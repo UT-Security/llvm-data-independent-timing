@@ -1,0 +1,7 @@
+# Tainted Source Lines Report
+# Format: filename:line | source_code
+#
+hello.c:8 | while (*src != '\0') {
+hello.c:9 | *dest = *src;
+hello.c:11 | src++;
+hello.c:37 | my_strcpy(buffer, user_input);   // Taint flows through my_strcpy

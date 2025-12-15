@@ -143,6 +143,7 @@ add_llvm_component_library(LLVMCodeGen
   MachinePassManager.cpp
   MachinePipeliner.cpp
   MachinePostDominators.cpp
+  MachineTaintPruning.cpp
   MachineRegionInfo.cpp
   MachineRegisterInfo.cpp
   MachineScheduler.cpp

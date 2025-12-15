@@ -147,6 +147,7 @@
 #include "llvm/Transforms/Vectorize/LoopVectorize.h"
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
+#include "llvm/Analysis/TaintAnalysis.h"
 
 using namespace llvm;
 
@@ -215,6 +216,10 @@ static cl::opt<bool> EnableUnrollAndJam("enable-unroll-and-jam",
 static cl::opt<bool> EnableLoopFlatten("enable-loop-flatten", cl::init(false),
                                        cl::Hidden,
                                        cl::desc("Enable the LoopFlatten Pass"));
+
+static cl::opt<bool> EnableTaintAnalysis(
+    "enable-taint-analysis", cl::init(false),
+    cl::desc("Enable taint analysis pass to detect potential timing leaks"));
 
 // Experimentally allow loop header duplication. This should allow for better
 // optimization at Oz, since loop-idiom recognition can then recognize things
@@ -1694,6 +1699,10 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
 
   // Emit annotation remarks.
   addAnnotationRemarksPass(MPM);
+
+  // Run taint analysis if enabled
+  if (EnableTaintAnalysis)
+    MPM.addPass(TaintAnalysisPrinterPass(errs()));
 
   if (isLTOPreLink(Phase))
     addRequiredLTOPreLinkPasses(MPM);

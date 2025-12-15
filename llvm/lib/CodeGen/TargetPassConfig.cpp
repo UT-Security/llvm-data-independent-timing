@@ -25,6 +25,7 @@
 #include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachinePassRegistry.h"
+#include "llvm/CodeGen/MachineTaintPruning.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/RegAllocRegistry.h"
 #include "llvm/IR/IRPrintingPasses.h"
@@ -109,6 +110,10 @@ static cl::opt<bool> DisableAtExitBasedGlobalDtorLowering(
 static cl::opt<bool> EnableImplicitNullChecks(
     "enable-implicit-null-checks",
     cl::desc("Fold null checks into faulting memory operations"),
+    cl::init(false), cl::Hidden);
+static cl::opt<bool> EnableTaintPruning(
+    "enable-taint-pruning",
+    cl::desc("Enable MIR-level taint analysis for timing side-channel detection"),
     cl::init(false), cl::Hidden);
 static cl::opt<bool> DisableMergeICmps("disable-mergeicmps",
     cl::desc("Disable MergeICmps Pass"),
@@ -1218,6 +1223,10 @@ void TargetPassConfig::addMachinePasses() {
   addPass(&PatchableFunctionID);
 
   addPreEmitPass();
+
+  // Add taint pruning pass for timing side-channel detection if enabled.
+  if (EnableTaintPruning)
+    addPass(createMachineTaintPruningPass());
 
   if (TM->Options.EnableIPRA)
     // Collect register usage information and produce a register mask of

@@ -146,6 +146,7 @@ add_llvm_component_library(LLVMAnalysis
   StackSafetyAnalysis.cpp
   StructuralHash.cpp
   SyntheticCountsUtils.cpp
+  TaintAnalysis.cpp
   TFLiteUtils.cpp
   TargetLibraryInfo.cpp
   TargetTransformInfo.cpp
