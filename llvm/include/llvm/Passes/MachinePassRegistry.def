@@ -170,6 +170,7 @@ MACHINE_FUNCTION_PASS("stack-coloring", StackColoringPass())
 MACHINE_FUNCTION_PASS("stack-frame-layout", StackFrameLayoutAnalysisPass())
 MACHINE_FUNCTION_PASS("stack-slot-coloring", StackSlotColoringPass())
 MACHINE_FUNCTION_PASS("tailduplication", TailDuplicatePass())
+MACHINE_FUNCTION_PASS("taint-analysis", TaintAnalysisPass())
 MACHINE_FUNCTION_PASS("trigger-verifier-error", TriggerVerifierErrorPass())
 MACHINE_FUNCTION_PASS("two-address-instruction", TwoAddressInstructionPass())
 MACHINE_FUNCTION_PASS("unreachable-mbb-elimination", 
