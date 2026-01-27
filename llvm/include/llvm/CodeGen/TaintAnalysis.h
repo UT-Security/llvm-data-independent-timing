@@ -9,9 +9,33 @@
 #ifndef LLVM_CODEGEN_TAINTANALYSIS_H
 #define LLVM_CODEGEN_TAINTANALYSIS_H
 
+#include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/StringMap.h"
 #include "llvm/CodeGen/MachinePassManager.h"
 
 namespace llvm {
+
+struct TaintSource {
+  std::string FuncName;
+  llvm::SmallSet<unsigned, 4> TaintedArgs;
+};
+
+class TaintInfo {
+
+};
+
+class TaintAnalysis : public AnalysisInfoMixin<TaintAnalysis> {
+  friend AnalysisInfoMixin<TaintAnalysis>;
+  static AnalysisKey Key;
+
+public:
+  TaintAnalysis();
+  using Result = TaintInfo;
+  LLVM_ABI Result run(MachineFunction &MF,
+                      MachineFunctionAnalysisManager &MFAM);
+private:
+  llvm::StringMap<TaintSource> TaintSources;
+};
 
 class TaintAnalysisPass : public PassInfoMixin<TaintAnalysisPass> {
 public:
