@@ -23,6 +23,7 @@ add_llvm_component_library(LLVMInstrumentation
   SanitizerCoverage.cpp
   SanitizerBinaryMetadata.cpp
   ValueProfileCollector.cpp
+  TaintSourceAnnotator.cpp
   ThreadSanitizer.cpp
   TypeSanitizer.cpp
   HWAddressSanitizer.cpp

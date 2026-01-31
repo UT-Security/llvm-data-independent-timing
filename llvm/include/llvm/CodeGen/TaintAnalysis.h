@@ -20,8 +20,13 @@ struct TaintSource {
   llvm::SmallSet<unsigned, 4> TaintedArgs;
 };
 
-class TaintInfo {
+enum class Taint: uint8_t {
+  Clean = 0,
+  Tainted = 1,
+};
 
+class TaintInfo {
+  SparseBitVector<> TaintedVRegs;
 };
 
 class TaintAnalysis : public AnalysisInfoMixin<TaintAnalysis> {
@@ -29,7 +34,6 @@ class TaintAnalysis : public AnalysisInfoMixin<TaintAnalysis> {
   static AnalysisKey Key;
 
 public:
-  TaintAnalysis();
   using Result = TaintInfo;
   LLVM_ABI Result run(MachineFunction &MF,
                       MachineFunctionAnalysisManager &MFAM);
