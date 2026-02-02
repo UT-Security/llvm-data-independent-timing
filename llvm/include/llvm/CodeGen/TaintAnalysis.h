@@ -14,6 +14,7 @@
 #ifndef LLVM_CODEGEN_TAINTANALYSIS_H
 #define LLVM_CODEGEN_TAINTANALYSIS_H
 
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SparseBitVector.h"
 #include "llvm/CodeGen/MachinePassManager.h"
 #include "llvm/CodeGen/Register.h"
@@ -24,6 +25,7 @@ namespace llvm {
 /// It tracks which virtual registers are considered tainted.
 class TaintInfo {
   SparseBitVector<> TaintedRegs;
+  DenseSet<int> TaintedFrameIdx;
 
 public:
   /// Check if a register is tainted.
@@ -31,6 +33,9 @@ public:
 
   /// Mark a register as tainted.
   void setTainted(Register R) { TaintedRegs.set(R.id()); }
+
+  bool isTaintedFI(int FI) const { return TaintedFrameIdx.contains(FI); }
+  void setTaintedFI(int FI) { TaintedFrameIdx.insert(FI); }
 
   /// Check if no registers are tainted.
   bool empty() const { return TaintedRegs.empty(); }

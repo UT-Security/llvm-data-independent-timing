@@ -12,17 +12,53 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/TaintAnalysis.h"
+#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/Debug.h"
 
+#include <optional>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "taint-analysis"
 
 AnalysisKey TaintAnalysis::Key;
+
+static std::optional<int> getFrameIndexIfAny(const llvm::MachineInstr &MI) {
+  for (const llvm::MachineOperand &MO : MI.operands()) {
+    if (MO.isFI())
+      return MO.getIndex();
+  }
+  return std::nullopt;
+}
+
+static bool anyTaintedRegUse(const llvm::MachineInstr &MI,
+                             const llvm::TaintInfo &Result) {
+  for (const llvm::MachineOperand &MO : MI.uses()) {
+    if (MO.isReg()) {
+      llvm::Register R = MO.getReg();
+      if (R.isValid() && Result.isTainted(R))
+        return true;
+    }
+  }
+  return false;
+}
+
+static void taintAllRegDefs(const llvm::MachineInstr &MI, llvm::TaintInfo &Result, const TargetRegisterInfo *TRI) {
+  for (const llvm::MachineOperand &MO : MI.defs()) {
+    if (MO.isReg()) {
+      llvm::Register R = MO.getReg();
+      if (R.isValid()) {
+        Result.setTainted(R);
+        LLVM_DEBUG(dbgs() << "      set " << printReg(MO.getReg(), TRI)
+                   << " as tainted\n");
+      }
+    }
+  }
+}
 
 TaintInfo TaintAnalysis::run(MachineFunction &MF,
                              MachineFunctionAnalysisManager &MFAM) {
@@ -71,6 +107,35 @@ TaintInfo TaintAnalysis::run(MachineFunction &MF,
       }
     }
     ++LiveInIdx;
+  }
+
+  LLVM_DEBUG(dbgs() << "  Reverse Post Order Traversal: \n");
+  ReversePostOrderTraversal<MachineBasicBlock *> RPOT(&MF.front());
+  for (const auto &MBB: RPOT) {
+    LLVM_DEBUG(dbgs() << "    " << MBB->getFullName() << "\n");
+    for (const auto &MI: *MBB) {
+      bool isTaintedMI = anyTaintedRegUse(MI, Result);
+
+      if (isTaintedMI)
+        taintAllRegDefs(MI, Result, TRI);
+
+      // Stack-slot taint propagation via FrameIndex
+      std::optional<int> FI = getFrameIndexIfAny(MI);
+      if (!FI)
+        continue;
+
+      if (MI.mayStore()) {
+        if (anyTaintedRegUse(MI, Result)) {
+          Result.setTaintedFI(*FI);
+          LLVM_DEBUG(dbgs() << "      taint FI#" << *FI
+                     << " due to store from tainted reg(s)\n");
+        }
+      }
+
+      if (MI.mayLoad())
+        if (Result.isTaintedFI(*FI))
+          taintAllRegDefs(MI, Result, TRI);
+    }
   }
 
   LLVM_DEBUG(dbgs() << "  Total tainted registers: " << Result.count() << "\n");
