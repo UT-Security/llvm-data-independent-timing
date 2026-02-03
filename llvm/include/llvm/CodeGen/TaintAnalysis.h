@@ -23,30 +23,46 @@ namespace llvm {
 
 /// TaintInfo holds the result of taint analysis for a MachineFunction.
 /// It tracks which virtual registers are considered tainted.
-class TaintInfo {
+struct TaintState {
   SparseBitVector<> TaintedRegs;
   DenseSet<int> TaintedFrameIdx;
 
 public:
+  bool operator==(const TaintState &O) const {
+    return TaintedRegs == O.TaintedRegs && TaintedFrameIdx == O.TaintedFrameIdx;
+  }
+
+  bool operator!=(const TaintState &O) const { return !(*this == O); }
+
+  void join(const TaintState &O) {
+    TaintedRegs |= O.TaintedRegs;
+
+    for (const auto &FI : O.TaintedFrameIdx) {
+      TaintedFrameIdx.insert(FI);
+    }
+  }
+
   /// Check if a register is tainted.
-  bool isTainted(Register R) const { return TaintedRegs.test(R.id()); }
+  bool isTainted(Register R) const {
+    return R.isValid() && TaintedRegs.test(R.id());
+  }
 
   /// Mark a register as tainted.
-  void setTainted(Register R) { TaintedRegs.set(R.id()); }
+  void setTainted(Register R) {
+    if (R.isValid())
+      TaintedRegs.set(R.id());
+  }
 
   bool isTaintedFI(int FI) const { return TaintedFrameIdx.contains(FI); }
   void setTaintedFI(int FI) { TaintedFrameIdx.insert(FI); }
 
-  /// Check if no registers are tainted.
-  bool empty() const { return TaintedRegs.empty(); }
+  bool emptyRegs() const { return TaintedRegs.empty(); }
+  bool emptyFIs() const { return TaintedFrameIdx.empty(); }
+  bool empty() const { return emptyRegs() && emptyFIs(); }
 
-  /// Get the number of tainted registers.
-  unsigned count() const { return TaintedRegs.count(); }
-
-  /// Iterator access to tainted register IDs.
-  using iterator = SparseBitVector<>::iterator;
-  iterator begin() const { return TaintedRegs.begin(); }
-  iterator end() const { return TaintedRegs.end(); }
+  unsigned countRegs() const { return TaintedRegs.count(); }
+  unsigned countFIs() const { return (unsigned)TaintedFrameIdx.size(); }
+  unsigned count() const { return countRegs() + countFIs(); }
 };
 
 /// TaintAnalysis is a MachineFunction analysis that computes which registers
@@ -56,7 +72,7 @@ class TaintAnalysis : public AnalysisInfoMixin<TaintAnalysis> {
   static AnalysisKey Key;
 
 public:
-  using Result = TaintInfo;
+  using Result = TaintState;
   LLVM_ABI Result run(MachineFunction &MF,
                       MachineFunctionAnalysisManager &MFAM);
 };
