@@ -21,25 +21,37 @@
 
 namespace llvm {
 
-/// TaintInfo holds the result of taint analysis for a MachineFunction.
+struct MemLoc {
+  enum Kind { IRValue, Unknown } K = Unknown;
+  const Value *V = nullptr; // base pointer value
+};
+
+
+/// TaintState holds the result of taint analysis for a MachineFunction.
 /// It tracks which virtual registers are considered tainted.
 struct TaintState {
   SparseBitVector<> TaintedRegs;
   DenseSet<int> TaintedFrameIdx;
+  DenseSet<const Value *> TaintedMemVals;
+  bool UnknownMemTainted = false;
 
 public:
   bool operator==(const TaintState &O) const {
-    return TaintedRegs == O.TaintedRegs && TaintedFrameIdx == O.TaintedFrameIdx;
+    return TaintedRegs == O.TaintedRegs && TaintedFrameIdx == O.TaintedFrameIdx &&
+      TaintedMemVals == O.TaintedMemVals && UnknownMemTainted == O.UnknownMemTainted;
   }
 
   bool operator!=(const TaintState &O) const { return !(*this == O); }
 
   void join(const TaintState &O) {
     TaintedRegs |= O.TaintedRegs;
-
     for (const auto &FI : O.TaintedFrameIdx) {
       TaintedFrameIdx.insert(FI);
     }
+    for (const Value *V : O.TaintedMemVals) {
+      TaintedMemVals.insert(V);
+    }
+    UnknownMemTainted |= O.UnknownMemTainted;
   }
 
   /// Check if a register is tainted.
@@ -55,6 +67,16 @@ public:
 
   bool isTaintedFI(int FI) const { return TaintedFrameIdx.contains(FI); }
   void setTaintedFI(int FI) { TaintedFrameIdx.insert(FI); }
+
+  bool isTaintedMem(const MemLoc &L) const {
+    if (L.K == MemLoc::IRValue) return TaintedMemVals.contains(L.V);
+    return UnknownMemTainted;
+  }
+
+  void setTaintedMem(const MemLoc &L) {
+    if (L.K == MemLoc::IRValue) TaintedMemVals.insert(L.V);
+    else UnknownMemTainted = true;
+  }
 
   bool emptyRegs() const { return TaintedRegs.empty(); }
   bool emptyFIs() const { return TaintedFrameIdx.empty(); }

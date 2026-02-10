@@ -27,12 +27,24 @@ using namespace llvm;
 
 AnalysisKey TaintAnalysis::Key;
 
-static std::optional<int> getFrameIndexIfAny(const llvm::MachineInstr &MI) {
-  for (const llvm::MachineOperand &MO : MI.operands()) {
-    if (MO.isFI())
-      return MO.getIndex();
+
+static MemLoc getMemLocFromMMO(const MachineMemOperand &MMO) {
+  MemLoc L;
+  if (const Value *V = MMO.getValue()) { // base address of memory access :contentReference[oaicite:2]{index=2}
+    L.K = MemLoc::IRValue;
+    L.V = V;
+    return L;
   }
-  return std::nullopt;
+  return L; // Unknown
+}
+
+static SmallVector<MemLoc, 2> getMemLocs(const MachineInstr &MI) {
+  SmallVector<MemLoc, 2> Locs;
+  for (MachineMemOperand *MMO : MI.memoperands()) {
+    if (MMO)
+      Locs.push_back(getMemLocFromMMO(*MMO));
+  }
+  return Locs;
 }
 
 static bool anyTaintedRegUse(const llvm::MachineInstr &MI,
@@ -68,21 +80,36 @@ static void propagateTaintMI(const llvm::MachineInstr &MI, TaintState &S,
     taintAllRegDefs(MI, S, TRI);
   }
 
-  std::optional<int> FI = getFrameIndexIfAny(MI);
-  if (!FI)
-    return;
+  SmallVector<MemLoc, 2> Mems = getMemLocs(MI);
+  bool HasMem = !Mems.empty();
 
-  if (MI.mayStore()) {
-    if (anyTaintedRegUse(MI, S)) {
-      LLVM_DEBUG(dbgs() << "      set FI#" << *FI << " (store)\n");
-      S.setTaintedFI(*FI);
+  if (MI.mayStore() && anyTaintedRegUse(MI, S)) {
+    if (!HasMem) {
+      S.UnknownMemTainted = true;
+    } else {
+      for (const MemLoc &L : Mems) {
+        S.setTaintedMem(L);
+        LLVM_DEBUG({
+          if (L.K == MemLoc::IRValue)
+            dbgs() << "      taint mem @" << L.V->getName() << " (store)\n";
+          else
+            dbgs() << "      taint unknown mem (store)\n";
+        });
+      }
     }
   }
 
   if (MI.mayLoad()) {
-    if (S.isTaintedFI(*FI)) {
-      LLVM_DEBUG(llvm::dbgs()
-                 << "      taint defs (load from FI#" << *FI << ")\n");
+    bool LoadFromTainted = false;
+    if (!HasMem) {
+      LoadFromTainted = S.UnknownMemTainted;
+    } else {
+      for (const MemLoc &L : Mems)
+        LoadFromTainted |= S.isTaintedMem(L);
+    }
+
+    if (LoadFromTainted) {
+      LLVM_DEBUG(dbgs() << "      taint defs (load)\n");
       taintAllRegDefs(MI, S, TRI);
     }
   }
