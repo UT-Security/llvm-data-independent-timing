@@ -1,0 +1,40 @@
+# REQUIRES: asserts
+# RUN: llc -mtriple=aarch64 -passes='taint-analysis-transform' -debug-only=taint-analysis %s -o /dev/null 2>&1 | FileCheck %s
+
+# Test early-exit when no arguments have the "tainted" attribute.
+
+# CHECK: TaintAnalysis: analyzing function no_taint
+# CHECK:   No tainted arguments found
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @no_taint(i32 %a, i32 %b) {
+  entry:
+    %sum = add i32 %a, %b
+    ret i32 %sum
+  }
+
+...
+---
+name:            no_taint
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr32 }
+  - { id: 1, class: gpr32 }
+  - { id: 2, class: gpr32 }
+liveins:
+  - { reg: '$w0', virtual-reg: '%0' }
+  - { reg: '$w1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $w0, $w1
+
+    %0:gpr32 = COPY $w0
+    %1:gpr32 = COPY $w1
+    %2:gpr32 = ADDWrr %0, %1
+    $w0 = COPY %2
+    RET_ReallyLR implicit $w0
+
+...

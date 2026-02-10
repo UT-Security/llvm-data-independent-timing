@@ -1,0 +1,46 @@
+# REQUIRES: asserts
+# RUN: llc -mtriple=aarch64 -passes='taint-analysis-transform' -debug-only=taint-analysis %s -o /dev/null 2>&1 | FileCheck %s
+
+# Test basic register-to-register taint propagation.
+# Arg 0 (%a) is marked "tainted" in the IR. The analysis should:
+#   1. Mark the virtual register corresponding to arg 0 as tainted
+#   2. Propagate taint through COPY and arithmetic instructions
+
+# CHECK: TaintAnalysis: analyzing function simple_add
+# CHECK:   IR arg 0 has 'tainted' attribute
+# CHECK:   Marked virtual register
+# CHECK:        set %{{[0-9]+}} as tainted
+# CHECK: Total tainted regs: {{[1-9][0-9]*}}
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @simple_add(i32 "tainted" %a, i32 %b) {
+  entry:
+    %sum = add i32 %a, %b
+    ret i32 %sum
+  }
+
+...
+---
+name:            simple_add
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr32 }
+  - { id: 1, class: gpr32 }
+  - { id: 2, class: gpr32 }
+liveins:
+  - { reg: '$w0', virtual-reg: '%0' }
+  - { reg: '$w1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $w0, $w1
+
+    %0:gpr32 = COPY $w0
+    %1:gpr32 = COPY $w1
+    %2:gpr32 = ADDWrr %0, %1
+    $w0 = COPY %2
+    RET_ReallyLR implicit $w0
+
+...

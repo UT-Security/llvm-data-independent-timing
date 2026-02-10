@@ -1,0 +1,49 @@
+# REQUIRES: asserts
+# RUN: llc -mtriple=aarch64 -passes='taint-analysis-transform' -debug-only=taint-analysis %s -o /dev/null 2>&1 | FileCheck %s
+
+# Test taint propagation through memory (store then load).
+# Arg 0 is tainted. It gets stored to a stack slot, then loaded back.
+# The analysis should propagate taint through the store → load path.
+
+# CHECK: TaintAnalysis: analyzing function store_load
+# CHECK:   IR arg 0 has 'tainted' attribute
+# CHECK:   Marked virtual register
+# CHECK:   taint mem
+# CHECK:   taint defs (load)
+# CHECK: Total tainted regs: {{[1-9][0-9]*}}
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @store_load(i32 "tainted" %a) {
+  entry:
+    %slot = alloca i32, align 4
+    store i32 %a, ptr %slot, align 4
+    %val = load i32, ptr %slot, align 4
+    ret i32 %val
+  }
+
+...
+---
+name:            store_load
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr32 }
+  - { id: 1, class: gpr64sp }
+  - { id: 2, class: gpr32 }
+liveins:
+  - { reg: '$w0', virtual-reg: '%0' }
+stack:
+  - { id: 0, name: slot, offset: 0, size: 4, alignment: 4 }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    %0:gpr32 = COPY $w0
+    STRWui %0, %stack.0.slot, 0 :: (store (s32) into %ir.slot)
+    %2:gpr32 = LDRWui %stack.0.slot, 0 :: (load (s32) from %ir.slot)
+    $w0 = COPY %2
+    RET_ReallyLR implicit $w0
+
+...
