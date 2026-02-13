@@ -17,9 +17,10 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Function.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-
-#include <optional>
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
@@ -27,10 +28,16 @@ using namespace llvm;
 
 AnalysisKey TaintAnalysis::Key;
 
+static cl::opt<std::string>
+    TaintOutputFile("taint-output",
+                    cl::desc("Output file for tainted instructions (TSV)"),
+                    cl::value_desc("file"));
 
 static MemLoc getMemLocFromMMO(const MachineMemOperand &MMO) {
   MemLoc L;
-  if (const Value *V = MMO.getValue()) { // base address of memory access :contentReference[oaicite:2]{index=2}
+  if (const Value *V =
+          MMO.getValue()) { // base address of memory access
+                            // :contentReference[oaicite:2]{index=2}
     L.K = MemLoc::IRValue;
     L.V = V;
     return L;
@@ -67,7 +74,7 @@ static void taintAllRegDefs(const llvm::MachineInstr &MI, llvm::TaintState &S,
       if (R.isValid()) {
         S.setTainted(R);
         LLVM_DEBUG(dbgs() << "      set " << printReg(MO.getReg(), TRI)
-                   << " as tainted\n");
+                          << " as tainted\n");
       }
     }
   }
@@ -86,6 +93,7 @@ static void propagateTaintMI(const llvm::MachineInstr &MI, TaintState &S,
   if (MI.mayStore() && anyTaintedRegUse(MI, S)) {
     if (!HasMem) {
       S.UnknownMemTainted = true;
+      dbgs() << "      taint unknown mem (store)\n";
     } else {
       for (const MemLoc &L : Mems) {
         S.setTaintedMem(L);
@@ -125,13 +133,13 @@ static TaintState propagateTaintMBB(const MachineBasicBlock &MBB,
   return Out;
 }
 
-TaintState TaintAnalysis::run(MachineFunction &MF,
-                              MachineFunctionAnalysisManager &MFAM) {
+TaintResult TaintAnalysis::run(MachineFunction &MF,
+                               MachineFunctionAnalysisManager &MFAM) {
   const Function &F = MF.getFunction();
   const MachineRegisterInfo &MRI = MF.getRegInfo();
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
 
-  LLVM_DEBUG(dbgs() << "TaintAnalysis: analyzing function " << F.getName()
+  LLVM_DEBUG(dbgs() << "\nTaintAnalysis: analyzing function " << F.getName()
                     << "\n");
 
   // Collect which argument indices are tainted based on IR attributes
@@ -146,7 +154,8 @@ TaintState TaintAnalysis::run(MachineFunction &MF,
 
   if (TaintedArgIndices.empty()) {
     LLVM_DEBUG(dbgs() << "  No tainted arguments found\n");
-    return TaintState{};
+    return TaintResult{TaintState{},
+                       DenseMap<const MachineBasicBlock *, TaintState>{}};
   }
 
   TaintState Seed;
@@ -162,14 +171,14 @@ TaintState TaintAnalysis::run(MachineFunction &MF,
       if (VirtReg.isValid()) {
         Seed.setTainted(VirtReg);
         LLVM_DEBUG(dbgs() << "  Marked virtual register "
-                          << printReg(VirtReg, TRI)
-                          << " as tainted (from arg " << LiveInIdx << ", phys "
-                          << printReg(PhysReg, TRI) << ")\n");
+                          << printReg(VirtReg, TRI) << " as tainted (from arg "
+                          << LiveInIdx << ", phys " << printReg(PhysReg, TRI)
+                          << ")\n");
       } else {
         Seed.setTainted(PhysReg);
         LLVM_DEBUG(dbgs() << "  Marked physical register "
-                          << printReg(PhysReg, TRI)
-                          << " as tainted (from arg " << LiveInIdx << ")\n");
+                          << printReg(PhysReg, TRI) << " as tainted (from arg "
+                          << LiveInIdx << ")\n");
       }
     }
     ++LiveInIdx;
@@ -197,7 +206,7 @@ TaintState TaintAnalysis::run(MachineFunction &MF,
     const llvm::MachineBasicBlock *B = WorkQ.pop_back_val();
     InQ.erase(B);
 
-    LLVM_DEBUG(dbgs() << "    " << B->getName() << "\n");
+    LLVM_DEBUG(dbgs() << "    " << printMBBReference(*B) << "\n");
 
     // Recompute IN[B] from preds, but preserve seed for entry.
     TaintState NewIn;
@@ -247,21 +256,63 @@ TaintState TaintAnalysis::run(MachineFunction &MF,
 
   LLVM_DEBUG(dbgs() << "Total tainted regs: " << Result.countRegs()
                     << ", tainted FIs: " << Result.countFIs()
-                    << ", total: " << Result.count() << "\n\n");
+                    << ", total: " << Result.count() << "\n");
 
-  return Result;
+  return TaintResult{std::move(Result), std::move(IN)};
 }
 
 PreservedAnalyses TaintAnalysisPass::run(MachineFunction &MF,
                                          MachineFunctionAnalysisManager &MFAM) {
-  auto &TI = MFAM.getResult<TaintAnalysis>(MF);
+  auto &TR = MFAM.getResult<TaintAnalysis>(MF);
 
   LLVM_DEBUG({
-    if (!TI.empty()) {
-      dbgs() << "TaintAnalysisPass: " << MF.getName() << " has " << TI.count()
-             << " tainted register(s)\n";
+    if (!TR.Merged.empty()) {
+      dbgs() << "TaintAnalysisPass: " << MF.getName() << " has "
+             << TR.Merged.count() << " tainted register(s)\n";
     }
   });
+
+  // Export tainted instructions to file if requested.
+  if (!TaintOutputFile.empty() && !TR.Merged.empty()) {
+    const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
+
+    // Open file in append mode so multiple functions accumulate.
+    std::error_code EC;
+    raw_fd_ostream OS(TaintOutputFile, EC, sys::fs::OF_Append);
+    if (EC) {
+      errs() << "Error opening taint output file: " << EC.message() << "\n";
+    } else {
+      OS << "# Function: " << MF.getName() << "\n";
+
+      for (const auto &MBB : MF) {
+        // Start from the entry state for this BB.
+        auto It = TR.IN.find(&MBB);
+        TaintState S = (It != TR.IN.end()) ? It->second : TaintState{};
+
+        for (const auto &MI : MBB) {
+          bool UsesTainted = anyTaintedRegUse(MI, S);
+
+          // Propagate taint through this instruction.
+          propagateTaintMI(MI, S, TRI);
+
+          // Check if any def became tainted.
+          bool DefsTainted = false;
+          for (const MachineOperand &MO : MI.defs()) {
+            if (MO.isReg() && MO.getReg().isValid() &&
+                S.isTainted(MO.getReg())) {
+              DefsTainted = true;
+              break;
+            }
+          }
+
+          if (UsesTainted || DefsTainted) {
+            OS << MF.getName() << "\t" << MBB.getName() << "\t";
+            MI.print(OS, /*IsStandalone=*/true);
+          }
+        }
+      }
+    }
+  }
 
   // Analysis pass doesn't modify the IR
   return getMachineFunctionPassPreservedAnalyses();

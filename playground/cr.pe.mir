@@ -1,0 +1,400 @@
+--- |
+  ; ModuleID = 'cr.annotated.ll'
+  source_filename = "cr.c"
+  target datalayout = "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32"
+  target triple = "arm64-apple-macosx15.0.0"
+  
+  ; Function Attrs: noinline nounwind ssp
+  define i32 @f1(i32 noundef "tainted" %0, i32 noundef %1, i32 noundef "tainted" %2) #0 {
+    %4 = alloca i32, align 4
+    %5 = alloca i32, align 4
+    %6 = alloca i32, align 4
+    %7 = alloca i32, align 4
+    %8 = alloca i32, align 4
+    store i32 %0, ptr %4, align 4
+    store i32 %1, ptr %5, align 4
+    store i32 %2, ptr %6, align 4
+    %9 = load i32, ptr %4, align 4
+    %10 = load i32, ptr %5, align 4
+    %11 = add nsw i32 %9, %10
+    store i32 %11, ptr %7, align 4
+    %12 = load i32, ptr %7, align 4
+    %13 = icmp sgt i32 %12, 0
+    br i1 %13, label %14, label %16
+  
+  14:                                               ; preds = %3
+    %15 = load i32, ptr %5, align 4
+    store i32 %15, ptr %8, align 4
+    br label %18
+  
+  16:                                               ; preds = %3
+    %17 = load i32, ptr %6, align 4
+    store i32 %17, ptr %8, align 4
+    br label %18
+  
+  18:                                               ; preds = %16, %14
+    %19 = load i32, ptr %8, align 4
+    ret i32 %19
+  }
+  
+  ; Function Attrs: noinline nounwind ssp
+  define i32 @f2(i32 noundef %0, i32 noundef "tainted" %1) #0 {
+    %3 = alloca i32, align 4
+    %4 = alloca i32, align 4
+    %5 = alloca i32, align 4
+    store i32 %0, ptr %4, align 4
+    store i32 %1, ptr %5, align 4
+    %6 = load i32, ptr %4, align 4
+    %7 = load i32, ptr %5, align 4
+    %8 = icmp sgt i32 %6, %7
+    br i1 %8, label %9, label %10
+  
+  9:                                                ; preds = %2
+    store i32 0, ptr %3, align 4
+    br label %12
+  
+  10:                                               ; preds = %2
+    %11 = load i32, ptr %4, align 4
+    store i32 %11, ptr %3, align 4
+    br label %12
+  
+  12:                                               ; preds = %10, %9
+    %13 = load i32, ptr %3, align 4
+    ret i32 %13
+  }
+  
+  ; Function Attrs: noinline nounwind ssp
+  define i32 @main() #0 {
+    %1 = alloca i32, align 4
+    store i32 0, ptr %1, align 4
+    %2 = call i32 @f1(i32 noundef 1, i32 noundef 2, i32 noundef 3)
+    %3 = call i32 @f2(i32 noundef 1, i32 noundef 2)
+    ret i32 0
+  }
+  
+  attributes #0 = { noinline nounwind ssp "frame-pointer"="non-leaf" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="apple-m1" "target-features"="+aes,+altnzcv,+ccdp,+ccidx,+ccpp,+complxnum,+crc,+dit,+dotprod,+flagm,+fp-armv8,+fp16fml,+fptoint,+fullfp16,+jsconv,+lse,+neon,+pauth,+perfmon,+predres,+ras,+rcpc,+rdm,+sb,+sha2,+sha3,+specrestrict,+ssbs,+v8.1a,+v8.2a,+v8.3a,+v8.4a,+v8a,+zcm,+zcz" }
+  
+  !llvm.module.flags = !{!0, !1, !2, !3}
+  !llvm.ident = !{!4}
+  
+  !0 = !{i32 2, !"SDK Version", [2 x i32] [i32 15, i32 5]}
+  !1 = !{i32 1, !"wchar_size", i32 4}
+  !2 = !{i32 8, !"PIC Level", i32 2}
+  !3 = !{i32 7, !"frame-pointer", i32 1}
+  !4 = !{!"Homebrew clang version 20.1.6"}
+...
+---
+name:            f1
+alignment:       4
+exposesReturnsTwice: false
+legalized:       true
+regBankSelected: true
+selected:        true
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: false
+registers:       []
+liveins:
+  - { reg: '$w0', virtual-reg: '' }
+  - { reg: '$w1', virtual-reg: '' }
+  - { reg: '$w2', virtual-reg: '' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       32
+  offsetAdjustment: 0
+  maxAlignment:    4
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: true
+  localFrameSize:  20
+fixedStack:      []
+stack:
+  - { id: 0, name: '', type: default, offset: -4, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      local-offset: -4, debug-info-variable: '', debug-info-expression: '', 
+      debug-info-location: '' }
+  - { id: 1, name: '', type: default, offset: -8, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      local-offset: -8, debug-info-variable: '', debug-info-expression: '', 
+      debug-info-location: '' }
+  - { id: 2, name: '', type: default, offset: -12, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      local-offset: -12, debug-info-variable: '', debug-info-expression: '', 
+      debug-info-location: '' }
+  - { id: 3, name: '', type: default, offset: -16, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      local-offset: -16, debug-info-variable: '', debug-info-expression: '', 
+      debug-info-location: '' }
+  - { id: 4, name: '', type: default, offset: -20, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      local-offset: -20, debug-info-variable: '', debug-info-expression: '', 
+      debug-info-location: '' }
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+body:             |
+  bb.1 (%ir-block.3):
+    successors: %bb.2(0x40000000), %bb.3(0x40000000)
+    liveins: $w0, $w1, $w2
+  
+    $sp = frame-setup SUBXri $sp, 32, 0
+    STRWui killed renamable $w0, $sp, 7 :: (store (s32) into %ir.4)
+    STRWui killed renamable $w1, $sp, 6 :: (store (s32) into %ir.5)
+    STRWui killed renamable $w2, $sp, 5 :: (store (s32) into %ir.6)
+    renamable $w8 = LDRWui $sp, 7 :: (dereferenceable load (s32) from %ir.4)
+    renamable $w9 = LDRWui $sp, 6 :: (dereferenceable load (s32) from %ir.5)
+    renamable $w8 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+    STRWui killed renamable $w8, $sp, 4 :: (store (s32) into %ir.7)
+    renamable $w8 = LDRWui $sp, 4 :: (dereferenceable load (s32) from %ir.7)
+    dead renamable $w8 = SUBSWri killed renamable $w8, 0, 0, implicit-def $nzcv
+    Bcc 13, %bb.3, implicit killed $nzcv
+    B %bb.2
+  
+  bb.2 (%ir-block.14):
+    successors: %bb.4(0x80000000)
+  
+    renamable $w8 = LDRWui $sp, 6 :: (dereferenceable load (s32) from %ir.5)
+    STRWui killed renamable $w8, $sp, 3 :: (store (s32) into %ir.8)
+    B %bb.4
+  
+  bb.3 (%ir-block.16):
+    successors: %bb.4(0x80000000)
+  
+    renamable $w8 = LDRWui $sp, 5 :: (dereferenceable load (s32) from %ir.6)
+    STRWui killed renamable $w8, $sp, 3 :: (store (s32) into %ir.8)
+    B %bb.4
+  
+  bb.4 (%ir-block.18):
+    renamable $w0 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.8)
+    $sp = frame-destroy ADDXri $sp, 32, 0
+    RET_ReallyLR implicit killed $w0
+...
+---
+name:            f2
+alignment:       4
+exposesReturnsTwice: false
+legalized:       true
+regBankSelected: true
+selected:        true
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: false
+registers:       []
+liveins:
+  - { reg: '$w0', virtual-reg: '' }
+  - { reg: '$w1', virtual-reg: '' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       16
+  offsetAdjustment: 0
+  maxAlignment:    4
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: true
+  localFrameSize:  12
+fixedStack:      []
+stack:
+  - { id: 0, name: '', type: default, offset: -4, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      local-offset: -4, debug-info-variable: '', debug-info-expression: '', 
+      debug-info-location: '' }
+  - { id: 1, name: '', type: default, offset: -8, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      local-offset: -8, debug-info-variable: '', debug-info-expression: '', 
+      debug-info-location: '' }
+  - { id: 2, name: '', type: default, offset: -12, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      local-offset: -12, debug-info-variable: '', debug-info-expression: '', 
+      debug-info-location: '' }
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+body:             |
+  bb.1 (%ir-block.2):
+    successors: %bb.2(0x40000000), %bb.3(0x40000000)
+    liveins: $w0, $w1
+  
+    $sp = frame-setup SUBXri $sp, 16, 0
+    STRWui killed renamable $w0, $sp, 2 :: (store (s32) into %ir.4)
+    STRWui killed renamable $w1, $sp, 1 :: (store (s32) into %ir.5)
+    renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.4)
+    renamable $w9 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+    dead renamable $w8 = SUBSWrr killed renamable $w8, killed renamable $w9, implicit-def $nzcv
+    Bcc 13, %bb.3, implicit killed $nzcv
+    B %bb.2
+  
+  bb.2 (%ir-block.9):
+    successors: %bb.4(0x80000000)
+  
+    STRWui $wzr, $sp, 3 :: (store (s32) into %ir.3)
+    B %bb.4
+  
+  bb.3 (%ir-block.10):
+    successors: %bb.4(0x80000000)
+  
+    renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.4)
+    STRWui killed renamable $w8, $sp, 3 :: (store (s32) into %ir.3)
+    B %bb.4
+  
+  bb.4 (%ir-block.12):
+    renamable $w0 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+    $sp = frame-destroy ADDXri $sp, 16, 0
+    RET_ReallyLR implicit killed $w0
+...
+---
+name:            main
+alignment:       4
+exposesReturnsTwice: false
+legalized:       true
+regBankSelected: true
+selected:        true
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: false
+registers:       []
+liveins:         []
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       32
+  offsetAdjustment: 0
+  maxAlignment:    8
+  adjustsStack:    true
+  hasCalls:        true
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: true
+  localFrameSize:  4
+fixedStack:      []
+stack:
+  - { id: 0, name: '', type: default, offset: -20, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      local-offset: -4, debug-info-variable: '', debug-info-expression: '', 
+      debug-info-location: '' }
+  - { id: 1, name: '', type: spill-slot, offset: -24, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 2, name: '', type: spill-slot, offset: -28, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 3, name: '', type: spill-slot, offset: -32, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 4, name: '', type: spill-slot, offset: -8, size: 8, alignment: 8, 
+      stack-id: default, callee-saved-register: '$lr', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 5, name: '', type: spill-slot, offset: -16, size: 8, alignment: 8, 
+      stack-id: default, callee-saved-register: '$fp', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+  hasStackFrame:   true
+body:             |
+  bb.1 (%ir-block.0):
+    liveins: $lr
+  
+    $sp = frame-setup SUBXri $sp, 32, 0
+    frame-setup STPXi killed $fp, killed $lr, $sp, 2 :: (store (s64) into %stack.5), (store (s64) into %stack.4)
+    $fp = frame-setup ADDXri $sp, 16, 0
+    renamable $w8 = COPY $wzr
+    STRWui $w8, $sp, 2 :: (store (s32) into %stack.1)
+    STURWi $wzr, $fp, -4 :: (store (s32) into %ir.1)
+    renamable $w0 = MOVi32imm 1
+    STRWui $w0, $sp, 1 :: (store (s32) into %stack.2)
+    renamable $w1 = MOVi32imm 2
+    STRWui $w1, $sp, 0 :: (store (s32) into %stack.3)
+    renamable $w2 = MOVi32imm 3
+    BL @f1, csr_darwin_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0, implicit killed $w1, implicit killed $w2, implicit-def $w0
+    $w1 = LDRWui $sp, 0 :: (load (s32) from %stack.3)
+    $w0 = LDRWui $sp, 1 :: (load (s32) from %stack.2)
+    BL @f2, csr_darwin_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0, implicit killed $w1, implicit-def $w0
+    $w0 = LDRWui $sp, 2 :: (load (s32) from %stack.1)
+    $fp, $lr = frame-destroy LDPXi $sp, 2 :: (load (s64) from %stack.5), (load (s64) from %stack.4)
+    $sp = frame-destroy ADDXri $sp, 32, 0
+    RET_ReallyLR implicit killed $w0
+...

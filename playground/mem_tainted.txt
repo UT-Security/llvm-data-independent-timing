@@ -1,0 +1,400 @@
+# Function: store_load
+store_load		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+store_load		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+store_load		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+store_load		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+store_load		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+store_load		RET_ReallyLR implicit killed $w0
+
+
+# Function: array_index
+array_index		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+array_index		renamable $x9 = LDRSWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+array_index		renamable $w0 = LDRWroX killed renamable $x8, killed renamable $x9, 0, 1 :: (load (s32) from %ir.8)
+array_index		RET_ReallyLR implicit killed $w0
+
+
+# Function: store_via_ptr
+store_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.3)
+store_via_ptr		renamable $x9 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.3)
+store_via_ptr		STRWui killed renamable $w8, killed renamable $x9, 0 :: (store (s32) into %ir.6)
+
+
+# Function: load_via_ptr
+load_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+load_via_ptr		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+load_via_ptr		renamable $w0 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.3)
+load_via_ptr		RET_ReallyLR implicit killed $w0
+
+
+# Function: struct_access
+struct_access		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.6)
+struct_access		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.3)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 1 :: (load (s32) from %ir.9)
+struct_access		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.4)
+struct_access		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.3)
+struct_access		renamable $w9 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.4)
+struct_access		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+struct_access		RET_ReallyLR implicit killed $w0
+
+
+# Function: multi_hop
+multi_hop		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.2)
+multi_hop		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.2)
+multi_hop		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+multi_hop		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.3)
+multi_hop		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.3)
+multi_hop		renamable $w8 = UBFMWri killed renamable $w8, 31, 30
+multi_hop		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.4)
+multi_hop		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.4)
+multi_hop		renamable $w8 = nsw SUBSWri killed renamable $w8, 3, 0, implicit-def dead $nzcv
+multi_hop		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.5)
+multi_hop		renamable $w0 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.5)
+multi_hop		RET_ReallyLR implicit killed $w0
+# Function: cond_store
+cond_store		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+cond_store		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+cond_store		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+cond_store		renamable $w0 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+cond_store		RET_ReallyLR implicit killed $w0
+# Function: byte_copy
+byte_copy		STRXui killed renamable $x1, $sp, 2 :: (store (p0) into %ir.5)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		dead renamable $w8 = SUBSWrr killed renamable $w8, killed renamable $w9, implicit-def $nzcv
+byte_copy		renamable $x8 = LDRXui $sp, 2 :: (dereferenceable load (p0) from %ir.5)
+byte_copy		renamable $x9 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = LDRBBroX killed renamable $x8, killed renamable $x9, 0, 0 :: (load (s8) from %ir.16)
+byte_copy		renamable $x9 = LDRXui $sp, 3 :: (dereferenceable load (p0) from %ir.4)
+byte_copy		renamable $x10 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		STRBBroX killed renamable $w8, killed renamable $x9, killed renamable $x10, 0, 0 :: (store (s8) into %ir.21)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+byte_copy		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.7)
+# Function: store_load
+store_load		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+store_load		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+store_load		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+store_load		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+store_load		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+store_load		RET_ReallyLR implicit killed $w0
+# Function: array_index
+array_index		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+array_index		renamable $x9 = LDRSWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+array_index		renamable $w0 = LDRWroX killed renamable $x8, killed renamable $x9, 0, 1 :: (load (s32) from %ir.8)
+array_index		RET_ReallyLR implicit killed $w0
+# Function: store_via_ptr
+store_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.3)
+store_via_ptr		renamable $x9 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.3)
+store_via_ptr		STRWui killed renamable $w8, killed renamable $x9, 0 :: (store (s32) into %ir.6)
+# Function: load_via_ptr
+load_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+load_via_ptr		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+load_via_ptr		renamable $w0 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.3)
+load_via_ptr		RET_ReallyLR implicit killed $w0
+# Function: struct_access
+struct_access		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.6)
+struct_access		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.3)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 1 :: (load (s32) from %ir.9)
+struct_access		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.4)
+struct_access		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.3)
+struct_access		renamable $w9 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.4)
+struct_access		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+struct_access		RET_ReallyLR implicit killed $w0
+# Function: multi_hop
+multi_hop		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.2)
+multi_hop		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.2)
+multi_hop		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+multi_hop		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.3)
+multi_hop		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.3)
+multi_hop		renamable $w8 = UBFMWri killed renamable $w8, 31, 30
+multi_hop		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.4)
+multi_hop		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.4)
+multi_hop		renamable $w8 = nsw SUBSWri killed renamable $w8, 3, 0, implicit-def dead $nzcv
+multi_hop		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.5)
+multi_hop		renamable $w0 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.5)
+multi_hop		RET_ReallyLR implicit killed $w0
+# Function: cond_store
+cond_store		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+cond_store		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+cond_store		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+cond_store		renamable $w0 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+cond_store		RET_ReallyLR implicit killed $w0
+# Function: byte_copy
+byte_copy		STRXui killed renamable $x1, $sp, 2 :: (store (p0) into %ir.5)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		dead renamable $w8 = SUBSWrr killed renamable $w8, killed renamable $w9, implicit-def $nzcv
+byte_copy		renamable $x8 = LDRXui $sp, 2 :: (dereferenceable load (p0) from %ir.5)
+byte_copy		renamable $x9 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = LDRBBroX killed renamable $x8, killed renamable $x9, 0, 0 :: (load (s8) from %ir.16)
+byte_copy		renamable $x9 = LDRXui $sp, 3 :: (dereferenceable load (p0) from %ir.4)
+byte_copy		renamable $x10 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		STRBBroX killed renamable $w8, killed renamable $x9, killed renamable $x10, 0, 0 :: (store (s8) into %ir.21)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+byte_copy		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.7)
+# Function: store_load
+store_load		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+store_load		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+store_load		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+store_load		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+store_load		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+store_load		RET_ReallyLR implicit killed $w0
+# Function: array_index
+array_index		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+array_index		renamable $x9 = LDRSWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+array_index		renamable $w0 = LDRWroX killed renamable $x8, killed renamable $x9, 0, 1 :: (load (s32) from %ir.8)
+array_index		RET_ReallyLR implicit killed $w0
+# Function: store_via_ptr
+store_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.3)
+store_via_ptr		renamable $x9 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.3)
+store_via_ptr		STRWui killed renamable $w8, killed renamable $x9, 0 :: (store (s32) into %ir.6)
+# Function: load_via_ptr
+load_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+load_via_ptr		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+load_via_ptr		renamable $w0 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.3)
+load_via_ptr		RET_ReallyLR implicit killed $w0
+# Function: struct_access
+struct_access		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.6)
+struct_access		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.3)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 1 :: (load (s32) from %ir.9)
+struct_access		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.4)
+struct_access		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.3)
+struct_access		renamable $w9 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.4)
+struct_access		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+struct_access		RET_ReallyLR implicit killed $w0
+# Function: multi_hop
+multi_hop		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.2)
+multi_hop		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.2)
+multi_hop		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+multi_hop		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.3)
+multi_hop		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.3)
+multi_hop		renamable $w8 = UBFMWri killed renamable $w8, 31, 30
+multi_hop		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.4)
+multi_hop		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.4)
+multi_hop		renamable $w8 = nsw SUBSWri killed renamable $w8, 3, 0, implicit-def dead $nzcv
+multi_hop		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.5)
+multi_hop		renamable $w0 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.5)
+multi_hop		RET_ReallyLR implicit killed $w0
+# Function: cond_store
+cond_store		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+cond_store		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+cond_store		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+cond_store		renamable $w0 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+cond_store		RET_ReallyLR implicit killed $w0
+# Function: byte_copy
+byte_copy		STRXui killed renamable $x1, $sp, 2 :: (store (p0) into %ir.5)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		dead renamable $w8 = SUBSWrr killed renamable $w8, killed renamable $w9, implicit-def $nzcv
+byte_copy		renamable $x8 = LDRXui $sp, 2 :: (dereferenceable load (p0) from %ir.5)
+byte_copy		renamable $x9 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = LDRBBroX killed renamable $x8, killed renamable $x9, 0, 0 :: (load (s8) from %ir.16)
+byte_copy		renamable $x9 = LDRXui $sp, 3 :: (dereferenceable load (p0) from %ir.4)
+byte_copy		renamable $x10 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		STRBBroX killed renamable $w8, killed renamable $x9, killed renamable $x10, 0, 0 :: (store (s8) into %ir.21)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+byte_copy		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.7)
+# Function: store_load
+store_load		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+store_load		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+store_load		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+store_load		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+store_load		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+store_load		RET_ReallyLR implicit killed $w0
+# Function: array_index
+array_index		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+array_index		renamable $x9 = LDRSWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+array_index		renamable $w0 = LDRWroX killed renamable $x8, killed renamable $x9, 0, 1 :: (load (s32) from %ir.8)
+array_index		RET_ReallyLR implicit killed $w0
+# Function: store_via_ptr
+store_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.3)
+store_via_ptr		renamable $x9 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.3)
+store_via_ptr		STRWui killed renamable $w8, killed renamable $x9, 0 :: (store (s32) into %ir.6)
+# Function: load_via_ptr
+load_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+load_via_ptr		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+load_via_ptr		renamable $w0 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.3)
+load_via_ptr		RET_ReallyLR implicit killed $w0
+# Function: struct_access
+struct_access		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.6)
+struct_access		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.3)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 1 :: (load (s32) from %ir.9)
+struct_access		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.4)
+struct_access		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.3)
+struct_access		renamable $w9 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.4)
+struct_access		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+struct_access		RET_ReallyLR implicit killed $w0
+# Function: multi_hop
+multi_hop		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.2)
+multi_hop		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.2)
+multi_hop		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+multi_hop		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.3)
+multi_hop		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.3)
+multi_hop		renamable $w8 = UBFMWri killed renamable $w8, 31, 30
+multi_hop		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.4)
+multi_hop		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.4)
+multi_hop		renamable $w8 = nsw SUBSWri killed renamable $w8, 3, 0, implicit-def dead $nzcv
+multi_hop		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.5)
+multi_hop		renamable $w0 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.5)
+multi_hop		RET_ReallyLR implicit killed $w0
+# Function: cond_store
+cond_store		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+cond_store		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+cond_store		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+cond_store		renamable $w0 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+cond_store		RET_ReallyLR implicit killed $w0
+# Function: byte_copy
+byte_copy		STRXui killed renamable $x1, $sp, 2 :: (store (p0) into %ir.5)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		dead renamable $w8 = SUBSWrr killed renamable $w8, killed renamable $w9, implicit-def $nzcv
+byte_copy		renamable $x8 = LDRXui $sp, 2 :: (dereferenceable load (p0) from %ir.5)
+byte_copy		renamable $x9 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = LDRBBroX killed renamable $x8, killed renamable $x9, 0, 0 :: (load (s8) from %ir.16)
+byte_copy		renamable $x9 = LDRXui $sp, 3 :: (dereferenceable load (p0) from %ir.4)
+byte_copy		renamable $x10 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		STRBBroX killed renamable $w8, killed renamable $x9, killed renamable $x10, 0, 0 :: (store (s8) into %ir.21)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+byte_copy		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.7)
+# Function: store_load
+store_load		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+store_load		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+store_load		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+store_load		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+store_load		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+store_load		RET_ReallyLR implicit killed $w0
+# Function: array_index
+array_index		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+array_index		renamable $x9 = LDRSWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+array_index		renamable $w0 = LDRWroX killed renamable $x8, killed renamable $x9, 0, 1 :: (load (s32) from %ir.8)
+array_index		RET_ReallyLR implicit killed $w0
+# Function: store_via_ptr
+store_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.3)
+store_via_ptr		renamable $x9 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.3)
+store_via_ptr		STRWui killed renamable $w8, killed renamable $x9, 0 :: (store (s32) into %ir.6)
+# Function: load_via_ptr
+load_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+load_via_ptr		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+load_via_ptr		renamable $w0 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.3)
+load_via_ptr		RET_ReallyLR implicit killed $w0
+# Function: struct_access
+struct_access		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.6)
+struct_access		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.3)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 1 :: (load (s32) from %ir.9)
+struct_access		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.4)
+struct_access		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.3)
+struct_access		renamable $w9 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.4)
+struct_access		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+struct_access		RET_ReallyLR implicit killed $w0
+# Function: multi_hop
+multi_hop		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.2)
+multi_hop		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.2)
+multi_hop		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+multi_hop		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.3)
+multi_hop		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.3)
+multi_hop		renamable $w8 = UBFMWri killed renamable $w8, 31, 30
+multi_hop		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.4)
+multi_hop		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.4)
+multi_hop		renamable $w8 = nsw SUBSWri killed renamable $w8, 3, 0, implicit-def dead $nzcv
+multi_hop		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.5)
+multi_hop		renamable $w0 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.5)
+multi_hop		RET_ReallyLR implicit killed $w0
+# Function: cond_store
+cond_store		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+cond_store		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+cond_store		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+cond_store		renamable $w0 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+cond_store		RET_ReallyLR implicit killed $w0
+# Function: byte_copy
+byte_copy		STRXui killed renamable $x1, $sp, 2 :: (store (p0) into %ir.5)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		dead renamable $w8 = SUBSWrr killed renamable $w8, killed renamable $w9, implicit-def $nzcv
+byte_copy		renamable $x8 = LDRXui $sp, 2 :: (dereferenceable load (p0) from %ir.5)
+byte_copy		renamable $x9 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = LDRBBroX killed renamable $x8, killed renamable $x9, 0, 0 :: (load (s8) from %ir.16)
+byte_copy		renamable $x9 = LDRXui $sp, 3 :: (dereferenceable load (p0) from %ir.4)
+byte_copy		renamable $x10 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		STRBBroX killed renamable $w8, killed renamable $x9, killed renamable $x10, 0, 0 :: (store (s8) into %ir.21)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+byte_copy		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.7)
+# Function: store_load
+store_load		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+store_load		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+store_load		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+store_load		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+store_load		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+store_load		RET_ReallyLR implicit killed $w0
+# Function: array_index
+array_index		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+array_index		renamable $x9 = LDRSWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+array_index		renamable $w0 = LDRWroX killed renamable $x8, killed renamable $x9, 0, 1 :: (load (s32) from %ir.8)
+array_index		RET_ReallyLR implicit killed $w0
+# Function: store_via_ptr
+store_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.3)
+store_via_ptr		renamable $x9 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.3)
+store_via_ptr		STRWui killed renamable $w8, killed renamable $x9, 0 :: (store (s32) into %ir.6)
+# Function: load_via_ptr
+load_via_ptr		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+load_via_ptr		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+load_via_ptr		renamable $w0 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.3)
+load_via_ptr		RET_ReallyLR implicit killed $w0
+# Function: struct_access
+struct_access		STRXui killed renamable $x0, $sp, 1 :: (store (p0) into %ir.2)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 0 :: (load (s32) from %ir.6)
+struct_access		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.3)
+struct_access		renamable $x8 = LDRXui $sp, 1 :: (dereferenceable load (p0) from %ir.2)
+struct_access		renamable $w8 = LDRWui killed renamable $x8, 1 :: (load (s32) from %ir.9)
+struct_access		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.4)
+struct_access		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.3)
+struct_access		renamable $w9 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.4)
+struct_access		renamable $w0 = nsw ADDWrr killed renamable $w8, killed renamable $w9
+struct_access		RET_ReallyLR implicit killed $w0
+# Function: multi_hop
+multi_hop		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.2)
+multi_hop		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.2)
+multi_hop		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+multi_hop		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.3)
+multi_hop		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.3)
+multi_hop		renamable $w8 = UBFMWri killed renamable $w8, 31, 30
+multi_hop		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.4)
+multi_hop		renamable $w8 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.4)
+multi_hop		renamable $w8 = nsw SUBSWri killed renamable $w8, 3, 0, implicit-def dead $nzcv
+multi_hop		STRWui killed renamable $w8, $sp, 0 :: (store (s32) into %ir.5)
+multi_hop		renamable $w0 = LDRWui $sp, 0 :: (dereferenceable load (s32) from %ir.5)
+multi_hop		RET_ReallyLR implicit killed $w0
+# Function: cond_store
+cond_store		STRWui killed renamable $w0, $sp, 3 :: (store (s32) into %ir.3)
+cond_store		renamable $w8 = LDRWui $sp, 3 :: (dereferenceable load (s32) from %ir.3)
+cond_store		STRWui killed renamable $w8, $sp, 1 :: (store (s32) into %ir.5)
+cond_store		renamable $w0 = LDRWui $sp, 1 :: (dereferenceable load (s32) from %ir.5)
+cond_store		RET_ReallyLR implicit killed $w0
+# Function: byte_copy
+byte_copy		STRXui killed renamable $x1, $sp, 2 :: (store (p0) into %ir.5)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		dead renamable $w8 = SUBSWrr killed renamable $w8, killed renamable $w9, implicit-def $nzcv
+byte_copy		renamable $x8 = LDRXui $sp, 2 :: (dereferenceable load (p0) from %ir.5)
+byte_copy		renamable $x9 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = LDRBBroX killed renamable $x8, killed renamable $x9, 0, 0 :: (load (s8) from %ir.16)
+byte_copy		renamable $x9 = LDRXui $sp, 3 :: (dereferenceable load (p0) from %ir.4)
+byte_copy		renamable $x10 = LDRSWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		STRBBroX killed renamable $w8, killed renamable $x9, killed renamable $x10, 0, 0 :: (store (s8) into %ir.21)
+byte_copy		renamable $w8 = LDRWui $sp, 2 :: (dereferenceable load (s32) from %ir.7)
+byte_copy		renamable $w8 = nsw ADDWri killed renamable $w8, 1, 0
+byte_copy		STRWui killed renamable $w8, $sp, 2 :: (store (s32) into %ir.7)

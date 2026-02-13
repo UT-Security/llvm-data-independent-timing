@@ -14,9 +14,11 @@
 #ifndef LLVM_CODEGEN_TAINTANALYSIS_H
 #define LLVM_CODEGEN_TAINTANALYSIS_H
 
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SparseBitVector.h"
-#include "llvm/CodeGen/MachinePassManager.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/Register.h"
 
 namespace llvm {
@@ -25,7 +27,6 @@ struct MemLoc {
   enum Kind { IRValue, Unknown } K = Unknown;
   const Value *V = nullptr; // base pointer value
 };
-
 
 /// TaintState holds the result of taint analysis for a MachineFunction.
 /// It tracks which virtual registers are considered tainted.
@@ -37,8 +38,10 @@ struct TaintState {
 
 public:
   bool operator==(const TaintState &O) const {
-    return TaintedRegs == O.TaintedRegs && TaintedFrameIdx == O.TaintedFrameIdx &&
-      TaintedMemVals == O.TaintedMemVals && UnknownMemTainted == O.UnknownMemTainted;
+    return TaintedRegs == O.TaintedRegs &&
+           TaintedFrameIdx == O.TaintedFrameIdx &&
+           TaintedMemVals == O.TaintedMemVals &&
+           UnknownMemTainted == O.UnknownMemTainted;
   }
 
   bool operator!=(const TaintState &O) const { return !(*this == O); }
@@ -69,13 +72,16 @@ public:
   void setTaintedFI(int FI) { TaintedFrameIdx.insert(FI); }
 
   bool isTaintedMem(const MemLoc &L) const {
-    if (L.K == MemLoc::IRValue) return TaintedMemVals.contains(L.V);
+    if (L.K == MemLoc::IRValue)
+      return TaintedMemVals.contains(L.V);
     return UnknownMemTainted;
   }
 
   void setTaintedMem(const MemLoc &L) {
-    if (L.K == MemLoc::IRValue) TaintedMemVals.insert(L.V);
-    else UnknownMemTainted = true;
+    if (L.K == MemLoc::IRValue)
+      TaintedMemVals.insert(L.V);
+    else
+      UnknownMemTainted = true;
   }
 
   bool emptyRegs() const { return TaintedRegs.empty(); }
@@ -87,6 +93,15 @@ public:
   unsigned count() const { return countRegs() + countFIs(); }
 };
 
+/// TaintResult holds both the merged taint state and per-BB entry states.
+/// The per-BB IN map is needed by the export pass to replay taint propagation
+/// instruction-by-instruction and determine which specific instructions are
+/// tainted.
+struct TaintResult {
+  TaintState Merged;
+  DenseMap<const MachineBasicBlock *, TaintState> IN;
+};
+
 /// TaintAnalysis is a MachineFunction analysis that computes which registers
 /// are tainted based on IR function argument attributes.
 class TaintAnalysis : public AnalysisInfoMixin<TaintAnalysis> {
@@ -94,7 +109,7 @@ class TaintAnalysis : public AnalysisInfoMixin<TaintAnalysis> {
   static AnalysisKey Key;
 
 public:
-  using Result = TaintState;
+  using Result = TaintResult;
   LLVM_ABI Result run(MachineFunction &MF,
                       MachineFunctionAnalysisManager &MFAM);
 };
@@ -107,7 +122,7 @@ public:
                         MachineFunctionAnalysisManager &MFAM);
 
   MachineFunctionProperties getRequiredProperties() const {
-    return MachineFunctionProperties().setIsSSA();
+    return MachineFunctionProperties();
   }
 };
 
