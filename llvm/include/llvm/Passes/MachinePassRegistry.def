@@ -19,6 +19,7 @@
 MODULE_ANALYSIS("collector-metadata", CollectorMetadataAnalysis())
 MODULE_ANALYSIS("machine-module-info", MachineModuleAnalysis())
 MODULE_ANALYSIS("pass-instrumentation", PassInstrumentationAnalysis(PIC))
+MODULE_ANALYSIS("taint-summary", TaintSummaryAnalysis())
 #undef MODULE_ANALYSIS
 
 #ifndef MODULE_PASS

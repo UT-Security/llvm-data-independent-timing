@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachinePassManager.h"
 #include "llvm/CodeGen/MachineVerifier.h"
+#include "llvm/CodeGen/TaintFixedPointIteration.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
@@ -58,6 +59,11 @@ static cl::opt<RegAllocType, false, RegAllocTypeParser>
 static cl::opt<bool>
     DebugPM("debug-pass-manager", cl::Hidden,
             cl::desc("Print pass management debugging information"));
+
+static cl::opt<bool>
+    RunTaintInterproc("run-taint-interproc",
+                      cl::desc("Run interprocedural taint analysis on MIR input"),
+                      cl::init(false));
 
 bool LLCDiagnosticHandler::handleDiagnostics(const DiagnosticInfo &DI) {
   DiagnosticHandler::handleDiagnostics(DI);
@@ -153,17 +159,22 @@ int llvm::compileModuleWithNewPM(
   ModulePassManager MPM;
   FunctionPassManager FPM;
 
-  if (!PassPipeline.empty()) {
+  if (!PassPipeline.empty() || (MIR && RunTaintInterproc)) {
     // Construct a custom pass pipeline that starts after instruction
-    // selection.
+    // selection, OR set up minimal pipeline for MIR analysis.
 
-    if (!MIR) {
+    if (!MIR && !PassPipeline.empty()) {
       WithColor::error(errs(), Arg0) << "-passes is for .mir file only.\n";
       return 1;
     }
 
-    // FIXME: verify that there are no IR passes.
-    ExitOnErr(PB.parsePassPipeline(MPM, PassPipeline));
+    // Parse user-provided pipeline (if any)
+    if (!PassPipeline.empty()) {
+      // FIXME: verify that there are no IR passes.
+      ExitOnErr(PB.parsePassPipeline(MPM, PassPipeline));
+    }
+
+    // Add printing passes for MIR output
     MPM.addPass(PrintMIRPreparePass(*OS));
     MachineFunctionPassManager MFPM;
     if (VK == VerifierKind::InputOutput)
@@ -191,6 +202,12 @@ int llvm::compileModuleWithNewPM(
 
   if (MIR && MIR->parseMachineFunctions(*M, MAM))
     return 1;
+
+  // Add interprocedural taint analysis pass if requested.
+  // This must run AFTER parseMachineFunctions populates the MachineModuleInfo.
+  if (RunTaintInterproc && MIR) {
+    MPM.addPass(TaintInterprocPass());
+  }
 
   // Before executing passes, print the final values of the LLVM options.
   cl::PrintOptionValues();

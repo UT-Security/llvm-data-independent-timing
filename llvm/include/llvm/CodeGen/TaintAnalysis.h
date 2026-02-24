@@ -20,27 +20,39 @@
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/Register.h"
+#include "llvm/Support/CommandLine.h"
 
 namespace llvm {
 
-struct MemLoc {
-  enum Kind { IRValue, Unknown } K = Unknown;
-  const Value *V = nullptr; // base pointer value
-};
+// Forward declarations
+class TaintSummaryInfo;
+class Module;
+class TargetRegisterInfo;
+class MachineInstr;
+class GlobalVariable;
+
+/// Cell keys: (base, (offset, size_in_bytes))
+using StackCell = std::pair<int, std::pair<int64_t, uint64_t>>;
+using GlobalCell =
+    std::pair<const GlobalVariable *, std::pair<int64_t, uint64_t>>;
+
+/// Command-line option for taint output file (shared across passes).
+extern cl::opt<std::string> TaintOutputFile;
 
 /// TaintState holds the result of taint analysis for a MachineFunction.
-/// It tracks which virtual registers are considered tainted.
+/// It tracks which virtual registers are considered tainted, and which
+/// memory cells (stack/global at specific offset+size) are tainted.
 struct TaintState {
   SparseBitVector<> TaintedRegs;
-  DenseSet<int> TaintedFrameIdx;
-  DenseSet<const Value *> TaintedMemVals;
+  DenseSet<StackCell> TaintedStackCells;
+  DenseSet<GlobalCell> TaintedGlobalCells;
   bool UnknownMemTainted = false;
 
 public:
   bool operator==(const TaintState &O) const {
     return TaintedRegs == O.TaintedRegs &&
-           TaintedFrameIdx == O.TaintedFrameIdx &&
-           TaintedMemVals == O.TaintedMemVals &&
+           TaintedStackCells == O.TaintedStackCells &&
+           TaintedGlobalCells == O.TaintedGlobalCells &&
            UnknownMemTainted == O.UnknownMemTainted;
   }
 
@@ -48,12 +60,10 @@ public:
 
   void join(const TaintState &O) {
     TaintedRegs |= O.TaintedRegs;
-    for (const auto &FI : O.TaintedFrameIdx) {
-      TaintedFrameIdx.insert(FI);
-    }
-    for (const Value *V : O.TaintedMemVals) {
-      TaintedMemVals.insert(V);
-    }
+    for (const auto &C : O.TaintedStackCells)
+      TaintedStackCells.insert(C);
+    for (const auto &C : O.TaintedGlobalCells)
+      TaintedGlobalCells.insert(C);
     UnknownMemTainted |= O.UnknownMemTainted;
   }
 
@@ -68,29 +78,55 @@ public:
       TaintedRegs.set(R.id());
   }
 
-  bool isTaintedFI(int FI) const { return TaintedFrameIdx.contains(FI); }
-  void setTaintedFI(int FI) { TaintedFrameIdx.insert(FI); }
-
-  bool isTaintedMem(const MemLoc &L) const {
-    if (L.K == MemLoc::IRValue)
-      return TaintedMemVals.contains(L.V);
-    return UnknownMemTainted;
+  // Stack cell methods
+  void setTaintedStackCell(int FI, int64_t Off, uint64_t Sz) {
+    TaintedStackCells.insert({FI, {Off, Sz}});
+  }
+  void clearTaintedStackCell(int FI, int64_t Off, uint64_t Sz) {
+    TaintedStackCells.erase({FI, {Off, Sz}});
+  }
+  bool isTaintedStackCell(int FI, int64_t Off, uint64_t Sz) const {
+    return TaintedStackCells.contains({FI, {Off, Sz}});
+  }
+  /// Fallback: any cell for this FI tainted? O(n) scan.
+  bool anyTaintedStackCellForFI(int FI) const {
+    for (const auto &C : TaintedStackCells)
+      if (C.first == FI)
+        return true;
+    return false;
   }
 
-  void setTaintedMem(const MemLoc &L) {
-    if (L.K == MemLoc::IRValue)
-      TaintedMemVals.insert(L.V);
-    else
-      UnknownMemTainted = true;
+  // Global cell methods
+  void setTaintedGlobalCell(const GlobalVariable *GV, int64_t Off,
+                            uint64_t Sz) {
+    TaintedGlobalCells.insert({GV, {Off, Sz}});
+  }
+  void clearTaintedGlobalCell(const GlobalVariable *GV, int64_t Off,
+                              uint64_t Sz) {
+    TaintedGlobalCells.erase({GV, {Off, Sz}});
+  }
+  bool isTaintedGlobalCell(const GlobalVariable *GV, int64_t Off,
+                           uint64_t Sz) const {
+    return TaintedGlobalCells.contains({GV, {Off, Sz}});
+  }
+  bool anyTaintedGlobalCellForGV(const GlobalVariable *GV) const {
+    for (const auto &C : TaintedGlobalCells)
+      if (C.first == GV)
+        return true;
+    return false;
   }
 
   bool emptyRegs() const { return TaintedRegs.empty(); }
-  bool emptyFIs() const { return TaintedFrameIdx.empty(); }
-  bool empty() const { return emptyRegs() && emptyFIs(); }
+  bool empty() const {
+    return emptyRegs() && TaintedStackCells.empty() &&
+           TaintedGlobalCells.empty() && !UnknownMemTainted;
+  }
 
   unsigned countRegs() const { return TaintedRegs.count(); }
-  unsigned countFIs() const { return (unsigned)TaintedFrameIdx.size(); }
-  unsigned count() const { return countRegs() + countFIs(); }
+  unsigned countCells() const {
+    return (unsigned)(TaintedStackCells.size() + TaintedGlobalCells.size());
+  }
+  unsigned count() const { return countRegs() + countCells(); }
 };
 
 /// TaintResult holds both the merged taint state and per-BB entry states.
@@ -110,8 +146,14 @@ class TaintAnalysis : public AnalysisInfoMixin<TaintAnalysis> {
 
 public:
   using Result = TaintResult;
+
+  /// Standard pass-manager entry point. Extracts TSI from MFAM proxy.
   LLVM_ABI Result run(MachineFunction &MF,
                       MachineFunctionAnalysisManager &MFAM);
+
+  /// Direct entry point for interprocedural analysis.
+  /// Bypasses pass manager; TSI is provided directly by the module pass.
+  LLVM_ABI Result run(MachineFunction &MF, const TaintSummaryInfo *TSI);
 };
 
 /// TaintAnalysisPass is a MachineFunction pass that runs TaintAnalysis
@@ -125,6 +167,38 @@ public:
     return MachineFunctionProperties();
   }
 };
+
+//===----------------------------------------------------------------------===//
+// Shared helpers used by both TaintAnalysisPass and TaintInterprocPass
+//===----------------------------------------------------------------------===//
+
+/// Propagate taint through a single machine instruction.
+void propagateTaintMI(const MachineInstr &MI, TaintState &S,
+                      const TargetRegisterInfo *TRI,
+                      const TaintSummaryInfo *TSI = nullptr,
+                      Module *M = nullptr);
+
+/// Check if any register use of MI is tainted.
+bool anyTaintedRegUse(const MachineInstr &MI, const TaintState &S);
+
+/// Find the called function from a call instruction.
+/// Returns nullptr for indirect calls.
+const Function *findCalledFunction(Module &M, const MachineInstr &MI);
+
+/// Holds buffered per-function taint statistics for sorting before output.
+struct FunctionTaintStats {
+  std::string Output;     // Formatted stats text
+  double TaintRatio = 0.0;
+};
+
+/// Export tainted instructions for a single MachineFunction to the output
+/// streams. OS receives the TSV instruction dump; SrcOS (if non-null)
+/// receives the source-line summary; Stats (if non-null) receives
+/// buffered per-function taint composition statistics.
+void exportTaintedInstructions(MachineFunction &MF, const TaintResult &TR,
+                               const TaintSummaryInfo *TSI,
+                               raw_ostream &OS, raw_ostream *SrcOS,
+                               FunctionTaintStats *Stats = nullptr);
 
 } // namespace llvm
 

@@ -238,6 +238,9 @@ add_llvm_component_library(LLVMCodeGen
   TailDuplication.cpp
   TailDuplicator.cpp
   TaintAnalysis.cpp
+  TaintFixedPointIteration.cpp
+  TaintSummaryCollector.cpp
+  TaintSummaryInfo.cpp
   TargetFrameLoweringImpl.cpp
   TargetInstrInfo.cpp
   TargetLoweringBase.cpp
