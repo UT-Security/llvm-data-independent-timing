@@ -55,8 +55,26 @@ class TaintSummaryInfo {
   /// Map from Function to its taint summary.
   DenseMap<const Function *, FunctionTaintSummary> Summaries;
 
+  /// Module-level flag: true if ANY function in the module stored tainted
+  /// data to unknown/heap memory. When set, all unknown/heap loads in all
+  /// functions are considered potentially tainted (cross-function safety).
+  bool ModuleUnknownMemTainted = false;
+
 public:
   TaintSummaryInfo() = default;
+
+  /// Set the module-level unknown-mem-tainted flag.
+  /// Returns true if the flag changed (was previously false).
+  bool setUnknownMemTainted() {
+    if (!ModuleUnknownMemTainted) {
+      ModuleUnknownMemTainted = true;
+      return true;
+    }
+    return false;
+  }
+
+  /// Check the module-level unknown-mem-tainted flag.
+  bool hasUnknownMemTainted() const { return ModuleUnknownMemTainted; }
 
   /// Store a taint summary for a function.
   void storeSummary(const Function &F, FunctionTaintSummary Summary) {

@@ -35,6 +35,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include <memory>
 
 using namespace llvm;
 
@@ -82,24 +83,21 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
         continue;
       MachineFunction *CalleeMF = &CalleeMFA->getMF();
 
-      // Walk callee's liveins: livein[i] = (PhysReg, VirtReg) maps to arg i.
-      // If PhysReg is tainted at the call site in the caller, then arg i
-      // of the callee is tainted.
+      // Walk callee's liveins and map each physical register to its argument
+      // index via hardware encoding (not livein list order, which may differ).
       FunctionTaintSummary CalleeSummary = TSI.getSummary(*Callee);
-      unsigned ArgIdx = 0;
-      for (const auto &[PhysReg, VirtReg] :
-           CalleeMF->getRegInfo().liveins()) {
+      for (const auto &[PhysReg, VirtReg] : CalleeMF->getRegInfo().liveins()) {
+        unsigned ArgIdx = TRI->getEncodingValue(PhysReg);
         if (S.isTainted(PhysReg)) {
           if (!CalleeSummary.TaintedArgIndices.contains(ArgIdx)) {
             CalleeSummary.TaintedArgIndices.insert(ArgIdx);
             Changed = true;
             LLVM_DEBUG(dbgs() << "  caller " << MF.getName() << " -> callee "
                               << Callee->getName() << ": arg " << ArgIdx
-                              << " now tainted (via "
-                              << printReg(PhysReg, TRI) << ")\n");
+                              << " now tainted (via " << printReg(PhysReg, TRI)
+                              << ")\n");
           }
         }
-        ++ArgIdx;
       }
 
       if (Changed)
@@ -114,8 +112,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
   // Step 1: Get FunctionAnalysisManager — in the new PM, MachineFunctions
   // are stored per-function in the FAM (via MachineFunctionAnalysis),
   // NOT in MachineModuleInfo.
-  auto &FAM =
-      MAM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+  auto &FAM = MAM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
 
   // Step 2: Create TaintSummaryInfo — shared database of per-function summaries
   TaintSummaryInfo TSI;
@@ -135,6 +132,22 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       TSI.storeSummary(F, Summary);
       LLVM_DEBUG(dbgs() << "Seed: " << F.getName() << " has "
                         << TaintedArgs.size() << " tainted arg(s)\n");
+    }
+  }
+
+  // Open trace file (derives path from TaintOutputFile: out_trace.txt)
+  std::unique_ptr<raw_fd_ostream> TraceOS;
+  if (!TaintOutputFile.empty()) {
+    SmallString<256> TracePath(TaintOutputFile);
+    std::string TraceExt = sys::path::extension(TracePath).str();
+    sys::path::replace_extension(TracePath, "");
+    TracePath += "_trace";
+    TracePath += TraceExt;
+    std::error_code EC;
+    TraceOS = std::make_unique<raw_fd_ostream>(TracePath, EC, sys::fs::OF_None);
+    if (EC) {
+      errs() << "Error creating trace file: " << EC.message() << "\n";
+      TraceOS.reset();
     }
   }
 
@@ -158,8 +171,8 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
     ++Iteration;
 
     if (Iteration > MaxIterations) {
-      errs() << "ERROR: Taint analysis did not converge after "
-             << MaxIterations << " iterations.\n"
+      errs() << "ERROR: Taint analysis did not converge after " << MaxIterations
+             << " iterations.\n"
              << "This indicates a bug (non-monotonic updates or "
              << "incorrect equality check).\n";
       report_fatal_error("Taint fixed-point iteration failed to converge");
@@ -167,6 +180,8 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
 
     LLVM_DEBUG(dbgs() << "\n=== Taint fixed-point iteration " << Iteration
                       << " ===\n");
+    if (TraceOS)
+      *TraceOS << "\n=== Iteration " << Iteration << " ===\n";
 
     for (Function &F : M) {
       if (F.isDeclaration())
@@ -179,14 +194,38 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
         continue;
       }
       MachineFunction *MF = &MFA->getMF();
+      const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
 
-      // Only analyze functions that have at least one tainted argument
-      // (either from IR attributes or from interprocedural propagation)
+      // Get current summary (may have tainted args from IR attrs or
+      // interprocedural propagation, or may be empty for functions that
+      // only receive taint via callee return values).
       FunctionTaintSummary CurrentSummary = TSI.getSummary(F);
-      if (CurrentSummary.TaintedArgIndices.empty()) {
-        LLVM_DEBUG(dbgs() << "  [skip] " << F.getName()
-                          << ": no tainted args\n");
-        continue;
+
+      // Log function entry with tainted arg seeds
+      if (TraceOS) {
+        *TraceOS << "\n--- " << F.getName() << " ---\n";
+        *TraceOS << "  tainted_args:";
+        if (CurrentSummary.TaintedArgIndices.empty())
+          *TraceOS << " (none)";
+        else
+          for (unsigned Idx : CurrentSummary.TaintedArgIndices)
+            *TraceOS << " " << Idx;
+        *TraceOS << "\n";
+
+        // Show which physical registers will be seeded via liveins
+        *TraceOS << "  seeded_regs:";
+        bool Any = false;
+        for (const auto &[PhysReg, VirtReg] : MF->getRegInfo().liveins()) {
+          unsigned ArgIdx = TRI->getEncodingValue(PhysReg);
+          if (CurrentSummary.TaintedArgIndices.contains(ArgIdx)) {
+            *TraceOS << " " << printReg(PhysReg, TRI) << "(arg" << ArgIdx
+                     << ")";
+            Any = true;
+          }
+        }
+        if (!Any)
+          *TraceOS << " (none)";
+        *TraceOS << "\n";
       }
 
       // Run intraprocedural analysis with TSI.
@@ -195,6 +234,33 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       TaintAnalysis TA;
       TaintResult TR = TA.run(*MF, &TSI);
       Results[&F] = TR;
+
+      // Log merged taint result
+      if (TraceOS) {
+        *TraceOS << "  result: " << TR.Merged.countRegs() << " tainted regs, "
+                 << TR.Merged.countCells() << " tainted cells";
+        if (TR.Merged.UnknownMemTainted)
+          *TraceOS << ", UnknownMemTainted";
+        *TraceOS << "\n";
+        // Print tainted register names
+        *TraceOS << "  tainted_regs:";
+        for (const auto &RegID : TR.Merged.TaintedRegs)
+          *TraceOS << " " << printReg(Register(RegID), TRI);
+        *TraceOS << "\n";
+      }
+
+      // Propagate UnknownMemTainted to the module-level flag in TSI.
+      // If any function stores tainted data to heap, all functions need
+      // to know so their heap loads are correctly tainted.
+      if (TR.Merged.UnknownMemTainted) {
+        if (TSI.setUnknownMemTainted()) {
+          Changed = true;
+          LLVM_DEBUG(dbgs() << "  " << F.getName()
+                            << ": set module-level UnknownMemTainted\n");
+          if (TraceOS)
+            *TraceOS << "  ** set module-level UnknownMemTainted **\n";
+        }
+      }
 
       // Check if return register (X0/W0) is tainted.
       // Use the callee's liveins to find the first livein (return register
@@ -215,6 +281,9 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
         Changed = true;
         LLVM_DEBUG(dbgs() << "  " << F.getName() << ": summary changed"
                           << " (returns_tainted=" << ReturnsTainted << ")\n");
+        if (TraceOS)
+          *TraceOS << "  ** summary changed: returns_tainted=" << ReturnsTainted
+                   << " **\n";
       } else {
         LLVM_DEBUG(dbgs() << "  " << F.getName() << ": unchanged\n");
       }
@@ -222,14 +291,22 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       // Propagate argument taint to callees.
       // If caller_simple passes a tainted X0 to identity(), this adds
       // arg 0 to identity's TaintedArgIndices in TSI.
-      if (propagateArgTaintToCallees(*MF, TR, TSI, M, FAM))
+      if (propagateArgTaintToCallees(*MF, TR, TSI, M, FAM)) {
         Changed = true;
+        if (TraceOS)
+          *TraceOS << "  ** propagated arg taint to callee(s) **\n";
+      }
     }
   }
 
   LLVM_DEBUG(dbgs() << "\nTaint analysis converged after " << Iteration
                     << " iteration(s)\n");
   LLVM_DEBUG(dbgs() << "Total function summaries: " << TSI.size() << "\n");
+
+  if (TraceOS) {
+    *TraceOS << "\n=== Converged after " << Iteration << " iteration(s) ===\n";
+    *TraceOS << "Total function summaries: " << TSI.size() << "\n";
+  }
 
   // Step 4: Export tainted instructions to file
   if (!TaintOutputFile.empty()) {
@@ -251,8 +328,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       std::error_code EC;
       raw_fd_ostream OS(SrcPath, EC, sys::fs::OF_None);
       if (EC)
-        errs() << "Error creating source output file: " << EC.message()
-               << "\n";
+        errs() << "Error creating source output file: " << EC.message() << "\n";
     }
 
     SmallString<256> StatsPath(TaintOutputFile);
@@ -297,10 +373,10 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
     }
 
     // Sort by taint ratio, highest first.
-    llvm::sort(AllStats, [](const FunctionTaintStats &A,
-                            const FunctionTaintStats &B) {
-      return A.TaintRatio > B.TaintRatio;
-    });
+    llvm::sort(AllStats,
+               [](const FunctionTaintStats &A, const FunctionTaintStats &B) {
+                 return A.TaintRatio > B.TaintRatio;
+               });
 
     // Write sorted stats to file.
     {
@@ -313,9 +389,82 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
           StatsOS << S.Output;
     }
 
-    LLVM_DEBUG(dbgs() << "Exported tainted instructions to "
-                      << TaintOutputFile << "\n");
+    LLVM_DEBUG(dbgs() << "Exported tainted instructions to " << TaintOutputFile
+                      << "\n");
   }
 
+  std::unique_ptr<raw_fd_ostream> RegionsOS;
+  if (!TaintRegionsOutputFile.empty()) {
+    std::error_code EC;
+    RegionsOS = std::make_unique<raw_fd_ostream>(TaintRegionsOutputFile, EC,
+                                                 sys::fs::OF_None);
+    if (EC) {
+      errs() << "Error creating taint regions output file: " << EC.message()
+             << "\n";
+      RegionsOS.reset();
+    }
+  }
+
+  std::unique_ptr<raw_fd_ostream> SourceRegionsOS;
+  if (!TaintSourceRegionsOutputFile.empty()) {
+    std::error_code EC;
+    SourceRegionsOS = std::make_unique<raw_fd_ostream>(
+        TaintSourceRegionsOutputFile, EC, sys::fs::OF_None);
+    if (EC) {
+      errs() << "Error creating taint source regions output file: "
+             << EC.message() << "\n";
+      SourceRegionsOS.reset();
+    }
+  }
+
+  unsigned BarriersInserted = 0;
+  unsigned RegionsReported = 0;
+  unsigned SourceRegionsReported = 0;
+  if (TaintInsertISB || RegionsOS || SourceRegionsOS) {
+    for (Function &F : M) {
+      if (F.isDeclaration())
+        continue;
+      auto *MFA = FAM.getCachedResult<MachineFunctionAnalysis>(F);
+      if (!MFA)
+        continue;
+
+      auto It = Results.find(&F);
+      if (It == Results.end() || It->second.Merged.empty())
+        continue;
+
+      if (TaintInsertISB) {
+        BarriersInserted += insertTaintBarriers(MFA->getMF(), It->second, &TSI,
+                                                RegionsOS.get());
+      } else if (RegionsOS) {
+        RegionsReported += exportTaintBarrierRegions(MFA->getMF(), It->second,
+                                                     &TSI, *RegionsOS);
+      }
+
+      if (SourceRegionsOS)
+        SourceRegionsReported += exportTaintSourceRegions(
+            MFA->getMF(), It->second, &TSI, *SourceRegionsOS);
+    }
+
+    if (TaintInsertISB) {
+      LLVM_DEBUG(dbgs() << "Inserted ISB barriers around " << BarriersInserted
+                        << " tainted instruction(s)\n");
+      if (TraceOS)
+        *TraceOS << "Inserted ISB barriers around " << BarriersInserted
+                 << " tainted instruction(s)\n";
+    } else if (TraceOS && RegionsOS) {
+      *TraceOS << "Reported barrier-protected regions covering "
+               << RegionsReported << " tainted instruction(s)\n";
+    }
+
+    if (TraceOS && RegionsOS)
+      *TraceOS << "Taint regions report: " << TaintRegionsOutputFile << "\n";
+    if (TraceOS && SourceRegionsOS)
+      *TraceOS << "Taint source regions report: "
+               << TaintSourceRegionsOutputFile << " (" << SourceRegionsReported
+               << " source region(s))\n";
+  }
+
+  // The pass mutates cached MachineFunctions, not the IR module. Preserve the
+  // analysis cache so a following MIR printer sees the modified functions.
   return PreservedAnalyses::all();
 }

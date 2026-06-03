@@ -7026,6 +7026,18 @@ void AArch64InstrInfo::insertNoop(MachineBasicBlock &MBB,
   BuildMI(MBB, MI, DL, get(AArch64::NOP));
 }
 
+void AArch64InstrInfo::insertInstructionBarrier(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
+    const DebugLoc &DL) const {
+  BuildMI(MBB, MI, DL, get(AArch64::ISB)).addImm(0xf);
+}
+
+void AArch64InstrInfo::insertDataBarrier(MachineBasicBlock &MBB,
+                                         MachineBasicBlock::iterator MI,
+                                         const DebugLoc &DL) const {
+  BuildMI(MBB, MI, DL, get(AArch64::DSB)).addImm(0xf);
+}
+
 MCInst AArch64InstrInfo::getNop() const { return MCInstBuilder(AArch64::NOP); }
 
 // AArch64 supports MachineCombiner.

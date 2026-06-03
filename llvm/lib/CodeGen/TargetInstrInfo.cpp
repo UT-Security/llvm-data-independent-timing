@@ -82,6 +82,18 @@ void TargetInstrInfo::insertNoop(MachineBasicBlock &MBB,
   llvm_unreachable("Target didn't implement insertNoop!");
 }
 
+void TargetInstrInfo::insertInstructionBarrier(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
+    const DebugLoc &DL) const {
+  report_fatal_error("target did not implement instruction barrier insertion");
+}
+
+void TargetInstrInfo::insertDataBarrier(MachineBasicBlock &MBB,
+                                        MachineBasicBlock::iterator MI,
+                                        const DebugLoc &DL) const {
+  report_fatal_error("target did not implement data barrier insertion");
+}
+
 /// insertNoops - Insert noops into the instruction stream at the specified
 /// point.
 void TargetInstrInfo::insertNoops(MachineBasicBlock &MBB,

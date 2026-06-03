@@ -12,23 +12,27 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/TaintAnalysis.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/CodeGen/TaintSummaryInfo.h"
-#include "llvm/Analysis/ValueTracking.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Format.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include <memory>
+#include <optional>
 #include <set>
 
 using namespace llvm;
@@ -39,10 +43,24 @@ AnalysisKey TaintAnalysis::Key;
 
 // Shared command-line option (declared extern in TaintAnalysis.h).
 // Must use llvm:: to match the extern declaration inside namespace llvm.
-cl::opt<std::string>
-    llvm::TaintOutputFile("taint-output",
-                          cl::desc("Output file for tainted instructions (TSV)"),
-                          cl::value_desc("file"));
+cl::opt<std::string> llvm::TaintOutputFile(
+    "taint-output", cl::desc("Output file for tainted instructions (TSV)"),
+    cl::value_desc("file"));
+
+cl::opt<std::string> llvm::TaintRegionsOutputFile(
+    "taint-regions-output",
+    cl::desc("Output file for barrier-protected taint regions"),
+    cl::value_desc("file"));
+
+cl::opt<std::string> llvm::TaintSourceRegionsOutputFile(
+    "taint-source-regions-output",
+    cl::desc("Output file for source-line taint regions"),
+    cl::value_desc("file"));
+
+cl::opt<bool> llvm::TaintInsertISB(
+    "taint-insert-isb",
+    cl::desc("Insert target instruction barriers around tainted instructions"),
+    cl::init(false));
 
 /// Unified cell extraction from a MachineMemOperand.
 /// Returns the base kind (Stack/Global/Unknown), offset, and optional size.
@@ -63,8 +81,8 @@ static CellInfo getCellFromMMO(const MachineMemOperand &MMO) {
   if (LS.hasValue() && LS.isPrecise() && !LS.isScalable())
     CI.Size = LS.getValue().getFixedValue();
 
-  if (auto *FSV = dyn_cast_or_null<FixedStackPseudoSourceValue>(
-          MMO.getPseudoValue())) {
+  if (auto *FSV =
+          dyn_cast_or_null<FixedStackPseudoSourceValue>(MMO.getPseudoValue())) {
     CI.K = CellInfo::Stack;
     CI.FI = FSV->getFrameIndex();
     return CI;
@@ -91,15 +109,84 @@ bool llvm::anyTaintedRegUse(const MachineInstr &MI, const TaintState &S) {
   return false;
 }
 
+/// A register represents a single physical register if all its
+/// non-artificial subregs share the same hardware encoding.
+/// True for $x0 (subregs: $w0 enc=0, $w0_hi enc=0xFFFF/artificial).
+/// False for $w8_w9 (subregs: $w8 enc=8, $w9 enc=9 — different regs).
+/// False for $x0_x1 (subregs: $x0 enc=0, $x1 enc=1 — different regs).
+static bool isSinglePhysReg(MCPhysReg R, const TargetRegisterInfo *TRI) {
+  unsigned ParentEnc = TRI->getEncodingValue(R);
+  for (MCPhysReg SR : TRI->subregs(R)) {
+    unsigned SubEnc = TRI->getEncodingValue(SR);
+    if (SubEnc == 0xFFFF) // Skip artificial registers (e.g., W0_HI)
+      continue;
+    if (SubEnc != ParentEnc)
+      return false;
+  }
+  return true;
+}
+
+/// Propagate a taint change to all simple aliases of R (W↔X),
+/// skipping register tuples to avoid cascade.
+static void setTaintWithAliases(Register R, TaintState &S,
+                                const TargetRegisterInfo *TRI) {
+  S.setTainted(R);
+  if (!R.isPhysical())
+    return;
+  MCPhysReg Phys = R.asMCReg();
+  // DOWN: e.g. $x0 → $w0, $w0_hi (skip if R is a tuple)
+  if (isSinglePhysReg(Phys, TRI))
+    for (MCPhysReg SR : TRI->subregs(Phys))
+      S.setTainted(SR);
+  // UP: e.g. $w0 → $x0 (skip tuple superregs)
+  for (MCPhysReg Super : TRI->superregs(Phys))
+    if (isSinglePhysReg(Super, TRI)) {
+      S.setTainted(Super);
+      for (MCPhysReg SR : TRI->subregs(Super))
+        S.setTainted(SR);
+    }
+}
+
+static void clearTaintWithAliases(Register R, TaintState &S,
+                                  const TargetRegisterInfo *TRI) {
+  S.clearTainted(R);
+  if (!R.isPhysical())
+    return;
+  MCPhysReg Phys = R.asMCReg();
+  if (isSinglePhysReg(Phys, TRI))
+    for (MCPhysReg SR : TRI->subregs(Phys))
+      S.clearTainted(SR);
+  for (MCPhysReg Super : TRI->superregs(Phys))
+    if (isSinglePhysReg(Super, TRI)) {
+      S.clearTainted(Super);
+      for (MCPhysReg SR : TRI->subregs(Super))
+        S.clearTainted(SR);
+    }
+}
+
 static void taintAllRegDefs(const llvm::MachineInstr &MI, llvm::TaintState &S,
                             const TargetRegisterInfo *TRI) {
   for (const llvm::MachineOperand &MO : MI.defs()) {
     if (MO.isReg()) {
       llvm::Register R = MO.getReg();
       if (R.isValid()) {
-        S.setTainted(R);
+        setTaintWithAliases(R, S, TRI);
         LLVM_DEBUG(dbgs() << "      set " << printReg(MO.getReg(), TRI)
                           << " as tainted\n");
+      }
+    }
+  }
+}
+
+static void clearAllRegDefs(const llvm::MachineInstr &MI, llvm::TaintState &S,
+                            const TargetRegisterInfo *TRI) {
+  for (const llvm::MachineOperand &MO : MI.defs()) {
+    if (MO.isReg()) {
+      llvm::Register R = MO.getReg();
+      if (R.isValid()) {
+        clearTaintWithAliases(R, S, TRI);
+        LLVM_DEBUG(dbgs() << "      clear " << printReg(MO.getReg(), TRI)
+                          << " (untainted def)\n");
       }
     }
   }
@@ -133,9 +220,15 @@ const Function *llvm::findCalledFunction(Module &M, const MachineInstr &MI) {
 void llvm::propagateTaintMI(const MachineInstr &MI, TaintState &S,
                             const TargetRegisterInfo *TRI,
                             const TaintSummaryInfo *TSI, Module *M) {
-  // Reg -> Reg
-  if (anyTaintedRegUse(MI, S)) {
-    taintAllRegDefs(MI, S, TRI);
+  // Reg → Reg: skip for pure loads/stores (address use is DIT sink).
+  // Keep for ALU and RMW (mayLoad && mayStore) for conservatism.
+  bool IsPureLoad = MI.mayLoad() && !MI.mayStore();
+  bool IsPureStore = !MI.mayLoad() && MI.mayStore();
+  if (!IsPureLoad && !IsPureStore) {
+    if (anyTaintedRegUse(MI, S))
+      taintAllRegDefs(MI, S, TRI);
+    else
+      clearAllRegDefs(MI, S, TRI);
   }
 
   // Store handling: track taint into stack/global cells precisely.
@@ -163,8 +256,7 @@ void llvm::propagateTaintMI(const MachineInstr &MI, TaintState &S,
           // Unknown size: insert sentinel (size=0), no strong update.
           S.setTaintedStackCell(CI.FI, CI.Offset, 0);
           LLVM_DEBUG(dbgs() << "      taint stack cell FI=" << CI.FI
-                            << " off=" << CI.Offset
-                            << " sz=unknown (store)\n");
+                            << " off=" << CI.Offset << " sz=unknown (store)\n");
         }
       } else if (CI.K == CellInfo::Global) {
         if (CI.Size) {
@@ -175,16 +267,14 @@ void llvm::propagateTaintMI(const MachineInstr &MI, TaintState &S,
                               << " (store)\n");
           } else {
             S.clearTaintedGlobalCell(CI.GV, CI.Offset, *CI.Size);
-            LLVM_DEBUG(dbgs() << "      clear global cell "
-                              << CI.GV->getName() << " off=" << CI.Offset
-                              << " sz=" << *CI.Size
+            LLVM_DEBUG(dbgs() << "      clear global cell " << CI.GV->getName()
+                              << " off=" << CI.Offset << " sz=" << *CI.Size
                               << " (store untainted)\n");
           }
         } else if (DataTainted) {
           S.setTaintedGlobalCell(CI.GV, CI.Offset, 0);
           LLVM_DEBUG(dbgs() << "      taint global cell " << CI.GV->getName()
-                            << " off=" << CI.Offset
-                            << " sz=unknown (store)\n");
+                            << " off=" << CI.Offset << " sz=unknown (store)\n");
         }
       } else if (DataTainted) {
         // Unknown/heap: conservative.
@@ -199,62 +289,79 @@ void llvm::propagateTaintMI(const MachineInstr &MI, TaintState &S,
     }
   }
 
-  // Load handling: stack and globals use cell-level precision; unknown is
-  // conservative.
+  // Load handling: stack and globals use cell-level precision; unknown/heap
+  // uses pointer taint as a proxy (no cell tracking for heap).
+  // Also check the module-level UnknownMemTainted flag from TSI for
+  // cross-function heap safety (some other function may have stored
+  // tainted data to heap that we load here).
   if (MI.mayLoad()) {
     bool ShouldTaint = false;
-    bool AllKnown = !MI.memoperands_empty();
+    bool HeapPoisoned =
+        S.UnknownMemTainted || (TSI && TSI->hasUnknownMemTainted());
 
     for (MachineMemOperand *MMO : MI.memoperands()) {
       if (!MMO) {
-        AllKnown = false;
+        // No MMO info: use pointer taint or heap-poisoned flag as fallback.
+        if (HeapPoisoned || anyTaintedRegUse(MI, S))
+          ShouldTaint = true;
         continue;
       }
       CellInfo CI = getCellFromMMO(*MMO);
       if (CI.K == CellInfo::Stack) {
-        bool Tainted =
-            CI.Size ? S.isTaintedStackCell(CI.FI, CI.Offset, *CI.Size)
-                    : S.anyTaintedStackCellForFI(CI.FI);
+        bool Tainted = CI.Size
+                           ? S.isTaintedStackCell(CI.FI, CI.Offset, *CI.Size)
+                           : S.anyTaintedStackCellForFI(CI.FI);
         if (Tainted) {
           ShouldTaint = true;
-          LLVM_DEBUG(dbgs() << "      load from tainted stack cell FI="
-                            << CI.FI << " off=" << CI.Offset << "\n");
+          LLVM_DEBUG(dbgs() << "      load from tainted stack cell FI=" << CI.FI
+                            << " off=" << CI.Offset << "\n");
         } else {
           LLVM_DEBUG(dbgs() << "      load from untainted stack cell FI="
                             << CI.FI << " off=" << CI.Offset << "\n");
         }
       } else if (CI.K == CellInfo::Global) {
-        if (S.UnknownMemTainted) {
+        if (HeapPoisoned) {
           ShouldTaint = true;
           LLVM_DEBUG(dbgs() << "      load from global " << CI.GV->getName()
                             << " (poisoned by unknown mem)\n");
         } else {
-          bool Tainted =
-              CI.Size ? S.isTaintedGlobalCell(CI.GV, CI.Offset, *CI.Size)
-                      : S.anyTaintedGlobalCellForGV(CI.GV);
+          bool Tainted = CI.Size
+                             ? S.isTaintedGlobalCell(CI.GV, CI.Offset, *CI.Size)
+                             : S.anyTaintedGlobalCellForGV(CI.GV);
           if (Tainted) {
             ShouldTaint = true;
-            LLVM_DEBUG(dbgs() << "      load from tainted global cell "
-                              << CI.GV->getName() << " off=" << CI.Offset
-                              << "\n");
+            LLVM_DEBUG(dbgs()
+                       << "      load from tainted global cell "
+                       << CI.GV->getName() << " off=" << CI.Offset << "\n");
           } else {
-            LLVM_DEBUG(dbgs() << "      load from untainted global cell "
-                              << CI.GV->getName() << " off=" << CI.Offset
-                              << "\n");
+            LLVM_DEBUG(dbgs()
+                       << "      load from untainted global cell "
+                       << CI.GV->getName() << " off=" << CI.Offset << "\n");
           }
         }
       } else {
-        // Unknown: conservative.
-        AllKnown = false;
+        // Unknown/heap: taint if the pointer register is tainted (proxy for
+        // "this pointer was derived from secret data, so the pointed-to data
+        // is likely secret"), or if any function stored tainted data to heap.
+        if (HeapPoisoned || anyTaintedRegUse(MI, S)) {
+          ShouldTaint = true;
+          LLVM_DEBUG(dbgs() << "      load from tainted unknown/heap mem\n");
+        } else {
+          LLVM_DEBUG(dbgs() << "      load from untainted unknown/heap mem\n");
+        }
       }
     }
 
-    // Unknown memory or no MMOs: conservative (taint).
-    if (!AllKnown)
-      ShouldTaint = true;
+    // No MMOs at all: use pointer taint or heap-poisoned flag.
+    if (MI.memoperands_empty()) {
+      if (HeapPoisoned || anyTaintedRegUse(MI, S))
+        ShouldTaint = true;
+    }
 
     if (ShouldTaint)
       taintAllRegDefs(MI, S, TRI);
+    else
+      clearAllRegDefs(MI, S, TRI);
   }
 
   // NEW: Handle function calls for interprocedural taint propagation
@@ -269,31 +376,21 @@ void llvm::propagateTaintMI(const MachineInstr &MI, TaintState &S,
       // Direct call to a known function with a body
       FunctionTaintSummary Summary = TSI->getSummary(*Callee);
 
-      // Step 2: Check if we're passing any tainted arguments
-      // AArch64 uses X0-X7 for integer arguments (W0-W7 for 32-bit)
-      // TODO: Get registers from calling convention instead of hardcoding
-      bool PassingTaintedArg = false;
-      for (unsigned RegID : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}) {
-        if (S.isTainted(RegID)) {
-          PassingTaintedArg = true;
-          LLVM_DEBUG(dbgs() << "        passing tainted arg in reg " << RegID << "\n");
-          break;
-        }
-      }
-
-      // Step 3: If passing tainted arg AND callee returns tainted, taint return reg
-      if (PassingTaintedArg && Summary.ReturnsTainted) {
-        // X0 is return register (W0 for 32-bit)
-        S.setTainted(1);  // X0 - TODO: Get from calling convention
-        S.setTainted(2);  // W0
+      // If callee's summary says it returns tainted, taint the return register
+      // unconditionally. The callee's ReturnsTainted already accounts for all
+      // taint sources (args, heap loads, globals) — no need to gate on whether
+      // the caller is passing tainted args.
+      if (Summary.ReturnsTainted) {
+        S.setTainted(1); // X0 - TODO: Get from calling convention
+        S.setTainted(2); // W0
         LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
-                         << " returns tainted value\n");
+                          << " returns tainted value\n");
       }
     } else {
       // Conservative: External function or indirect call
       // If any arg register is tainted, assume return is tainted
       bool HasTaintedArg = false;
-      for (unsigned RegID : {1, 2}) {  // X0, W0 (first arg)
+      for (unsigned RegID : {1, 2}) { // X0, W0 (first arg)
         if (S.isTainted(RegID)) {
           HasTaintedArg = true;
           break;
@@ -301,13 +398,14 @@ void llvm::propagateTaintMI(const MachineInstr &MI, TaintState &S,
       }
 
       if (HasTaintedArg) {
-        S.setTainted(1);  // X0
-        S.setTainted(2);  // W0
+        S.setTainted(1); // X0
+        S.setTainted(2); // W0
         if (Callee)
           LLVM_DEBUG(dbgs() << "        conservative: external call to "
-                           << Callee->getName() << " taints return\n");
+                            << Callee->getName() << " taints return\n");
         else
-          LLVM_DEBUG(dbgs() << "        conservative: indirect call taints return\n");
+          LLVM_DEBUG(dbgs()
+                     << "        conservative: indirect call taints return\n");
       }
     }
   }
@@ -323,6 +421,182 @@ static TaintState propagateTaintMBB(const MachineBasicBlock &MBB,
     propagateTaintMI(MI, Out, TRI, TSI, M);
   }
   return Out;
+}
+
+static bool hasTaintedRegDef(const MachineInstr &MI, const TaintState &S) {
+  for (const MachineOperand &MO : MI.defs())
+    if (MO.isReg() && MO.getReg().isValid() && S.isTainted(MO.getReg()))
+      return true;
+  return false;
+}
+
+static bool isTaintedAfterPropagation(const MachineInstr &MI,
+                                      const TaintState &S, bool UsesTainted) {
+  return UsesTainted || hasTaintedRegDef(MI, S);
+}
+
+static bool isBarrierInsertionCandidate(const MachineInstr &MI) {
+  return !MI.isDebugInstr() && !MI.isMetaInstruction() && !MI.isPosition();
+}
+
+namespace {
+
+struct TaintedRun {
+  MachineInstr *First = nullptr;
+  MachineInstr *Last = nullptr;
+  unsigned Count = 0;
+  unsigned FirstIndex = 0;
+  unsigned LastIndex = 0;
+};
+
+} // namespace
+
+static SmallVector<TaintedRun, 64>
+collectTaintedRuns(MachineFunction &MF, const TaintResult &TR,
+                   const TaintSummaryInfo *TSI, unsigned &TaintedInstrCount) {
+  const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
+  Module *M = const_cast<Module *>(MF.getFunction().getParent());
+
+  SmallVector<TaintedRun, 64> TaintedRuns;
+  TaintedInstrCount = 0;
+  unsigned InstrIndex = 0;
+
+  for (auto &MBB : MF) {
+    auto It = TR.IN.find(&MBB);
+    TaintState S = (It != TR.IN.end()) ? It->second : TaintState{};
+    TaintedRun CurrentRun;
+
+    auto FinishRun = [&]() {
+      if (CurrentRun.First)
+        TaintedRuns.push_back(CurrentRun);
+      CurrentRun = TaintedRun{};
+    };
+
+    for (auto &MI : MBB) {
+      bool UsesTainted = anyTaintedRegUse(MI, S);
+      propagateTaintMI(MI, S, TRI, TSI, M);
+
+      if (!isBarrierInsertionCandidate(MI))
+        continue;
+
+      ++InstrIndex;
+      if (isTaintedAfterPropagation(MI, S, UsesTainted)) {
+        if (!CurrentRun.First) {
+          CurrentRun.First = &MI;
+          CurrentRun.FirstIndex = InstrIndex;
+        }
+        CurrentRun.Last = &MI;
+        CurrentRun.LastIndex = InstrIndex;
+        ++CurrentRun.Count;
+        ++TaintedInstrCount;
+      } else {
+        FinishRun();
+      }
+    }
+
+    FinishRun();
+  }
+
+  return TaintedRuns;
+}
+
+static void printTaintedRuns(MachineFunction &MF,
+                             ArrayRef<TaintedRun> TaintedRuns,
+                             raw_ostream &OS) {
+  unsigned RegionNo = 0;
+  for (const TaintedRun &Run : TaintedRuns) {
+    ++RegionNo;
+    OS << "# Region " << RegionNo << " (" << MF.getName() << ")\n";
+
+    for (auto It = Run.First->getIterator(),
+              End = std::next(Run.Last->getIterator());
+         It != End; ++It) {
+      if (!isBarrierInsertionCandidate(*It))
+        continue;
+      OS << "    ";
+      It->print(OS, /*IsStandalone=*/true);
+    }
+    OS << "\n";
+  }
+}
+
+struct SourceRegion {
+  std::string Filename;
+  unsigned StartLine = 0;
+  unsigned EndLine = 0;
+  bool HasExitBarrier = false;
+};
+
+static std::optional<std::string> getResolvedDebugFilename(const DebugLoc &DL) {
+  if (!DL)
+    return std::nullopt;
+
+  DILocation *Loc = DL.get();
+  if (!Loc || Loc->getLine() == 0 || Loc->getFilename().empty())
+    return std::nullopt;
+
+  StringRef Filename = Loc->getFilename();
+  if (sys::path::is_absolute(Filename))
+    return Filename.str();
+
+  SmallString<256> Path(Loc->getDirectory());
+  if (!Path.empty())
+    sys::path::append(Path, Filename);
+  else
+    Path = Filename;
+  return std::string(Path);
+}
+
+static std::optional<SourceRegion> getSourceRegion(const TaintedRun &Run) {
+  SourceRegion Region;
+  Region.HasExitBarrier = !Run.Last->isTerminator();
+
+  for (auto It = Run.First->getIterator(),
+            End = std::next(Run.Last->getIterator());
+       It != End; ++It) {
+    if (!isBarrierInsertionCandidate(*It))
+      continue;
+
+    std::optional<std::string> Filename =
+        getResolvedDebugFilename(It->getDebugLoc());
+    if (!Filename)
+      continue;
+
+    unsigned Line = It->getDebugLoc().getLine();
+    if (Region.Filename.empty()) {
+      Region.Filename = *Filename;
+      Region.StartLine = Line;
+      Region.EndLine = Line;
+      continue;
+    }
+
+    if (Region.Filename != *Filename)
+      return std::nullopt;
+
+    Region.StartLine = std::min(Region.StartLine, Line);
+    Region.EndLine = std::max(Region.EndLine, Line);
+  }
+
+  if (Region.Filename.empty())
+    return std::nullopt;
+  return Region;
+}
+
+static unsigned printTaintSourceRegions(ArrayRef<TaintedRun> TaintedRuns,
+                                        StringRef FunctionName,
+                                        raw_ostream &OS) {
+  unsigned Emitted = 0;
+  for (const TaintedRun &Run : TaintedRuns) {
+    std::optional<SourceRegion> Region = getSourceRegion(Run);
+    if (!Region)
+      continue;
+
+    OS << Region->Filename << "\t" << Region->StartLine << "\t"
+       << Region->EndLine << "\t" << FunctionName << "\t"
+       << (Region->HasExitBarrier ? "DSB" : "none") << "\n";
+    ++Emitted;
+  }
+  return Emitted;
 }
 
 /// Core implementation: runs intraprocedural taint analysis on a single
@@ -372,33 +646,37 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
     }
   }
 
-  if (TaintedArgIndices.empty()) {
-    LLVM_DEBUG(dbgs() << "  No tainted arguments found\n");
+  if (TaintedArgIndices.empty() && !TSI) {
+    // Intraprocedural mode with no tainted args: nothing to analyze.
+    // In interprocedural mode (TSI != nullptr), we must still analyze
+    // because the function may receive taint via callee return values.
+    LLVM_DEBUG(dbgs() << "  No tainted arguments found (intra mode)\n");
     return TaintResult{TaintState{},
                        DenseMap<const MachineBasicBlock *, TaintState>{}};
   }
 
   TaintState Seed;
 
-  // Map tainted argument indices to virtual registers via liveins.
-  // LiveIn ordering matches argument ordering (calling convention).
-  unsigned LiveInIdx = 0;
+  // Map tainted argument indices to registers via liveins.
+  // Use the hardware register encoding to determine the argument index
+  // (AArch64: X0/W0=0, X1/W1=1, ..., X7/W7=7), NOT the livein list order
+  // which may differ from argument order in post-regalloc MIR.
   for (const auto &[PhysReg, VirtReg] : MRI.liveins()) {
-    if (llvm::is_contained(TaintedArgIndices, LiveInIdx)) {
+    unsigned ArgIdx = TRI->getEncodingValue(PhysReg);
+    if (llvm::is_contained(TaintedArgIndices, ArgIdx)) {
       if (VirtReg.isValid()) {
         Seed.setTainted(VirtReg);
         LLVM_DEBUG(dbgs() << "  Marked virtual register "
                           << printReg(VirtReg, TRI) << " as tainted (from arg "
-                          << LiveInIdx << ", phys " << printReg(PhysReg, TRI)
+                          << ArgIdx << ", phys " << printReg(PhysReg, TRI)
                           << ")\n");
       } else {
-        Seed.setTainted(PhysReg);
+        setTaintWithAliases(PhysReg, Seed, TRI);
         LLVM_DEBUG(dbgs() << "  Marked physical register "
                           << printReg(PhysReg, TRI) << " as tainted (from arg "
-                          << LiveInIdx << ")\n");
+                          << ArgIdx << ")\n");
       }
     }
-    ++LiveInIdx;
   }
 
   DenseMap<const MachineBasicBlock *, TaintState> IN, OUT;
@@ -490,8 +768,7 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
 /// Replays taint propagation instruction-by-instruction using the per-BB
 /// IN states from TaintResult, and writes every tainted instruction to OS.
 /// If SrcOS is non-null, also writes tainted C source lines there.
-void llvm::exportTaintedInstructions(MachineFunction &MF,
-                                     const TaintResult &TR,
+void llvm::exportTaintedInstructions(MachineFunction &MF, const TaintResult &TR,
                                      const TaintSummaryInfo *TSI,
                                      raw_ostream &OS, raw_ostream *SrcOS,
                                      FunctionTaintStats *Stats) {
@@ -519,8 +796,8 @@ void llvm::exportTaintedInstructions(MachineFunction &MF,
 
   // Instruction type categories.
   enum InstrCat { Load, Store, ALU, Branch, Call, Copy, Debug, Other, NumCats };
-  static const char *CatNames[] = {"Load",  "Store", "ALU",   "Branch",
-                                   "Call",  "Copy",  "Debug", "Other"};
+  static const char *CatNames[] = {"Load", "Store", "ALU",   "Branch",
+                                   "Call", "Copy",  "Debug", "Other"};
   unsigned TaintedByCat[NumCats] = {};
   unsigned UntaintedByCat[NumCats] = {};
 
@@ -558,15 +835,7 @@ void llvm::exportTaintedInstructions(MachineFunction &MF,
 
       propagateTaintMI(MI, S, TRI, TSI, M);
 
-      bool DefsTainted = false;
-      for (const MachineOperand &MO : MI.defs()) {
-        if (MO.isReg() && MO.getReg().isValid() && S.isTainted(MO.getReg())) {
-          DefsTainted = true;
-          break;
-        }
-      }
-
-      bool IsTainted = UsesTainted || DefsTainted;
+      bool IsTainted = isTaintedAfterPropagation(MI, S, UsesTainted);
 
       if (Stats) {
         ++TotalInstr;
@@ -586,19 +855,24 @@ void llvm::exportTaintedInstructions(MachineFunction &MF,
           Runs.back().Length++;
       }
 
-      if (IsTainted) {
-        OS << MF.getName() << "\t" << MBB.getName() << "\t";
-        MI.print(OS, /*IsStandalone=*/true);
+      // Print every instruction with taint state for per-instruction analysis.
+      OS << MF.getName() << "\t" << MBB.getName() << "\t"
+         << (IsTainted ? "TAINTED" : "clean") << "\t";
+      MI.print(OS, /*IsStandalone=*/true);
+      // Print tainted registers after the instruction.
+      OS << "\t# tainted_regs:";
+      for (const auto &RegID : S.TaintedRegs)
+        OS << " " << printReg(Register(RegID), TRI);
+      OS << "\n";
 
-        if (SrcOS) {
-          if (const DebugLoc &DL = MI.getDebugLoc()) {
-            if (DILocation *Loc = DL.get()) {
-              std::string Filename = Loc->getFilename().str();
-              unsigned Line = Loc->getLine();
-              if (Line > 0 && !Filename.empty())
-                TaintedSourceLines.insert(
-                    std::make_tuple(Filename, Line, MF.getName().str()));
-            }
+      if (IsTainted && SrcOS) {
+        if (const DebugLoc &DL = MI.getDebugLoc()) {
+          if (DILocation *Loc = DL.get()) {
+            std::string Filename = Loc->getFilename().str();
+            unsigned Line = Loc->getLine();
+            if (Line > 0 && !Filename.empty())
+              TaintedSourceLines.insert(
+                  std::make_tuple(Filename, Line, MF.getName().str()));
           }
         }
       }
@@ -697,6 +971,51 @@ void llvm::exportTaintedInstructions(MachineFunction &MF,
   }
 }
 
+unsigned llvm::exportTaintBarrierRegions(MachineFunction &MF,
+                                         const TaintResult &TR,
+                                         const TaintSummaryInfo *TSI,
+                                         raw_ostream &OS) {
+  unsigned TaintedInstrCount = 0;
+  SmallVector<TaintedRun, 64> TaintedRuns =
+      collectTaintedRuns(MF, TR, TSI, TaintedInstrCount);
+  printTaintedRuns(MF, TaintedRuns, OS);
+  return TaintedInstrCount;
+}
+
+unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
+                                        const TaintResult &TR,
+                                        const TaintSummaryInfo *TSI,
+                                        raw_ostream &OS) {
+  unsigned TaintedInstrCount = 0;
+  SmallVector<TaintedRun, 64> TaintedRuns =
+      collectTaintedRuns(MF, TR, TSI, TaintedInstrCount);
+  return printTaintSourceRegions(TaintedRuns, MF.getName(), OS);
+}
+
+unsigned llvm::insertTaintBarriers(MachineFunction &MF, const TaintResult &TR,
+                                   const TaintSummaryInfo *TSI,
+                                   raw_ostream *RegionsOS) {
+  const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+  unsigned TaintedInstrCount = 0;
+  SmallVector<TaintedRun, 64> TaintedRuns =
+      collectTaintedRuns(MF, TR, TSI, TaintedInstrCount);
+
+  if (RegionsOS)
+    printTaintedRuns(MF, TaintedRuns, *RegionsOS);
+
+  for (const TaintedRun &Run : TaintedRuns) {
+    MachineBasicBlock &MBB = *Run.First->getParent();
+    DebugLoc StartDL = Run.First->getDebugLoc();
+
+    TII->insertInstructionBarrier(MBB, Run.First->getIterator(), StartDL);
+    if (!Run.Last->isTerminator())
+      TII->insertDataBarrier(MBB, std::next(Run.Last->getIterator()),
+                             Run.Last->getDebugLoc());
+  }
+
+  return TaintedInstrCount;
+}
+
 //===----------------------------------------------------------------------===//
 // TaintAnalysisPass — standalone MachineFunction pass (uses the helper above)
 //===----------------------------------------------------------------------===//
@@ -758,5 +1077,44 @@ PreservedAnalyses TaintAnalysisPass::run(MachineFunction &MF,
     }
   }
 
+  unsigned BarriersInserted = 0;
+  if (!TR.Merged.empty() &&
+      (TaintInsertISB || !TaintRegionsOutputFile.empty() ||
+       !TaintSourceRegionsOutputFile.empty())) {
+    std::unique_ptr<raw_fd_ostream> RegionsOS;
+    if (!TaintRegionsOutputFile.empty()) {
+      std::error_code EC;
+      RegionsOS = std::make_unique<raw_fd_ostream>(TaintRegionsOutputFile, EC,
+                                                   sys::fs::OF_Append);
+      if (EC) {
+        errs() << "Error opening taint regions output file: " << EC.message()
+               << "\n";
+        RegionsOS.reset();
+      }
+    }
+
+    std::unique_ptr<raw_fd_ostream> SourceRegionsOS;
+    if (!TaintSourceRegionsOutputFile.empty()) {
+      std::error_code EC;
+      SourceRegionsOS = std::make_unique<raw_fd_ostream>(
+          TaintSourceRegionsOutputFile, EC, sys::fs::OF_Append);
+      if (EC) {
+        errs() << "Error opening taint source regions output file: "
+               << EC.message() << "\n";
+        SourceRegionsOS.reset();
+      }
+    }
+
+    if (TaintInsertISB)
+      BarriersInserted = insertTaintBarriers(MF, TR, TSI, RegionsOS.get());
+    else if (RegionsOS)
+      exportTaintBarrierRegions(MF, TR, TSI, *RegionsOS);
+
+    if (SourceRegionsOS)
+      exportTaintSourceRegions(MF, TR, TSI, *SourceRegionsOS);
+  }
+
+  if (BarriersInserted)
+    return PreservedAnalyses::none();
   return getMachineFunctionPassPreservedAnalyses();
 }

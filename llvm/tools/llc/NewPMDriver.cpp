@@ -174,6 +174,9 @@ int llvm::compileModuleWithNewPM(
       ExitOnErr(PB.parsePassPipeline(MPM, PassPipeline));
     }
 
+    if (RunTaintInterproc && MIR)
+      MPM.addPass(TaintInterprocPass());
+
     // Add printing passes for MIR output
     MPM.addPass(PrintMIRPreparePass(*OS));
     MachineFunctionPassManager MFPM;
@@ -202,12 +205,6 @@ int llvm::compileModuleWithNewPM(
 
   if (MIR && MIR->parseMachineFunctions(*M, MAM))
     return 1;
-
-  // Add interprocedural taint analysis pass if requested.
-  // This must run AFTER parseMachineFunctions populates the MachineModuleInfo.
-  if (RunTaintInterproc && MIR) {
-    MPM.addPass(TaintInterprocPass());
-  }
 
   // Before executing passes, print the final values of the LLVM options.
   cl::PrintOptionValues();

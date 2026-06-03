@@ -39,6 +39,16 @@ using GlobalCell =
 /// Command-line option for taint output file (shared across passes).
 extern cl::opt<std::string> TaintOutputFile;
 
+/// Command-line option for barrier protected-region output file.
+extern cl::opt<std::string> TaintRegionsOutputFile;
+
+/// Command-line option for source-line protected-region output file.
+extern cl::opt<std::string> TaintSourceRegionsOutputFile;
+
+/// Command-line option for inserting target instruction barriers around
+/// tainted instructions.
+extern cl::opt<bool> TaintInsertISB;
+
 /// TaintState holds the result of taint analysis for a MachineFunction.
 /// It tracks which virtual registers are considered tainted, and which
 /// memory cells (stack/global at specific offset+size) are tainted.
@@ -76,6 +86,12 @@ public:
   void setTainted(Register R) {
     if (R.isValid())
       TaintedRegs.set(R.id());
+  }
+
+  /// Clear taint on a register.
+  void clearTainted(Register R) {
+    if (R.isValid())
+      TaintedRegs.reset(R.id());
   }
 
   // Stack cell methods
@@ -187,7 +203,7 @@ const Function *findCalledFunction(Module &M, const MachineInstr &MI);
 
 /// Holds buffered per-function taint statistics for sorting before output.
 struct FunctionTaintStats {
-  std::string Output;     // Formatted stats text
+  std::string Output; // Formatted stats text
   double TaintRatio = 0.0;
 };
 
@@ -196,9 +212,28 @@ struct FunctionTaintStats {
 /// receives the source-line summary; Stats (if non-null) receives
 /// buffered per-function taint composition statistics.
 void exportTaintedInstructions(MachineFunction &MF, const TaintResult &TR,
-                               const TaintSummaryInfo *TSI,
-                               raw_ostream &OS, raw_ostream *SrcOS,
+                               const TaintSummaryInfo *TSI, raw_ostream &OS,
+                               raw_ostream *SrcOS,
                                FunctionTaintStats *Stats = nullptr);
+
+/// Export the coalesced tainted instruction regions that would be protected by
+/// hardening barriers. Returns the number of tainted instructions in those
+/// regions.
+unsigned exportTaintBarrierRegions(MachineFunction &MF, const TaintResult &TR,
+                                   const TaintSummaryInfo *TSI,
+                                   raw_ostream &OS);
+
+/// Export source-line ranges corresponding to coalesced tainted instruction
+/// regions. Returns the number of source regions emitted.
+unsigned exportTaintSourceRegions(MachineFunction &MF, const TaintResult &TR,
+                                  const TaintSummaryInfo *TSI, raw_ostream &OS);
+
+/// Insert target instruction barriers before and after every coalesced region
+/// of tainted instructions. If RegionsOS is non-null, also prints those
+/// protected regions. Returns the number of tainted instructions protected.
+unsigned insertTaintBarriers(MachineFunction &MF, const TaintResult &TR,
+                             const TaintSummaryInfo *TSI,
+                             raw_ostream *RegionsOS = nullptr);
 
 } // namespace llvm
 
