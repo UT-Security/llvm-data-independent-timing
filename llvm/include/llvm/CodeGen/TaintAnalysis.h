@@ -16,11 +16,15 @@
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/STLFunctionalExtras.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SparseBitVector.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/Register.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/raw_ostream.h"
+#include <memory>
 
 namespace llvm {
 
@@ -65,6 +69,13 @@ extern cl::opt<TaintBarrierKind> TaintBarrierMode;
 /// passing tainted/pointee-tainted arguments to callees the analysis cannot
 /// instrument (external declarations, indirect calls).
 extern cl::opt<std::string> TaintCallsiteReportFile;
+
+/// Selects which of TaintState's register bitvectors an operation applies to.
+enum class TaintKind {
+  Data,    ///< The value itself is secret.
+  Pointee, ///< The value is a pointer to secret memory.
+  Address, ///< The value may be used as a secret-dependent memory address.
+};
 
 /// TaintState holds the result of taint analysis for a MachineFunction.
 /// TaintedRegs tracks secret data values. PointeeTaintedRegs tracks pointer
@@ -113,55 +124,48 @@ public:
     UnknownMemTainted |= O.UnknownMemTainted;
   }
 
+  /// The register bitvector holding taint of kind K.
+  SparseBitVector<> &regs(TaintKind K) {
+    switch (K) {
+    case TaintKind::Data:
+      return TaintedRegs;
+    case TaintKind::Pointee:
+      return PointeeTaintedRegs;
+    case TaintKind::Address:
+      return AddressTaintedRegs;
+    }
+    llvm_unreachable("unhandled TaintKind");
+  }
+  const SparseBitVector<> &regs(TaintKind K) const {
+    return const_cast<TaintState *>(this)->regs(K);
+  }
+
+  /// Check whether R carries taint of kind K.
+  bool test(TaintKind K, Register R) const {
+    return R.isValid() && regs(K).test(R.id());
+  }
+
+  /// Set or clear taint of kind K on R.
+  void update(TaintKind K, Register R, bool Set) {
+    if (!R.isValid())
+      return;
+    if (Set)
+      regs(K).set(R.id());
+    else
+      regs(K).reset(R.id());
+  }
+
   /// Check if a register is tainted.
-  bool isTainted(Register R) const {
-    return R.isValid() && TaintedRegs.test(R.id());
-  }
-
-  /// Mark a register as tainted.
-  void setTainted(Register R) {
-    if (R.isValid())
-      TaintedRegs.set(R.id());
-  }
-
-  /// Clear taint on a register.
-  void clearTainted(Register R) {
-    if (R.isValid())
-      TaintedRegs.reset(R.id());
-  }
+  bool isTainted(Register R) const { return test(TaintKind::Data, R); }
 
   /// Check if a register points to tainted memory.
   bool isPointeeTainted(Register R) const {
-    return R.isValid() && PointeeTaintedRegs.test(R.id());
-  }
-
-  /// Mark a register as pointing to tainted memory.
-  void setPointeeTainted(Register R) {
-    if (R.isValid())
-      PointeeTaintedRegs.set(R.id());
-  }
-
-  /// Clear pointee taint on a register.
-  void clearPointeeTainted(Register R) {
-    if (R.isValid())
-      PointeeTaintedRegs.reset(R.id());
+    return test(TaintKind::Pointee, R);
   }
 
   /// Check if a register carries secret-dependent address taint.
   bool isAddressTainted(Register R) const {
-    return R.isValid() && AddressTaintedRegs.test(R.id());
-  }
-
-  /// Mark a register as secret-dependent address data.
-  void setAddressTainted(Register R) {
-    if (R.isValid())
-      AddressTaintedRegs.set(R.id());
-  }
-
-  /// Clear address taint on a register.
-  void clearAddressTainted(Register R) {
-    if (R.isValid())
-      AddressTaintedRegs.reset(R.id());
+    return test(TaintKind::Address, R);
   }
 
   // Stack cell methods
@@ -303,26 +307,45 @@ public:
 // Shared helpers used by both TaintAnalysisPass and TaintInterprocPass
 //===----------------------------------------------------------------------===//
 
-/// Propagate taint through a single machine instruction.
-void propagateTaintMI(const MachineInstr &MI, TaintState &S,
-                      const TargetRegisterInfo *TRI,
-                      const TaintSummaryInfo *TSI = nullptr,
-                      Module *M = nullptr, AAResults *AA = nullptr);
+/// Facts about one instruction, gathered during a taint replay. These are the
+/// only questions consumers ask about the state surrounding an instruction, so
+/// carrying them lets the replay avoid copying a whole TaintState per
+/// instruction.
+struct TaintFacts {
+  bool UsesData = false;    ///< Reads a secret value (state entering MI).
+  bool UsesPointee = false; ///< Reads a pointer to secret memory.
+  bool UsesAddress = false; ///< Reads a secret-dependent address.
+  bool DefsData = false;    ///< Defines a secret value (state leaving MI).
+};
 
-/// Check if any register use of MI is tainted.
-bool anyTaintedRegUse(const MachineInstr &MI, const TaintState &S);
+/// Replay the converged taint state through MF instruction by instruction,
+/// seeding each block from TR.IN exactly as the analysis did.
+///
+/// Post, if given, sees the state leaving each instruction; Pre, if given, sees
+/// the state entering it. Either may return false to stop the walk early.
+void replayTaint(
+    MachineFunction &MF, const TaintResult &TR, const TaintSummaryInfo *TSI,
+    AAResults *AA,
+    function_ref<bool(MachineInstr &, const TaintFacts &, const TaintState &)>
+        Post,
+    function_ref<bool(MachineInstr &, const TaintState &)> Pre = {});
 
-/// True if the call instruction MI passes any tainted value in its argument
-/// registers.
-bool anyTaintedCallArgument(const MachineInstr &MI, const TaintState &S);
-
-/// True if the call instruction MI passes any pointer to secret memory
-/// (pointee-tainted value) in its argument registers.
-bool anyPointeeTaintedCallArgument(const MachineInstr &MI, const TaintState &S);
+/// True if MI is secret-dependent and therefore belongs inside a barrier region.
+bool isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F);
 
 /// Find the called function from a call instruction.
 /// Returns nullptr for indirect calls.
 const Function *findCalledFunction(Module &M, const MachineInstr &MI);
+
+/// Derive a sibling report path: ("out.txt", "_src") -> "out_src.txt".
+SmallString<256> deriveReportPath(StringRef Base, StringRef Suffix);
+
+/// Open a taint report file, truncating it unless Append is set. Returns null
+/// both when Path is empty (the report was not requested) and when the file
+/// cannot be opened, so callers can simply test the result; open failures are
+/// reported on stderr.
+std::unique_ptr<raw_fd_ostream> openTaintReport(StringRef Path, StringRef What,
+                                                bool Append = false);
 
 /// True if the function contains at least one coalesced tainted run, i.e.
 /// insertTaintBarriers would instrument it. Used to compute the PreservesDIT

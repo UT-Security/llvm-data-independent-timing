@@ -173,7 +173,6 @@
 #include "llvm/CodeGen/TailDuplication.h"
 #include "llvm/CodeGen/TaintAnalysis.h"
 #include "llvm/CodeGen/TaintFixedPointIteration.h"
-#include "llvm/CodeGen/TaintSummaryInfo.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/CodeGen/TwoAddressInstructionPass.h"
 #include "llvm/CodeGen/TypePromotion.h"

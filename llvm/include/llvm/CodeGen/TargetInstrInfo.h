@@ -1701,6 +1701,18 @@ public:
                                       MachineBasicBlock::iterator MI,
                                       const DebugLoc &DL, bool Enable) const;
 
+  /// Return how many of MI's leading explicit register use operands hold the
+  /// value written to memory, as opposed to the address it is written to. A
+  /// store-pair, for instance, has two.
+  ///
+  /// Returns std::nullopt when the target cannot classify MI. Callers must then
+  /// treat every register use of MI as potentially part of the stored value:
+  /// over-approximating the value operands is safe, whereas missing one is not.
+  virtual std::optional<unsigned>
+  getNumStoredValueRegs(const MachineInstr &MI) const {
+    return std::nullopt;
+  }
+
   /// Insert noops into the instruction stream at the specified point.
   virtual void insertNoops(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MI,

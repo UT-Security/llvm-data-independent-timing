@@ -1,0 +1,87 @@
+# REQUIRES: asserts
+# RUN: llc -mtriple=aarch64 -passes='taint-analysis-transform' -debug-only=taint-analysis %s -o /dev/null 2>&1 | FileCheck %s
+
+# A store-pair writes two value registers before naming its address. Here the
+# secret is the SECOND of them, so a payload scan that stops after the first
+# value operand never sees it and the stored memory is left untainted -- an
+# under-taint, which means a missing barrier.
+#
+# STNPXi covers the other half of the hazard: it is a pair, but it is not
+# spelled "STP...", so classifying stores by mnemonic prefix misses it outright.
+
+# CHECK: TaintAnalysis: analyzing function store_pair_second
+# CHECK:      taint unknown mem value %slot
+# CHECK:      load from tainted unknown/heap mem
+
+# CHECK: TaintAnalysis: analyzing function store_nontemporal_pair_second
+# CHECK:      taint unknown mem value %slot
+# CHECK:      load from tainted unknown/heap mem
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i64 @store_pair_second(i64 "tainted" %secret, i64 %public) {
+  entry:
+    %slot = alloca [2 x i64], align 8
+    %val = load i64, ptr %slot, align 8
+    ret i64 %val
+  }
+
+  define i64 @store_nontemporal_pair_second(i64 "tainted" %secret, i64 %public) {
+  entry:
+    %slot = alloca [2 x i64], align 8
+    %val = load i64, ptr %slot, align 8
+    ret i64 %val
+  }
+
+...
+---
+name:            store_pair_second
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr64common }
+  - { id: 1, class: gpr64common }
+  - { id: 2, class: gpr64sp }
+  - { id: 3, class: gpr64common }
+liveins:
+  - { reg: '$x0', virtual-reg: '%0' }
+  - { reg: '$x1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1
+
+    %0:gpr64common = COPY $x0
+    %1:gpr64common = COPY $x1
+    %2:gpr64sp = COPY $sp
+    STPXi %1, %0, %2, 0 :: (store (s128) into %ir.slot, align 8)
+    %3:gpr64common = LDRXui %2, 0 :: (load (s64) from %ir.slot, align 8)
+    $x0 = COPY %3
+    RET_ReallyLR implicit $x0
+
+...
+---
+name:            store_nontemporal_pair_second
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr64common }
+  - { id: 1, class: gpr64common }
+  - { id: 2, class: gpr64sp }
+  - { id: 3, class: gpr64common }
+liveins:
+  - { reg: '$x0', virtual-reg: '%0' }
+  - { reg: '$x1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1
+
+    %0:gpr64common = COPY $x0
+    %1:gpr64common = COPY $x1
+    %2:gpr64sp = COPY $sp
+    STNPXi %1, %0, %2, 0 :: (store (s128) into %ir.slot, align 8)
+    %3:gpr64common = LDRXui %2, 0 :: (load (s64) from %ir.slot, align 8)
+    $x0 = COPY %3
+    RET_ReallyLR implicit $x0
+
+...

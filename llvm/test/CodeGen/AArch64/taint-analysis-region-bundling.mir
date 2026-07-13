@@ -27,15 +27,15 @@ name:            bundle_gap
 tracksRegLiveness: true
 isSSA:           true
 registers:
-  - { id: 0, class: gpr32 }
-  - { id: 1, class: gpr32 }
-  - { id: 2, class: gpr32 }
-  - { id: 3, class: gpr32 }
-  - { id: 4, class: gpr32 }
-  - { id: 5, class: gpr32 }
-  - { id: 6, class: gpr32 }
-  - { id: 7, class: gpr32 }
-  - { id: 8, class: gpr32 }
+  - { id: 0, class: gpr32common }
+  - { id: 1, class: gpr32common }
+  - { id: 2, class: gpr32common }
+  - { id: 3, class: gpr32common }
+  - { id: 4, class: gpr32common }
+  - { id: 5, class: gpr32common }
+  - { id: 6, class: gpr32common }
+  - { id: 7, class: gpr32common }
+  - { id: 8, class: gpr32common }
 liveins:
   - { reg: '$w0', virtual-reg: '%0' }
   - { reg: '$w1', virtual-reg: '%1' }
@@ -45,41 +45,41 @@ body:             |
 
     ; GAP0-LABEL: name: bundle_gap
     ; GAP0: ISB 15
-    ; GAP0-NEXT: %0:gpr32 = COPY $w0
+    ; GAP0-NEXT: %0:gpr32common = COPY $w0
     ; GAP0-NEXT: DSB 15
     ; GAP0: ISB 15
-    ; GAP0-NEXT: %2:gpr32 = ADDWri %0, 1, 0
+    ; GAP0-NEXT: %2:gpr32common = ADDWri %0, 1, 0
     ; GAP0-NEXT: DSB 15
     ; GAP0: ISB 15
-    ; GAP0-NEXT: %4:gpr32 = ADDWri %0, 2, 0
+    ; GAP0-NEXT: %4:gpr32common = ADDWri %0, 2, 0
     ; GAP0-NEXT: DSB 15
     ; GAP0: ISB 15
-    ; GAP0-NEXT: %8:gpr32 = ADDWri %0, 3, 0
+    ; GAP0-NEXT: %8:gpr32common = ADDWri %0, 3, 0
     ; GAP0-NEXT: DSB 15
     ;
     ; GAP2-LABEL: name: bundle_gap
     ; GAP2: ISB 15
-    ; GAP2-NEXT: %0:gpr32 = COPY $w0
-    ; GAP2-NEXT: %1:gpr32 = COPY $w1
-    ; GAP2-NEXT: %2:gpr32 = ADDWri %0, 1, 0
-    ; GAP2-NEXT: %3:gpr32 = ADDWri %1, 1, 0
-    ; GAP2-NEXT: %4:gpr32 = ADDWri %0, 2, 0
+    ; GAP2-NEXT: %0:gpr32common = COPY $w0
+    ; GAP2-NEXT: %1:gpr32common = COPY $w1
+    ; GAP2-NEXT: %2:gpr32common = ADDWri %0, 1, 0
+    ; GAP2-NEXT: %3:gpr32common = ADDWri %1, 1, 0
+    ; GAP2-NEXT: %4:gpr32common = ADDWri %0, 2, 0
     ; GAP2-NEXT: DSB 15
-    ; GAP2: %5:gpr32 = ADDWri %1, 2, 0
-    ; GAP2-NEXT: %6:gpr32 = ADDWri %5, 1, 0
-    ; GAP2-NEXT: %7:gpr32 = ADDWri %6, 1, 0
+    ; GAP2: %5:gpr32common = ADDWri %1, 2, 0
+    ; GAP2-NEXT: %6:gpr32common = ADDWri %5, 1, 0
+    ; GAP2-NEXT: %7:gpr32common = ADDWri %6, 1, 0
     ; GAP2-NEXT: ISB 15
-    ; GAP2-NEXT: %8:gpr32 = ADDWri %0, 3, 0
+    ; GAP2-NEXT: %8:gpr32common = ADDWri %0, 3, 0
     ; GAP2-NEXT: DSB 15
-    %0:gpr32 = COPY $w0
-    %1:gpr32 = COPY $w1
-    %2:gpr32 = ADDWri %0, 1, 0
-    %3:gpr32 = ADDWri %1, 1, 0
-    %4:gpr32 = ADDWri %0, 2, 0
-    %5:gpr32 = ADDWri %1, 2, 0
-    %6:gpr32 = ADDWri %5, 1, 0
-    %7:gpr32 = ADDWri %6, 1, 0
-    %8:gpr32 = ADDWri %0, 3, 0
+    %0:gpr32common = COPY $w0
+    %1:gpr32common = COPY $w1
+    %2:gpr32common = ADDWri %0, 1, 0
+    %3:gpr32common = ADDWri %1, 1, 0
+    %4:gpr32common = ADDWri %0, 2, 0
+    %5:gpr32common = ADDWri %1, 2, 0
+    %6:gpr32common = ADDWri %5, 1, 0
+    %7:gpr32common = ADDWri %6, 1, 0
+    %8:gpr32common = ADDWri %0, 3, 0
     $w0 = COPY %1
     RET_ReallyLR implicit $w0
 

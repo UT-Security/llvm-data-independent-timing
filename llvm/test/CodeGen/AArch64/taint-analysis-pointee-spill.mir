@@ -30,9 +30,9 @@ name:            pointee_spill
 tracksRegLiveness: true
 isSSA:           true
 registers:
-  - { id: 0, class: gpr64sp }
+  - { id: 0, class: gpr64common }
   - { id: 1, class: gpr64sp }
-  - { id: 2, class: gpr64sp }
+  - { id: 2, class: gpr64common }
   - { id: 3, class: gpr32 }
 liveins:
   - { reg: '$x0', virtual-reg: '%0' }
@@ -40,10 +40,10 @@ body:             |
   bb.0.entry:
     liveins: $x0
 
-    %0:gpr64sp = COPY $x0
+    %0:gpr64common = COPY $x0
     %1:gpr64sp = COPY $sp
     STRXui %0, %1, 0 :: (store (p0) into %ir.slot)
-    %2:gpr64sp = LDRXui %1, 0 :: (load (p0) from %ir.slot)
+    %2:gpr64common = LDRXui %1, 0 :: (load (p0) from %ir.slot)
     %3:gpr32 = LDRWui %2, 0 :: (load (s32) from %ir.reload)
     $w0 = COPY %3
     RET_ReallyLR implicit $w0

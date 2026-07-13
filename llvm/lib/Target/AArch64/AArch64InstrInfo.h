@@ -436,6 +436,9 @@ public:
                               MachineBasicBlock::iterator MI, const DebugLoc &DL,
                               bool Enable) const override;
 
+  std::optional<unsigned>
+  getNumStoredValueRegs(const MachineInstr &MI) const override;
+
   MCInst getNop() const override;
 
   bool isSchedulingBoundary(const MachineInstr &MI,

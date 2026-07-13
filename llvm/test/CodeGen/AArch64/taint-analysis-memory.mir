@@ -5,11 +5,14 @@
 # Arg 0 is tainted. It gets stored to a stack slot, then loaded back.
 # The analysis should propagate taint through the store → load path.
 
+# The MIR addresses the slot through $sp rather than a frame index, so the store
+# lands in the unknown-memory set rather than a stack cell.
 # CHECK: TaintAnalysis: analyzing function store_load
 # CHECK:   IR arg 0 has 'tainted' attribute
 # CHECK:   Marked virtual register
-# CHECK:   taint mem
-# CHECK:   taint defs (load)
+# CHECK:      taint unknown mem value %slot
+# CHECK:      load from tainted unknown/heap mem
+# CHECK:      set %{{[0-9]+}} as tainted
 # CHECK: Total tainted regs: {{[1-9][0-9]*}}
 
 --- |

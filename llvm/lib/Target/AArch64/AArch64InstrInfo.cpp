@@ -7050,6 +7050,55 @@ void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
       .addImm(Enable ? 1 : 0);
 }
 
+std::optional<unsigned>
+AArch64InstrInfo::getNumStoredValueRegs(const MachineInstr &MI) const {
+  // Read-modify-write memory operands have no distinct value operand to point
+  // at; let the caller fall back to its conservative handling.
+  if (!MI.mayStore() || MI.mayLoad())
+    return std::nullopt;
+
+  switch (MI.getOpcode()) {
+  default:
+    // Every other AArch64 store writes a single register. Multi-register vector
+    // stores (ST1/ST2/ST3/ST4) name their registers through one tuple operand,
+    // so they count as one here too.
+    return 1;
+
+  // Store-pair forms write two registers before naming the address. Beware the
+  // mnemonics: STGPi is a pair, while STGPostIndex is a *single* tag store
+  // (STG + PostIndex) — which is why this is an opcode switch and not a name
+  // prefix test.
+  case AArch64::STPWi:
+  case AArch64::STPXi:
+  case AArch64::STPSi:
+  case AArch64::STPDi:
+  case AArch64::STPQi:
+  case AArch64::STPWpre:
+  case AArch64::STPXpre:
+  case AArch64::STPSpre:
+  case AArch64::STPDpre:
+  case AArch64::STPQpre:
+  case AArch64::STPWpost:
+  case AArch64::STPXpost:
+  case AArch64::STPSpost:
+  case AArch64::STPDpost:
+  case AArch64::STPQpost:
+  case AArch64::STNPWi:
+  case AArch64::STNPXi:
+  case AArch64::STNPSi:
+  case AArch64::STNPDi:
+  case AArch64::STNPQi:
+  case AArch64::STGPi:
+  case AArch64::STGPpre:
+  case AArch64::STGPpost:
+  case AArch64::STXPW:
+  case AArch64::STXPX:
+  case AArch64::STLXPW:
+  case AArch64::STLXPX:
+    return 2;
+  }
+}
+
 MCInst AArch64InstrInfo::getNop() const { return MCInstBuilder(AArch64::NOP); }
 
 // AArch64 supports MachineCombiner.

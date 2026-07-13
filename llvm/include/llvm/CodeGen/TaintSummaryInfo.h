@@ -18,12 +18,8 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/PassManager.h"
-#include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
-
-class Module;
 
 /// Summary of taint behavior for a single function.
 struct FunctionTaintSummary {
@@ -115,32 +111,6 @@ public:
 
   /// Check if there are any summaries stored.
   bool empty() const { return Summaries.empty(); }
-
-  /// Required by the pass manager. Taint summaries are never invalidated
-  /// because they only grow monotonically during fixed-point iteration.
-  bool invalidate(Module &, const PreservedAnalyses &,
-                  ModuleAnalysisManager::Invalidator &) {
-    return false; // Never invalidated
-  }
-};
-
-/// Analysis pass that provides TaintSummaryInfo for a module.
-class TaintSummaryAnalysis : public AnalysisInfoMixin<TaintSummaryAnalysis> {
-  friend AnalysisInfoMixin<TaintSummaryAnalysis>;
-  static AnalysisKey Key;
-
-public:
-  using Result = TaintSummaryInfo;
-  TaintSummaryInfo run(Module &M, ModuleAnalysisManager &MAM);
-};
-
-/// Printer pass for taint summaries.
-class TaintSummaryPrinterPass : public PassInfoMixin<TaintSummaryPrinterPass> {
-  raw_ostream &OS;
-
-public:
-  explicit TaintSummaryPrinterPass(raw_ostream &OS) : OS(OS) {}
-  PreservedAnalyses run(Module &M, ModuleAnalysisManager &MAM);
 };
 
 } // namespace llvm
