@@ -192,8 +192,8 @@ private:
   void setupDebugValueTracking(MachineFunction &MF,
     PerFunctionMIParsingState &PFS, const yaml::MachineFunction &YamlMF);
 
-  bool parseMachineInst(MachineFunction &MF, yaml::MachineInstrLoc MILoc,
-                        MachineInstr const *&MI);
+  bool parseMachineInst(const PerFunctionMIParsingState &PFS,
+                        yaml::MachineInstrLoc MILoc, MachineInstr const *&MI);
 };
 
 } // end namespace llvm
@@ -468,15 +468,21 @@ bool MIRParserImpl::computeFunctionProperties(
   return false;
 }
 
-bool MIRParserImpl::parseMachineInst(MachineFunction &MF,
+bool MIRParserImpl::parseMachineInst(const PerFunctionMIParsingState &PFS,
                                      yaml::MachineInstrLoc MILoc,
                                      MachineInstr const *&MI) {
-  if (MILoc.BlockNum >= MF.size()) {
+  MachineFunction &MF = PFS.MF;
+  // BlockNum is the textual block ID (the printer emits the source block's
+  // number), which need not match the block's layout position when the
+  // original function's numbering had gaps or was out of layout order.
+  // Resolve it through the parsed block-ID map, like any other %bb.N use.
+  auto BlockIt = PFS.MBBSlots.find(MILoc.BlockNum);
+  if (BlockIt == PFS.MBBSlots.end()) {
     return error(Twine(MF.getName()) +
                  Twine(" instruction block out of range.") +
                  " Unable to reference bb:" + Twine(MILoc.BlockNum));
   }
-  auto BB = std::next(MF.begin(), MILoc.BlockNum);
+  const MachineBasicBlock *BB = BlockIt->second;
   if (MILoc.Offset >= BB->size())
     return error(
         Twine(MF.getName()) + Twine(" instruction offset out of range.") +
@@ -494,7 +500,7 @@ bool MIRParserImpl::initializeCallSiteInfo(
   for (auto &YamlCSInfo : YamlMF.CallSitesInfo) {
     yaml::MachineInstrLoc MILoc = YamlCSInfo.CallLocation;
     const MachineInstr *CallI;
-    if (parseMachineInst(MF, MILoc, CallI))
+    if (parseMachineInst(PFS, MILoc, CallI))
       return true;
     if (!CallI->isCall(MachineInstr::IgnoreBundle))
       return error(Twine(MF.getName()) +
@@ -1177,7 +1183,7 @@ bool MIRParserImpl::parseCalledGlobals(PerFunctionMIParsingState &PFS,
   for (const auto &YamlCG : YMF.CalledGlobals) {
     yaml::MachineInstrLoc MILoc = YamlCG.CallSite;
     const MachineInstr *CallI;
-    if (parseMachineInst(MF, MILoc, CallI))
+    if (parseMachineInst(PFS, MILoc, CallI))
       return true;
     if (!CallI->isCall(MachineInstr::IgnoreBundle))
       return error(Twine(MF.getName()) +

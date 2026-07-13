@@ -12,7 +12,14 @@ Options:
   -o, --output FILE      Output executable path. Default: <out-dir>/<stem>.hardened
   --out-dir DIR          Directory for intermediates and default executable.
                          Default: input file directory
-  --opt-level LEVEL      LLVM optimization level. Default: -O2
+  --opt-level LEVEL      LLVM optimization level. Default: -O0
+  --region-merge-gap N   Merge protected taint regions separated by at most N
+                         clean MIR instructions. Default: LLVM pass default
+  --clean                Delete intermediates after a successful run. With
+                         linking enabled, only the executable is kept. With
+                         --no-link, only the hardened object is kept.
+  --keep-region-reports  With --clean, keep <stem>.tainted_regions.txt and
+                         <stem>.tainted_source_regions.txt.
   --no-link              Stop after producing the hardened object file
   --link-arg ARG         Extra argument passed to the final clang link command
   -h, --help             Show this help
@@ -50,9 +57,12 @@ LLVM_BIN="${LLVM_BIN:-${REPO_ROOT}/build/bin}"
 TAINT_SRC=""
 OUT_DIR=""
 EXE_OUT=""
-OPT_LEVEL="-O2"
+OPT_LEVEL="-O0"
 DO_LINK=1
+CLEAN_INTERMEDIATES=0
+KEEP_REGION_REPORTS=0
 LINK_ARGS=()
+TAINT_LLC_ARGS=()
 INPUT_C=""
 
 while [[ $# -gt 0 ]]; do
@@ -76,6 +86,20 @@ while [[ $# -gt 0 ]]; do
     [[ $# -ge 2 ]] || die "$1 requires an optimization level"
     OPT_LEVEL="$2"
     shift 2
+    ;;
+  --region-merge-gap)
+    [[ $# -ge 2 ]] || die "$1 requires a non-negative integer"
+    [[ "$2" =~ ^[0-9]+$ ]] || die "$1 requires a non-negative integer"
+    TAINT_LLC_ARGS+=("-taint-region-merge-gap=$2")
+    shift 2
+    ;;
+  --clean)
+    CLEAN_INTERMEDIATES=1
+    shift
+    ;;
+  --keep-region-reports)
+    KEEP_REGION_REPORTS=1
+    shift
     ;;
   --no-link)
     DO_LINK=0
@@ -160,13 +184,16 @@ OBJ="${PREFIX}.hardened.o"
 TAINT_OUT="${PREFIX}.tainted.txt"
 REGIONS_OUT="${PREFIX}.tainted_regions.txt"
 SOURCE_REGIONS_OUT="${PREFIX}.tainted_source_regions.txt"
+TAINT_SRC_OUT="${PREFIX}.tainted_src.txt"
+TAINT_STATS_OUT="${PREFIX}.tainted_stats.txt"
+TAINT_TRACE_OUT="${PREFIX}.tainted_trace.txt"
 HARDENED_SOURCE="${PREFIX}.hardened_source.c"
 if [[ -z "${EXE_OUT}" ]]; then
   EXE_OUT="${PREFIX}.hardened"
 fi
 
 echo "[1/6] C -> LLVM IR"
-"${CLANG}" -gline-tables-only "${OPT_LEVEL}" -S -emit-llvm \
+"${CLANG}" -g "${OPT_LEVEL}" -S -emit-llvm \
   -fno-asynchronous-unwind-tables -fno-unwind-tables \
   "${SYSROOT_ARGS[@]}" "${INPUT_C}" -o "${LL}"
 
@@ -185,6 +212,7 @@ echo "[4/6] Taint analysis + ISB insertion"
 "${LLC}" -enable-new-pm -run-taint-interproc -taint-insert-isb \
   -taint-output="${TAINT_OUT}" -taint-regions-output="${REGIONS_OUT}" \
   -taint-source-regions-output="${SOURCE_REGIONS_OUT}" \
+  "${TAINT_LLC_ARGS[@]}" \
   "${PE_MIR}" -o "${HARDENED_MIR}"
 
 generate_hardened_source_view() {
@@ -196,13 +224,21 @@ generate_hardened_source_view() {
 
   awk -v src="${input_abs}" -v src_base="${input_base}" \
     -v src_original="${input_original}" '
+    function normalize_path(path) {
+      while (gsub(/\/\.\//, "/", path)) {}
+      return path;
+    }
     BEGIN {
       FS = "\t";
       barrier_in = "__asm__ __volatile__(\"isb sy\" ::: \"memory\");";
       barrier_out = "__asm__ __volatile__(\"dsb sy\" ::: \"memory\");";
+      src_norm = normalize_path(src);
+      src_original_norm = normalize_path(src_original);
     }
     FNR == NR {
-      if ($1 != src && $1 != src_base && $1 != src_original)
+      report_src = normalize_path($1);
+      if (report_src != src_norm && report_src != src_base &&
+          report_src != src_original && report_src != src_original_norm)
         next;
       if ($2 !~ /^[0-9]+$/ || $3 !~ /^[0-9]+$/)
         next;
@@ -213,10 +249,15 @@ generate_hardened_source_view() {
         start = end;
         end = tmp;
       }
-      if (!(start in range_end) || end > range_end[start])
-        range_end[start] = end;
+      # The C source view is only an approximation of MIR barrier placement.
+      # Multi-line ranges are often caused by inlined debug locations and can
+      # span across unrelated source statements or even functions. Show exact
+      # source-line regions directly instead of merging those broad spans.
+      if (start != end)
+        next;
+      line_has_entry[start] = 1;
       if ($5 == "DSB")
-        range_has_exit[start] = 1;
+        line_has_exit[start] = 1;
       next;
     }
     {
@@ -224,48 +265,12 @@ generate_hardened_source_view() {
       next;
     }
     END {
-      merged_count = 0;
-      for (start in range_end) {
-        starts[++start_count] = start + 0;
-      }
-      for (i = 1; i <= start_count; ++i) {
-        for (j = i + 1; j <= start_count; ++j) {
-          if (starts[j] < starts[i]) {
-            tmp = starts[i];
-            starts[i] = starts[j];
-            starts[j] = tmp;
-          }
-        }
-      }
-      for (i = 1; i <= start_count; ++i) {
-        start = starts[i];
-        end = range_end[start];
-        has_exit = range_has_exit[start] ? 1 : 0;
-        if (merged_count > 0 && start <= merged_end[merged_count]) {
-          if (end > merged_end[merged_count])
-            merged_end[merged_count] = end;
-          if (has_exit)
-            merged_exit[merged_count] = 1;
-        } else {
-          ++merged_count;
-          merged_start[merged_count] = start;
-          merged_end[merged_count] = end;
-          merged_exit[merged_count] = has_exit;
-        }
-      }
-      next_region = 1;
       for (line = 1; line <= line_count; ++line) {
-        while (next_region <= merged_count && merged_start[next_region] < line)
-          ++next_region;
-        while (next_region <= merged_count && merged_start[next_region] == line) {
+        if (line_has_entry[line])
           print barrier_in;
-          ++next_region;
-        }
         print lines[line];
-        for (region = 1; region <= merged_count; ++region) {
-          if (merged_end[region] == line && merged_exit[region])
-            print barrier_out;
-        }
+        if (line_has_exit[line])
+          print barrier_out;
       }
     }
   ' "${regions_file}" "${input_abs}" >"${output_file}"
@@ -295,13 +300,59 @@ else
   echo "[6/6] Skipping link (--no-link)"
 fi
 
-echo
-echo "Hardened MIR: ${HARDENED_MIR}"
-echo "Object:       ${OBJ}"
-if [[ "${DO_LINK}" -eq 1 ]]; then
-  echo "Executable:   ${EXE_OUT}"
+if [[ "${CLEAN_INTERMEDIATES}" -eq 1 ]]; then
+  KEEP_OUTPUT="${EXE_OUT}"
+  if [[ "${DO_LINK}" -eq 0 ]]; then
+    KEEP_OUTPUT="${OBJ}"
+  fi
+
+  for Intermediate in \
+    "${LL}" \
+    "${ANNOTATED_LL}" \
+    "${PE_MIR}" \
+    "${HARDENED_MIR}" \
+    "${TAINT_OUT}" \
+    "${REGIONS_OUT}" \
+    "${SOURCE_REGIONS_OUT}" \
+    "${TAINT_SRC_OUT}" \
+    "${TAINT_STATS_OUT}" \
+    "${TAINT_TRACE_OUT}" \
+    "${HARDENED_SOURCE}" \
+    "${OBJ}"; do
+    if [[ "${Intermediate}" == "${KEEP_OUTPUT}" ]]; then
+      continue
+    fi
+    if [[ "${KEEP_REGION_REPORTS}" -eq 1 ]] &&
+       { [[ "${Intermediate}" == "${REGIONS_OUT}" ]] ||
+         [[ "${Intermediate}" == "${SOURCE_REGIONS_OUT}" ]]; }; then
+      continue
+    fi
+    if [[ "${Intermediate}" != "${KEEP_OUTPUT}" ]]; then
+      rm -f "${Intermediate}"
+    fi
+  done
 fi
-echo "Taint report: ${TAINT_OUT}"
-echo "Region report: ${REGIONS_OUT}"
-echo "Source region report: ${SOURCE_REGIONS_OUT}"
-echo "Hardened source view: ${HARDENED_SOURCE}"
+
+echo
+if [[ "${CLEAN_INTERMEDIATES}" -eq 1 ]]; then
+  if [[ "${DO_LINK}" -eq 1 ]]; then
+    echo "Executable:   ${EXE_OUT}"
+  else
+    echo "Object:       ${OBJ}"
+  fi
+  if [[ "${KEEP_REGION_REPORTS}" -eq 1 ]]; then
+    echo "Region report: ${REGIONS_OUT}"
+    echo "Source region report: ${SOURCE_REGIONS_OUT}"
+  fi
+  echo "Intermediates cleaned (--clean)"
+else
+  echo "Hardened MIR: ${HARDENED_MIR}"
+  echo "Object:       ${OBJ}"
+  if [[ "${DO_LINK}" -eq 1 ]]; then
+    echo "Executable:   ${EXE_OUT}"
+  fi
+  echo "Taint report: ${TAINT_OUT}"
+  echo "Region report: ${REGIONS_OUT}"
+  echo "Source region report: ${SOURCE_REGIONS_OUT}"
+  echo "Hardened source view: ${HARDENED_SOURCE}"
+fi

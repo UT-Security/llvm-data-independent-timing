@@ -30,6 +30,9 @@ struct FunctionTaintSummary {
   /// Indices of tainted arguments (0-7 for X0-X7/W0-W7 in AArch64).
   SmallSet<unsigned, 8> TaintedArgIndices;
 
+  /// Indices of pointer arguments whose pointee memory is tainted.
+  SmallSet<unsigned, 8> PointeeTaintedArgIndices;
+
   /// Whether the function returns a tainted value (X0/W0).
   bool ReturnsTainted = false;
 
@@ -37,10 +40,19 @@ struct FunctionTaintSummary {
   /// Used for external functions, indirect calls, etc.
   bool IsConservative = false;
 
+  /// Whether the function is guaranteed to leave PSTATE.DIT unchanged on every
+  /// path to every exit (it is not DIT-instrumented itself and only makes
+  /// direct calls to preserving callees). Default false = conservative
+  /// (externals, indirect targets, instrumented functions). Computed after the
+  /// taint fixed point converges; used to elide after-call DIT re-asserts.
+  bool PreservesDIT = false;
+
   bool operator==(const FunctionTaintSummary &Other) const {
     return TaintedArgIndices == Other.TaintedArgIndices &&
+           PointeeTaintedArgIndices == Other.PointeeTaintedArgIndices &&
            ReturnsTainted == Other.ReturnsTainted &&
-           IsConservative == Other.IsConservative;
+           IsConservative == Other.IsConservative &&
+           PreservesDIT == Other.PreservesDIT;
   }
 
   bool operator!=(const FunctionTaintSummary &Other) const {
@@ -55,9 +67,9 @@ class TaintSummaryInfo {
   /// Map from Function to its taint summary.
   DenseMap<const Function *, FunctionTaintSummary> Summaries;
 
-  /// Module-level flag: true if ANY function in the module stored tainted
-  /// data to unknown/heap memory. When set, all unknown/heap loads in all
-  /// functions are considered potentially tainted (cross-function safety).
+  /// Optional module-level flag for unknown/heap memory. The current
+  /// fixed-point pass intentionally keeps unknown-memory taint local because a
+  /// module-wide heap poison is too imprecise for public heap inputs.
   bool ModuleUnknownMemTainted = false;
 
 public:

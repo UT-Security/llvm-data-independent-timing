@@ -22,6 +22,7 @@ set(LLVM_LINK_COMPONENTS
   LTO
   Linker
   MC
+  MIRParser
   ObjCARCOpts
   Object
   Passes

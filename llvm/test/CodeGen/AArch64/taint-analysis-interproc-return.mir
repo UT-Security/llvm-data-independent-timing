@@ -1,0 +1,62 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-output=%t %s -o /dev/null
+# RUN: FileCheck %s < %t
+
+# A callee that loads from a tainted pointee and returns the loaded value should
+# summarize as returning tainted data. The caller must then taint the actual
+# call result register, not a hardcoded generated-register enum value.
+
+# CHECK: # Function: caller
+# CHECK: caller{{.*}}TAINTED{{.*}}ADDWri
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @callee(ptr "tainted-pointee" %p) {
+  entry:
+    %v = load i32, ptr %p, align 4
+    ret i32 %v
+  }
+
+  define i32 @caller(ptr "tainted-pointee" %p) {
+  entry:
+    %v = call i32 @callee(ptr %p)
+    %r = add i32 %v, 1
+    ret i32 %r
+  }
+
+...
+---
+name:            callee
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr64sp }
+  - { id: 1, class: gpr32 }
+liveins:
+  - { reg: '$x0', virtual-reg: '%0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    %0:gpr64sp = COPY $x0
+    %1:gpr32 = LDRWui %0, 0 :: (load (s32) from %ir.p)
+    $w0 = COPY %1
+    RET_ReallyLR implicit killed $w0
+
+...
+---
+name:            caller
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    BL @callee, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit-def $w0
+    renamable $w1 = ADDWri killed $w0, 1, 0
+    $w0 = COPY killed renamable $w1
+    RET_ReallyLR implicit killed $w0
+
+...

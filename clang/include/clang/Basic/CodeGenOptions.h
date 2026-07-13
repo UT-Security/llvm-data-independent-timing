@@ -556,6 +556,11 @@ public:
   /// hotpatching. See -fms-secure-hotpatch-functions-file.
   std::string MSSecureHotPatchFunctionsFile;
 
+  /// Path to a taint-source file (lines of func,argidx[,pointee]). When
+  /// non-empty, enables interprocedural taint hardening (ISB/DSB barrier
+  /// insertion). See -ftaint-harden.
+  std::string TaintHarden;
+
   /// A list of functions which will be compiled for hotpatching.
   /// See -fms-secure-hotpatch-functions-list.
   std::vector<std::string> MSSecureHotPatchFunctionsList;

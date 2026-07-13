@@ -1,0 +1,52 @@
+# REQUIRES: asserts
+# RUN: llc -mtriple=aarch64 -passes='taint-analysis-transform' -debug-only=taint-analysis %s -o /dev/null 2>&1 | FileCheck %s
+
+# A pointee-tainted pointer marks values loaded from that pointer as data
+# tainted. A separate public pointer load should stay untainted.
+
+# CHECK: TaintAnalysis: analyzing function pointee_load
+# CHECK:   IR arg 0 has 'tainted-pointee' attribute
+# CHECK:   Marked virtual register
+# CHECK-SAME: as pointee-tainted
+# CHECK:      load from tainted unknown/heap mem
+# CHECK:      set %{{[0-9]+}} as tainted
+# CHECK:      load from untainted unknown/heap mem
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @pointee_load(ptr "tainted-pointee" %secret, ptr %public) {
+  entry:
+    %secret_val = load i32, ptr %secret, align 4
+    %public_val = load i32, ptr %public, align 4
+    %sum = add i32 %secret_val, %public_val
+    ret i32 %sum
+  }
+
+...
+---
+name:            pointee_load
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr64sp }
+  - { id: 1, class: gpr64sp }
+  - { id: 2, class: gpr32 }
+  - { id: 3, class: gpr32 }
+  - { id: 4, class: gpr32 }
+liveins:
+  - { reg: '$x0', virtual-reg: '%0' }
+  - { reg: '$x1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1
+
+    %0:gpr64sp = COPY $x0
+    %1:gpr64sp = COPY $x1
+    %2:gpr32 = LDRWui %0, 0 :: (load (s32) from %ir.secret)
+    %3:gpr32 = LDRWui %1, 0 :: (load (s32) from %ir.public)
+    %4:gpr32 = ADDWrr %2, %3
+    $w0 = COPY %4
+    RET_ReallyLR implicit $w0
+
+...

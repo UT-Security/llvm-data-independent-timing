@@ -1,0 +1,51 @@
+# REQUIRES: asserts
+# RUN: llc -mtriple=aarch64 -passes='taint-analysis-transform' -debug-only=taint-analysis %s -o /dev/null 2>&1 | FileCheck %s
+
+# At -O0, pointer arguments are commonly spilled to alloca-backed stack slots.
+# A pointee-tainted pointer spilled and reloaded this way should remain a
+# pointer to secret memory, without marking the pointer value itself as secret.
+
+# CHECK: TaintAnalysis: analyzing function pointee_spill
+# CHECK:   IR arg 0 has 'tainted-pointee' attribute
+# CHECK:      taint pointee unknown mem value %slot
+# CHECK:      load from pointee-tainted unknown mem
+# CHECK:      load from tainted unknown/heap mem
+# CHECK:      set %{{[0-9]+}} as tainted
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @pointee_spill(ptr "tainted-pointee" %secret) {
+  entry:
+    %slot = alloca ptr, align 8
+    store ptr %secret, ptr %slot, align 8
+    %reload = load ptr, ptr %slot, align 8
+    %val = load i32, ptr %reload, align 4
+    ret i32 %val
+  }
+
+...
+---
+name:            pointee_spill
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr64sp }
+  - { id: 1, class: gpr64sp }
+  - { id: 2, class: gpr64sp }
+  - { id: 3, class: gpr32 }
+liveins:
+  - { reg: '$x0', virtual-reg: '%0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    %0:gpr64sp = COPY $x0
+    %1:gpr64sp = COPY $sp
+    STRXui %0, %1, 0 :: (store (p0) into %ir.slot)
+    %2:gpr64sp = LDRXui %1, 0 :: (load (p0) from %ir.slot)
+    %3:gpr32 = LDRWui %2, 0 :: (load (s32) from %ir.reload)
+    $w0 = COPY %3
+    RET_ReallyLR implicit $w0
+
+...

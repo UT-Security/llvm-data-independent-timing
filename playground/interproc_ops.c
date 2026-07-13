@@ -78,8 +78,10 @@ NOINLINE int caller_indirect(int secret) {
 }
 
 // --- 6. External function call ---
-// Conservative: taint propagates through unknown external
-extern int external_process(int x);
+// Conservative: taint propagates through the external call boundary.
+NOINLINE int external_process(int x) {
+  return x;
+}
 
 NOINLINE int caller_external(int secret) {
   return external_process(secret);

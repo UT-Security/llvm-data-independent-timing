@@ -1,0 +1,159 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-isb -taint-barrier-mode=dit %s -o - | FileCheck %s --check-prefix=DIT
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-isb %s -o - | FileCheck %s --check-prefix=ISB
+
+# Function-granularity PSTATE.DIT mode: a function containing any tainted
+# instruction gets MSR DIT, #1 as its first instruction and MSR DIT, #0
+# immediately before every return; no ISB/DSB are inserted. An untainted
+# function is untouched. Without -taint-barrier-mode=dit the default per-region
+# ISB/DSB behavior is unchanged.
+#
+# A call site inside an instrumented function gets MSR DIT, #1 re-asserted
+# immediately after it: the callee may have cleared DIT on its own exit
+# (PSTATE.DIT has no callee-saved convention), which would leave the caller's
+# remaining tainted instructions unprotected (gap G1 in
+# utils/taint_dit_placement.md).
+#
+# The re-assert is elided when the callee provably preserves DIT
+# (PreservesDIT summary bit): in-TU, not instrumented itself, and only makes
+# preserving calls — like pure_helper below.
+#
+# 26 is the PSTATE.DIT pstatefield encoding (op1=0b011, op2=0b010).
+
+# DIT-LABEL: name: tainted_fn
+# DIT: bb.0.entry:
+# DIT: MSRpstateImm4 26, 1
+# DIT-NOT: ISB
+# DIT-NOT: DSB
+# DIT: MSRpstateImm4 26, 0
+# DIT-NEXT: RET_ReallyLR
+# DIT-LABEL: name: clean_fn
+# DIT-NOT: MSRpstateImm4
+# DIT-LABEL: name: caller_fn
+# DIT: MSRpstateImm4 26, 1
+# DIT: BL @tainted_fn
+# DIT-NEXT: MSRpstateImm4 26, 1
+# DIT: BL @pure_helper
+# DIT-NOT: MSRpstateImm4 26, 1
+# DIT: MSRpstateImm4 26, 0
+# DIT-NEXT: RET_ReallyLR
+# DIT-LABEL: name: pure_helper
+# DIT-NOT: MSRpstateImm4
+
+# The runs in these functions extend into the RET (its implicit $w0 use is
+# tainted), and no DSB is inserted after a terminator — so ISB mode emits only
+# the entry ISB here. DSB placement is covered by the region-bundling test.
+# ISB-LABEL: name: tainted_fn
+# ISB-NOT: MSRpstateImm4
+# ISB: ISB 15
+# ISB-LABEL: name: clean_fn
+# ISB-NOT: MSRpstateImm4
+# ISB-NOT: ISB 15
+# ISB-LABEL: name: caller_fn
+# ISB-NOT: MSRpstateImm4
+# ISB: ISB 15
+# ISB-LABEL: name: pure_helper
+# ISB-NOT: MSRpstateImm4
+# ISB-NOT: ISB 15
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @tainted_fn(i32 "tainted" %a, i32 %b) {
+  entry:
+    %sum = add i32 %a, %b
+    ret i32 %sum
+  }
+
+  define i32 @clean_fn(i32 %a, i32 %b) {
+  entry:
+    %sum = add i32 %a, %b
+    ret i32 %sum
+  }
+
+  define i32 @caller_fn(i32 "tainted" %a) {
+  entry:
+    %v = call i32 @tainted_fn(i32 %a, i32 %a)
+    %u = call i32 @pure_helper()
+    %r = add i32 %v, %u
+    ret i32 %r
+  }
+
+  define i32 @pure_helper() {
+  entry:
+    ret i32 7
+  }
+
+...
+---
+name:            tainted_fn
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr32 }
+  - { id: 1, class: gpr32 }
+  - { id: 2, class: gpr32 }
+liveins:
+  - { reg: '$w0', virtual-reg: '%0' }
+  - { reg: '$w1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $w0, $w1
+
+    %0:gpr32 = COPY $w0
+    %1:gpr32 = COPY $w1
+    %2:gpr32 = ADDWrr %0, %1
+    $w0 = COPY %2
+    RET_ReallyLR implicit $w0
+
+...
+---
+name:            clean_fn
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr32 }
+  - { id: 1, class: gpr32 }
+  - { id: 2, class: gpr32 }
+liveins:
+  - { reg: '$w0', virtual-reg: '%0' }
+  - { reg: '$w1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $w0, $w1
+
+    %0:gpr32 = COPY $w0
+    %1:gpr32 = COPY $w1
+    %2:gpr32 = ADDWrr %0, %1
+    $w0 = COPY %2
+    RET_ReallyLR implicit $w0
+
+...
+---
+name:            caller_fn
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    $w1 = COPY $w0
+    BL @tainted_fn, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0, implicit killed $w1, implicit-def $w0
+    renamable $w19 = ADDWri killed $w0, 1, 0
+    BL @pure_helper, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit-def $w0
+    renamable $w0 = ADDWrr killed renamable $w0, killed renamable $w19
+    RET_ReallyLR implicit killed $w0
+
+...
+---
+name:            pure_helper
+tracksRegLiveness: true
+isSSA:           false
+body:             |
+  bb.0.entry:
+
+    renamable $w0 = MOVZWi 7, 0
+    RET_ReallyLR implicit killed $w0
+
+...

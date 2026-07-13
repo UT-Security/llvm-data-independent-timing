@@ -2,10 +2,12 @@
 ; RUN: echo "f1,0" > %t.src
 ; RUN: echo "f1,2" >> %t.src
 ; RUN: echo "f2,1" >> %t.src
+; RUN: echo "f4,0,pointee" >> %t.src
 ; RUN: opt -S -passes=taint-annotate -taint-src=%t.src %s | FileCheck %s
 
 ; Test that taint-annotate pass correctly adds "tainted" attribute
-; to function arguments based on a taint-sources file.
+; or "tainted-pointee" attribute to function arguments based on a
+; taint-sources file.
 
 ; f1: arg 0 and arg 2 should be tainted
 ; CHECK-LABEL: define i32 @f1(
@@ -35,4 +37,13 @@ define i32 @f2(i32 %x, ptr %y) {
 define i32 @f3(i32 %a, i32 %b) {
   %sum = add i32 %a, %b
   ret i32 %sum
+}
+
+; f4: arg 0 points to tainted memory, but the pointer value is not data-tainted
+; CHECK-LABEL: define i32 @f4(
+; CHECK-SAME: ptr "tainted-pointee" %p
+; CHECK-SAME: ptr %q
+define i32 @f4(ptr %p, ptr %q) {
+  %val = load i32, ptr %p
+  ret i32 %val
 }

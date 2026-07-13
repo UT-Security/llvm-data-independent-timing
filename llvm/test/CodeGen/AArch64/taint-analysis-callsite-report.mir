@@ -1,0 +1,72 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-callsite-report=%t %s -o /dev/null
+# RUN: FileCheck %s < %t
+
+# Call sites passing secret data to callees the analysis cannot instrument are
+# residual hazards and must be reported: a direct call to an external
+# declaration (ext_process) and an indirect call (BLR) both receive the tainted
+# value. The call to the in-TU safe_helper passes an untainted constant and
+# must not be reported.
+
+# CHECK: ESCAPE external callee=ext_process caller=leaky bb=0 tainted-args
+# CHECK: ESCAPE indirect callee=<indirect> caller=leaky bb=0 tainted-args
+# CHECK-NOT: safe_helper
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  declare i32 @ext_process(i32)
+
+  define i32 @safe_helper(i32 %x) {
+  entry:
+    %r = add i32 %x, 1
+    ret i32 %r
+  }
+
+  define i32 @leaky(i32 "tainted" %s, ptr %fp) {
+  entry:
+    %a = call i32 @ext_process(i32 %s)
+    %b = call i32 %fp(i32 %s)
+    %c = call i32 @safe_helper(i32 0)
+    %r = add i32 %a, %b
+    ret i32 %r
+  }
+
+...
+---
+name:            safe_helper
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    renamable $w0 = ADDWri killed renamable $w0, 1, 0
+    RET_ReallyLR implicit killed $w0
+
+...
+---
+name:            leaky
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+  - { reg: '$x1' }
+body:             |
+  bb.0.entry:
+    liveins: $w0, $x1
+
+    $w19 = COPY $w0
+    $x20 = COPY $x1
+    BL @ext_process, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0, implicit-def $w0
+    $w21 = COPY $w0
+    $w0 = COPY $w19
+    BLR killed renamable $x20, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0, implicit-def $w0
+    $w22 = COPY $w0
+    renamable $w0 = MOVZWi 0, 0
+    BL @safe_helper, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0, implicit-def $w0
+    renamable $w0 = ADDWrr killed renamable $w21, killed renamable $w22
+    RET_ReallyLR implicit killed $w0
+
+...

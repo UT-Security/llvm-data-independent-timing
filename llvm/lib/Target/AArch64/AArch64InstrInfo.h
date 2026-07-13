@@ -432,6 +432,10 @@ public:
   void insertDataBarrier(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
                          const DebugLoc &DL) const override;
 
+  void insertTimingModeSwitch(MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator MI, const DebugLoc &DL,
+                              bool Enable) const override;
+
   MCInst getNop() const override;
 
   bool isSchedulingBoundary(const MachineInstr &MI,

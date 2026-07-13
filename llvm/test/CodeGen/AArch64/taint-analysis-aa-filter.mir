@@ -1,0 +1,89 @@
+# REQUIRES: asserts
+# RUN: llc -mtriple=aarch64 -passes='taint-analysis-transform' -debug-only=taint-analysis %s -o /dev/null 2>&1 | FileCheck %s
+
+# A tainted unknown-memory store should not poison a later unknown-memory load
+# when LLVM AA proves the two IR pointer locations are noalias. Without noalias,
+# the load must remain conservatively tainted.
+
+# CHECK-LABEL: TaintAnalysis: analyzing function aa_noalias_filter
+# CHECK:      taint unknown mem value %out
+# CHECK:      load from untainted unknown/heap mem
+# CHECK-SAME: AA noalias
+
+# CHECK-LABEL: TaintAnalysis: analyzing function aa_mayalias_fallback
+# CHECK:      taint unknown mem value %out
+# CHECK:      load from tainted unknown/heap mem
+# CHECK:      set %{{[0-9]+}} as tainted
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @aa_noalias_filter(ptr noalias %out, ptr noalias %kernel,
+                                i32 "tainted" %secret) {
+  entry:
+    store i32 %secret, ptr %out, align 4
+    %v = load i32, ptr %kernel, align 4
+    ret i32 %v
+  }
+
+  define i32 @aa_mayalias_fallback(ptr %out, ptr %kernel,
+                                   i32 "tainted" %secret) {
+  entry:
+    store i32 %secret, ptr %out, align 4
+    %v = load i32, ptr %kernel, align 4
+    ret i32 %v
+  }
+
+...
+---
+name:            aa_noalias_filter
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr64sp }
+  - { id: 1, class: gpr64sp }
+  - { id: 2, class: gpr32 }
+  - { id: 3, class: gpr32 }
+liveins:
+  - { reg: '$x0', virtual-reg: '%0' }
+  - { reg: '$x1', virtual-reg: '%1' }
+  - { reg: '$w2', virtual-reg: '%2' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1, $w2
+
+    %0:gpr64sp = COPY $x0
+    %1:gpr64sp = COPY $x1
+    %2:gpr32 = COPY $w2
+    STRWui %2, %0, 0 :: (store (s32) into %ir.out)
+    %3:gpr32 = LDRWui %1, 0 :: (load (s32) from %ir.kernel)
+    $w0 = COPY %3
+    RET_ReallyLR implicit $w0
+
+...
+---
+name:            aa_mayalias_fallback
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr64sp }
+  - { id: 1, class: gpr64sp }
+  - { id: 2, class: gpr32 }
+  - { id: 3, class: gpr32 }
+liveins:
+  - { reg: '$x0', virtual-reg: '%0' }
+  - { reg: '$x1', virtual-reg: '%1' }
+  - { reg: '$w2', virtual-reg: '%2' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1, $w2
+
+    %0:gpr64sp = COPY $x0
+    %1:gpr64sp = COPY $x1
+    %2:gpr32 = COPY $w2
+    STRWui %2, %0, 0 :: (store (s32) into %ir.out)
+    %3:gpr32 = LDRWui %1, 0 :: (load (s32) from %ir.kernel)
+    $w0 = COPY %3
+    RET_ReallyLR implicit $w0
+
+...

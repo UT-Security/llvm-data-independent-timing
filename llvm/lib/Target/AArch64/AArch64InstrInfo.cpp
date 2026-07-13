@@ -7038,6 +7038,18 @@ void AArch64InstrInfo::insertDataBarrier(MachineBasicBlock &MBB,
   BuildMI(MBB, MI, DL, get(AArch64::DSB)).addImm(0xf);
 }
 
+void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
+                                              MachineBasicBlock::iterator MI,
+                                              const DebugLoc &DL,
+                                              bool Enable) const {
+  // MSR DIT, #Enable (PSTATE.DIT requires FEAT_DIT at run time).
+  const auto *DIT = AArch64PState::lookupPStateImm0_15ByName("DIT");
+  assert(DIT && "DIT PState not registered");
+  BuildMI(MBB, MI, DL, get(AArch64::MSRpstateImm4))
+      .addImm(DIT->Encoding)
+      .addImm(Enable ? 1 : 0);
+}
+
 MCInst AArch64InstrInfo::getNop() const { return MCInstBuilder(AArch64::NOP); }
 
 // AArch64 supports MachineCombiner.

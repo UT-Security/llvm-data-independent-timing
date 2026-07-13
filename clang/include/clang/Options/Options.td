@@ -4080,6 +4080,14 @@ def fms_secure_hotpatch_functions_list
       HelpText<"List of mangled symbol names of functions that should be "
                "hot-patched for Windows Secure Hot-Patching">;
 
+def ftaint_harden_EQ : Joined<["-"], "ftaint-harden=">,
+    Group<f_Group>,
+    Visibility<[ClangOption, CC1Option]>,
+    MarshallingInfoString<CodeGenOpts<"TaintHarden">>,
+    MetaVarName<"<file>">,
+    HelpText<"Path to a taint-source file (func,argidx[,pointee]); enables "
+             "interprocedural taint hardening (ISB/DSB barrier insertion)">;
+
 def fpcc_struct_return : Flag<["-"], "fpcc-struct-return">, Group<f_Group>,
   Visibility<[ClangOption, CC1Option]>,
   HelpText<"Override the default ABI to return all structs on the stack">;

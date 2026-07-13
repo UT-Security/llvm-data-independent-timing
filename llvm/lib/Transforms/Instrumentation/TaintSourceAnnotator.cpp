@@ -31,6 +31,7 @@ static cl::opt<std::string> TaintSourcesFile("taint-src", cl::desc("A file speci
 struct TaintSource {
   std::string FuncName;
   llvm::SmallSet<unsigned, 4> TaintedArgs;
+  llvm::SmallSet<unsigned, 4> PointeeTaintedArgs;
 };
 
 static Expected<StringMap<TaintSource>>
@@ -53,15 +54,16 @@ parseTaintSourcesFile(StringRef Filename) {
     SmallVector<StringRef, 4> Fields;
     Line.split(Fields, ',');
 
-    if (Fields.size() != 2) {
+    if (Fields.size() != 2 && Fields.size() != 3) {
       return createStringError(
           inconvertibleErrorCode(),
-          "Invalid format (expected func,argN) at line %u",
+          "Invalid format (expected func,argN or func,argN,pointee) at line %u",
           I.line_number());
     }
 
     StringRef FuncName = Fields[0].trim();
     StringRef Spec = Fields[1].trim();
+    StringRef Kind = Fields.size() == 3 ? Fields[2].trim() : "data";
 
     if (FuncName.empty())
       return createStringError(
@@ -79,7 +81,16 @@ parseTaintSourcesFile(StringRef Filename) {
           "Invalid argument index '%s' at line %u",
           Spec.str().c_str(), I.line_number());
 
-    TS.TaintedArgs.insert(ArgNo);
+    if (Kind == "data" || Kind.empty()) {
+      TS.TaintedArgs.insert(ArgNo);
+    } else if (Kind == "pointee") {
+      TS.PointeeTaintedArgs.insert(ArgNo);
+    } else {
+      return createStringError(
+          inconvertibleErrorCode(),
+          "Invalid taint kind '%s' at line %u (expected data or pointee)",
+          Kind.str().c_str(), I.line_number());
+    }
   }
 
   return Result;
@@ -87,10 +98,15 @@ parseTaintSourcesFile(StringRef Filename) {
 
 PreservedAnalyses TaintSourceAnnotatorPass::run(Module &M,
                                                 ModuleAnalysisManager &MAM) {
-  if (TaintSourcesFile.empty())
+  // An explicit path (e.g. from clang's -ftaint-harden) takes precedence over
+  // the -taint-src command-line option.
+  StringRef SourcesPath =
+      !TaintSourcesPath.empty() ? StringRef(TaintSourcesPath)
+                                : StringRef(TaintSourcesFile);
+  if (SourcesPath.empty())
     return PreservedAnalyses::all();
 
-  auto Parsed = parseTaintSourcesFile(TaintSourcesFile);
+  auto Parsed = parseTaintSourcesFile(SourcesPath);
   if (!Parsed) {
     logAllUnhandledErrors(Parsed.takeError(), errs(),
                           "Error parsing taint source file: ");
@@ -110,12 +126,18 @@ PreservedAnalyses TaintSourceAnnotatorPass::run(Module &M,
         continue;
 
       const auto &TaintedArgs = It->second.TaintedArgs;
+      const auto &PointeeTaintedArgs = It->second.PointeeTaintedArgs;
 
       for (Argument &Arg : F.args()) {
-        if (!TaintedArgs.contains(Arg.getArgNo()))
-          continue;
-        if (!Arg.hasAttribute("tainted")) {
+        if (TaintedArgs.contains(Arg.getArgNo()) &&
+            !Arg.hasAttribute("tainted")) {
           Arg.addAttr(llvm::Attribute::get(Arg.getContext(), "tainted"));
+          Changed = true;
+        }
+        if (PointeeTaintedArgs.contains(Arg.getArgNo()) &&
+            !Arg.hasAttribute("tainted-pointee")) {
+          Arg.addAttr(
+              llvm::Attribute::get(Arg.getContext(), "tainted-pointee"));
           Changed = true;
         }
       }

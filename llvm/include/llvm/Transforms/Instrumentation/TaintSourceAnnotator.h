@@ -15,12 +15,23 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Support/Compiler.h"
 
+#include <string>
+
 namespace llvm {
 class Function;
 class FunctionPass;
 class Module;
 
 struct TaintSourceAnnotatorPass : public PassInfoMixin<TaintSourceAnnotatorPass> {
+  /// Explicit taint-source file path. When empty, the pass falls back to the
+  /// -taint-src command-line option. This lets callers (e.g. clang's
+  /// -ftaint-harden) drive the pass without setting global cl::opt state.
+  std::string TaintSourcesPath;
+
+  TaintSourceAnnotatorPass() = default;
+  explicit TaintSourceAnnotatorPass(std::string Path)
+      : TaintSourcesPath(std::move(Path)) {}
+
   LLVM_ABI PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
   // static bool isRequired() { return true; }
 };

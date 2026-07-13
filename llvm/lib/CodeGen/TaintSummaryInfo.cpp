@@ -66,6 +66,20 @@ PreservedAnalyses TaintSummaryPrinterPass::run(Module &M,
       }
       OS << "\n";
 
+      OS << "  Pointee-tainted arguments: ";
+      if (Summary.PointeeTaintedArgIndices.empty()) {
+        OS << "none";
+      } else {
+        bool First = true;
+        for (unsigned ArgIdx : Summary.PointeeTaintedArgIndices) {
+          if (!First)
+            OS << ", ";
+          OS << ArgIdx;
+          First = false;
+        }
+      }
+      OS << "\n";
+
       OS << "  Returns tainted: " << (Summary.ReturnsTainted ? "yes" : "no")
          << "\n";
     }

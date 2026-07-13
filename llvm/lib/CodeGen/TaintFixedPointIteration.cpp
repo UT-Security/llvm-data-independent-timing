@@ -23,6 +23,7 @@
 
 #include "llvm/CodeGen/TaintFixedPointIteration.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/MachineFunctionAnalysis.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TaintAnalysis.h"
@@ -55,7 +56,8 @@ using namespace llvm;
 static bool propagateArgTaintToCallees(MachineFunction &MF,
                                        const TaintResult &TR,
                                        TaintSummaryInfo &TSI, Module &M,
-                                       FunctionAnalysisManager &FAM) {
+                                       FunctionAnalysisManager &FAM,
+                                       AAResults *AA) {
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   bool Changed = false;
 
@@ -65,22 +67,26 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
     TaintState S = (It != TR.IN.end()) ? It->second : TaintState{};
 
     for (const auto &MI : MBB) {
-      // Propagate taint through this instruction to maintain accurate state
-      propagateTaintMI(MI, S, TRI, &TSI, &M);
-
-      if (!MI.isCall())
+      if (!MI.isCall()) {
+        // Propagate taint through this instruction to maintain accurate state.
+        propagateTaintMI(MI, S, TRI, &TSI, &M, AA);
         continue;
+      }
 
       // Find the callee
       const Function *Callee = findCalledFunction(M, MI);
-      if (!Callee || Callee->isDeclaration())
+      if (!Callee || Callee->isDeclaration()) {
+        propagateTaintMI(MI, S, TRI, &TSI, &M, AA);
         continue;
+      }
 
       // Get the callee's MachineFunction so we can read its liveins
       auto *CalleeMFA = FAM.getCachedResult<MachineFunctionAnalysis>(
           *const_cast<Function *>(Callee));
-      if (!CalleeMFA)
+      if (!CalleeMFA) {
+        propagateTaintMI(MI, S, TRI, &TSI, &M, AA);
         continue;
+      }
       MachineFunction *CalleeMF = &CalleeMFA->getMF();
 
       // Walk callee's liveins and map each physical register to its argument
@@ -98,13 +104,44 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
                               << ")\n");
           }
         }
+        if (S.isPointeeTainted(PhysReg)) {
+          if (!CalleeSummary.PointeeTaintedArgIndices.contains(ArgIdx)) {
+            CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx);
+            Changed = true;
+            LLVM_DEBUG(dbgs() << "  caller " << MF.getName() << " -> callee "
+                              << Callee->getName() << ": arg " << ArgIdx
+                              << " now pointee-tainted (via "
+                              << printReg(PhysReg, TRI) << ")\n");
+          }
+        }
       }
 
       if (Changed)
         TSI.storeSummary(*Callee, CalleeSummary);
+
+      propagateTaintMI(MI, S, TRI, &TSI, &M, AA);
     }
   }
   return Changed;
+}
+
+static bool functionReturnsTainted(MachineFunction &MF, const TaintResult &TR,
+                                   TaintSummaryInfo &TSI, Module &M,
+                                   AAResults *AA) {
+  const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
+
+  for (const auto &MBB : MF) {
+    auto It = TR.IN.find(&MBB);
+    TaintState S = (It != TR.IN.end()) ? It->second : TaintState{};
+
+    for (const auto &MI : MBB) {
+      if (MI.isReturn() && anyTaintedRegUse(MI, S))
+        return true;
+      propagateTaintMI(MI, S, TRI, &TSI, &M, AA);
+    }
+  }
+
+  return false;
 }
 
 PreservedAnalyses TaintInterprocPass::run(Module &M,
@@ -117,21 +154,27 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
   // Step 2: Create TaintSummaryInfo — shared database of per-function summaries
   TaintSummaryInfo TSI;
 
-  // Seed TSI from IR "tainted" attributes (set by taint-annotate pass)
+  // Seed TSI from IR taint attributes (set by taint-annotate pass)
   for (Function &F : M) {
     if (F.isDeclaration())
       continue;
     SmallSet<unsigned, 8> TaintedArgs;
+    SmallSet<unsigned, 8> PointeeTaintedArgs;
     for (const Argument &Arg : F.args()) {
       if (Arg.hasAttribute("tainted"))
         TaintedArgs.insert(Arg.getArgNo());
+      if (Arg.hasAttribute("tainted-pointee"))
+        PointeeTaintedArgs.insert(Arg.getArgNo());
     }
-    if (!TaintedArgs.empty()) {
+    if (!TaintedArgs.empty() || !PointeeTaintedArgs.empty()) {
       FunctionTaintSummary Summary;
       Summary.TaintedArgIndices = TaintedArgs;
+      Summary.PointeeTaintedArgIndices = PointeeTaintedArgs;
       TSI.storeSummary(F, Summary);
       LLVM_DEBUG(dbgs() << "Seed: " << F.getName() << " has "
-                        << TaintedArgs.size() << " tainted arg(s)\n");
+                        << TaintedArgs.size() << " tainted arg(s), "
+                        << PointeeTaintedArgs.size()
+                        << " pointee-tainted arg(s)\n");
     }
   }
 
@@ -211,6 +254,13 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
           for (unsigned Idx : CurrentSummary.TaintedArgIndices)
             *TraceOS << " " << Idx;
         *TraceOS << "\n";
+        *TraceOS << "  pointee_tainted_args:";
+        if (CurrentSummary.PointeeTaintedArgIndices.empty())
+          *TraceOS << " (none)";
+        else
+          for (unsigned Idx : CurrentSummary.PointeeTaintedArgIndices)
+            *TraceOS << " " << Idx;
+        *TraceOS << "\n";
 
         // Show which physical registers will be seeded via liveins
         *TraceOS << "  seeded_regs:";
@@ -220,6 +270,11 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
           if (CurrentSummary.TaintedArgIndices.contains(ArgIdx)) {
             *TraceOS << " " << printReg(PhysReg, TRI) << "(arg" << ArgIdx
                      << ")";
+            Any = true;
+          }
+          if (CurrentSummary.PointeeTaintedArgIndices.contains(ArgIdx)) {
+            *TraceOS << " " << printReg(PhysReg, TRI) << "(pointee_arg"
+                     << ArgIdx << ")";
             Any = true;
           }
         }
@@ -232,12 +287,16 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       // TSI provides: (1) extra tainted-arg seeds from previous iterations,
       //               (2) callee return summaries for call handling
       TaintAnalysis TA;
-      TaintResult TR = TA.run(*MF, &TSI);
+      AAResults *AA = &FAM.getResult<AAManager>(F);
+      TaintResult TR = TA.run(*MF, &TSI, AA);
       Results[&F] = TR;
 
       // Log merged taint result
       if (TraceOS) {
-        *TraceOS << "  result: " << TR.Merged.countRegs() << " tainted regs, "
+        *TraceOS << "  result: " << TR.Merged.countRegs() << " tainted regs "
+                 << "(data=" << TR.Merged.countDataRegs()
+                 << ", pointee=" << TR.Merged.countPointeeRegs()
+                 << ", address=" << TR.Merged.countAddressRegs() << "), "
                  << TR.Merged.countCells() << " tainted cells";
         if (TR.Merged.UnknownMemTainted)
           *TraceOS << ", UnknownMemTainted";
@@ -247,31 +306,36 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
         for (const auto &RegID : TR.Merged.TaintedRegs)
           *TraceOS << " " << printReg(Register(RegID), TRI);
         *TraceOS << "\n";
+        *TraceOS << "  pointee_tainted_regs:";
+        for (const auto &RegID : TR.Merged.PointeeTaintedRegs)
+          *TraceOS << " " << printReg(Register(RegID), TRI);
+        *TraceOS << "\n";
+        *TraceOS << "  address_tainted_regs:";
+        for (const auto &RegID : TR.Merged.AddressTaintedRegs)
+          *TraceOS << " " << printReg(Register(RegID), TRI);
+        *TraceOS << "\n";
       }
 
-      // Propagate UnknownMemTainted to the module-level flag in TSI.
-      // If any function stores tainted data to heap, all functions need
-      // to know so their heap loads are correctly tainted.
+      // Keep unknown-memory taint intraprocedural. Promoting any tainted store
+      // to unknown/heap memory into a module-wide load poison is too coarse:
+      // it makes independent public heap reads, such as convolution kernel
+      // coefficient loads, data-tainted in later fixed-point iterations.
       if (TR.Merged.UnknownMemTainted) {
-        if (TSI.setUnknownMemTainted()) {
-          Changed = true;
-          LLVM_DEBUG(dbgs() << "  " << F.getName()
-                            << ": set module-level UnknownMemTainted\n");
-          if (TraceOS)
-            *TraceOS << "  ** set module-level UnknownMemTainted **\n";
-        }
+        LLVM_DEBUG(dbgs() << "  " << F.getName()
+                          << ": UnknownMemTainted kept local\n");
+        if (TraceOS)
+          *TraceOS << "  ** UnknownMemTainted kept local **\n";
       }
 
-      // Check if return register (X0/W0) is tainted.
-      // Use the callee's liveins to find the first livein (return register
-      // is typically the first physical register in AArch64).
-      // TODO: use calling convention info instead of hardcoded register IDs
-      bool ReturnsTainted =
-          TR.Merged.isTainted(1) || TR.Merged.isTainted(2); // X0 or W0
+      // Check actual return instructions instead of hardcoding generated
+      // physical-register enum values for W0/X0.
+      bool ReturnsTainted = functionReturnsTainted(*MF, TR, TSI, M, AA);
 
       // Build new summary
       FunctionTaintSummary NewSummary;
       NewSummary.TaintedArgIndices = CurrentSummary.TaintedArgIndices;
+      NewSummary.PointeeTaintedArgIndices =
+          CurrentSummary.PointeeTaintedArgIndices;
       NewSummary.ReturnsTainted = ReturnsTainted;
 
       // Check if return-taint status changed
@@ -291,7 +355,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       // Propagate argument taint to callees.
       // If caller_simple passes a tainted X0 to identity(), this adds
       // arg 0 to identity's TaintedArgIndices in TSI.
-      if (propagateArgTaintToCallees(*MF, TR, TSI, M, FAM)) {
+      if (propagateArgTaintToCallees(*MF, TR, TSI, M, FAM, AA)) {
         Changed = true;
         if (TraceOS)
           *TraceOS << "  ** propagated arg taint to callee(s) **\n";
@@ -306,6 +370,129 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
   if (TraceOS) {
     *TraceOS << "\n=== Converged after " << Iteration << " iteration(s) ===\n";
     *TraceOS << "Total function summaries: " << TSI.size() << "\n";
+  }
+
+  // Step 3b: Compute the PreservesDIT summary bit (greatest fixed point).
+  // A function preserves PSTATE.DIT iff it will not be DIT-instrumented (no
+  // tainted runs) and every call it makes is direct to a preserving in-TU
+  // callee. Tail calls count: the tail-callee runs inside the caller's frame
+  // from its own caller's perspective. Externals/indirect targets keep the
+  // conservative default (false). Used by insertTaintBarriers to elide
+  // after-call DIT re-asserts; must run before barrier insertion below.
+  if (TaintInsertISB && TaintBarrierMode == TaintBarrierKind::DIT) {
+    for (Function &F : M) {
+      if (F.isDeclaration())
+        continue;
+      auto *MFA = FAM.getCachedResult<MachineFunctionAnalysis>(F);
+      if (!MFA)
+        continue;
+      bool Instrumented = false;
+      auto It = Results.find(&F);
+      if (It != Results.end() && !It->second.Merged.empty()) {
+        AAResults *AA = &FAM.getResult<AAManager>(F);
+        Instrumented = functionHasTaintedRuns(MFA->getMF(), It->second, &TSI, AA);
+      }
+      FunctionTaintSummary S = TSI.getSummary(F);
+      S.PreservesDIT = !Instrumented;
+      TSI.storeSummary(F, S);
+    }
+
+    bool PreservesChanged = true;
+    while (PreservesChanged) {
+      PreservesChanged = false;
+      for (Function &F : M) {
+        if (F.isDeclaration())
+          continue;
+        auto *MFA = FAM.getCachedResult<MachineFunctionAnalysis>(F);
+        if (!MFA)
+          continue;
+        FunctionTaintSummary S = TSI.getSummary(F);
+        if (!S.PreservesDIT)
+          continue;
+        bool Preserves = true;
+        for (const auto &MBB : MFA->getMF()) {
+          for (const auto &MI : MBB) {
+            if (!MI.isCall())
+              continue;
+            const Function *Callee = findCalledFunction(M, MI);
+            if (!Callee || !TSI.getSummary(*Callee).PreservesDIT) {
+              Preserves = false;
+              break;
+            }
+          }
+          if (!Preserves)
+            break;
+        }
+        if (!Preserves) {
+          S.PreservesDIT = false;
+          TSI.storeSummary(F, S);
+          PreservesChanged = true;
+        }
+      }
+    }
+    LLVM_DEBUG({
+      for (Function &F : M)
+        if (!F.isDeclaration())
+          dbgs() << "  PreservesDIT(" << F.getName()
+                 << ") = " << TSI.getSummary(F).PreservesDIT << "\n";
+    });
+  }
+
+  // Step 3c: Call-site escape report. Secrets handed to callees the analysis
+  // cannot instrument (external declarations, indirect calls) are residual
+  // hazards in every barrier mode: no toggle or barrier placed in the caller
+  // protects the secret while the callee executes.
+  if (!TaintCallsiteReportFile.empty()) {
+    std::error_code EC;
+    raw_fd_ostream CallsiteOS(TaintCallsiteReportFile, EC, sys::fs::OF_None);
+    if (EC) {
+      errs() << "Error creating taint callsite report file: " << EC.message()
+             << "\n";
+    } else {
+      for (Function &F : M) {
+        if (F.isDeclaration())
+          continue;
+        auto *MFA = FAM.getCachedResult<MachineFunctionAnalysis>(F);
+        if (!MFA)
+          continue;
+        auto It = Results.find(&F);
+        if (It == Results.end())
+          continue;
+        MachineFunction &MF = MFA->getMF();
+        const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
+        AAResults *AA = &FAM.getResult<AAManager>(F);
+        for (const auto &MBB : MF) {
+          auto InIt = It->second.IN.find(&MBB);
+          TaintState S = (InIt != It->second.IN.end()) ? InIt->second
+                                                       : TaintState{};
+          for (const auto &MI : MBB) {
+            if (MI.isCall()) {
+              bool ArgTainted = anyTaintedCallArgument(MI, S);
+              bool ArgPointeeTainted = anyPointeeTaintedCallArgument(MI, S);
+              if (ArgTainted || ArgPointeeTainted) {
+                const Function *Callee = findCalledFunction(M, MI);
+                bool InstrumentableCallee = Callee && !Callee->isDeclaration();
+                if (!InstrumentableCallee) {
+                  CallsiteOS << "ESCAPE " << (Callee ? "external" : "indirect")
+                             << " callee="
+                             << (Callee ? Callee->getName() : "<indirect>")
+                             << " caller=" << F.getName()
+                             << " bb=" << MBB.getNumber();
+                  if (const DebugLoc &DL = MI.getDebugLoc())
+                    CallsiteOS << " line=" << DL.getLine();
+                  if (ArgTainted)
+                    CallsiteOS << " tainted-args";
+                  if (ArgPointeeTainted)
+                    CallsiteOS << " pointee-tainted-args";
+                  CallsiteOS << "\n";
+                }
+              }
+            }
+            propagateTaintMI(MI, S, TRI, &TSI, &M, AA);
+          }
+        }
+      }
+    }
   }
 
   // Step 4: Export tainted instructions to file
@@ -367,7 +554,8 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       raw_ostream *SrcPtr = SrcEC ? nullptr : &SrcOS;
 
       FunctionTaintStats Stats;
-      exportTaintedInstructions(*MF, It->second, &TSI, OS, SrcPtr, &Stats);
+      AAResults *AA = &FAM.getResult<AAManager>(F);
+      exportTaintedInstructions(*MF, It->second, &TSI, OS, SrcPtr, &Stats, AA);
       if (!Stats.Output.empty())
         AllStats.push_back(std::move(Stats));
     }
@@ -433,16 +621,20 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
         continue;
 
       if (TaintInsertISB) {
+        AAResults *AA = &FAM.getResult<AAManager>(F);
         BarriersInserted += insertTaintBarriers(MFA->getMF(), It->second, &TSI,
-                                                RegionsOS.get());
+                                                RegionsOS.get(), AA);
       } else if (RegionsOS) {
+        AAResults *AA = &FAM.getResult<AAManager>(F);
         RegionsReported += exportTaintBarrierRegions(MFA->getMF(), It->second,
-                                                     &TSI, *RegionsOS);
+                                                     &TSI, *RegionsOS, AA);
       }
 
-      if (SourceRegionsOS)
+      if (SourceRegionsOS) {
+        AAResults *AA = &FAM.getResult<AAManager>(F);
         SourceRegionsReported += exportTaintSourceRegions(
-            MFA->getMF(), It->second, &TSI, *SourceRegionsOS);
+            MFA->getMF(), It->second, &TSI, *SourceRegionsOS, AA);
+      }
     }
 
     if (TaintInsertISB) {

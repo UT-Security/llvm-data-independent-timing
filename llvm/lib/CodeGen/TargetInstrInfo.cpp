@@ -94,6 +94,13 @@ void TargetInstrInfo::insertDataBarrier(MachineBasicBlock &MBB,
   report_fatal_error("target did not implement data barrier insertion");
 }
 
+void TargetInstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
+                                             MachineBasicBlock::iterator MI,
+                                             const DebugLoc &DL,
+                                             bool Enable) const {
+  report_fatal_error("target did not implement timing mode switch insertion");
+}
+
 /// insertNoops - Insert noops into the instruction stream at the specified
 /// point.
 void TargetInstrInfo::insertNoops(MachineBasicBlock &MBB,

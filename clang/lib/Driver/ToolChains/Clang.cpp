@@ -6806,6 +6806,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT_fms_secure_hotpatch_functions_file))
     Args.AddLastArg(CmdArgs, options::OPT_fms_secure_hotpatch_functions_file);
 
+  if (Args.hasArg(options::OPT_ftaint_harden_EQ))
+    Args.AddLastArg(CmdArgs, options::OPT_ftaint_harden_EQ);
+
   for (const auto &A :
        Args.getAllArgValues(options::OPT_fms_secure_hotpatch_functions_list))
     CmdArgs.push_back(

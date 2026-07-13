@@ -1,0 +1,86 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-isb -taint-region-merge-gap=0 %s -o - | FileCheck %s --check-prefix=GAP0
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-isb -taint-region-merge-gap=2 %s -o - | FileCheck %s --check-prefix=GAP2
+
+# A gap of 0 preserves the old precise behavior: every clean instruction ends
+# the current protected region. A gap of 2 bundles tainted runs separated by up
+# to two clean candidate instructions in the same basic block, while a gap of
+# three clean instructions still splits the region.
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @bundle_gap(i32 "tainted" %secret, i32 %public) {
+  entry:
+    %a = add i32 %secret, 1
+    %b = add i32 %public, 1
+    %c = add i32 %secret, 2
+    %d = add i32 %public, 2
+    %e = add i32 %d, 1
+    %f = add i32 %e, 1
+    %g = add i32 %secret, 3
+    ret i32 %public
+  }
+
+...
+---
+name:            bundle_gap
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr32 }
+  - { id: 1, class: gpr32 }
+  - { id: 2, class: gpr32 }
+  - { id: 3, class: gpr32 }
+  - { id: 4, class: gpr32 }
+  - { id: 5, class: gpr32 }
+  - { id: 6, class: gpr32 }
+  - { id: 7, class: gpr32 }
+  - { id: 8, class: gpr32 }
+liveins:
+  - { reg: '$w0', virtual-reg: '%0' }
+  - { reg: '$w1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $w0, $w1
+
+    ; GAP0-LABEL: name: bundle_gap
+    ; GAP0: ISB 15
+    ; GAP0-NEXT: %0:gpr32 = COPY $w0
+    ; GAP0-NEXT: DSB 15
+    ; GAP0: ISB 15
+    ; GAP0-NEXT: %2:gpr32 = ADDWri %0, 1, 0
+    ; GAP0-NEXT: DSB 15
+    ; GAP0: ISB 15
+    ; GAP0-NEXT: %4:gpr32 = ADDWri %0, 2, 0
+    ; GAP0-NEXT: DSB 15
+    ; GAP0: ISB 15
+    ; GAP0-NEXT: %8:gpr32 = ADDWri %0, 3, 0
+    ; GAP0-NEXT: DSB 15
+    ;
+    ; GAP2-LABEL: name: bundle_gap
+    ; GAP2: ISB 15
+    ; GAP2-NEXT: %0:gpr32 = COPY $w0
+    ; GAP2-NEXT: %1:gpr32 = COPY $w1
+    ; GAP2-NEXT: %2:gpr32 = ADDWri %0, 1, 0
+    ; GAP2-NEXT: %3:gpr32 = ADDWri %1, 1, 0
+    ; GAP2-NEXT: %4:gpr32 = ADDWri %0, 2, 0
+    ; GAP2-NEXT: DSB 15
+    ; GAP2: %5:gpr32 = ADDWri %1, 2, 0
+    ; GAP2-NEXT: %6:gpr32 = ADDWri %5, 1, 0
+    ; GAP2-NEXT: %7:gpr32 = ADDWri %6, 1, 0
+    ; GAP2-NEXT: ISB 15
+    ; GAP2-NEXT: %8:gpr32 = ADDWri %0, 3, 0
+    ; GAP2-NEXT: DSB 15
+    %0:gpr32 = COPY $w0
+    %1:gpr32 = COPY $w1
+    %2:gpr32 = ADDWri %0, 1, 0
+    %3:gpr32 = ADDWri %1, 1, 0
+    %4:gpr32 = ADDWri %0, 2, 0
+    %5:gpr32 = ADDWri %1, 2, 0
+    %6:gpr32 = ADDWri %5, 1, 0
+    %7:gpr32 = ADDWri %6, 1, 0
+    %8:gpr32 = ADDWri %0, 3, 0
+    $w0 = COPY %1
+    RET_ReallyLR implicit $w0
+
+...
