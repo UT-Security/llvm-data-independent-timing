@@ -134,27 +134,30 @@ guarantees DIT=1, `g` needs **zero** toggles. Note even a redundant same-value
 `MSR DIT, #1` (the post-call re-assert) costs **12 cycles** — cheaper than a real
 toggle, but not free, so the `PreservesDIT` elision is worth real cycles.
 
-### P2: whole-function dwell when taint is localized — **NOT A GAP (measured)**
-This section used to hypothesize that dwell is near-free and ask for measurement
-on FEAT_DIT hardware. **Measured 2026-07-14 on Apple M4** — the hypothesis was
-right, and stronger than stated: **dwell cost is zero** (≤1% on every ALU,
-multiply, load, store, pointer-chase and streaming kernel; whole-program DIT on
-`firefox_convolve_int` is 0.968x, i.e. not a slowdown). A **toggle costs ~30
-cycles** and fully serializes. Full data: `utils/taint_dit_cost_model.md`.
+### P2: whole-function dwell when taint is localized — **REAL, and the reason for §5**
+This section used to hypothesize that dwell is near-free pending measurement on
+FEAT_DIT hardware. **The hypothesis was wrong.** With DIT fully on, **some SPEC
+2026 benchmarks lose ~15%** (measured by the project owner). Dwell is real,
+workload-dependent, and is exactly the cost that narrowing placement to the
+tainted region buys back. Data and caveats: `utils/taint_dit_cost_model.md`.
 
 Consequences for this document:
-- The objective is confirmed as **minimizing executed toggles** — §5's lazy-code-
-  motion design is aimed at exactly the right thing.
-- **Narrowing a region to the tainted instructions is a pessimization**, not an
-  optimization: it can only add ~30-cycle toggles to save dwell that is free.
-  Wherever this doc reads as "shrink the region", read "**coarsen and hoist the
-  toggles out**" (§5's LCM does this naturally — it sinks enables and hoists
-  disables to minimize *executed* toggles, not covered instructions).
-- P1 below is therefore the **whole** performance story, not merely the dominant
-  one.
-- Caveat: one microarchitecture. Arm does not architecturally promise cheap DIT;
-  re-run `playground/dit_bench/run.sh` on Neoverse V1/N2 or Graviton3 before
-  generalizing. A core with real dwell cost puts this gap back.
+- The objective has **two competing terms**, and §5's design must optimize both:
+  `toggles × ~30 cyc` (favours coarse) + `dwell × time_in_DIT` (favours fine).
+- A **toggle costs ~30 cycles** and fully serializes (measured, M4), so a region
+  costs **~60 cyc to enter and leave**. That is the **admission test** for
+  creating a region at all: only narrow if it removes more than ~60 cyc of dwell
+  from the covered code. `-taint-region-merge-gap` is today's hand-tuned proxy
+  for this test and can now be derived rather than guessed.
+- Beware evaluating placement on `firefox_convolve_int`: it is **DIT-insensitive**
+  (whole-program DIT = 0.968x), so it cannot demonstrate a win. Finding
+  DIT-sensitive workloads is an open project task.
+- P1 above (redundant toggles across the call graph) is an **independent** win:
+  hoisting a toggle out of a hot leaf removes toggles *without* extending dwell
+  over extra secret-free code, so it pays regardless of the dwell number.
+- ⚠️ Do not re-derive "dwell ≈ 0" from a microbenchmark. The M4 microkernels in
+  `playground/dit_bench/` show ~0 and are **not representative** — see the cost-
+  model doc's "History" section.
 
 ### P3: one disable per return
 Functions with many exit blocks execute at most one, so the *static* count is

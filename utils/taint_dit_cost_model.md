@@ -5,15 +5,31 @@
 **Benchmarks:** `playground/dit_bench/` (`sh playground/dit_bench/run.sh`).
 Frequency calibrated per run against a dependent `add` chain (3.94 GHz observed).
 
-This file answers the question every DIT placement decision was blocked on
+This file addresses the question every DIT placement decision was blocked on
 (`taint_dit_placement.md` §4 P2, handoff next-action #1): **what does DIT cost?**
+It answers the *toggle* half. It does **not** answer the *dwell* half — see the
+warning immediately below.
 
 ## The two numbers
 
-| Term | Measured on M4 |
+| Term | Status |
 |---|---|
-| **Toggle** — `MSR DIT` that *changes* the bit | **~30 cycles**, fully serializing |
-| **Dwell** — running code with `PSTATE.DIT = 1` | **~0** (≤1%, at noise) |
+| **Toggle** — `MSR DIT` that *changes* the bit | **~30 cycles**, fully serializing — solid, see below |
+| **Dwell** — running code with `PSTATE.DIT = 1` | **NONZERO and workload-dependent.** Up to **~15% on some SPEC 2026 benchmarks** with DIT fully on (measured separately by the project owner). The microkernels below show ~0 — **they are not representative; see §"Why the microkernels show zero".** |
+
+> ⚠️ **Do not cite the ~0 dwell numbers in this file as "DIT is free."** They were
+> briefly written up that way on 2026-07-14 and that conclusion was **wrong**. The
+> ground truth is the SPEC 2026 result: real workloads lose real performance when
+> DIT is left on. Both terms of the objective function are alive:
+>
+> ```
+> cost = toggles × ~30 cyc  +  dwell(workload) × time_in_DIT
+> ```
+>
+> Minimizing *only* toggles (i.e. coarsening to whole-function or whole-program
+> DIT) is what costs 15% on the benchmarks that are sensitive. **This is precisely
+> the cost the taint analysis exists to avoid, and it validates the project's
+> premise rather than undermining it.**
 
 ### Toggle cost, in context (cycles, 32 instructions per loop iteration)
 
@@ -36,7 +52,17 @@ Note the same-value write still costs 12 cycles. It is cheaper than a real
 toggle but **not free**, so redundant re-asserts (the post-call `MSR DIT, #1`)
 are not free either.
 
-### Dwell cost: zero, on everything tried
+### Dwell cost: the microkernels below show zero — and that is a NEGATIVE RESULT
+
+**Ground truth first:** with DIT fully on, **some SPEC 2026 benchmarks lose ~15%**
+(measured by the project owner; hardware/benchmark breakdown TBD — see "Open" at
+the end). Dwell is real, it is workload-dependent, and it is exactly the cost this
+project exists to avoid paying on public code.
+
+The kernels below therefore measure **what my microbenchmarks failed to contain**,
+not what DIT costs. They are kept because a *reproducible negative* is useful: it
+bounds where the 15% is *not* coming from (plain integer ALU, multiplies, and
+these load/store patterns on M4), which narrows the hunt for where it *is*.
 
 Identical code, `PSTATE.DIT` set before the timed loop and verified still set
 after it (the harness `MRS`-checks this and aborts otherwise — an early version
@@ -65,72 +91,103 @@ byte-identical code, `PSTATE.DIT` set for the *entire program* via a constructor
 DIT off : min 624.9 ms   DIT on : min 604.7 ms   →  0.968x
 ```
 
-Whole-program DIT is **not a slowdown at all** on this workload (the 3% is
-noise/layout, not a speedup one should claim).
+i.e. `firefox_convolve_int` is **DIT-insensitive** on M4. Combined with the SPEC
+2026 result, the useful reading is not "DIT is free" but: **DIT sensitivity varies
+enormously by workload.** `firefox_convolve_int` is therefore a *bad* benchmark for
+evaluating placement quality — it cannot show a win, because it has nothing to
+lose. Placement work needs a DIT-sensitive workload to be evaluated against
+(finding those is an explicit project goal; see "Open").
+
+### Why the microkernels show zero
+
+Hypotheses for the gap between these kernels (~0) and SPEC 2026 (~15%), i.e. where
+to look for the sensitive patterns — **untested, listed for the next session**:
+
+- **SIMD/NEON and FP.** Everything here is scalar integer. Data-dependent
+  optimizations in the vector and floating-point paths are a prime suspect and are
+  entirely unmeasured.
+- **The data memory-dependent prefetcher (DMP).** DIT disables it on M3+. My
+  DMP-sensitive kernel did *not* isolate it: at 3.27 ns/op into a 256 MB arena the
+  loads already run with heavy memory-level parallelism from out-of-order
+  execution, masking any DMP contribution. A GoFetch-style test would be sharper.
+  Pointer-heavy workloads are where this should bite.
+- **Microarchitectural breadth.** Zero-latency move elimination, store-to-load
+  forwarding, branch/predictor interactions — none probed.
+- **Scale.** SPEC benchmarks have large working sets and complex control flow; a
+  32-instruction loop with a hot L1 working set exercises almost none of the
+  machinery DIT constrains.
 
 ## What this means for the project
 
-**The premise that motivated secret-awareness does not hold on M4.** The
-handoff states: *"DIT is NOT free… while it is ON the core loses hardware
-optimizations. So DIT-everywhere is expensive… the project's entire value is
-enabling DIT only around instructions that operate on secrets."* On M4 the
-dwell term is **zero**, so DIT-everywhere is **not** expensive, and the "avoid
-paying for DIT on public code" argument has no measured cost to avoid.
-
-The objective function collapses accordingly:
+**The project's premise stands.** The handoff's rationale — *"DIT is NOT free…
+while it is ON the core loses hardware optimizations. So DIT-everywhere is
+expensive… the project's entire value is enabling DIT only around instructions
+that operate on secrets"* — is **supported** by the SPEC 2026 result (~15% on
+sensitive benchmarks with DIT fully on). Both terms are live:
 
 ```
-cost = toggles × 30 cyc  +  instrs_in_DIT × ~0
-     = toggles × 30 cyc
+cost = toggles × ~30 cyc  +  dwell(workload) × time_in_DIT
+       \__ favours coarse __/   \__ favours fine-grained __/
 ```
 
-Consequences, in order of how much they change the plan:
+The two terms **pull in opposite directions**, which is what makes placement a
+real optimization problem rather than a "just coarsen it" problem:
 
-1. **Fine-grained region placement is a pessimization, not an optimization.**
-   Narrowing a region can only *add* toggles; each one costs ~30 cycles while
-   the dwell it saves costs nothing. Handoff next-action #3 ("replace function
-   granularity with cost-model-driven region placement") is now
-   **contraindicated on this hardware** — the cost model, once measured, argues
-   the other way. This retroactively **validates** `taint_dit_placement.md` §4
-   P2 ("treat dwell as near-free and toggle count as the objective") and §5's
-   lazy-code-motion design, whose objective is minimizing *executed toggles*.
-2. **The optimum is to coarsen, i.e. hoist toggles up and out.** Minimizing
-   toggles means: set DIT once at the outermost tainted point, let callees
-   inherit it (PSTATE.DIT survives calls; AAPCS64 has no callee-saved rule for
-   it), and never toggle in a leaf. Today's function granularity is *not* that
-   optimum — a tainted leaf called in a hot loop pays ~60 cyc/activation, 30× a
-   call/ret. The `PreservesDIT` summary bit is the seed of the fix; §5.3 of the
-   placement doc is the design.
-   The degenerate optimum — `MSR DIT, #1` once per thread entry and never again
-   — is exactly what the arm64 kernel and BoringSSL do by hand, and on M4 the
-   measurements cannot distinguish it from anything cleverer.
-3. **What still justifies the taint analysis** (none of it is the perf argument):
-   - **Portability of the claim.** This is *one* FEAT_DIT implementation. Arm
-     does not architecturally promise a zero-cost DIT, and Neoverse V1/N2 and
-     Graviton3+ are unmeasured. A core with real dwell cost restores the
-     original argument verbatim. **Re-run `run.sh` on Graviton3 before
-     generalizing anything here.**
-   - **Toggle placement still needs taint** to know which functions need a
-     toggle at all — and toggles are the entire measured cost.
-   - **Correctness/audit**, which is where the analysis is uniquely load-bearing:
-     the `ESCAPE` call-site report, and `taint_dit_placement.md` §3 G2 — a
-     tainted `SDIV`/`UDIV` is **not** covered by DIT, so DIT-everywhere is
-     *silent false assurance* while the taint analysis can point at the
-     uncovered instruction. "Which instructions touch secrets" is a question
-     DIT-everywhere cannot answer and this pass can.
+1. **Fine-grained region placement remains the goal** (handoff next-action #3).
+   The dwell term is what it buys, and on a DIT-sensitive workload that is worth
+   up to ~15%. What the toggle measurement adds is a **hard floor on how fine it
+   is worth going**: a region costs ~60 cycles to enter and leave, so a region is
+   only worth creating if it removes more than ~60 cycles' worth of dwell from
+   the covered code. That is the concrete admission test the current hand-tuned
+   `-taint-region-merge-gap` knob is a proxy for — and now it can be derived
+   instead of guessed. `taint_dit_placement.md` §5's lazy-code-motion design
+   still applies; its objective just gains the dwell term rather than minimizing
+   toggles alone.
+2. **Coarsening is still right *within* the call graph, where it is free.**
+   Hoisting a toggle out of a hot leaf (set DIT at the outermost tainted point,
+   let callees inherit it — PSTATE.DIT survives calls and AAPCS64 has no
+   callee-saved rule for it) removes toggles **without extending dwell over any
+   additional secret-free code**, so it is a pure win independent of the dwell
+   number. Today's function granularity pays ~60 cyc per activation of a tainted
+   leaf called in a hot loop. `PreservesDIT` + §5.3 of the placement doc is the
+   fix. This is the part of the earlier (wrong) analysis that survives.
+3. **Forward-looking, the dwell term only grows.** This project targets a 5+ year
+   horizon. Future cores add *more* data-dependent optimizations for DIT to
+   suppress, not fewer, so the cost of DIT-everywhere trends **up** and the value
+   of secret-aware placement trends up with it. No measurement on today's silicon
+   — favourable or not — should be read as a statement about that trajectory.
+4. **Beyond performance, the taint analysis is load-bearing for correctness:** the
+   `ESCAPE` call-site report, and `taint_dit_placement.md` §3 G2 — a tainted
+   `SDIV`/`UDIV` is **not** covered by DIT, so DIT-everywhere is *silent false
+   assurance*, while the analysis can point at the uncovered instruction.
+
+## History — a wrong conclusion, recorded so it is not re-derived
+
+On 2026-07-14 this file initially concluded from the microkernels that "dwell ≈ 0,
+therefore DIT-everywhere is nearly free and fine-grained placement is a
+pessimization." **That was wrong**, and it was wrong in an instructive way: the
+kernels were scalar-integer, small-working-set loops that happen to contain none
+of the patterns DIT penalizes, so they measured the benchmark's blind spots rather
+than DIT's cost. The SPEC 2026 data (~15%) is the ground truth. If a future
+measurement again shows ~0 on some workload, the correct inference is *"this
+workload is DIT-insensitive"*, **not** *"DIT is free."*
 
 ## Caveats — read before generalizing
 
-- **M4 only, and absence of evidence is not evidence of absence.** No kernel was
-  found where dwell costs anything; that is not proof none exists. The
-  DMP-sensitive kernel in particular did **not** cleanly isolate the data
-  memory-dependent prefetcher (GoFetch mechanism, which DIT is documented to
-  disable on M3+): at 3.27 ns/op into a 256 MB arena the loads are already
-  running with heavy memory-level parallelism from out-of-order execution, so
-  any DMP contribution is masked. A sharper DMP test could still find a real
-  dwell cost for pointer-heavy secret code. Treat "dwell = 0" as *measured on
-  these kernels*, not as an architectural guarantee.
-- DIT constrains a **specified instruction list**. Instructions outside it
-  (divides, FP/denormal paths) have no DIT guarantee, so a zero dwell cost is
-  partly just "the M4 had little data-dependent timing to suppress here."
-- All numbers are single-threaded, P-core, one microarchitecture, `-O2`.
+- **The ~30 cyc toggle number is M4, single-threaded, P-core, `-O2`.** It should be
+  re-measured per target core; it is the one number here that is solid, but it is
+  solid *for this microarchitecture*.
+- **The ~0 dwell kernels prove nothing about DIT** beyond "these specific patterns
+  are insensitive on M4." Do not generalize from them (see History).
+- DIT constrains a **specified instruction list**; instructions outside it (divides,
+  FP/denormal paths) get no DIT guarantee at all — relevant to §3 G2, not to cost.
+
+## Open
+
+- **Where does the SPEC 2026 15% come from?** Which benchmarks, which core, and
+  which code patterns. This is the number that drives the whole dwell term, and
+  reducing it to a set of *patterns* is what would let the region-admission test
+  above be computed statically. (Explicit project goal: find real-world workloads
+  where DIT is needed *and* coarse-grained placement hurts. Deferred, not dropped.)
+- Full SPEC 2026 methodology (hardware, config, per-benchmark deltas) is not yet
+  recorded here — it lives with the project owner. Capture it here when available.
