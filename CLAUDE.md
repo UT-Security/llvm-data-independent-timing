@@ -78,6 +78,7 @@ these). Region spacing: `utils/taint_region_distance.py OUT.hardened.mir`.
 | `-ftaint-harden` flag + in-process 3-phase codegen (`RunTaintHardenCodegen`) | `clang/lib/CodeGen/BackendUtil.cpp`; flag in `clang/include/clang/Options/Options.td`, `clang/include/clang/Basic/CodeGenOptions.h`, forwarding in `clang/lib/Driver/ToolChains/Clang.cpp` |
 | Firefox integration guide | `utils/taint_firefox_integration.md` |
 | DIT placement: state, gaps, optimal-placement design | `utils/taint_dit_placement.md` |
+| **DIT cost model (measured, Apple M4): toggle ≈ 30 cyc serializing, dwell ≈ 0** — read before any placement work | `utils/taint_dit_cost_model.md`, benchmarks in `playground/dit_bench/` |
 | **KNOWN UNSOUNDNESS** — callee→caller taint through memory (missing barrier); literature + design recommendation | `utils/taint_memory_summary_research.md`, repro in `playground/callee_memory_gap.c` |
 | Tests | `llvm/test/CodeGen/AArch64/taint-analysis-*.mir`, `llvm/test/Transforms/TaintAnnotate/taint-annotate.ll` |
 | Scratch experiments (not shipping code) | `playground/` |

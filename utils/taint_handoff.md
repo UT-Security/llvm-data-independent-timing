@@ -21,12 +21,24 @@ simplification; same family as the CIO paper). The ISB/DSB "speculation barrier"
 the code and in CLAUDE.md is a **placeholder / stand-in** for the DIT toggle mechanism, not
 a goal. Do not treat speculation defense as in scope.
 
-**Why the taint analysis exists:** DIT is NOT free. Toggling it costs a pipeline flush, and
-while it is ON the core loses hardware optimizations. So DIT-everywhere (what the arm64
-kernel / BoringSSL do by hand) is expensive. The project's entire value is enabling DIT
-**only around instructions that operate on secrets** — hence taint. This answers the
-research report's "is secret-awareness paying for itself?" question in the affirmative:
-yes, because the secret-agnostic baseline (DIT always on) is the expensive thing we avoid.
+**Why the taint analysis exists — HALF OF THIS WAS MEASURED FALSE (2026-07-14, M4).**
+The original argument was: DIT is not free — toggling costs a pipeline flush, *and* while it
+is ON the core loses hardware optimizations — so DIT-everywhere (what the arm64 kernel /
+BoringSSL do by hand) is expensive, and the project's value is enabling DIT only around
+secret instructions.
+
+The measurement (`utils/taint_dit_cost_model.md`) says:
+- **Toggle cost: real** — ~30 cycles, a full pipeline flush, ~30× a call/ret. ✅
+- **Dwell cost (running with DIT=1): ZERO** — ≤1% on every ALU, multiply, load, store,
+  pointer-chase and streaming kernel tried, and whole-program DIT on the project's own
+  `firefox_convolve_int` reference workload is **0.968x**, i.e. not a slowdown. ❌
+
+So the objective function is just `toggles × 30 cyc`. On M4, DIT-everywhere is *not* the
+expensive baseline we avoid — it is nearly free, and the "secret-awareness pays for itself
+on performance" answer is **not supported on this hardware**. Read the cost-model doc before
+planning any placement work; what still justifies the taint analysis (portability to cores
+with nonzero dwell cost, toggle placement, and audit/correctness — e.g. tainted `SDIV` is
+*not* DIT-covered, so DIT-everywhere is silent false assurance) is spelled out there.
 
 ## State of the work
 
@@ -63,22 +75,32 @@ yes, because the secret-agnostic baseline (DIT always on) is the expensive thing
 
 ## Next actions, in priority order
 
-1. **MEASURE (M4-only, the reason for the move).** Two microbenchmarks on FEAT_DIT hardware:
-   (a) cost of a single `MSR DIT` toggle (pipeline-flush cost); (b) steady-state slowdown of
-   identical code with DIT on vs off. These two numbers ARE the objective function
-   `(toggles × flush_cost) + (instrs_in_DIT × on_cost)` and decide whether fine-grained
-   placement even beats function granularity. Everything downstream is guessing without them.
+1. ~~**MEASURE (M4-only, the reason for the move).**~~ **DONE 2026-07-14.** Results and
+   implications: `utils/taint_dit_cost_model.md`; benchmarks: `playground/dit_bench/`.
+   `toggle ≈ 30 cyc (serializing)`, `dwell ≈ 0`. See the corrected premise above.
 2. **Fix the soundness hole** (mod-set memory-effects summary, report #1). Independent of the
-   cost model; it is a leaked secret today.
-3. **Replace function-granularity with cost-model-driven region placement.** This is a
-   mode-switch-minimization problem, NOT a taint problem — study the in-tree idioms:
-   `AArch64/SMEPeepholeOpt.cpp` (removes back-to-back smstart/smstop — closest cousin),
-   `RISCV/RISCVInsertVSETVLI.cpp` (dataflow-driven mode insertion), `X86/X86VZeroUpper.cpp`.
-   The existing `-taint-region-merge-gap` knob is a hand-tuned proxy for the real objective.
-4. **Before any novelty claim:** read Serberus/LLSCT (S&P'24) and DECLASSIFLOW (CCS'23) end
+   cost model; it is a leaked secret today. **← now the top priority.**
+3. ~~**Replace function-granularity with cost-model-driven region placement.**~~
+   **CONTRAINDICATED by the measurement.** With dwell ≈ 0, narrowing a region can only *add*
+   ~30-cycle toggles to save dwell that costs nothing. The correct direction is the
+   **opposite**: *coarsen* — hoist toggles up and out of the call graph (set DIT once at the
+   outermost tainted point; callees inherit it, since PSTATE.DIT survives calls and AAPCS64
+   has no callee-saved rule for it), so a tainted leaf in a hot loop stops paying ~60
+   cyc/activation. That is `taint_dit_placement.md` §5 (lazy code motion, objective =
+   minimize *executed toggles*) plus the `PreservesDIT` summary bit — the design was already
+   right; the measurement confirms its objective and kills the region-narrowing framing.
+   The mode-switch-minimization idioms are still the right prior art:
+   `AArch64/SMEPeepholeOpt.cpp` (back-to-back smstart/smstop — closest cousin),
+   `RISCV/RISCVInsertVSETVLI.cpp`, `X86/X86VZeroUpper.cpp`.
+4. **Re-run `playground/dit_bench/run.sh` on Graviton3 / Neoverse V1-N2.** The zero-dwell
+   result is one microarchitecture; it is the single load-bearing assumption behind (3), and
+   a core with real dwell cost restores the original premise verbatim.
+5. **Before any novelty claim:** read Serberus/LLSCT (S&P'24) and DECLASSIFLOW (CCS'23) end
    to end — surfaced but not fully verified. Also note `AArch64SpeculationHardening.cpp` is
    already in-tree (AArch64, post-RA, a "taint" register, DSB/ISB) — have the "how is this
-   different" paragraph ready.
+   different" paragraph ready. Add: with dwell measured at ~0, a reviewer *will* ask why not
+   just DIT-everywhere — `taint_dit_cost_model.md` §"What still justifies the taint analysis"
+   is the answer, and it is not a performance answer on M4.
 
 ## Also worth revisiting (not blocking)
 
