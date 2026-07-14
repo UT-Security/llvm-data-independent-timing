@@ -368,9 +368,9 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
   // tainted runs) and every call it makes is direct to a preserving in-TU
   // callee. Tail calls count: the tail-callee runs inside the caller's frame
   // from its own caller's perspective. Externals/indirect targets keep the
-  // conservative default (false). Used by insertTaintBarriers to elide
-  // after-call DIT re-asserts; must run before barrier insertion below.
-  if (TaintInsertISB && TaintBarrierMode == TaintBarrierKind::DIT) {
+  // conservative default (false). Used by insertTaintDITSwitches to elide
+  // after-call DIT re-asserts; must run before instrumentation below.
+  if (TaintInsertDIT) {
     // Optimistic seed: a function preserves DIT unless it is itself
     // instrumented.
     forEachAnalyzed(M, FAM, Results,
@@ -515,18 +515,18 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       openTaintReport(TaintSourceRegionsOutputFile, "taint source regions "
                                                     "output");
 
-  unsigned BarriersInserted = 0;
+  unsigned ProtectedInstrs = 0;
   unsigned RegionsReported = 0;
   unsigned SourceRegionsReported = 0;
-  if (TaintInsertISB || RegionsOS || SourceRegionsOS) {
+  if (TaintInsertDIT || RegionsOS || SourceRegionsOS) {
     forEachAnalyzed(M, FAM, Results,
                     [&](Function &, MachineFunction &MF, const TaintResult &TR,
                         AAResults *AA) {
                       if (TR.Merged.empty())
                         return;
 
-                      if (TaintInsertISB)
-                        BarriersInserted += insertTaintBarriers(
+                      if (TaintInsertDIT)
+                        ProtectedInstrs += insertTaintDITSwitches(
                             MF, TR, &TSI, RegionsOS.get(), AA);
                       else if (RegionsOS)
                         RegionsReported += exportTaintBarrierRegions(
@@ -537,15 +537,15 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
                             MF, TR, &TSI, *SourceRegionsOS, AA);
                     });
 
-    if (TaintInsertISB) {
-      LLVM_DEBUG(dbgs() << "Inserted ISB barriers around " << BarriersInserted
+    if (TaintInsertDIT) {
+      LLVM_DEBUG(dbgs() << "Enabled PSTATE.DIT over " << ProtectedInstrs
                         << " tainted instruction(s)\n");
       if (TraceOS)
-        *TraceOS << "Inserted ISB barriers around " << BarriersInserted
+        *TraceOS << "Enabled PSTATE.DIT over " << ProtectedInstrs
                  << " tainted instruction(s)\n";
     } else if (TraceOS && RegionsOS) {
-      *TraceOS << "Reported barrier-protected regions covering "
-               << RegionsReported << " tainted instruction(s)\n";
+      *TraceOS << "Reported protected regions covering " << RegionsReported
+               << " tainted instruction(s)\n";
     }
 
     if (TraceOS && RegionsOS)

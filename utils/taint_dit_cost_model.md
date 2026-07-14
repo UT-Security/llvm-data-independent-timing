@@ -40,7 +40,7 @@ warning immediately below.
 | `msr DIT, #1` when already 1 (no change) | 12.00 |
 | `isb` | 34.01 |
 | `dsb ish` / `dsb sy` | 18.00 |
-| `dsb sy` + `isb` (what `-taint-insert-isb` emits) | 29.51 |
+| `dsb sy` + `isb` (what the removed ISB/DSB mode emitted, for reference) | 29.51 |
 | `bl` + `ret` (pair, for scale) | 2.03 |
 
 A toggle is a **pipeline flush**: interleaving independent ALU work with the

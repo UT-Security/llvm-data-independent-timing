@@ -208,8 +208,8 @@ echo "[3/6] LLVM IR -> post-prologepilog MIR"
 # Work around known MIR serialization issue for CFI offsets.
 perl -0pi -e 's/<mcsymbol >//g' "${PE_MIR}"
 
-echo "[4/6] Taint analysis + ISB insertion"
-"${LLC}" -enable-new-pm -run-taint-interproc -taint-insert-isb \
+echo "[4/6] Taint analysis + PSTATE.DIT mode-switch insertion"
+"${LLC}" -enable-new-pm -run-taint-interproc -taint-insert-dit \
   -taint-output="${TAINT_OUT}" -taint-regions-output="${REGIONS_OUT}" \
   -taint-source-regions-output="${SOURCE_REGIONS_OUT}" \
   "${TAINT_LLC_ARGS[@]}" \
@@ -230,8 +230,8 @@ generate_hardened_source_view() {
     }
     BEGIN {
       FS = "\t";
-      barrier_in = "__asm__ __volatile__(\"isb sy\" ::: \"memory\");";
-      barrier_out = "__asm__ __volatile__(\"dsb sy\" ::: \"memory\");";
+      barrier_in = "__asm__ __volatile__(\"msr DIT, #1\" ::: \"memory\");";
+      barrier_out = "__asm__ __volatile__(\"msr DIT, #0\" ::: \"memory\");";
       src_norm = normalize_path(src);
       src_original_norm = normalize_path(src_original);
     }
@@ -249,14 +249,17 @@ generate_hardened_source_view() {
         start = end;
         end = tmp;
       }
-      # The C source view is only an approximation of MIR barrier placement.
+      # The C source view marks the secret-dependent REGIONS. Actual DIT
+      # placement is function-granularity (entry/return), so this view shows
+      # where the secrets are, not literally where the MSRs are emitted.
+      # It is only an approximation.
       # Multi-line ranges are often caused by inlined debug locations and can
       # span across unrelated source statements or even functions. Show exact
       # source-line regions directly instead of merging those broad spans.
       if (start != end)
         next;
       line_has_entry[start] = 1;
-      if ($5 == "DSB")
+      if ($5 == "exit")
         line_has_exit[start] = 1;
       next;
     }

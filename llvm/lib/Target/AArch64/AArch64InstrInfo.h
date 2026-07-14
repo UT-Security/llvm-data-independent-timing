@@ -425,13 +425,6 @@ public:
   void insertNoop(MachineBasicBlock &MBB,
                   MachineBasicBlock::iterator MI) const override;
 
-  void insertInstructionBarrier(MachineBasicBlock &MBB,
-                                MachineBasicBlock::iterator MI,
-                                const DebugLoc &DL) const override;
-
-  void insertDataBarrier(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
-                         const DebugLoc &DL) const override;
-
   void insertTimingModeSwitch(MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator MI, const DebugLoc &DL,
                               bool Enable) const override;

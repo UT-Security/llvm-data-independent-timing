@@ -82,18 +82,6 @@ void TargetInstrInfo::insertNoop(MachineBasicBlock &MBB,
   llvm_unreachable("Target didn't implement insertNoop!");
 }
 
-void TargetInstrInfo::insertInstructionBarrier(
-    MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
-    const DebugLoc &DL) const {
-  report_fatal_error("target did not implement instruction barrier insertion");
-}
-
-void TargetInstrInfo::insertDataBarrier(MachineBasicBlock &MBB,
-                                        MachineBasicBlock::iterator MI,
-                                        const DebugLoc &DL) const {
-  report_fatal_error("target did not implement data barrier insertion");
-}
-
 void TargetInstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
                                              MachineBasicBlock::iterator MI,
                                              const DebugLoc &DL,

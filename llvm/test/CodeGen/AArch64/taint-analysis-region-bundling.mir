@@ -1,10 +1,41 @@
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-isb -taint-region-merge-gap=0 %s -o - | FileCheck %s --check-prefix=GAP0
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-isb -taint-region-merge-gap=2 %s -o - | FileCheck %s --check-prefix=GAP2
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-region-merge-gap=0 -taint-regions-output=%t.gap0 %s -o /dev/null
+# RUN: FileCheck %s --check-prefix=GAP0 --input-file=%t.gap0
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-region-merge-gap=2 -taint-regions-output=%t.gap2 %s -o /dev/null
+# RUN: FileCheck %s --check-prefix=GAP2 --input-file=%t.gap2
 
 # A gap of 0 preserves the old precise behavior: every clean instruction ends
 # the current protected region. A gap of 2 bundles tainted runs separated by up
 # to two clean candidate instructions in the same basic block, while a gap of
 # three clean instructions still splits the region.
+#
+# Coalesced regions no longer drive placement — PSTATE.DIT is applied at
+# function granularity (the per-region ISB/DSB mode was removed on 2026-07-14),
+# so this checks the regions report, which is what -taint-region-merge-gap still
+# feeds and what cost-model-driven region placement will consume. See
+# utils/taint_dit_cost_model.md and utils/taint_dit_placement.md.
+
+# Gap 0: four separate single-instruction regions, one per tainted instruction.
+# GAP0: # Region 1 (bundle_gap)
+# GAP0: %0:gpr32common = COPY $w0
+# GAP0: # Region 2 (bundle_gap)
+# GAP0: %2:gpr32common = ADDWri %0:gpr32common, 1, 0
+# GAP0: # Region 3 (bundle_gap)
+# GAP0: %4:gpr32common = ADDWri %0:gpr32common, 2, 0
+# GAP0: # Region 4 (bundle_gap)
+# GAP0: %8:gpr32common = ADDWri %0:gpr32common, 3, 0
+# GAP0-NOT: # Region 5
+
+# Gap 2: %0..%4 coalesce into one region across the two clean instructions
+# between them; the three clean instructions before %8 still split it off.
+# GAP2: # Region 1 (bundle_gap)
+# GAP2: %0:gpr32common = COPY $w0
+# GAP2: %1:gpr32common = COPY $w1
+# GAP2: %2:gpr32common = ADDWri %0:gpr32common, 1, 0
+# GAP2: %3:gpr32common = ADDWri %1:gpr32common, 1, 0
+# GAP2: %4:gpr32common = ADDWri %0:gpr32common, 2, 0
+# GAP2: # Region 2 (bundle_gap)
+# GAP2: %8:gpr32common = ADDWri %0:gpr32common, 3, 0
+# GAP2-NOT: # Region 3
 
 --- |
   target triple = "aarch64-unknown-linux-gnu"
@@ -43,34 +74,6 @@ body:             |
   bb.0.entry:
     liveins: $w0, $w1
 
-    ; GAP0-LABEL: name: bundle_gap
-    ; GAP0: ISB 15
-    ; GAP0-NEXT: %0:gpr32common = COPY $w0
-    ; GAP0-NEXT: DSB 15
-    ; GAP0: ISB 15
-    ; GAP0-NEXT: %2:gpr32common = ADDWri %0, 1, 0
-    ; GAP0-NEXT: DSB 15
-    ; GAP0: ISB 15
-    ; GAP0-NEXT: %4:gpr32common = ADDWri %0, 2, 0
-    ; GAP0-NEXT: DSB 15
-    ; GAP0: ISB 15
-    ; GAP0-NEXT: %8:gpr32common = ADDWri %0, 3, 0
-    ; GAP0-NEXT: DSB 15
-    ;
-    ; GAP2-LABEL: name: bundle_gap
-    ; GAP2: ISB 15
-    ; GAP2-NEXT: %0:gpr32common = COPY $w0
-    ; GAP2-NEXT: %1:gpr32common = COPY $w1
-    ; GAP2-NEXT: %2:gpr32common = ADDWri %0, 1, 0
-    ; GAP2-NEXT: %3:gpr32common = ADDWri %1, 1, 0
-    ; GAP2-NEXT: %4:gpr32common = ADDWri %0, 2, 0
-    ; GAP2-NEXT: DSB 15
-    ; GAP2: %5:gpr32common = ADDWri %1, 2, 0
-    ; GAP2-NEXT: %6:gpr32common = ADDWri %5, 1, 0
-    ; GAP2-NEXT: %7:gpr32common = ADDWri %6, 1, 0
-    ; GAP2-NEXT: ISB 15
-    ; GAP2-NEXT: %8:gpr32common = ADDWri %0, 3, 0
-    ; GAP2-NEXT: DSB 15
     %0:gpr32common = COPY $w0
     %1:gpr32common = COPY $w1
     %2:gpr32common = ADDWri %0, 1, 0

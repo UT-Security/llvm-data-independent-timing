@@ -51,19 +51,14 @@ extern cl::opt<std::string> TaintRegionsOutputFile;
 /// Command-line option for source-line protected-region output file.
 extern cl::opt<std::string> TaintSourceRegionsOutputFile;
 
-/// Command-line option for inserting target instruction barriers around
-/// tainted instructions.
-extern cl::opt<bool> TaintInsertISB;
-
-/// Kind of protection inserted around tainted code (selected with
-/// -taint-barrier-mode; -taint-insert-isb remains the master switch).
-enum class TaintBarrierKind {
-  ISB, ///< Per-region ISB/DSB speculation barriers.
-  DIT, ///< Function-granularity PSTATE.DIT data-independent-timing mode.
-};
-
-/// Command-line option selecting the protection mechanism.
-extern cl::opt<TaintBarrierKind> TaintBarrierMode;
+/// Master switch: insert PSTATE.DIT mode switches around tainted code.
+/// DIT (data-independent timing) is the project's only protection mechanism.
+/// The ISB/DSB speculation-barrier mode that used to sit behind
+/// -taint-barrier-mode was a placeholder for this toggle and was removed on
+/// 2026-07-14; speculation defense is not in scope (see utils/taint_handoff.md).
+/// Without this flag, codegen is unchanged and only the report files are
+/// produced.
+extern cl::opt<bool> TaintInsertDIT;
 
 /// Command-line option for the call-site residual (escape) report: call sites
 /// passing tainted/pointee-tainted arguments to callees the analysis cannot
@@ -348,8 +343,8 @@ std::unique_ptr<raw_fd_ostream> openTaintReport(StringRef Path, StringRef What,
                                                 bool Append = false);
 
 /// True if the function contains at least one coalesced tainted run, i.e.
-/// insertTaintBarriers would instrument it. Used to compute the PreservesDIT
-/// summary bit before barrier insertion.
+/// insertTaintDITSwitches would instrument it. Used to compute the PreservesDIT
+/// summary bit before instrumentation.
 bool functionHasTaintedRuns(MachineFunction &MF, const TaintResult &TR,
                             const TaintSummaryInfo *TSI,
                             AAResults *AA = nullptr);
@@ -383,13 +378,17 @@ unsigned exportTaintSourceRegions(MachineFunction &MF, const TaintResult &TR,
                                   const TaintSummaryInfo *TSI, raw_ostream &OS,
                                   AAResults *AA = nullptr);
 
-/// Insert target instruction barriers before and after every coalesced region
-/// of tainted instructions. If RegionsOS is non-null, also prints those
-/// protected regions. Returns the number of tainted instructions protected.
-unsigned insertTaintBarriers(MachineFunction &MF, const TaintResult &TR,
-                             const TaintSummaryInfo *TSI,
-                             raw_ostream *RegionsOS = nullptr,
-                             AAResults *AA = nullptr);
+/// Instrument MF with PSTATE.DIT mode switches if it contains any tainted
+/// instruction: MSR DIT, #1 at entry, MSR DIT, #0 before every return, and a
+/// re-assert after each non-tail call whose callee is not proven DIT-preserving.
+/// Placement is function-granularity — see utils/taint_dit_placement.md.
+/// If RegionsOS is non-null, also prints the coalesced tainted regions (which
+/// are reported but do not currently drive placement).
+/// Returns the number of tainted instructions protected.
+unsigned insertTaintDITSwitches(MachineFunction &MF, const TaintResult &TR,
+                                const TaintSummaryInfo *TSI,
+                                raw_ostream *RegionsOS = nullptr,
+                                AAResults *AA = nullptr);
 
 } // namespace llvm
 

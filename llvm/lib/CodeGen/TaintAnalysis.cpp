@@ -60,20 +60,10 @@ cl::opt<std::string> llvm::TaintSourceRegionsOutputFile(
     cl::desc("Output file for source-line taint regions"),
     cl::value_desc("file"));
 
-cl::opt<bool> llvm::TaintInsertISB(
-    "taint-insert-isb",
-    cl::desc("Insert target instruction barriers around tainted instructions"),
+cl::opt<bool> llvm::TaintInsertDIT(
+    "taint-insert-dit",
+    cl::desc("Insert PSTATE.DIT mode switches around tainted code"),
     cl::init(false));
-
-cl::opt<TaintBarrierKind> llvm::TaintBarrierMode(
-    "taint-barrier-mode",
-    cl::desc("Protection inserted around tainted code (with -taint-insert-isb)"),
-    cl::init(TaintBarrierKind::ISB),
-    cl::values(clEnumValN(TaintBarrierKind::ISB, "isb",
-                          "Per-region ISB/DSB speculation barriers (default)"),
-               clEnumValN(TaintBarrierKind::DIT, "dit",
-                          "Function-granularity PSTATE.DIT data-independent "
-                          "timing mode")));
 
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
     "taint-callsite-report",
@@ -709,7 +699,7 @@ collectTaintedRuns(MachineFunction &MF, const TaintResult &TR,
   return TaintedRuns;
 }
 
-// Public: declared in TaintAnalysis.h — same predicate insertTaintBarriers
+// Public: declared in TaintAnalysis.h — same predicate insertTaintDITSwitches
 // uses to decide whether a function gets DIT instrumentation.
 bool llvm::functionHasTaintedRuns(MachineFunction &MF, const TaintResult &TR,
                                   const TaintSummaryInfo *TSI, AAResults *AA) {
@@ -808,9 +798,12 @@ static unsigned printTaintSourceRegions(ArrayRef<TaintedRun> TaintedRuns,
     if (!Region)
       continue;
 
+    // Column 5 marks whether the region has an exit point (it does not, when
+    // the run extends into a terminator). "exit" replaced the old "DSB" when
+    // the ISB/DSB mode was removed on 2026-07-14.
     OS << Region->Filename << "\t" << Region->StartLine << "\t"
        << Region->EndLine << "\t" << FunctionName << "\t"
-       << (Region->HasExitBarrier ? "DSB" : "none") << "\n";
+       << (Region->HasExitBarrier ? "exit" : "none") << "\n";
     ++Emitted;
   }
   return Emitted;
@@ -1236,59 +1229,51 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
   return printTaintSourceRegions(TaintedRuns, MF.getName(), OS);
 }
 
-unsigned llvm::insertTaintBarriers(MachineFunction &MF, const TaintResult &TR,
-                                   const TaintSummaryInfo *TSI,
-                                   raw_ostream *RegionsOS, AAResults *AA) {
+unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
+                                      const TaintResult &TR,
+                                      const TaintSummaryInfo *TSI,
+                                      raw_ostream *RegionsOS, AAResults *AA) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   unsigned TaintedInstrCount = 0;
   SmallVector<TaintedRun, 64> TaintedRuns =
       collectTaintedRuns(MF, TR, TSI, TaintedInstrCount, AA);
 
+  // The runs no longer drive placement (DIT is function-granularity), but they
+  // still drive the region reports — and they are the input the cost-model-
+  // driven region placement will consume. See utils/taint_dit_cost_model.md.
   if (RegionsOS)
     printTaintedRuns(MF, TaintedRuns, *RegionsOS);
 
-  if (TaintBarrierMode == TaintBarrierKind::DIT) {
-    // Function granularity: run the whole function in data-independent-timing
-    // mode when it contains any tainted instruction. Per-region toggles would
-    // clear an enclosing region's DIT when a tainted callee's exit switch runs
-    // inside a caller's still-open region.
-    if (!TaintedRuns.empty()) {
-      MachineBasicBlock &Entry = MF.front();
-      TII->insertTimingModeSwitch(Entry, Entry.begin(), DebugLoc(),
-                                  /*Enable=*/true);
-      // The DIT scope ends on any exit, including tail calls; a tainted
-      // callee re-enables it for itself. After a non-tail call the callee may
-      // have cleared DIT on its own exit (PSTATE.DIT has no callee-saved
-      // convention), so re-assert it to keep the rest of this function
-      // protected — unless the callee's summary proves it preserves DIT
-      // (in-TU, not instrumented, only preserving calls).
-      Module *M = const_cast<Module *>(MF.getFunction().getParent());
-      for (MachineBasicBlock &MBB : MF)
-        for (MachineInstr &MI : MBB) {
-          if (MI.isReturn()) {
-            TII->insertTimingModeSwitch(MBB, MI.getIterator(),
-                                        MI.getDebugLoc(), /*Enable=*/false);
-          } else if (MI.isCall()) {
-            const Function *Callee = findCalledFunction(*M, MI);
-            if (TSI && Callee && TSI->getSummary(*Callee).PreservesDIT)
-              continue;
-            TII->insertTimingModeSwitch(MBB, std::next(MI.getIterator()),
-                                        MI.getDebugLoc(), /*Enable=*/true);
-          }
-        }
-    }
+  if (TaintedRuns.empty())
     return TaintedInstrCount;
-  }
 
-  for (const TaintedRun &Run : TaintedRuns) {
-    MachineBasicBlock &MBB = *Run.First->getParent();
-    DebugLoc StartDL = Run.First->getDebugLoc();
-
-    TII->insertInstructionBarrier(MBB, Run.First->getIterator(), StartDL);
-    if (!Run.Last->isTerminator())
-      TII->insertDataBarrier(MBB, std::next(Run.Last->getIterator()),
-                             Run.Last->getDebugLoc());
-  }
+  // Function granularity: run the whole function in data-independent-timing
+  // mode when it contains any tainted instruction. Per-region toggles would
+  // clear an enclosing region's DIT when a tainted callee's exit switch runs
+  // inside a caller's still-open region.
+  MachineBasicBlock &Entry = MF.front();
+  TII->insertTimingModeSwitch(Entry, Entry.begin(), DebugLoc(),
+                              /*Enable=*/true);
+  // The DIT scope ends on any exit, including tail calls; a tainted callee
+  // re-enables it for itself. After a non-tail call the callee may have cleared
+  // DIT on its own exit (PSTATE.DIT has no callee-saved convention), so
+  // re-assert it to keep the rest of this function protected — unless the
+  // callee's summary proves it preserves DIT (in-TU, not instrumented, only
+  // preserving calls).
+  Module *M = const_cast<Module *>(MF.getFunction().getParent());
+  for (MachineBasicBlock &MBB : MF)
+    for (MachineInstr &MI : MBB) {
+      if (MI.isReturn()) {
+        TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
+                                    /*Enable=*/false);
+      } else if (MI.isCall()) {
+        const Function *Callee = findCalledFunction(*M, MI);
+        if (TSI && Callee && TSI->getSummary(*Callee).PreservesDIT)
+          continue;
+        TII->insertTimingModeSwitch(MBB, std::next(MI.getIterator()),
+                                    MI.getDebugLoc(), /*Enable=*/true);
+      }
+    }
 
   return TaintedInstrCount;
 }
@@ -1367,8 +1352,9 @@ PreservedAnalyses TaintAnalysisPass::run(MachineFunction &MF,
         openTaintReport(TaintSourceRegionsOutputFile,
                         "taint source regions output", /*Append=*/true);
 
-    if (TaintInsertISB)
-      BarriersInserted = insertTaintBarriers(MF, TR, TSI, RegionsOS.get(), AA);
+    if (TaintInsertDIT)
+      BarriersInserted =
+          insertTaintDITSwitches(MF, TR, TSI, RegionsOS.get(), AA);
     else if (RegionsOS)
       exportTaintBarrierRegions(MF, TR, TSI, *RegionsOS, AA);
 

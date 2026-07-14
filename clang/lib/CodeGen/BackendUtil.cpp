@@ -1360,13 +1360,13 @@ void EmitAssemblyHelper::RunTaintHardenCodegen(
   const std::string SavedStopAfter = *StopAfterO;
   const std::string SavedStartBefore = *StartBeforeO;
   const std::string SavedStopBefore = *StopBeforeO;
-  const bool SavedInsertISB = llvm::TaintInsertISB;
+  const bool SavedInsertDIT = llvm::TaintInsertDIT;
   llvm::scope_exit RestoreOpts([&] {
     *StartAfterO = SavedStartAfter;
     *StopAfterO = SavedStopAfter;
     *StartBeforeO = SavedStartBefore;
     *StopBeforeO = SavedStopBefore;
-    llvm::TaintInsertISB = SavedInsertISB;
+    llvm::TaintInsertDIT = SavedInsertDIT;
   });
   auto SetStartStop = [&](StringRef Start, StringRef Stop) {
     *StartAfterO = Start.str();
@@ -1448,11 +1448,11 @@ void EmitAssemblyHelper::RunTaintHardenCodegen(
       return;
     }
 
-    // Enable ISB/DSB barrier insertion; leave the report files unset. An
-    // explicit -mllvm -taint-insert-isb=0 wins, so a barrier-free build with
+    // Enable PSTATE.DIT mode-switch insertion; leave the report files unset. An
+    // explicit -mllvm -taint-insert-dit=0 wins, so an unprotected build with
     // otherwise identical codegen can be produced for A/B benchmarking.
-    if (llvm::TaintInsertISB.getNumOccurrences() == 0)
-      llvm::TaintInsertISB = true;
+    if (llvm::TaintInsertDIT.getNumOccurrences() == 0)
+      llvm::TaintInsertDIT = true;
 
     raw_svector_ostream HardenedOS(HardenedMIR);
     ModulePassManager MPM2;

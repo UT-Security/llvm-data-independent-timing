@@ -1,10 +1,18 @@
 # CLAUDE.md
 
 This is an **LLVM fork** (branch `interproc_taint`) implementing **interprocedural
-taint analysis + speculative-execution barrier hardening** for AArch64: secret data
-entry points are declared in a taint-source file, taint is propagated through
-registers/stack/global memory at the MIR level across all functions of a TU, and
-ISB/DSB barriers are inserted around secret-dependent regions.
+taint analysis + PSTATE.DIT hardening** for AArch64: secret data entry points are
+declared in a taint-source file, taint is propagated through registers/stack/global
+memory at the MIR level across all functions of a TU, and **PSTATE.DIT
+(data-independent timing) mode switches** are inserted so secret-dependent code runs
+with data-operand timing side channels suppressed.
+
+**Threat model: data-operand instruction timing (DIT), NOT speculation.** An
+ISB/DSB "speculation barrier" mode used to exist as a placeholder for the DIT toggle
+mechanism; it was **removed on 2026-07-14**. Speculation defense is out of scope —
+do not reintroduce it. Why taint at all, rather than DIT-everywhere: DIT is not free
+(some SPEC 2026 benchmarks lose ~15% with it fully on), so it should cover only
+secret-dependent code. See `utils/taint_dit_cost_model.md`.
 
 ## Build (IMPORTANT: never run builds yourself)
 
@@ -22,27 +30,35 @@ command and ask them to run it and paste the output.
 build/bin/clang -O2 -ftaint-harden=<taint-src-file> -c file.c -o file.o
 ```
 
-Flag absent ⇒ codegen byte-for-byte unchanged. Verify barriers:
-`build/bin/llvm-objdump -d file.o | grep -E '\bisb\b|\bdsb\b'`
+Flag absent ⇒ codegen byte-for-byte unchanged. Verify:
+`build/bin/llvm-objdump -d file.o | grep -E '\bmsr\b.*\bdit\b'`
 
-### Barrier modes
+### Protection: PSTATE.DIT (the only mode)
 
-`-taint-barrier-mode={isb,dit}` (default `isb`; needs `-taint-insert-isb`, or via
-clang add `-mllvm -taint-barrier-mode=dit` next to `-ftaint-harden`):
-- `isb` — per-region ISB/DSB speculation barriers (transient-execution defense).
-- `dit` — **function-granularity** PSTATE.DIT: `MSR DIT, #1` at entry of any
-  function containing taint, `MSR DIT, #0` before each return. Defends
-  data-dependent *instruction timing*, NOT speculation — different threat model.
-  Requires FEAT_DIT (Armv8.4+) at run time; the dev machine (Neoverse N1) lacks
-  it ⇒ SIGILL if executed locally; verify via objdump/lit or `qemu-aarch64 -cpu max`.
-  Function granularity avoids per-region mode toggles clearing an enclosing
-  region's DIT across calls; `MSR DIT, #1` is also re-asserted after every
-  non-tail call site (a callee may clear DIT on its exit — gap G1, fixed),
-  except when the callee's `PreservesDIT` summary bit proves the re-assert
-  redundant (in-TU, uninstrumented, only preserving calls). Secrets passed to
-  external/indirect callees can't be protected by placement — audit them with
-  `-taint-callsite-report=<file>` (`ESCAPE` lines; works in both modes).
-  Remaining gaps + optimal-placement design in `utils/taint_dit_placement.md`.
+`-taint-insert-dit` is the master switch at the `llc` level (implied by
+`-ftaint-harden`; `-mllvm -taint-insert-dit=0` next to it produces an unprotected
+build with otherwise identical codegen, for A/B benchmarking). Without it, the
+analysis still runs and the report files are still produced, but codegen is
+untouched.
+
+**Function granularity:** `MSR DIT, #1` at entry of any function containing taint,
+`MSR DIT, #0` before each return. Requires FEAT_DIT (Armv8.4+) at run time — Apple
+M-series has it (`sysctl hw.optional.arm.FEAT_DIT`), Neoverse N1 does not ⇒ SIGILL
+there; verify via objdump/lit or `qemu-aarch64 -cpu max`.
+
+Function granularity avoids per-region toggles clearing an enclosing region's DIT
+across calls; `MSR DIT, #1` is also re-asserted after every non-tail call site (a
+callee may clear DIT on its exit — gap G1, fixed), except when the callee's
+`PreservesDIT` summary bit proves the re-assert redundant (in-TU, uninstrumented,
+only preserving calls). Secrets passed to external/indirect callees can't be
+protected by placement — audit them with `-taint-callsite-report=<file>` (`ESCAPE`
+lines). Remaining gaps + optimal-placement design in `utils/taint_dit_placement.md`;
+measured costs (toggle ≈ 30 cyc; dwell is workload-dependent and real) in
+`utils/taint_dit_cost_model.md`.
+
+`-taint-region-merge-gap` and the coalesced "regions" in the reports **no longer
+drive placement** — they feed the report files and are the input the planned
+cost-model-driven region placement will consume.
 
 ### Taint-source file format (one per line)
 
@@ -60,7 +76,7 @@ utils/taint_harden_c.sh --opt-level -O2 --region-merge-gap 2 playground/firefox_
 Taint source auto-detected as `<basename>_secret.txt`. Steps it performs: clang
 `-emit-llvm` → `opt -passes=taint-annotate -taint-src=...` → `llc -stop-after=prologepilog`
 → perl strip of `<mcsymbol >` (MIR CFI serialization bug) → `llc -enable-new-pm
--run-taint-interproc -taint-insert-isb -taint-region-merge-gap=2` → `llc
+-run-taint-interproc -taint-insert-dit -taint-region-merge-gap=2` → `llc
 -start-after=prologepilog -filetype=obj`. Report files: `-taint-output`,
 `-taint-regions-output`, `-taint-source-regions-output`,
 `-taint-callsite-report` (secret-escape call sites; the clang flag doesn't emit
@@ -71,15 +87,16 @@ these). Region spacing: `utils/taint_region_distance.py OUT.hardened.mir`.
 | Piece | Where |
 |---|---|
 | `taint-annotate` IR pass (marks `tainted`/`tainted-pointee` arg attrs from taint-src file) | `llvm/lib/Transforms/Instrumentation/TaintSourceAnnotator.cpp` |
-| Interproc MIR taint analysis + barrier insertion (`TaintInterprocPass`, new-PM module pass, post-prologepilog, cell-based memory taint, fixed-point over call graph, region merging) | `llvm/lib/CodeGen/TaintAnalysis.cpp`, `TaintFixedPointIteration.cpp` |
+| Interproc MIR taint analysis + DIT mode-switch insertion (`TaintInterprocPass`, new-PM module pass, post-prologepilog, cell-based memory taint, fixed-point over call graph, region merging; `insertTaintDITSwitches`) | `llvm/lib/CodeGen/TaintAnalysis.cpp`, `TaintFixedPointIteration.cpp` |
 | `TaintSummaryInfo` — plain per-function summary map, owned and populated by `TaintInterprocPass` (there is no `taint-summary` *analysis*; one existed, always returned an empty summary, and was removed 2026-07-13) | `llvm/include/llvm/CodeGen/TaintSummaryInfo.h` (header-only) |
 | Store payload classification (`getNumStoredValueRegs`) | `llvm/include/llvm/CodeGen/TargetInstrInfo.h`, `llvm/lib/Target/AArch64/AArch64InstrInfo.cpp` |
-| Taint cl::opts (`-taint-insert-isb` etc. are `extern cl::opt` globals) | `llvm/include/llvm/CodeGen/TaintAnalysis.h` |
+| Taint cl::opts (`-taint-insert-dit` etc. are `extern cl::opt` globals) | `llvm/include/llvm/CodeGen/TaintAnalysis.h` |
 | `-ftaint-harden` flag + in-process 3-phase codegen (`RunTaintHardenCodegen`) | `clang/lib/CodeGen/BackendUtil.cpp`; flag in `clang/include/clang/Options/Options.td`, `clang/include/clang/Basic/CodeGenOptions.h`, forwarding in `clang/lib/Driver/ToolChains/Clang.cpp` |
 | Firefox integration guide | `utils/taint_firefox_integration.md` |
+| `TargetInstrInfo::insertTimingModeSwitch` hook (emits `MSR DIT`; the `insertInstructionBarrier`/`insertDataBarrier` ISB/DSB hooks were removed 2026-07-14) | `llvm/include/llvm/CodeGen/TargetInstrInfo.h`, `llvm/lib/Target/AArch64/AArch64InstrInfo.cpp` |
 | DIT placement: state, gaps, optimal-placement design | `utils/taint_dit_placement.md` |
 | **DIT cost model: toggle ≈ 30 cyc serializing (measured, M4); dwell up to ~15% on sensitive SPEC 2026 benchmarks.** Both terms matter — they pull opposite ways, and that tension *is* the placement problem. Read before any placement work; do NOT conclude "DIT is free" from the ~0 microkernels (blind spot, see the doc's History) | `utils/taint_dit_cost_model.md`, benchmarks in `playground/dit_bench/` |
-| **KNOWN UNSOUNDNESS** — callee→caller taint through memory (missing barrier); literature + design recommendation | `utils/taint_memory_summary_research.md`, repro in `playground/callee_memory_gap.c` |
+| **KNOWN UNSOUNDNESS** — callee→caller taint through memory (missing DIT coverage); literature + design recommendation | `utils/taint_memory_summary_research.md`, repro in `playground/callee_memory_gap.c` |
 | Tests | `llvm/test/CodeGen/AArch64/taint-analysis-*.mir`, `llvm/test/Transforms/TaintAnnotate/taint-annotate.ll` |
 | Scratch experiments (not shipping code) | `playground/` |
 
@@ -153,12 +170,16 @@ hardened MIR text; (3) legacy PM `start-after=prologepilog` → object.
 build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate
 ```
 End-to-end reference: harden `playground/firefox_convolve_int.c` and compare
-per-symbol barrier placement between the clang flag and the wrapper — they must
-match exactly. Expected at -O2 (as of 2026-07-13, commit b596a05): `isb` mode
-emits 14 ISB + 14 DSB; `dit` mode emits one `msr DIT, #0x1` at entry and one
-`msr DIT, #0x0` before the return. Count mnemonics, not `grep` hits on the
-objdump output — the file paths themselves often contain "isb"/"dit" and inflate
-naive counts.
+per-symbol DIT placement between the clang flag and the wrapper — they must match
+exactly. Expected at -O2: one `msr DIT, #0x1` at entry of each tainted function and
+one `msr DIT, #0x0` before each return; **no `isb`/`dsb` anywhere** (the ISB/DSB
+mode was removed 2026-07-14 — its old expectation was 14 ISB + 14 DSB). Count
+mnemonics, not `grep` hits on the objdump output — file paths themselves often
+contain "isb"/"dit" and inflate naive counts.
+
+`playground/firefox_convolve_int.c` is a good *correctness* reference but a **bad
+performance benchmark for placement**: it is DIT-insensitive (whole-program DIT =
+0.968x), so it cannot show a placement win. See `utils/taint_dit_cost_model.md`.
 
 All 12 tests pass as of 2026-07-13 (`taint-analysis-store-pair.mir` was added then,
 covering a secret in the *second* register of an `STP`/`STNP` store-pair — it fails

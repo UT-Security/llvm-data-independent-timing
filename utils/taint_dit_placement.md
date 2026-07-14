@@ -1,6 +1,6 @@
 # DIT Barrier Placement: Current State, Gaps, and an Optimal-Placement Design
 
-Status of the `-taint-barrier-mode=dit` backend, what the Arm spec lets us rely
+Status of the PSTATE.DIT backend (`-taint-insert-dit`), what the Arm spec lets us rely
 on, where the current placement is unsound or wasteful, and a concrete design for
 spec-aware optimal placement of `MSR DIT` mode switches.
 
@@ -10,10 +10,10 @@ spec-aware optimal placement of `MSR DIT` mode switches.
 
 | Piece | Where |
 |---|---|
-| Mode flag `-taint-barrier-mode={isb,dit}` (`TaintInsertISB` stays the master switch) | `llvm/lib/CodeGen/TaintAnalysis.cpp` (cl::opt), enum in `llvm/include/llvm/CodeGen/TaintAnalysis.h` |
+| Master switch `-taint-insert-dit` (the `-taint-barrier-mode={isb,dit}` selector and the ISB/DSB mode were removed 2026-07-14; DIT is the only mechanism) | `llvm/lib/CodeGen/TaintAnalysis.cpp` (cl::opt), decl in `llvm/include/llvm/CodeGen/TaintAnalysis.h` |
 | Generic hook `insertTimingModeSwitch(MBB, MI, DL, Enable)` | `llvm/include/llvm/CodeGen/TargetInstrInfo.h`, default in `TargetInstrInfo.cpp` |
 | AArch64 impl: `MSR DIT, #1/#0` via `MSRpstateImm4` (pstatefield encoding 26) | `llvm/lib/Target/AArch64/AArch64InstrInfo.cpp` |
-| Placement policy (function granularity) | `insertTaintBarriers` in `TaintAnalysis.cpp` |
+| Placement policy (function granularity) | `insertTaintDITSwitches` in `TaintAnalysis.cpp` |
 | Lit test | `llvm/test/CodeGen/AArch64/taint-analysis-dit.mir` |
 
 **Current policy:** if a function contains ≥ 1 tainted run (`collectTaintedRuns`),
@@ -24,7 +24,7 @@ insert `MSR DIT, #1` as the very first instruction of the entry block and
 callee may clear DIT on its own exit. Untainted functions are untouched.
 The tainted-run computation (value taint, pointee-tainted loads, address-sensitive
 memory accesses, merged across gaps of `-taint-region-merge-gap` clean
-instructions) is shared with ISB mode and unchanged.
+instructions) is unchanged by the removal of the ISB/DSB mode.
 
 Placement is **purely syntactic** today: it keys off "function contains taint",
 not off which instructions need protection, which paths reach them, or what the
@@ -82,7 +82,7 @@ instruction after the call executes with **DIT=0**. The function-granularity
 choice avoided *region*-level nesting but recreated the same hole at call
 boundaries within the TU. Any caller→callee pair that are both instrumented is
 affected; deeper chains lose protection after the first callee returns.
-*Status:* **fixed** — `insertTaintBarriers` re-asserts `MSR DIT, #1` immediately
+*Status:* **fixed** — `insertTaintDITSwitches` re-asserts `MSR DIT, #1` immediately
 after every non-tail call site inside instrumented functions (cheap, always
 sound; lit-covered by `caller_fn` in `taint-analysis-dit.mir`). Eliding
 provably-redundant re-asserts is the P3 summary work (§5.3).
@@ -92,8 +92,10 @@ The run collector treats all tainted instructions alike, but per §2.2 a tainted
 `SDIV`/`UDIV` (or FP div/sqrt) is *not* protected by DIT=1. Silent false
 assurance. Similarly, runs include **address-sensitive loads/stores**
 (`isAddressSensitiveMemoryAccess`) and branches on tainted flags — DIT provides
-no guarantee for either; those hazards are what the ISB mode (or software
-rewriting) is for.
+no guarantee for either. These hazards are simply NOT COVERED by this project:
+the ISB/DSB mode that nominally addressed the speculative ones was a placeholder
+and was removed 2026-07-14, and speculation is out of scope. They must be
+diagnosed (G2) rather than silently counted as protected.
 *Fix:* classify per-instruction coverability (§5, `isDITCoveredOpcode`) and emit
 a diagnostic/report section for uncoverable tainted instructions instead of
 counting them as protected.
@@ -211,7 +213,7 @@ Placement rules:
   owns the state) — zero toggles in interior functions of tainted chains. (Not
   yet implemented.)
 - At a call site inside a DIT-live region: if `!PreservesDIT(callee)`, re-assert
-  `MSR DIT, #1` after the call — **implemented** in `insertTaintBarriers`
+  `MSR DIT, #1` after the call — **implemented** in `insertTaintDITSwitches`
   (re-asserts by default, elides when the callee's summary proves preservation).
 - Disables move to the *outermost* frontier: functions whose callers don't need
   DIT. (Not yet implemented.)
@@ -227,7 +229,7 @@ protocol bits come back unknown; default to the caller-side re-assert otherwise.
 - **Implemented:** call-site escape report — `-taint-callsite-report=<file>`
   emits `ESCAPE external|indirect callee=<name> caller=<fn> bb=<n> [line=<l>]
   tainted-args|pointee-tainted-args` for secrets handed to uninstrumentable
-  callees. Mode-independent (ISB and DIT). Lit:
+  callees. Lit:
   `taint-analysis-callsite-report.mir`.
 - Residual-hazard report (§5.1) — per instruction: opcode, reason
   (`non-DIT-op`, `tainted-address`, `tainted-branch`), source line. (Pending,

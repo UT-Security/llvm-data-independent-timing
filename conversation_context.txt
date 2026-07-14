@@ -1,0 +1,255 @@
+================================================================================
+LLVM Taint Analysis Project - Conversation Context Export
+Date: 2026-02-18
+Branch: init-taint-test
+Repo: /Users/rgangar/Documents/llvm-project-yichi
+================================================================================
+
+## PROJECT OVERVIEW
+
+Building an interprocedural context-insensitive taint analysis system in a
+custom LLVM fork. The system operates at the MIR (Machine IR) level after
+register allocation. It:
+
+1. Annotates "secret" function arguments via an IR pass (taint-annotate)
+2. Propagates taint through def-use chains within functions (TaintAnalysis)
+3. Propagates taint across function boundaries via fixed-point iteration
+   (TaintInterprocPass)
+4. Exports tainted instructions, source mappings, and composition statistics
+
+Target use case: analyzing libsodium to understand which instructions handle
+secret data (keys, nonces, etc.).
+
+================================================================================
+
+## KEY ARCHITECTURE
+
+### Pass Pipeline (for whole-program analysis on MIR):
+
+  .c sources
+    → WLLVM build → .a with embedded bitcode
+    → extract-bc → .bca (bitcode archive)
+    → llvm-link → single .bc module
+    → opt -passes=taint-annotate -taint-src=secret.txt → annotated .ll
+    → llc -O2 -stop-after=prologepilog → post-regalloc .pe.mir
+    → llc -enable-new-pm -run-taint-interproc → taint reports
+    → llc -O2 -filetype=obj → hardened .o
+
+### Key Technical Details:
+
+- LLVM New Pass Manager: MachineFunctions are stored in FunctionAnalysisManager
+  (FAM) via MachineFunctionAnalysis, NOT in MachineModuleInfo (MMI). This is
+  critical — the interprocedural pass uses FAM.getCachedResult<MachineFunctionAnalysis>()
+  to access MachineFunctions.
+
+- The -run-taint-interproc flag is a custom cl::opt added to NewPMDriver.cpp
+  that triggers the TaintInterprocPass after MIR parsing.
+
+- The pass is registered as MODULE_PASS("taint-interproc", TaintInterprocPass())
+  in PassRegistry.def (NOT MachinePassRegistry.def).
+
+- Fixed-point iteration: seed callers with tainted args → analyze → propagate
+  to callees via arg register mapping through callee liveins → repeat until
+  convergence.
+
+- Indirect calls (register-indirect like TCRETURNri): findCalledFunction()
+  returns nullptr, handled conservatively.
+
+================================================================================
+
+## FILES IN THE PROJECT
+
+### Headers:
+- llvm/include/llvm/CodeGen/TaintAnalysis.h
+  - TaintState struct (TaintedRegs, TaintedFrameIdx, TaintedMemVals)
+  - TaintResult struct (Merged state + per-BB IN states)
+  - TaintAnalysis (AnalysisInfoMixin) - intraprocedural analysis
+  - TaintAnalysisPass (PassInfoMixin) - standalone MachineFunction pass
+  - Helper declarations: propagateTaintMI, anyTaintedRegUse, findCalledFunction,
+    exportTaintedInstructions
+  - exportTaintedInstructions signature:
+    void exportTaintedInstructions(MachineFunction &MF, const TaintResult &TR,
+                                   const TaintSummaryInfo *TSI,
+                                   raw_ostream &OS, raw_ostream *SrcOS,
+                                   raw_ostream *StatsOS = nullptr);
+
+- llvm/include/llvm/CodeGen/TaintSummaryInfo.h
+  - FunctionTaintSummary struct (tainted args, returns tainted flag)
+  - TaintSummaryInfo (module-level database of summaries)
+  - TaintSummaryAnalysis (AnalysisInfoMixin)
+
+- llvm/include/llvm/CodeGen/TaintFixedPointIteration.h
+  - TaintInterprocPass declaration
+
+### Source files:
+- llvm/lib/CodeGen/TaintAnalysis.cpp
+  - Core taint propagation: propagateTaintMI, propagateTaintMBB
+  - Worklist-based dataflow analysis in TaintAnalysis::run()
+  - exportTaintedInstructions() - exports tainted instruction dump + source
+    mappings + composition statistics (newly added)
+  - TaintAnalysisPass::run() - standalone per-function pass with file output
+
+- llvm/lib/CodeGen/TaintFixedPointIteration.cpp
+  - TaintInterprocPass::run() - module-level fixed-point iteration
+  - Seeds callers with tainted args, iterates until convergence
+  - propagateArgTaintToCallees() - maps caller arg taint to callee liveins
+  - Export section: writes _tainted.txt, _tainted_src.txt, _tainted_stats.txt
+
+- llvm/lib/CodeGen/TaintSummaryInfo.cpp
+  - TaintSummaryInfo implementation
+  - TaintSummaryAnalysis::run()
+
+- llvm/lib/CodeGen/TaintSummaryCollector.cpp
+  - Collects initial taint summaries from IR attributes
+
+### Registration/Build files:
+- llvm/lib/Passes/PassRegistry.def
+  - MODULE_PASS("taint-annotate", TaintSourceAnnotatorPass())
+  - MODULE_PASS("taint-interproc", TaintInterprocPass())
+
+- llvm/include/llvm/Passes/MachinePassRegistry.def
+  - MODULE_ANALYSIS("taint-summary", TaintSummaryAnalysis())
+  - MACHINE_FUNCTION_ANALYSIS("taint", TaintAnalysis())
+  - MACHINE_FUNCTION_PASS("taint-analysis", TaintAnalysisPass())
+
+- llvm/lib/CodeGen/CMakeLists.txt - includes all Taint*.cpp files
+- llvm/lib/Passes/PassBuilder.cpp - includes TaintFixedPointIteration.h
+- llvm/tools/llc/NewPMDriver.cpp - has -run-taint-interproc flag
+
+================================================================================
+
+## RECENT CHANGES (this session)
+
+### 1. Per-Function Taint Composition Statistics (NEW FEATURE)
+
+Added stats output to a separate _stats.txt file alongside existing taint output.
+The stats include per function:
+
+a) Summary: tainted/untainted instruction counts, total, taint ratio
+b) Instruction type breakdown: Load, Store, ALU, Branch, Call, Copy, Debug, Other
+   - Classification uses MachineInstr properties: mayLoad(), mayStore(), isCall(),
+     isBranch(), isReturn(), isCopy(), isMoveImmediate(), isDebugInstr(), isPseudo()
+   - Read-modify-write instructions (mayLoad && mayStore) count as Store
+c) Distance between tainted instructions: min/max/avg gap
+d) Per-basic-block breakdown: tainted/untainted per BB
+e) Taint density regions: run-length encoding of tainted/untainted sequences,
+   longest runs, number of tainted clusters
+
+Files modified:
+- llvm/include/llvm/CodeGen/TaintAnalysis.h (line 166-169)
+  Added raw_ostream *StatsOS = nullptr parameter to exportTaintedInstructions
+
+- llvm/lib/CodeGen/TaintAnalysis.cpp
+  - Added #include "llvm/Support/Format.h"
+  - In exportTaintedInstructions(): added stats accumulators (counters, per-BB,
+    run-length, instruction categories), collection in MI loop, formatted output
+  - In TaintAnalysisPass::run(): constructs _stats path and passes StatsOS
+
+- llvm/lib/CodeGen/TaintFixedPointIteration.cpp
+  - Constructs _stats path, truncates it, opens for append in per-function loop
+
+### 2. Bug Fix: Dangling StringRef in Path Construction
+
+Fixed in both TaintAnalysis.cpp and TaintFixedPointIteration.cpp.
+The pattern:
+  StringRef Ext = sys::path::extension(SrcPath);  // points into SrcPath buffer
+  sys::path::replace_extension(SrcPath, "");       // mutates buffer → Ext dangles!
+  SrcPath += Ext;                                  // garbage
+
+Fixed by copying to std::string first:
+  std::string Ext = sys::path::extension(SrcPath).str();
+
+This was causing _src and _stats files to have wrong names / missing .txt extension.
+
+================================================================================
+
+## LIBSODIUM BUILD PIPELINE
+
+Working directory: /Users/rgangar/Documents/libsodium-stable/
+
+Build script at: /Users/rgangar/Documents/libsodium-stable/build_taint.sh
+
+Full steps:
+```bash
+cd /Users/rgangar/Documents/libsodium-stable
+
+export LLVM_COMPILER=clang
+export LLVM_COMPILER_PATH=/Users/rgangar/Documents/llvm-project-yichi/build/bin
+
+make distclean || true
+WLLVM_CONFIGURE_ONLY=1 CC=wllvm CFLAGS="-O2 -gline-tables-only -isysroot $(xcrun --show-sdk-path)" LDFLAGS="-isysroot $(xcrun --show-sdk-path)" ./configure --disable-shared --enable-static --disable-asm
+
+CC=wllvm CFLAGS="-O2 -gline-tables-only -isysroot $(xcrun --show-sdk-path)" make -j$(sysctl -n hw.ncpu)
+
+extract-bc src/libsodium/.libs/libsodium.a
+
+../llvm-project-yichi/build/bin/llvm-link src/libsodium/.libs/libsodium.bca -o libsodium-whole.bc
+
+../llvm-project-yichi/build/bin/opt -S libsodium-whole.bc -passes=taint-annotate -taint-src=secret.txt -o libsodium-annotated.ll
+
+../llvm-project-yichi/build/bin/llc -O2 -stop-after=prologepilog libsodium-annotated.ll -o libsodium.pe.mir
+
+sed -i '' 's/<mcsymbol >//g' libsodium.pe.mir
+
+../llvm-project-yichi/build/bin/llc -enable-new-pm -run-taint-interproc -taint-output=libsodium-tainted.txt libsodium.pe.mir -o /dev/null
+```
+
+Notes:
+- --disable-asm: forces portable C implementations for full bitcode coverage
+- -gline-tables-only: provides source file/line debug info without variable
+  metadata that corrupts MIR serialization
+- sed fix: MIR printer bug produces '<mcsymbol >' prefix on CFI offsets
+- WLLVM requires LLVM_COMPILER and LLVM_COMPILER_PATH env vars
+- macOS needs -isysroot $(xcrun --show-sdk-path) for custom-built clang
+- extract-bc on .a produces .bca (bitcode archive), feed directly to llvm-link
+
+Output files:
+- libsodium-tainted.txt - per-function tainted instruction dump (TSV)
+- libsodium-tainted_src.txt - source file:line mappings
+- libsodium-tainted_stats.txt - per-function composition statistics
+
+================================================================================
+
+## KNOWN ISSUES / WORKAROUNDS
+
+1. MIR printer bug with MCSymbol: CFI instructions serialize as
+   'def_cfa_offset <mcsymbol >32' instead of 'def_cfa_offset 32'.
+   Workaround: sed -i '' 's/<mcsymbol >//g' on the .mir file.
+
+2. Full debug info (-g) corrupts MIR: debug-info-variable and
+   debug-info-expression fields get concatenated ('!1482!270',
+   '!DIExpression()!DIExpression()'). Use -gline-tables-only instead.
+
+3. WLLVM doesn't recognize -g1 flag. Use -gline-tables-only instead.
+
+4. Legacy PM on post-regalloc MIR causes AArch64StackTaggingPreRA assertion
+   failure. Must use new PM (-enable-new-pm) with -run-taint-interproc.
+
+================================================================================
+
+## PLAYGROUND TEST FILES
+
+- playground/interproc_ops.c - test C source with caller/callee patterns
+- playground/interproc_ops.ll - LLVM IR
+- playground/interproc_ops.pe.mir - post-prologepilog MIR
+- playground/interproc_tainted.txt - taint analysis output
+- playground/interproc_tainted_src_src - source mappings
+- playground/secret.txt / interproc_secret.txt - secret argument annotations
+
+Test command:
+  cd playground
+  ../build/bin/llc -enable-new-pm -run-taint-interproc \
+    -taint-output=interproc_tainted.txt interproc_ops.pe.mir -o /dev/null
+
+Expected: converges in 2 iterations, 7 seed callers → 5 callees,
+12 total function summaries.
+
+================================================================================
+
+## CURRENT STATE
+
+- All code compiles successfully (ninja llc opt)
+- Stats feature is implemented and tested on playground
+- libsodium pipeline is scripted in build_taint.sh
+- User was about to rebuild and test on libsodium with the new stats feature
+================================================================================

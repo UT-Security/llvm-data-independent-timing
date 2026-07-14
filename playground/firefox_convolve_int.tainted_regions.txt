@@ -1,0 +1,125 @@
+# Region 1 (convolve_pixel_int)
+    renamable $w8 = BICWrs killed renamable $w24, renamable $w24, 159, debug-location !441; playground/firefox_convolve_int.c:32:12 @[ playground/firefox_convolve_int.c:70:14 ]
+    renamable $w9 = BICWrs killed renamable $w25, renamable $w25, 159, debug-location !448; playground/firefox_convolve_int.c:32:12 @[ playground/firefox_convolve_int.c:70:14 ]
+    renamable $w10 = BICWrs killed renamable $w26, renamable $w26, 159, debug-location !449; playground/firefox_convolve_int.c:32:12 @[ playground/firefox_convolve_int.c:70:14 ]
+    renamable $w11 = BICWrs killed renamable $w27, renamable $w27, 159, debug-location !450; playground/firefox_convolve_int.c:32:12 @[ playground/firefox_convolve_int.c:70:14 ]
+    renamable $s0 = COPY killed renamable $w10, implicit-def $q0, debug-location !434; playground/firefox_convolve_int.c:0
+    renamable $q0 = INSvi32gpr killed renamable $q0(tied-def 0), 1, killed renamable $w9, debug-location !434; playground/firefox_convolve_int.c:0
+    renamable $q0 = INSvi32gpr killed renamable $q0(tied-def 0), 2, killed renamable $w8, debug-location !434; playground/firefox_convolve_int.c:0
+    renamable $q0 = INSvi32gpr killed renamable $q0(tied-def 0), 3, killed renamable $w11, debug-location !434; playground/firefox_convolve_int.c:0
+
+# Region 2 (convolve_pixel_int)
+    renamable $q0 = UMINv4i32 killed renamable $q0, killed renamable $q1, debug-location !463; playground/firefox_convolve_int.c:14:12 @[ playground/firefox_convolve_int.c:70:9 ]
+    renamable $q0 = USHLv4i32 killed renamable $q0, killed renamable $q2, debug-location !464; playground/firefox_convolve_int.c:72:39
+    renamable $d0 = XTNv4i16 killed renamable $q0, debug-location !465; playground/firefox_convolve_int.c:72:9
+    renamable $d0 = UZP1v8i8 killed renamable $d0, undef renamable $d0, implicit-def $q0, debug-location !466; playground/firefox_convolve_int.c:71:57
+    STRSroW renamable $s0, killed renamable $x1, killed renamable $w9, 1, 0, implicit killed $q0, debug-location !466 :: (store (s32) into %ir.arrayidx52.2, align 1, !tbaa !144); playground/firefox_convolve_int.c:71:57
+
+# Region 3 (convolve_pixel_int)
+    renamable $q5 = INSvi32gpr killed renamable $q5(tied-def 0), 0, killed renamable $w24
+    renamable $q4 = MOVIv2d_ns 0
+    renamable $q4 = INSvi32gpr killed renamable $q4(tied-def 0), 0, killed renamable $w25
+    renamable $q3 = MOVIv2d_ns 0
+    renamable $q3 = INSvi32gpr killed renamable $q3(tied-def 0), 0, killed renamable $w26
+    renamable $q6 = MOVIv2d_ns 0
+    renamable $q2 = MOVIv2d_ns 0
+    renamable $q2 = INSvi32gpr killed renamable $q2(tied-def 0), 0, killed renamable $w27
+
+# Region 4 (convolve_pixel_int)
+    renamable $q26_q27_q28_q29 = LD4Fourv16b killed renamable $x27, debug-location !487 :: (load (s512) from %ir.51); playground/firefox_convolve_int.c:28:10 @[ playground/firefox_convolve_int.c:61:27 ]
+
+# Region 5 (convolve_pixel_int)
+    renamable $q5 = nsw MLAv4i32 killed renamable $q5(tied-def 0), renamable $q9, killed renamable $q11, debug-location !490; playground/firefox_convolve_int.c:61:16
+
+# Region 6 (convolve_pixel_int)
+    renamable $q4 = nsw MLAv4i32 killed renamable $q4(tied-def 0), renamable $q9, killed renamable $q15, debug-location !491; playground/firefox_convolve_int.c:61:16
+    renamable $q10 = TBLv16i8One renamable $q26, renamable $q30, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q11 = TBLv16i8One renamable $q26, renamable $q8, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q14 = TBLv16i8One renamable $q26, renamable $q0, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q15 = TBLv16i8One renamable $q26, renamable $q1, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q21 = nsw MLAv4i32 killed renamable $q21(tied-def 0), renamable $q12, killed renamable $q10, debug-location !492; playground/firefox_convolve_int.c:61:16
+    renamable $q20 = nsw MLAv4i32 killed renamable $q20(tied-def 0), renamable $q13, killed renamable $q11, debug-location !492; playground/firefox_convolve_int.c:61:16
+    renamable $q16 = nsw MLAv4i32 killed renamable $q16(tied-def 0), renamable $q31, killed renamable $q14, debug-location !492; playground/firefox_convolve_int.c:61:16
+    renamable $q3 = nsw MLAv4i32 killed renamable $q3(tied-def 0), renamable $q9, killed renamable $q15, debug-location !492; playground/firefox_convolve_int.c:61:16
+
+# Region 7 (convolve_pixel_int)
+    renamable $q26 = TBLv16i8One renamable $q29, renamable $q1, implicit killed $q26_q27_q28_q29, debug-location !488; playground/firefox_convolve_int.c:61:27
+
+# Region 8 (convolve_pixel_int)
+    renamable $q2 = nsw MLAv4i32 killed renamable $q2(tied-def 0), killed renamable $q9, killed renamable $q26, debug-location !493; playground/firefox_convolve_int.c:61:16
+
+# Region 9 (convolve_pixel_int)
+    renamable $q5 = ADDv4i32 killed renamable $q5, killed renamable $q6, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q6 = ADDv4i32 killed renamable $q22, killed renamable $q25, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q5 = ADDv4i32 killed renamable $q5, killed renamable $q6, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $s5 = ADDVv4i32v killed renamable $q5, implicit-def $q5, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $w24 = COPY renamable $s5, implicit killed $q5, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q4 = ADDv4i32 killed renamable $q4, killed renamable $q23, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q5 = ADDv4i32 killed renamable $q19, killed renamable $q24, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q4 = ADDv4i32 killed renamable $q4, killed renamable $q5, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $s4 = ADDVv4i32v killed renamable $q4, implicit-def $q4, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $w25 = COPY renamable $s4, implicit killed $q4, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q3 = ADDv4i32 killed renamable $q3, killed renamable $q20, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q4 = ADDv4i32 killed renamable $q16, killed renamable $q21, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q3 = ADDv4i32 killed renamable $q3, killed renamable $q4, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $s3 = ADDVv4i32v killed renamable $q3, implicit-def $q3, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $w26 = COPY renamable $s3, implicit killed $q3, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q2 = ADDv4i32 killed renamable $q2, killed renamable $q17, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q3 = ADDv4i32 killed renamable $q7, killed renamable $q18, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q2 = ADDv4i32 killed renamable $q2, killed renamable $q3, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $s2 = ADDVv4i32v killed renamable $q2, implicit-def $q2, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $w27 = COPY renamable $s2, implicit killed $q2, debug-location !494; playground/firefox_convolve_int.c:57:5
+
+# Region 10 (convolve_pixel_int)
+    renamable $q6 = INSvi32gpr killed renamable $q6(tied-def 0), 0, killed renamable $w24
+    renamable $q5 = MOVIv2d_ns 0
+    renamable $q5 = INSvi32gpr killed renamable $q5(tied-def 0), 0, killed renamable $w25
+    renamable $q4 = MOVIv2d_ns 0
+    renamable $q4 = INSvi32gpr killed renamable $q4(tied-def 0), 0, killed renamable $w26
+    renamable $q3 = MOVIv2d_ns 0
+    renamable $q3 = INSvi32gpr killed renamable $q3(tied-def 0), 0, killed renamable $w27
+
+# Region 11 (convolve_pixel_int)
+    renamable $d18_d19_d20_d21 = LD4Fourv8b killed renamable $x27, implicit-def $q18_q19_q20_q21, debug-location !487 :: (load (s256) from %ir.91); playground/firefox_convolve_int.c:28:10 @[ playground/firefox_convolve_int.c:61:27 ]
+
+# Region 12 (convolve_pixel_int)
+    renamable $q24 = TBLv16i8One renamable $q20, renamable $q0, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q25 = TBLv16i8One renamable $q20, renamable $q1, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q17 = nsw MLAv4i32 killed renamable $q17(tied-def 0), renamable $q22, killed renamable $q24, debug-location !490; playground/firefox_convolve_int.c:61:16
+    renamable $q6 = nsw MLAv4i32 killed renamable $q6(tied-def 0), renamable $q23, killed renamable $q25, debug-location !490; playground/firefox_convolve_int.c:61:16
+
+# Region 13 (convolve_pixel_int)
+    renamable $q5 = nsw MLAv4i32 killed renamable $q5(tied-def 0), renamable $q23, killed renamable $q25, debug-location !491; playground/firefox_convolve_int.c:61:16
+    renamable $q24 = TBLv16i8One renamable $q18, renamable $q0, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q25 = TBLv16i8One renamable $q18, renamable $q1, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q16 = nsw MLAv4i32 killed renamable $q16(tied-def 0), renamable $q22, killed renamable $q24, debug-location !492; playground/firefox_convolve_int.c:61:16
+    renamable $q4 = nsw MLAv4i32 killed renamable $q4(tied-def 0), renamable $q23, killed renamable $q25, debug-location !492; playground/firefox_convolve_int.c:61:16
+    renamable $q24 = TBLv16i8One renamable $q21, renamable $q0, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q18 = TBLv16i8One renamable $q21, renamable $q1, implicit killed $q18_q19_q20_q21, debug-location !488; playground/firefox_convolve_int.c:61:27
+    renamable $q7 = nsw MLAv4i32 killed renamable $q7(tied-def 0), killed renamable $q22, killed renamable $q24, debug-location !493; playground/firefox_convolve_int.c:61:16
+    renamable $q3 = nsw MLAv4i32 killed renamable $q3(tied-def 0), killed renamable $q23, killed renamable $q18, debug-location !493; playground/firefox_convolve_int.c:61:16
+
+# Region 14 (convolve_pixel_int)
+    renamable $q6 = ADDv4i32 killed renamable $q6, killed renamable $q17, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $s6 = ADDVv4i32v killed renamable $q6, implicit-def $q6, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $w24 = COPY renamable $s6, implicit killed $q6, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q2 = ADDv4i32 killed renamable $q5, killed renamable $q2, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $s2 = ADDVv4i32v killed renamable $q2, implicit-def $q2, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $w25 = COPY renamable $s2, implicit killed $q2, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q2 = ADDv4i32 killed renamable $q4, killed renamable $q16, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $s2 = ADDVv4i32v killed renamable $q2, implicit-def $q2, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $w26 = COPY renamable $s2, implicit killed $q2, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $q2 = ADDv4i32 killed renamable $q3, killed renamable $q7, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $s2 = ADDVv4i32v killed renamable $q2, implicit-def $q2, debug-location !494; playground/firefox_convolve_int.c:57:5
+    renamable $w27 = COPY renamable $s2, implicit killed $q2, debug-location !494; playground/firefox_convolve_int.c:57:5
+
+# Region 15 (convolve_pixel_int)
+    renamable $w15 = LDRBBui renamable $x17, 3, debug-location !506 :: (load (s8) from %ir.arrayidx.i.3, !tbaa !144); playground/firefox_convolve_int.c:28:10 @[ playground/firefox_convolve_int.c:61:27 ]
+    renamable $w13 = LDRBBui renamable $x17, 2, debug-location !487 :: (load (s8) from %ir.arrayidx.i, !tbaa !144); playground/firefox_convolve_int.c:28:10 @[ playground/firefox_convolve_int.c:61:27 ]
+    renamable $w1 = LDRBBui renamable $x17, 1, debug-location !507 :: (load (s8) from %ir.arrayidx.i.1, !tbaa !144); playground/firefox_convolve_int.c:28:10 @[ playground/firefox_convolve_int.c:61:27 ]
+    renamable $w17 = LDRBBui killed renamable $x17, 0, debug-location !508 :: (load (s8) from %ir.arrayidx.i.2, !tbaa !144); playground/firefox_convolve_int.c:28:10 @[ playground/firefox_convolve_int.c:61:27 ]
+    renamable $w24 = nsw MADDWrrr renamable $w14, killed renamable $w13, killed renamable $w24, debug-location !490; playground/firefox_convolve_int.c:61:16
+    renamable $w25 = nsw MADDWrrr renamable $w14, killed renamable $w1, killed renamable $w25, debug-location !491; playground/firefox_convolve_int.c:61:16
+    renamable $w26 = nsw MADDWrrr renamable $w14, killed renamable $w17, killed renamable $w26, debug-location !492; playground/firefox_convolve_int.c:61:16
+    renamable $w27 = nsw MADDWrrr killed renamable $w14, killed renamable $w15, killed renamable $w27, debug-location !493; playground/firefox_convolve_int.c:61:16
+

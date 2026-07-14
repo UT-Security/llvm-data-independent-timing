@@ -1,0 +1,155 @@
+================================================================================
+Function: convolve_pixel_int
+================================================================================
+
+--- Summary ---
+  Tainted instructions:   101
+  Untainted instructions: 268
+  Total instructions:     369
+  Taint ratio:            0.274
+
+--- Instruction type breakdown ---
+  Type        Tainted  Untainted  Total
+  Load              6         28     34
+  Store             1         13     14
+  ALU              69         97    166
+  Branch            0         26     26
+  Copy              9         12     21
+  Debug            16         55     71
+  Other             0         37     37
+
+--- Distance between tainted instructions ---
+  Min gap: 0
+  Max gap: 25
+  Avg gap: 1.68
+
+--- Per-basic-block breakdown ---
+  BB                    Tainted  Untainted  Total  Ratio
+  entry                       0         61     61 0.000
+  <unnamed>                   0          2      2 0.000
+  for.body.lr.ph              0         30     30 0.000
+  for.cond30.preheader.loopexit        8          2     10 0.800
+  for.cond30.preheader        5         28     33 0.152
+  for.body                    4          5      9 0.444
+  <unnamed>                   0          1      1 0.000
+  iter.check                  0          3      3 0.000
+  <unnamed>                   0          1      1 0.000
+  for.body7.preheader         0          3      3 0.000
+  vector.scevcheck            0          5      5 0.000
+  <unnamed>                   0          2      2 0.000
+  vector.main.loop.iter.check        0          2      2 0.000
+  <unnamed>                   0          2      2 0.000
+  vector.ph                   4         19     23 0.174
+  vector.body                13         32     45 0.289
+  middle.block               17          6     23 0.739
+  <unnamed>                   0          1      1 0.000
+  vec.epilog.iter.check        0          4      4 0.000
+  vec.epilog.ph               4         13     17 0.235
+  vec.epilog.vector.body       14         12     26 0.538
+  vec.epilog.middle.block       12          5     17 0.706
+  for.cond.cleanup6           4          8     12 0.333
+  for.body7                  16         21     37 0.432
+
+--- Taint density regions (run-length) ---
+  Region  Type       Length
+       1  untainted      93
+       2  tainted         8
+       3  untainted      17
+       4  tainted         5
+       5  untainted      13
+       6  tainted         4
+       7  untainted      25
+       8  tainted         1
+       9  untainted       1
+      10  tainted         1
+      11  untainted       1
+      12  tainted         1
+      13  untainted       2
+      14  tainted         1
+      15  untainted      15
+      16  tainted         1
+      17  untainted      13
+      18  tainted         1
+      19  untainted       7
+      20  tainted         9
+      21  untainted       3
+      22  tainted         1
+      23  untainted       3
+      24  tainted         1
+      25  untainted       5
+      26  tainted         1
+      27  untainted       1
+      28  tainted         4
+      29  untainted       1
+      30  tainted         9
+      31  untainted       1
+      32  tainted         3
+      33  untainted      10
+      34  tainted         1
+      35  untainted       1
+      36  tainted         1
+      37  untainted       1
+      38  tainted         1
+      39  untainted       1
+      40  tainted         1
+      41  untainted       9
+      42  tainted         1
+      43  untainted       3
+      44  tainted         4
+      45  untainted       3
+      46  tainted         9
+      47  untainted       5
+      48  tainted        12
+      49  untainted       5
+      50  tainted         4
+      51  untainted       8
+      52  tainted         4
+      53  untainted      14
+      54  tainted        12
+      55  untainted       7
+  Longest tainted run:   12
+  Longest untainted run: 93
+  Number of tainted clusters: 27
+
+================================================================================
+Function: run_kernel_int
+================================================================================
+
+--- Summary ---
+  Tainted instructions:   0
+  Untainted instructions: 135
+  Total instructions:     135
+  Taint ratio:            0.000
+
+--- Instruction type breakdown ---
+  Type        Tainted  Untainted  Total
+  Load              0         12     12
+  Store             0         15     15
+  ALU               0         18     18
+  Branch            0         13     13
+  Call              0          1      1
+  Copy              0         14     14
+  Debug             0         43     43
+  Other             0         19     19
+
+--- Distance between tainted instructions ---
+  N/A (fewer than 2 tainted instructions)
+
+--- Per-basic-block breakdown ---
+  BB                    Tainted  Untainted  Total  Ratio
+  entry                       0         45     45 0.000
+  for.cond3.preheader.lr.ph        0         27     27 0.000
+  for.cond3.preheader         0         12     12 0.000
+  for.cond.cleanup            0          8      8 0.000
+  for.cond7.preheader         0         11     11 0.000
+  for.cond.cleanup5           0          7      7 0.000
+  for.cond.cleanup10          0          6      6 0.000
+  for.body11                  0         19     19 0.000
+
+--- Taint density regions (run-length) ---
+  Region  Type       Length
+       1  untainted     135
+  Longest tainted run:   0
+  Longest untainted run: 135
+  Number of tainted clusters: 0
+

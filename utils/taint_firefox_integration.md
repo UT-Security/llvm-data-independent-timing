@@ -1,6 +1,6 @@
 # Integrating the Taint-Hardening Pass into a Firefox Compile
 
-Interprocedural taint analysis inserts ISB/DSB barriers around secret-dependent
+Interprocedural taint analysis inserts PSTATE.DIT mode switches around secret-dependent
 code (AArch64). As of the `-ftaint-harden` work, a **single `clang -c` applies the
 whole transformation** — no more multi-tool `opt`/`llc` pipeline in the build. This
 doc is the integration guide; the legacy multi-step flow is kept at the end as a
@@ -17,7 +17,7 @@ clang -O2 -ftaint-harden=<taint-src-file> -c file.cpp -o file.o
 That's it. When `-ftaint-harden=<file>` is present, clang:
 1. runs the `taint-annotate` IR pass (marks tainted args from `<file>`), then
 2. lowers to post-prologepilog MIR, runs the interprocedural taint pass (inserts
-   ISB/DSB), and emits the object — all in one process.
+   PSTATE.DIT mode switches), and emits the object — all in one process.
 
 When the flag is **absent**, codegen is byte-for-byte unchanged. The produced `.o`
 is a normal object linked by Firefox's normal link step. **Only the compile of
@@ -82,8 +82,9 @@ _ZN7mozilla3gfx19FilterNodeSoftware18RenderConvolve...EPKhj,1,pointee
    (`-I`, `-D`, `--target=`, `-std=`, sysroot, …) — just add it to the existing
    command line for that TU. Nothing else about the invocation changes.
 
-**Barrier mode.** Default is per-region ISB/DSB speculation barriers. An
-alternative backend exists: `-mllvm -taint-barrier-mode=dit` (added next to
+**Protection mode.** PSTATE.DIT, function granularity, is the only mode (the
+ISB/DSB speculation-barrier mode was removed 2026-07-14). It needs FEAT_DIT at
+run time. Formerly selected with `-mllvm -taint-barrier-mode=dit` (added next to
 `-ftaint-harden`) switches to **function-granularity PSTATE.DIT** — `MSR DIT, #1`
 at entry / `MSR DIT, #0` before returns of any function containing taint. Note the
 different threat model (data-independent *timing*, not anti-speculation) and the
@@ -162,11 +163,11 @@ for that subset.
 
 ```
 # Barriers landed in the object:
-<repo>/build/bin/llvm-objdump -d file.o | grep -E '\bisb\b|\bdsb\b'
+<repo>/build/bin/llvm-objdump -d file.o | grep -E '\bmsr\b.*\bdit\b'
 
 # Per-symbol barrier counts (to compare against the reference wrapper):
 <repo>/build/bin/llvm-objdump -d file.o \
-  | awk '/^[0-9a-f]+ </{s=$0} /\bisb\b|\bdsb\b/{n[s]++} END{for(k in n)print n[k],k}'
+  | awk '/^[0-9a-f]+ </{s=$0} /\bmsr\b.*\bdit\b/{n[s]++} END{for(k in n)print n[k],k}'
 ```
 
 Differential parity against the trusted multi-tool flow (`utils/taint_harden_c.sh`)
@@ -183,7 +184,7 @@ per-symbol barrier placement. The single-`clang` path is a drop-in for that wrap
 - [ ] Point `mozconfig` CC/CXX at the wrapper that appends `-ftaint-harden` (Section 5).
 - [ ] Move any target file out of `UNIFIED_SOURCES` into `SOURCES` (Section 6).
 - [ ] Disable LTO for hardened TUs (Section 6).
-- [ ] Build; spot-check a hardened `.o` for `isb`/`dsb` (Section 7).
+- [ ] Build; spot-check a hardened `.o` for `msr dit` (Section 7).
 
 ---
 
@@ -204,7 +205,7 @@ BIN=<repo>/build/bin
 # 3b. CFI serialization workaround (done automatically by -ftaint-harden)
 perl -0pi -e 's/<mcsymbol >//g' "$STEM.pe.mir"
 # 4. interproc taint + barrier insertion
-"$BIN/llc" -enable-new-pm -run-taint-interproc -taint-insert-isb \
+"$BIN/llc" -enable-new-pm -run-taint-interproc -taint-insert-dit \
   -taint-region-merge-gap=2 "$STEM.pe.mir" -o "$STEM.hardened.mir"
 # 5. hardened MIR -> object
 "$BIN/llc" -start-after=prologepilog "$STEM.hardened.mir" -filetype=obj -o "$STEM.o"

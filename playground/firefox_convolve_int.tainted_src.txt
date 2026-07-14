@@ -1,0 +1,8 @@
+# Function: convolve_pixel_int
+playground/firefox_convolve_int.c:14	convolve_pixel_int
+playground/firefox_convolve_int.c:28	convolve_pixel_int
+playground/firefox_convolve_int.c:32	convolve_pixel_int
+playground/firefox_convolve_int.c:57	convolve_pixel_int
+playground/firefox_convolve_int.c:61	convolve_pixel_int
+playground/firefox_convolve_int.c:71	convolve_pixel_int
+playground/firefox_convolve_int.c:72	convolve_pixel_int

@@ -1682,18 +1682,6 @@ public:
   virtual void insertNoop(MachineBasicBlock &MBB,
                           MachineBasicBlock::iterator MI) const;
 
-  /// Insert an instruction synchronization/speculation barrier into the
-  /// instruction stream at the specified point.
-  virtual void insertInstructionBarrier(MachineBasicBlock &MBB,
-                                        MachineBasicBlock::iterator MI,
-                                        const DebugLoc &DL) const;
-
-  /// Insert a data synchronization/speculation barrier into the instruction
-  /// stream at the specified point.
-  virtual void insertDataBarrier(MachineBasicBlock &MBB,
-                                 MachineBasicBlock::iterator MI,
-                                 const DebugLoc &DL) const;
-
   /// Insert a switch of the target's data-independent-timing execution mode
   /// (e.g. AArch64 PSTATE.DIT) into the instruction stream at the specified
   /// point.
