@@ -52,9 +52,23 @@ Note the same-value write still costs 12 cycles. It is cheaper than a real
 toggle but **not free**, so redundant re-asserts (the post-call `MSR DIT, #1`)
 are not free either.
 
-### Dwell cost: the microkernels below show zero — and that is a NEGATIVE RESULT
+### Dwell cost: the DIT-sensitive workload, FOUND — the Apple LVP (up to 4×)
 
-**Ground truth first:** with DIT fully on, **some SPEC 2026 benchmarks lose ~15%**
+**The cleanest DIT-sensitive workload is LVP-predictable pointer chasing** (measured
+2026-07-15 on M4; `playground/dit_bench/lvp_dit.c`, reproduced). The M4 has a Load
+Value Predictor (FLOP, USENIX Sec'25; see `taint_value_timing_leaks_research.md`),
+and **DIT disables it**. On a self-dependent load chase over a constant-valued
+L1-resident array, DIT-on vs DIT-off is **0.999 → 3.999 cyc/hop = 4.00× dwell
+cost** — identical code/data/cache, so unambiguously the LVP. This is the largest
+per-region dwell cost measured, and it is exactly the code fine-grained placement
+must keep OUT of DIT: the LVP accelerates *public* predictable-load code.
+
+Whole-program it dilutes: FLOP measured **4.5% on Speedometer 3.0** for
+process-wide DIT in Safari (0.6% on BYTE). So the dwell term ranges from ~0 (plain
+ALU, below) through ~4.5–15% (whole real workloads) to **4× on LVP-critical
+regions** — the spread across code type *is* why placement granularity matters.
+
+**Also, historically:** with DIT fully on, **some SPEC 2026 benchmarks lose ~15%**
 (measured by the project owner; hardware/benchmark breakdown TBD — see "Open" at
 the end). Dwell is real, it is workload-dependent, and it is exactly the cost this
 project exists to avoid paying on public code.

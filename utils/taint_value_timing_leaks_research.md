@@ -107,10 +107,47 @@ demonstrate it on convolution (they did the speculative exploit instead) — so 
 "reopen the integer pixel channel via the LVP timing side" demonstration remains
 open, and is now buildable on this M4.
 
-**On-M4 measurements (in flight, `playground/dit_bench/`):** reproduce FLOP §4.1
-(constant vs random load timing), confirm DIT erases the speedup, and a fine-grain
-intermix demo (public LVP-friendly loads + secret arithmetic, three placements).
-Results to be appended here.
+**On-M4 measurements — DONE, reproduced (`playground/dit_bench/`, `run_lvp.sh`).**
+Userspace (no KDK), frequency-normalized cyc/hop, verified by re-running.
+
+- **LVP confirmed + isolated** (`lvp_dit.c`, self-dependent chase `x = arr[x]`,
+  1024-entry L1-resident array): CONST-valued array **0.999 cyc/hop** vs random
+  permutation **3.998 cyc/hop** = **4.00× value-dependent timing**. The LVP
+  predicts the constant and breaks the load→address dependency.
+- **DIT disables the LVP** (the project's off-switch, on our hardware): on the
+  CONST chase, flipping DIT **0.999 → 3.999 cyc/hop** — it collapses exactly onto
+  the PERM line, and leaves PERM itself untouched (3.998 → 3.999). Because CONST
+  DIT-off vs DIT-on is *identical code, data, and cache state*, this 4× is
+  unambiguously the LVP, not caching. Matches FLOP §7 verbatim. **DIT-on costs up
+  to 4× on LVP-critical (predictable-pointer-chasing) code** — the largest dwell
+  number measured for this project, and the per-region worst case (whole-program
+  it dilutes to FLOP's 4.5% Safari / the ~15% SPEC).
+- **Fine-grain necessity, with a crossover** (`lvp_finegrain.c`, P public
+  LVP-friendly hops + 8 secret muls/region; (i) unprotected, (ii) whole-region
+  DIT, (iii) fine-grain toggle around only the secret):
+
+  | P (public hops/region) | whole-DIT vs fine | winner |
+  |---|---|---|
+  | 4–32 | fine is 1.1–3.7× *slower* | whole-DIT (toggle cost dominates) |
+  | 64 | fine 0.72× of coarse | **fine** |
+  | 256 | fine 0.39× of coarse (≈ unprotected speed) | **fine** |
+
+  Crossover at **P ≈ 40–64 hops** — precisely the cost model's admission test
+  (create a region only when LVP-saving > ~60-cyc toggle pair). At P=256 fine-grain
+  nearly matches *unprotected* speed while still protecting the secret. This is the
+  quantified answer to "why not just wrap the whole module": whole-process DIT
+  (FLOP's Safari-wide mitigation) pays the 4× on *all* public pointer-chasing;
+  fine-grain confines it and wins by up to ~2.6× once a region holds ≳40–64 hops
+  of public work.
+- **Honest negative** (`lvp_gather.c`): the faithful FLOP Listing-1 *independent*
+  gather did **not** reproduce the value-timing gap from userspace (0.997×) —
+  memory-level parallelism overlaps the misses and the LVP-training warmup also
+  warms the cache. That needs KDK clflush + cycle counters (as FLOP used); the
+  self-dependent chase isolates the LVP cleanly instead.
+
+Reinforces the `convolve_pixel_int` finding (placement doc §4 P4): toggles must
+sit at coarse region/phase boundaries, never inside tight loops — here a
+per-iteration toggle only pays off once the region holds ≳40–64 hops.
 
 Sources: predictors.fail; FLOP (USENIX Sec'25) predictors.fail/files/FLOP.pdf;
 SLAP (IEEE S&P'25) predictors.fail/files/SLAP.pdf.
