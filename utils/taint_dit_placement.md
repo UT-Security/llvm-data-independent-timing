@@ -202,6 +202,51 @@ Functions with many exit blocks execute at most one, so the *static* count is
 harmless; but disables in cold exit blocks are pure code-size. Post-dominator
 placement (§5) subsumes this.
 
+### P4: measured region structure of `convolve_pixel_int` — why §5 must be loop-aware
+Characterized 2026-07-15 from the taint report + region report + MIR CFG
+(`-taint-output`, `-taint-regions-output` on the reference workload).
+
+**Taint is sparse and clustered, not uniform.** Of 298 instructions in
+`convolve_pixel_int`, only **85 (28.5%) are tainted**. The public part is
+dominated by a large clean preamble — `entry` (35 instrs, 0 tainted) and
+`for.body.lr.ph` (30 instrs, 0 tainted) — i.e. ~65 instructions of pure setup
+that function granularity wraps in DIT for nothing.
+
+**Static region count bottoms out at 9** (the taint forms 9 CFG-separated
+clusters; `-taint-region-merge-gap` sweeps 24→15→9 as gap 0→2→≥16, then
+plateaus — cross-block gaps never coalesce). Naive per-region placement =
+2×count = 18–48 static toggles.
+
+**But static count is the wrong cost metric, and this function proves it.** Five
+of the tainted regions sit inside **self-looping inner-loop blocks** — `bb.12`/
+`bb.14` (`vector.body`), `bb.16`/`bb.18` (`vec.epilog.vector.body`), `bb.21`
+(`for.body7`) — whose backedges are weighted `0x7c...` vs `0x04...`, i.e. taken
+~97% of iterations. A toggle placed *inside* such a block executes **once per
+loop iteration**; `convolve_pixel_int` runs per output pixel, so "18 static
+toggles" becomes thousands-to-millions of *dynamic* ~30-cyc toggles —
+**strictly, catastrophically worse than function granularity's 2.** This is why
+`-taint-region-merge-gap` (run coalescing) is the wrong knob: it shrinks the
+static count but cannot move a toggle out of a loop.
+
+**The only placement that beats function granularity is loop-hoisting.** Set
+`MSR DIT, #1` once *before* the convolution loop nest and `MSR DIT, #0` once
+*after*, so the five loop-resident regions are covered by the enclosing region
+with **no per-iteration toggles**: ~2–4 executed toggles, covering the loop nest
+(~230 instrs) while excluding the 65-instr public preamble. The delta vs
+function granularity is exactly:
+
+```
+saved dwell   = ~65 preamble instrs × dwell_cost   (the win, workload-dependent)
+added toggles = ~2 × 30 cyc ≈ 60 cyc               (one-time per call)
+```
+
+**Design consequence for §5:** the objective is *executed* (frequency-weighted)
+toggles, and the enable must be **hoisted out of loops** (LICM-style), not merely
+placed at region boundaries. This is a lazy-code-motion / partial-redundancy
+problem over the machine CFG with block frequencies — the merge-gap proxy does
+not model it. `convolve_pixel_int` is the canonical test case: a small secret
+kernel inside a hot loop nest behind a large public preamble.
+
 ---
 
 ## 5. Proposed design: spec-aware optimal placement
