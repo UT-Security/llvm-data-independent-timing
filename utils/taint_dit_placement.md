@@ -105,14 +105,50 @@ Unwinds/`longjmp` out of an instrumented function leave DIT=1 in the unwinder an
 beyond — *safe* direction (over-protection), only a perf leak (still open,
 accepted). The **caller-side** hazard of external callees toggling DIT off is
 covered by the unconditional/summary-gated after-call re-assert (P0 + elision).
-What remains, now **diagnosed** instead of silent: secrets handed to callees the
-analysis cannot instrument. `-taint-callsite-report=<file>` emits an `ESCAPE`
-line for every call site passing tainted/pointee-tainted args to an external
-declaration or through an indirect call (`BLR`) — including the sneaky case of
-in-TU functions reached *only* indirectly, which never receive arg-taint
-propagation and are never instrumented. Protection *inside* such callees is out
-of placement's reach: annotate the target in its own TU, substitute a
-constant-time implementation, or accept the reported risk.
+
+**Protection *inside* an external/indirect callee is NOT out of reach — DIT is
+inherited.** `PSTATE.DIT` is per-thread state with no callee-saved convention
+(§2.4), so a callee entered with DIT=1 executes with DIT=1: `memcpy`, an indirect
+target, a closed-source blob all inherit our mode. Under function granularity
+every call from inside a tainted function is by construction made with DIT=1, so
+a secret handed to an unknown callee **is** covered — to the same standard as our
+own code (DIT-listed instructions only; an `SDIV` on the secret inside libc is no
+more protected than one in our own function — that's G2, not a call problem).
+
+This is a real asymmetry vs. the deleted ISB/DSB model, where a barrier had to be
+*inside* the callee, so an uninstrumented callee was genuinely unprotected. The
+old `ESCAPE`-report framing ("secrets handed to external/indirect callees can't
+be protected by placement") is inherited from that threat model and is now
+**misleading**; `-taint-callsite-report` should be read as an *audit list of
+secret-carrying call sites*, not a list of unprotected ones.
+
+Two genuine residuals: (a) an instrumented callee runs `MSR DIT, #0` on its exit —
+but only after its own protected work, and the post-call re-assert restores our
+mode; (b) **this ambient coverage is automatic ONLY under function granularity.**
+See the "Scenario B invariant" box below.
+
+> **DESIGN DECISIONS (2026-07-15) — memory-effects soundness fix.** Discussed and
+> locked; see `taint_memory_summary_research.md` for the domain design.
+>
+> - **Unknown callees (external decl / indirect `BLR`) get blunt TOP in P0.** Any
+>   tainted argument at such a call ⇒ assume it wrote a secret to every escaped
+>   stack object, every address-taken global, and unknown memory. No refinement
+>   in P0. The libc model table and `memory(argmem: write)` narrowing
+>   (research §11 vii/viii) are **deferred until we measure** how much blunt TOP
+>   over-instruments — the honest baseline first, then decide if the table earns
+>   its maintenance. Indirect calls also get blunt TOP in P0; the address-taken-
+>   target join (which would also close the "reached-only-indirectly, never
+>   instrumented" sub-case) is a later precision option, not P0.
+> - **Scenario B ("is the secret protected *during* the call?") gets an explicit
+>   assert/report, not an assumption.** Under function granularity a call passing
+>   a tainted arg is always inside DIT coverage (the tainted arg register makes
+>   the function have tainted runs ⇒ it is instrumented ⇒ entry set DIT=1). That
+>   invariant is currently true *by accident of granularity*. Add a verification
+>   pass: for every call site with a tainted/pointee-tainted argument, assert the
+>   enclosing function is DIT-instrumented (and, once regions exist, that the call
+>   lies inside an enabled region). A violation is a leaked secret — report it,
+>   and under an assertions build, assert. This turns an implicit invariant into a
+>   guardrail the future region work cannot silently break.
 
 ### G4 (correctness of scope): protection starts at entry, but secrets may
 pre-exist in memory

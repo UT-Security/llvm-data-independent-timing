@@ -322,12 +322,19 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       // physical-register enum values for W0/X0.
       bool ReturnsTainted = functionReturnsTainted(*MF, TR, TSI, M, AA);
 
+      // Memory-effects (mod-set): which caller-visible memory this function may
+      // write a secret into. Recomputed each iteration; it reads callee mem
+      // effects applied during (a), so it converges with the register summary.
+      FunctionMemEffects MemEffects =
+          computeFunctionMemEffects(*MF, TR, &TSI, AA);
+
       // Build new summary
       FunctionTaintSummary NewSummary;
       NewSummary.TaintedArgIndices = CurrentSummary.TaintedArgIndices;
       NewSummary.PointeeTaintedArgIndices =
           CurrentSummary.PointeeTaintedArgIndices;
       NewSummary.ReturnsTainted = ReturnsTainted;
+      NewSummary.MemEffects = MemEffects;
 
       // Check if return-taint status changed
       FunctionTaintSummary OldSummary = TSI.getSummary(F);
@@ -418,49 +425,70 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
     });
   }
 
-  // Step 3c: Call-site escape report. Secrets handed to callees the analysis
-  // cannot instrument (external declarations, indirect calls) are residual
-  // hazards in every barrier mode: no toggle or barrier placed in the caller
-  // protects the secret while the callee executes.
+  // Step 3c: Call-site secret audit + Scenario-B coverage verification.
+  //
+  // Two distinct things happen at a call that receives a secret:
+  //
+  //  (A) ESCAPE audit — the secret is passed to a callee the analysis cannot
+  //      instrument (external declaration or indirect target). Unlike the old
+  //      ISB/DSB model, this is NOT an unprotected hazard: PSTATE.DIT is
+  //      inherited, so the callee runs with DIT=1 (see taint_dit_placement.md
+  //      G3). The line is an audit record of where secrets leave the TU, not a
+  //      list of unprotected sites.
+  //
+  //  (B) Coverage invariant — for the secret to be protected DURING the call,
+  //      the call must execute with DIT=1. Under function granularity that is
+  //      guaranteed (a tainted call argument makes the enclosing function have
+  //      a tainted run, so it is DIT-instrumented and entry set DIT=1). We do
+  //      not assume this — we verify it, so the future region work cannot
+  //      silently break it. A violation is a leaked secret: report UNCOVERED
+  //      and, in an assertions build, assert.
   {
     auto CallsiteOSPtr =
         openTaintReport(TaintCallsiteReportFile, "taint callsite report");
-    if (CallsiteOSPtr) {
-      raw_fd_ostream &CallsiteOS = *CallsiteOSPtr;
-      forEachAnalyzed(
-          M, FAM, Results,
-          [&](Function &F, MachineFunction &MF, const TaintResult &TR,
-              AAResults *AA) {
-            replayTaint(MF, TR, &TSI, AA,
-                        [&](MachineInstr &MI, const TaintFacts &Facts,
-                            const TaintState &) {
-                          if (!MI.isCall() ||
-                              (!Facts.UsesData && !Facts.UsesPointee))
-                            return true;
+    raw_fd_ostream *CallsiteOS = CallsiteOSPtr.get();
+    forEachAnalyzed(
+        M, FAM, Results,
+        [&](Function &F, MachineFunction &MF, const TaintResult &TR,
+            AAResults *AA) {
+          bool FnInstrumented = functionHasTaintedRuns(MF, TR, &TSI, AA);
+          replayTaint(
+              MF, TR, &TSI, AA,
+              [&](MachineInstr &MI, const TaintFacts &Facts,
+                  const TaintState &) {
+                if (!MI.isCall() || (!Facts.UsesData && !Facts.UsesPointee))
+                  return true;
 
-                          // Only callees the analysis cannot instrument are
-                          // hazards.
-                          const Function *Callee = findCalledFunction(M, MI);
-                          if (Callee && !Callee->isDeclaration())
-                            return true;
+                // (B) The enclosing function must be DIT-instrumented, else the
+                // secret executes through the call with DIT off.
+                if (TaintInsertDIT && !FnInstrumented) {
+                  errs() << "taint: UNCOVERED secret-passing call in "
+                         << F.getName()
+                         << " but the function is not DIT-instrumented "
+                            "(Scenario-B invariant violated)\n";
+                  assert(false && "secret-passing call outside DIT coverage");
+                }
 
-                          CallsiteOS
-                              << "ESCAPE "
-                              << (Callee ? "external" : "indirect") << " callee="
-                              << (Callee ? Callee->getName() : "<indirect>")
-                              << " caller=" << F.getName()
-                              << " bb=" << MI.getParent()->getNumber();
-                          if (const DebugLoc &DL = MI.getDebugLoc())
-                            CallsiteOS << " line=" << DL.getLine();
-                          if (Facts.UsesData)
-                            CallsiteOS << " tainted-args";
-                          if (Facts.UsesPointee)
-                            CallsiteOS << " pointee-tainted-args";
-                          CallsiteOS << "\n";
-                          return true;
-                        });
-          });
-    }
+                // (A) ESCAPE audit — only callees we cannot instrument.
+                const Function *Callee = findCalledFunction(M, MI);
+                if ((Callee && !Callee->isDeclaration()) || !CallsiteOS)
+                  return true;
+
+                *CallsiteOS << "ESCAPE "
+                            << (Callee ? "external" : "indirect") << " callee="
+                            << (Callee ? Callee->getName() : "<indirect>")
+                            << " caller=" << F.getName()
+                            << " bb=" << MI.getParent()->getNumber();
+                if (const DebugLoc &DL = MI.getDebugLoc())
+                  *CallsiteOS << " line=" << DL.getLine();
+                if (Facts.UsesData)
+                  *CallsiteOS << " tainted-args";
+                if (Facts.UsesPointee)
+                  *CallsiteOS << " pointee-tainted-args";
+                *CallsiteOS << " (covered by inherited DIT)\n";
+                return true;
+              });
+        });
   }
 
   // Step 4: Export tainted instructions to file

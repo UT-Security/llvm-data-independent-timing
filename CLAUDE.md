@@ -96,7 +96,7 @@ these). Region spacing: `utils/taint_region_distance.py OUT.hardened.mir`.
 | `TargetInstrInfo::insertTimingModeSwitch` hook (emits `MSR DIT`; the `insertInstructionBarrier`/`insertDataBarrier` ISB/DSB hooks were removed 2026-07-14) | `llvm/include/llvm/CodeGen/TargetInstrInfo.h`, `llvm/lib/Target/AArch64/AArch64InstrInfo.cpp` |
 | DIT placement: state, gaps, optimal-placement design | `utils/taint_dit_placement.md` |
 | **DIT cost model: toggle ≈ 30 cyc serializing (measured, M4); dwell up to ~15% on sensitive SPEC 2026 benchmarks.** Both terms matter — they pull opposite ways, and that tension *is* the placement problem. Read before any placement work; do NOT conclude "DIT is free" from the ~0 microkernels (blind spot, see the doc's History) | `utils/taint_dit_cost_model.md`, benchmarks in `playground/dit_bench/` |
-| **KNOWN UNSOUNDNESS** — callee→caller taint through memory (missing DIT coverage); literature + design recommendation | `utils/taint_memory_summary_research.md`, repro in `playground/callee_memory_gap.c` |
+| Callee→caller taint through memory — **FIXED (blunt-TOP P0, 2026-07-15)** via `FunctionMemEffects` mod-set summary + caller-side `ExternalMemClobbered`; precision refinement (libc table, arg-i provenance) is P1 | `FunctionMemEffects` in `TaintSummaryInfo.h`, `computeFunctionMemEffects` in `TaintAnalysis.cpp`; literature/design `utils/taint_memory_summary_research.md`; repro `playground/callee_memory_gap.c` |
 | Tests | `llvm/test/CodeGen/AArch64/taint-analysis-*.mir`, `llvm/test/Transforms/TaintAnnotate/taint-annotate.ll` |
 | Scratch experiments (not shipping code) | `playground/` |
 
@@ -139,16 +139,25 @@ hardened MIR text; (3) legacy PM `start-after=prologepilog` → object.
 - Taint over-approximation is always the safe direction: a spurious barrier costs
   performance, a missing one costs the secret. Any "can't classify" path must fall
   back to treating every register use as secret.
-- **KNOWN UNSOUND (open, as of 2026-07-14): callee→caller taint through memory.**
-  `FunctionTaintSummary` carries no memory-effects component, so a callee that writes a
-  secret into caller-visible memory (`copy(buf, secret)`, `memcpy(dst, secret_src, n)`)
-  leaves the caller's later reload untainted ⇒ **no barrier**. Affects external, indirect
-  *and* plain in-TU direct calls — it is a summary-domain deficiency, not an
-  external-code problem, and no amount of fixed-point iteration fixes it. Return values
-  are fine (external/indirect returns are conservatively tainted when any arg is tainted).
-  Repro: `playground/callee_memory_gap.c`. Literature review + recommended design (coarse
-  alias-case-free mod-set summary; TOP default for unknown callees; libc model table):
-  `utils/taint_memory_summary_research.md`.
+- **Callee→caller taint through memory — FIXED (blunt-TOP P0, 2026-07-15).** Was: a
+  callee writing a secret into caller-visible memory (`copy(buf, secret)`, `memcpy(...)`)
+  left the caller's reload untainted. Now `FunctionTaintSummary` carries a
+  `FunctionMemEffects` mod-set (`WritesSecretToGlobal` set + `WritesSecretToUnknown`
+  TOP bit), computed by `computeFunctionMemEffects` in the interproc fixed point. At a
+  call the caller applies it: a direct in-TU callee contributes its precise mod-set; an
+  **external decl or indirect call receiving a secret is blunt TOP**. TOP sets the
+  caller-state `ExternalMemClobbered`, which poisons every subsequent stack/global/heap
+  load. Own-frame (non-fixed FrameIndex) callee writes are ignored (caller-invisible) —
+  that is the precision. **P0 is deliberately blunt: no arg-i or per-offset precision,
+  weak updates only, every truncation → TOP.** Measured cost on `firefox_convolve_int`
+  at -O2: 1 → 2 instrumented functions (`run_kernel_int` newly instrumented via
+  `convolve_pixel_int`'s TOP mod-set), `isb=0 dsb=0`, checksum unchanged. Repro
+  `playground/callee_memory_gap.c` now protected. **P1 (deferred, pending more numbers):**
+  libc model table + `memory(argmem: write)` narrowing + arg-i provenance to cut TOP.
+  Design/literature: `utils/taint_memory_summary_research.md`.
+- Also fixed on the way (latent, independent of the callee bug): the stack load path
+  never consulted any poison bit, so an unknown-size store followed by a known-size load
+  under-tainted. `ExternalMemClobbered` on the stack path closes it.
 
 ### Internal structure (post-2026-07-13 cleanup)
 

@@ -16,10 +16,41 @@
 #define LLVM_CODEGEN_TAINTSUMMARYINFO_H
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
 
 namespace llvm {
+
+/// Coarse, alias-case-free memory-effects (mod-set) summary: which
+/// caller-visible memory a function may have written a secret into by the time
+/// it returns. This is the callee->caller-through-memory transfer the register
+/// summary cannot express; without it a callee that writes a secret into
+/// caller-visible memory leaves the caller's reload untainted (the open
+/// unsoundness fixed by this component). See utils/taint_memory_summary_research.md.
+///
+/// The design is deliberately blunt in P0 (2026-07-15): no per-argument or
+/// per-offset precision, weak updates only. Every truncation over-approximates
+/// to WritesSecretToUnknown (TOP), which is the sound direction for a hardener.
+/// Provenance-based arg-i / escaped-object precision is the P1 refinement.
+struct FunctionMemEffects {
+  /// Specific globals the function may write a secret into. Kept precise so a
+  /// direct in-TU call that writes one global does not poison every global.
+  SmallPtrSet<const GlobalVariable *, 4> WritesSecretToGlobal;
+
+  /// TOP: the function may have written a secret to memory the analysis cannot
+  /// pin down — through a pointer argument, to the heap, or transitively via a
+  /// call it makes to an unknown/unknown-writing callee. Mandatory default for
+  /// external declarations and indirect calls that receive a secret.
+  bool WritesSecretToUnknown = false;
+
+  bool operator==(const FunctionMemEffects &O) const {
+    return WritesSecretToUnknown == O.WritesSecretToUnknown &&
+           WritesSecretToGlobal == O.WritesSecretToGlobal;
+  }
+  bool operator!=(const FunctionMemEffects &O) const { return !(*this == O); }
+};
 
 /// Summary of taint behavior for a single function.
 struct FunctionTaintSummary {
@@ -31,6 +62,9 @@ struct FunctionTaintSummary {
 
   /// Whether the function returns a tainted value (X0/W0).
   bool ReturnsTainted = false;
+
+  /// Which caller-visible memory the function may write a secret into.
+  FunctionMemEffects MemEffects;
 
   /// Conservative flag: if true, assume all arguments taint return.
   /// Used for external functions, indirect calls, etc.
@@ -47,6 +81,7 @@ struct FunctionTaintSummary {
     return TaintedArgIndices == Other.TaintedArgIndices &&
            PointeeTaintedArgIndices == Other.PointeeTaintedArgIndices &&
            ReturnsTainted == Other.ReturnsTainted &&
+           MemEffects == Other.MemEffects &&
            IsConservative == Other.IsConservative &&
            PreservesDIT == Other.PreservesDIT;
   }

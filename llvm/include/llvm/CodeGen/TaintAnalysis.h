@@ -22,6 +22,7 @@
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/Register.h"
+#include "llvm/CodeGen/TaintSummaryInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
@@ -87,6 +88,19 @@ struct TaintState {
   DenseSet<const Value *> PointeeTaintedUnknownMemValues;
   bool UnknownMemTainted = false;
 
+  /// Globals a callee wrote a secret into, at unknown offset. Whole-object
+  /// (any load of the global is secret): a callee's mod-set carries no offset.
+  DenseSet<const GlobalVariable *> TaintedWholeGlobals;
+
+  /// A call may have written a secret into memory the analysis cannot pin down
+  /// (through a pointer argument, to the heap, or via an unknown callee). Once
+  /// set, every subsequent stack / global / heap load in this function must be
+  /// treated as secret — this is the caller-side landing point of a callee's
+  /// FunctionMemEffects TOP. Distinct from UnknownMemTainted (which the analysis
+  /// keeps deliberately local for heap-store precision) so this coarser,
+  /// call-induced poison does not perturb the existing heap-store behavior.
+  bool ExternalMemClobbered = false;
+
 public:
   bool operator==(const TaintState &O) const {
     return TaintedRegs == O.TaintedRegs &&
@@ -97,7 +111,9 @@ public:
            TaintedGlobalCells == O.TaintedGlobalCells &&
            TaintedUnknownMemValues == O.TaintedUnknownMemValues &&
            PointeeTaintedUnknownMemValues == O.PointeeTaintedUnknownMemValues &&
-           UnknownMemTainted == O.UnknownMemTainted;
+           UnknownMemTainted == O.UnknownMemTainted &&
+           TaintedWholeGlobals == O.TaintedWholeGlobals &&
+           ExternalMemClobbered == O.ExternalMemClobbered;
   }
 
   bool operator!=(const TaintState &O) const { return !(*this == O); }
@@ -117,7 +133,27 @@ public:
     for (const Value *V : O.PointeeTaintedUnknownMemValues)
       PointeeTaintedUnknownMemValues.insert(V);
     UnknownMemTainted |= O.UnknownMemTainted;
+    for (const GlobalVariable *GV : O.TaintedWholeGlobals)
+      TaintedWholeGlobals.insert(GV);
+    ExternalMemClobbered |= O.ExternalMemClobbered;
   }
+
+  // Whole-object / call-clobber accessors (memory-effects component).
+  void setTaintedWholeGlobal(const GlobalVariable *GV) {
+    if (GV)
+      TaintedWholeGlobals.insert(GV);
+  }
+  bool isWholeGlobalTainted(const GlobalVariable *GV) const {
+    return GV && TaintedWholeGlobals.contains(GV);
+  }
+  /// Globals a callee wrote a secret into, inherited via caller-side mod-set
+  /// application. Read by computeFunctionMemEffects to re-export the effect so
+  /// it survives more than one call level.
+  const DenseSet<const GlobalVariable *> &wholeTaintedGlobals() const {
+    return TaintedWholeGlobals;
+  }
+  void setExternalMemClobbered() { ExternalMemClobbered = true; }
+  bool isExternalMemClobbered() const { return ExternalMemClobbered; }
 
   /// The register bitvector holding taint of kind K.
   SparseBitVector<> &regs(TaintKind K) {
@@ -348,6 +384,15 @@ std::unique_ptr<raw_fd_ostream> openTaintReport(StringRef Path, StringRef What,
 bool functionHasTaintedRuns(MachineFunction &MF, const TaintResult &TR,
                             const TaintSummaryInfo *TSI,
                             AAResults *AA = nullptr);
+
+/// Compute the memory-effects (mod-set) summary for MF from its converged taint
+/// result: which caller-visible memory it may have written a secret into. Runs
+/// inside the interprocedural fixed point (callee summaries feed caller
+/// application), so it must be recomputed until the summary stops changing.
+FunctionMemEffects computeFunctionMemEffects(MachineFunction &MF,
+                                             const TaintResult &TR,
+                                             const TaintSummaryInfo *TSI,
+                                             AAResults *AA = nullptr);
 
 /// Holds buffered per-function taint statistics for sorting before output.
 struct FunctionTaintStats {

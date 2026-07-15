@@ -17,6 +17,7 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachinePassManager.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -157,10 +158,6 @@ static bool anyRegUseOfKind(TaintKind K, const MachineInstr &MI,
   return false;
 }
 
-static bool anyTaintedRegUse(const MachineInstr &MI, const TaintState &S) {
-  return anyRegUseOfKind(TaintKind::Data, MI, S);
-}
-
 /// A register represents a single physical register if all its
 /// non-artificial subregs share the same hardware encoding.
 /// True for $x0 (subregs: $w0 enc=0, $w0_hi enc=0xFFFF/artificial).
@@ -266,9 +263,15 @@ static bool isABIResultRegDef(const MachineOperand &MO,
   return TRI->getEncodingValue(R.asMCReg()) == 0;
 }
 
+// A call "passes a secret" if any argument register holds a secret value
+// (data-tainted) OR points to secret memory (pointee-tainted). The pointee case
+// is essential: memcpy(dst, secret_src, n) passes a public pointer whose pointee
+// is secret — data taint alone misses it, so the callee could copy the secret
+// into caller-visible memory with no TOP mod-set applied (missing-barrier leak).
 static bool anyTaintedCallArgument(const MachineInstr &MI,
                                    const TaintState &S) {
-  return MI.isCall() && anyTaintedRegUse(MI, S);
+  return MI.isCall() && (anyRegUseOfKind(TaintKind::Data, MI, S) ||
+                         anyRegUseOfKind(TaintKind::Pointee, MI, S));
 }
 
 static void clearCallResultDefs(const MachineInstr &MI, TaintState &S,
@@ -433,8 +436,13 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
   if (MI.mayLoad()) {
     bool ShouldTaint = false;
     bool ShouldPointeeTaint = false;
-    bool HeapPoisoned =
-        S.UnknownMemTainted || (TSI && TSI->hasUnknownMemTainted());
+    // ExternalMemClobbered folds in here: after a call whose callee may have
+    // written a secret to unknown memory (a mod-set TOP), every heap and global
+    // load is secret. Stack loads are handled separately below — the existing
+    // heap poison never covered them, and that is exactly where the callee->
+    // caller-through-memory leak lived (the reload of a buffer a callee wrote).
+    bool HeapPoisoned = S.UnknownMemTainted || S.isExternalMemClobbered() ||
+                        (TSI && TSI->hasUnknownMemTainted());
 
     for (MachineMemOperand *MMO : MI.memoperands()) {
       if (!MMO) {
@@ -446,9 +454,14 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       }
       CellInfo CI = getCellFromMMO(*MMO);
       if (CI.K == CellInfo::Stack) {
-        bool Tainted = CI.Size
-                           ? S.isTaintedStackCell(CI.FI, CI.Offset, *CI.Size)
-                           : S.anyTaintedStackCellForFI(CI.FI);
+        // A call that clobbered unknown memory (mod-set TOP) may have written
+        // through a pointer into this frame — blunt P0 poisons every stack load
+        // after such a call. Provenance-based escaped-object precision (only
+        // poison stack objects whose address escaped) is the P1 refinement.
+        bool Tainted = S.isExternalMemClobbered() ||
+                       (CI.Size
+                            ? S.isTaintedStackCell(CI.FI, CI.Offset, *CI.Size)
+                            : S.anyTaintedStackCellForFI(CI.FI));
         bool PointeeTainted =
             CI.Size ? S.isPointeeTaintedStackCell(CI.FI, CI.Offset, *CI.Size)
                     : S.anyPointeeTaintedStackCellForFI(CI.FI);
@@ -472,9 +485,10 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           LLVM_DEBUG(dbgs() << "      load from global " << CI.GV->getName()
                             << " (poisoned by unknown mem)\n");
         } else {
-          bool Tainted = CI.Size
-                             ? S.isTaintedGlobalCell(CI.GV, CI.Offset, *CI.Size)
-                             : S.anyTaintedGlobalCellForGV(CI.GV);
+          bool Tainted =
+              S.isWholeGlobalTainted(CI.GV) ||
+              (CI.Size ? S.isTaintedGlobalCell(CI.GV, CI.Offset, *CI.Size)
+                       : S.anyTaintedGlobalCellForGV(CI.GV));
           if (Tainted) {
             ShouldTaint = true;
             LLVM_DEBUG(dbgs()
@@ -546,17 +560,36 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
                           << " returns tainted value\n");
       }
+
+      // Apply the callee's memory-effects (mod-set): what secret it may have
+      // written into caller-visible memory. This is the callee->caller-through-
+      // memory transfer. Applied unconditionally — the summary is context-
+      // insensitive (computed over the callee's joined tainted-arg set), so a
+      // call site not passing the taint is over-approximated, the sound way.
+      const FunctionMemEffects &ME = Summary.MemEffects;
+      for (const GlobalVariable *GV : ME.WritesSecretToGlobal)
+        S.setTaintedWholeGlobal(GV);
+      if (ME.WritesSecretToUnknown) {
+        S.setExternalMemClobbered();
+        LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
+                          << " writes secret to unknown memory (mod-set TOP)\n");
+      }
     } else {
-      // Conservative: External function or indirect call
-      // If any argument register is tainted, assume return is tainted.
+      // External declaration or indirect call: the analysis cannot see what it
+      // does to memory. If it receives a secret (in any argument register),
+      // assume TOP — it may have written that secret anywhere caller-visible.
+      // This is blunt-TOP P0; a libc model table and IR memory(...) attributes
+      // would refine it (research §11 vii/viii), deferred pending measurement.
       if (HasTaintedArg) {
         taintCallResultDefs(MI, S, TRI);
+        S.setExternalMemClobbered();
         if (Callee)
           LLVM_DEBUG(dbgs() << "        conservative: external call to "
-                            << Callee->getName() << " taints return\n");
+                            << Callee->getName()
+                            << " taints return + clobbers memory (TOP)\n");
         else
-          LLVM_DEBUG(dbgs()
-                     << "        conservative: indirect call taints return\n");
+          LLVM_DEBUG(dbgs() << "        conservative: indirect call taints "
+                               "return + clobbers memory (TOP)\n");
       }
     }
   }
@@ -587,7 +620,15 @@ bool llvm::isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F) {
   bool IsMemAccess = MI.mayLoad() || MI.mayStore();
   bool LoadsSecretPointee = MI.mayLoad() && F.UsesPointee;
   bool AddressSensitive = IsMemAccess && (F.UsesAddress || F.UsesData);
-  return F.UsesData || F.DefsData || LoadsSecretPointee || AddressSensitive;
+  // A call that hands a secret to its callee must run with DIT enabled so the
+  // callee inherits it (Scenario B, taint_dit_placement.md G3). A data-carrying
+  // call is already covered by F.UsesData; a call that passes only a *pointer to
+  // secret memory* (e.g. memcpy(dst, secret_src, n), where the pointer value is
+  // public but its pointee is secret) is not, and would otherwise leave the
+  // enclosing function uninstrumented — so the callee would run with DIT off.
+  bool PassesPointeeSecretToCall = MI.isCall() && F.UsesPointee;
+  return F.UsesData || F.DefsData || LoadsSecretPointee || AddressSensitive ||
+         PassesPointeeSecretToCall;
 }
 
 // Public: declared in TaintAnalysis.h — the single replay used by every
@@ -705,6 +746,73 @@ bool llvm::functionHasTaintedRuns(MachineFunction &MF, const TaintResult &TR,
                                   const TaintSummaryInfo *TSI, AAResults *AA) {
   unsigned TaintedInstrCount = 0;
   return !collectTaintedRuns(MF, TR, TSI, TaintedInstrCount, AA).empty();
+}
+
+FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
+                                                   const TaintResult &TR,
+                                                   const TaintSummaryInfo *TSI,
+                                                   AAResults *AA) {
+  FunctionMemEffects ME;
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // Transitive re-export (Post: reads the state LEAVING each instruction). A
+  // callee this function calls may itself write a secret into caller-visible
+  // memory; that effect lands in this function's state as ExternalMemClobbered
+  // and/or inherited whole-tainted globals, and must be re-exported so it
+  // survives more than one call level. Reading the *leaving* state is required
+  // for a tail call: it sets the clobber in its own post-state and has no
+  // successor instruction whose entering state could observe it.
+  auto reexport = [&](MachineInstr &, const TaintFacts &, const TaintState &S) {
+    if (S.isExternalMemClobbered())
+      ME.WritesSecretToUnknown = true;
+    for (const GlobalVariable *GV : S.wholeTaintedGlobals())
+      ME.WritesSecretToGlobal.insert(GV);
+    return true;
+  };
+
+  // Read the state ENTERING each store (store-data taint is a use of the
+  // incoming state), classify the destination, and record only what is
+  // visible to the caller. Every case the analysis cannot pin down goes to
+  // WritesSecretToUnknown (TOP), the sound direction for a hardener.
+  replayTaint(
+      MF, TR, TSI, AA, /*Post=*/reexport,
+      [&](MachineInstr &MI, const TaintState &S) {
+        if (!MI.mayStore())
+          return true;
+        if (!anyTaintedStoreDataRegUse(TaintKind::Data, MI, S) &&
+            !anyTaintedStoreDataRegUse(TaintKind::Pointee, MI, S))
+          return true;
+
+        if (MI.memoperands_empty()) {
+          ME.WritesSecretToUnknown = true; // unknown destination
+          return true;
+        }
+        for (MachineMemOperand *MMO : MI.memoperands()) {
+          if (!MMO) {
+            ME.WritesSecretToUnknown = true;
+            continue;
+          }
+          CellInfo CI = getCellFromMMO(*MMO);
+          if (CI.K == CellInfo::Stack) {
+            // A non-fixed frame object is this function's own private stack —
+            // the caller cannot see it, so it is NOT a caller-visible effect.
+            // A fixed object is an incoming stack/byval argument slot, which
+            // the caller CAN see; blunt P0 maps that to TOP (mapping it to the
+            // specific argument is the provenance-based P1 refinement).
+            if (MFI.isFixedObjectIndex(CI.FI))
+              ME.WritesSecretToUnknown = true;
+          } else if (CI.K == CellInfo::Global) {
+            ME.WritesSecretToGlobal.insert(CI.GV);
+          } else {
+            // Unknown/heap — includes a store through a pointer argument, which
+            // is the canonical callee->caller-through-memory write.
+            ME.WritesSecretToUnknown = true;
+          }
+        }
+        return true;
+      });
+
+  return ME;
 }
 
 static void printTaintedRuns(MachineFunction &MF,

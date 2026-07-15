@@ -1,0 +1,193 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s
+
+# Callee->caller taint through memory (the mod-set / FunctionMemEffects fix).
+#
+# A callee that writes a secret into caller-visible memory used to leave the
+# caller's reload untainted, so no DIT region covered it (the open unsoundness;
+# repro playground/callee_memory_gap.c). The blunt-TOP P0 fix: a call that
+# receives a secret and whose callee may write to unknown memory (external decl,
+# indirect target, or an in-TU callee that stores through a pointer) sets
+# ExternalMemClobbered, so every subsequent stack/heap/global load in the caller
+# is treated as secret. The reload therefore lands inside DIT coverage and the
+# function is instrumented.
+#
+# 26 is the PSTATE.DIT pstatefield encoding.
+# (Functions are checked in emission order: via_pointee_ext, via_ext_memory,
+# via_intu_memory, no_secret_ext.)
+
+# via_pointee_ext: the POINTEE case. The argument is a pointer whose *pointee* is
+# secret (tainted-pointee), passed to an external callee — the memcpy(dst,
+# secret_src, n) shape. The pointer value itself is not data-tainted, so a
+# data-only taint check would (a) skip the TOP mem-clobber (reload leaks) and
+# (b) leave the function uninstrumented, which made the Scenario-B audit
+# assert(false) ABORT the compiler. Both are fixed: the pointee-carrying call is
+# a tainted instruction (function instrumented) and sets ExternalMemClobbered
+# (reload tainted). This test aborts llc on any build with the pre-fix data-only
+# checks.
+# CHECK-LABEL: name: via_pointee_ext
+# CHECK: MSRpstateImm4 26, 1
+# CHECK: BL @ext_copy2
+# CHECK: LDRWui
+# CHECK: MSRpstateImm4 26, 0
+
+# via_ext_memory: secret passed to an EXTERNAL callee, then a stack reload.
+# The reload is now tainted (TOP), so the function is DIT-instrumented.
+# CHECK-LABEL: name: via_ext_memory
+# CHECK: MSRpstateImm4 26, 1
+# CHECK: BL @ext_copy
+# CHECK: LDRWui
+# CHECK: MSRpstateImm4 26, 0
+# CHECK-NEXT: RET_ReallyLR
+
+# via_intu_memory: secret passed to an IN-TU callee (intu_copy) that stores it
+# through its pointer argument. Its mod-set carries WritesSecretToUnknown, so
+# the caller's reload is tainted and the function is instrumented.
+# CHECK-LABEL: name: via_intu_memory
+# CHECK: MSRpstateImm4 26, 1
+# CHECK: BL @intu_copy
+# CHECK: LDRWui
+# CHECK: MSRpstateImm4 26, 0
+
+# no_secret_ext: NEGATIVE control. Same shape as via_ext_memory but the argument
+# passed to the external callee is PUBLIC. No secret escapes, so TOP does not
+# fire, the reload stays clean, and the function is NOT instrumented. This is the
+# test that fails if the fix over-approximates every external call to TOP.
+# CHECK-LABEL: name: no_secret_ext
+# CHECK-NOT: MSRpstateImm4
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  declare void @ext_copy(ptr, i32)
+  declare void @ext_copy2(ptr, ptr)
+
+  define void @intu_copy(ptr %dst, i32 %secret) {
+  entry:
+    store i32 %secret, ptr %dst, align 4
+    ret void
+  }
+
+  define i32 @via_pointee_ext(ptr "tainted-pointee" %src) {
+  entry:
+    %buf = alloca i32, align 4
+    call void @ext_copy2(ptr %buf, ptr %src)
+    %v = load i32, ptr %buf, align 4
+    ret i32 %v
+  }
+
+  define i32 @via_ext_memory(i32 "tainted" %secret) {
+  entry:
+    %buf = alloca i32, align 4
+    call void @ext_copy(ptr %buf, i32 %secret)
+    %v = load i32, ptr %buf, align 4
+    ret i32 %v
+  }
+
+  define i32 @via_intu_memory(i32 "tainted" %secret) {
+  entry:
+    %buf = alloca i32, align 4
+    call void @intu_copy(ptr %buf, i32 %secret)
+    %v = load i32, ptr %buf, align 4
+    ret i32 %v
+  }
+
+  define i32 @no_secret_ext(i32 %public) {
+  entry:
+    %buf = alloca i32, align 4
+    call void @ext_copy(ptr %buf, i32 %public)
+    %v = load i32, ptr %buf, align 4
+    ret i32 %v
+  }
+
+...
+---
+name:            intu_copy
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$w1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $w1
+
+    STRWui killed $w1, killed $x0, 0 :: (store (s32) into %ir.dst)
+    RET_ReallyLR
+
+...
+---
+name:            via_pointee_ext
+tracksRegLiveness: true
+isSSA:           false
+stack:
+  - { id: 0, name: buf, offset: 0, size: 4, alignment: 4 }
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    $x1 = COPY $x0
+    $x0 = ADDXri %stack.0.buf, 0, 0
+    BL @ext_copy2, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit killed $x1
+    renamable $w0 = LDRWui %stack.0.buf, 0 :: (load (s32) from %ir.buf)
+    RET_ReallyLR implicit killed $w0
+
+...
+---
+name:            via_ext_memory
+tracksRegLiveness: true
+isSSA:           false
+stack:
+  - { id: 0, name: buf, offset: 0, size: 4, alignment: 4 }
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    $w1 = COPY $w0
+    $x0 = ADDXri %stack.0.buf, 0, 0
+    BL @ext_copy, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit killed $w1
+    renamable $w0 = LDRWui %stack.0.buf, 0 :: (load (s32) from %ir.buf)
+    RET_ReallyLR implicit killed $w0
+
+...
+---
+name:            via_intu_memory
+tracksRegLiveness: true
+isSSA:           false
+stack:
+  - { id: 0, name: buf, offset: 0, size: 4, alignment: 4 }
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    $w1 = COPY $w0
+    $x0 = ADDXri %stack.0.buf, 0, 0
+    BL @intu_copy, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit killed $w1
+    renamable $w0 = LDRWui %stack.0.buf, 0 :: (load (s32) from %ir.buf)
+    RET_ReallyLR implicit killed $w0
+
+...
+---
+name:            no_secret_ext
+tracksRegLiveness: true
+isSSA:           false
+stack:
+  - { id: 0, name: buf, offset: 0, size: 4, alignment: 4 }
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    $w1 = COPY $w0
+    $x0 = ADDXri %stack.0.buf, 0, 0
+    BL @ext_copy, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit killed $w1
+    renamable $w0 = LDRWui %stack.0.buf, 0 :: (load (s32) from %ir.buf)
+    RET_ReallyLR implicit killed $w0
+
+...
