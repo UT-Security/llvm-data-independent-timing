@@ -22,17 +22,98 @@ work is the mitigation for exactly this class of leak. Complements
 
 **The thesis is well-grounded in mechanism, but no single source makes the exact
 "LVP reopens Firefox's integer convolution" argument end to end.** It is a valid
-synthesis of three separate, individually-verified literatures. The load-bearing
-final step — *a value-predicting or early-out integer multiplier makes the
-pixel-value multiply data-dependent again, reopening the exact channel* — is
-**sound in mechanism but not demonstrated by anyone**. That gap is itself the
-most interesting result: it is a publishable, buildable "we did the thing the
-literature only hypothesized" opportunity, and this project is the tool to do it.
+synthesis of separate, individually-verified literatures. The load-bearing final
+step — *a value-predicting load makes the pixel-value-dependent load timing depend
+on the secret again, reopening the channel* — is **sound in mechanism but not
+demonstrated on the convolution**. That gap is the interesting result: a
+publishable, buildable "we did the thing the literature only hypothesized"
+opportunity, and this project is the tool to do it. **Crucially, the hypothesized
+hardware is no longer hypothetical: the Apple M4 has a Load Value Predictor and
+DIT disables it — see the FLOP/SLAP section immediately below.**
 
 The one place the thesis's *shape* is already **demonstrated on real hardware,
 non-crypto**: **THOR / Intel AMX** (see catalog #2). That is the existence proof
 that operand-value-dependent latency in a general arithmetic unit leaks private
 application data today.
+
+---
+
+## ★ FLOP / SLAP (2025): the Apple LVP is real, it's on the M4, and DIT disables it
+
+Added 2026-07-15 after reading both papers (predictors.fail). **This is the
+strongest possible validation of the project — it puts the exact predictor the
+thesis needs on the exact hardware we develop on, with DIT as the named
+mitigation.** Papers:
+
+- **FLOP** — Kim, Chuang, Genkin, Yarom, *Breaking the Apple M3 CPU via False
+  Load Output Predictions*, USENIX Security 2025. The **Load Value Predictor (LVP)**.
+- **SLAP** — Kim, Genkin, Yarom, *Data Speculation Attacks via Load Address
+  Prediction on Apple Silicon*, IEEE S&P 2025. The **Load Address Predictor (LAP)** —
+  address, not value; closer to our address-taint / §G2 territory than to the core
+  value-timing thesis. Present on M2/A15+.
+
+What FLOP establishes (quotes verbatim from the PDF):
+
+1. **The M4 has an LVP.** Table 1: present on **M3, M4, A17 Pro**; absent on M2,
+   A15, A16. *"Apple's M3, M4, and A17 Pro CPUs all optimize RAW dependencies via
+   a load value predictor (LVP)."*
+2. **It is a NON-speculative, data-value-dependent TIMING channel** — our exact
+   threat model, no Spectre gadget needed. §4.1: *"the M3 CPU runs drastically
+   faster when the data stored in our memory addresses is a constant, compared to
+   when it is randomly generated"* — **~2× at 500 iterations**. Mechanism: the LVP
+   predicts a load's value when it has been **constant**, forwarding it to
+   dependent instructions instead of waiting for the (cache-missing) load — so
+   load-dependent timing becomes a function of the loaded **value's**
+   predictability. Activation (§4.2): trains on **constants** (not strides),
+   per-**instruction-address** (≤72 sites), ~40 iterations to engage,
+   **4-byte-and-smaller** loads (8-byte only when the value is 0). Loop unrolling
+   defeats it (each load site runs once).
+3. **DIT disables the LVP.** §7, verbatim: *"We repeat the experiments of Section
+   4.1, setting the DIT bit before running any instructions. On the M3 CPU's
+   P-cores, we no longer observe a speedup on constant load values compared to
+   random load values ... we conclude that setting the DIT bit indeed disables the
+   LVP."* DIT is Armv8.4-A, **unprivileged, per-process, tracked across context
+   switches**. (Also disables the data-memory-dependent prefetcher.)
+4. **FLOP recommends exactly this project, in their words:** *"we recommend that
+   developers patch their software to include DIT on supported platforms,
+   especially for code regions handling secrets or are untrusted."* Region-granular
+   DIT around secret-handling code — what the taint→DIT pass automates.
+5. **The dwell number we were missing, on a real workload.** They patched Safari
+   to set DIT process-wide: **4.5% overhead on Speedometer 3.0** (0.6% on BYTE).
+   This is the *coarse* mitigation's cost on a real browser benchmark.
+
+**Why this reframes the project's contribution:** FLOP/Apple's mitigation is
+**whole-process DIT at 4.5%**. The LVP accelerates *public* predictable-load code
+(RAW-dependency chains over stable/constant values). **Taint-driven fine-grained
+DIT is the cheap version of that mitigation** — it pays the ~4.5% only where
+secrets flow and preserves the LVP everywhere else. This is the concrete
+fine-grain-necessary argument the whole "why not just wrap the module" objection
+needed, now backed by a shipping, exploited predictor.
+
+**Honest nuance (speculative vs timing).** FLOP's *own attack* exploits the LVP
+through **speculation** (mispredict → transient type confusion → cache leak) —
+Spectre-class, and **out of this project's scope**. But the LVP creates *two*
+channels: (a) that speculative one, and (b) the non-speculative value-dependent
+timing of §4.1, which **is** our threat model. DIT closes both; the project's
+claim rests on (b), with shutting the misprediction window in covered regions as a
+bonus against (a). Note also: the **macOS kernel does not set DIT** (LVP enabled
+there) — §7.
+
+**Firefox-thesis connection.** The LVP is the concrete mechanism that reopens the
+integer-convolution channel: secret pixel values that are constant vs varying →
+predicted vs not → different load-dependent render timing, on the *integer* code.
+FLOP proved the LVP exists on M4 and creates the timing difference; it did not
+demonstrate it on convolution (they did the speculative exploit instead) — so the
+"reopen the integer pixel channel via the LVP timing side" demonstration remains
+open, and is now buildable on this M4.
+
+**On-M4 measurements (in flight, `playground/dit_bench/`):** reproduce FLOP §4.1
+(constant vs random load timing), confirm DIT erases the speedup, and a fine-grain
+intermix demo (public LVP-friendly loads + secret arithmetic, three placements).
+Results to be appended here.
+
+Sources: predictors.fail; FLOP (USENIX Sec'25) predictors.fail/files/FLOP.pdf;
+SLAP (IEEE S&P'25) predictors.fail/files/SLAP.pdf.
 
 ---
 
