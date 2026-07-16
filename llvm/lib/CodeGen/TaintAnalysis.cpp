@@ -1576,38 +1576,60 @@ static void fallbackToFunctionGranularity(MachineFunction &MF,
 
 // Increment (c): the admission test (utils/taint_dit_placement.md §5.6). Given the
 // increment-(b) On/Off block partition, look at each interior Off *corridor* — a
-// maximal connected group of Off blocks flanked by On on both sides (an On->Off
-// disable enters it, an Off->On enable leaves it). Keeping the corridor Off costs
-// a toggle PAIR (~60 serializing cyc) every traversal but saves the DIT dwell over
-// its instructions; keeping it On (merging) pays the dwell but drops the pair.
-// Merge (extend `OnBlocks` over the corridor) iff the pair costs at least the dwell
-// it saves, both weighted by block frequency:
-//   60 * max(freq(disable), freq(enable))  >=  dwell_per_instr * Σ freq(b)*|b|.
-// This is the frequency-aware form of `-taint-region-merge-gap`: cold/long gaps
-// merge, hot/short gaps stay split, and the P≈40-64 crossover falls out of the
-// tunable. Merging only EXTENDS coverage, so it can never leave a Need uncovered —
-// the soundness verifier that runs afterward still passes. Corridors that (a) are
-// only bounded on one side (a leading preamble or trailing epilogue — no toggle
-// PAIR to save) or (b) contain a DIT clobber (a call whose re-assert is a
-// correctness toggle, never a merge candidate) are left Off.
-static void admitOffCorridors(MachineFunction &MF,
+// maximal CFG-connected group of Off blocks flanked by On on both sides — and
+// decide whether keeping it DIT-off is worth the toggle pair that bounds it, or
+// whether to merge it into coverage (extend `OnBlocks` over it). The comparison is
+// made emit-accurately: the placement below puts every switch at a block boundary,
+// so the frequency-weighted count of the switches emit would insert if the corridor
+// is Off vs. On is compared against the DIT dwell over the corridor.
+//
+//   ToggleSaved = c_sw * [ Σ_{b∈C, has On-pred} freq(b)      // disables at b's entry
+//                        + Σ_{s∉C, On-succ of C} freq(s) ]   // enables at s's entry
+//   ToggleAdded = c_sw * [ Σ_{non-term clobber in C} freq(blk)   // re-asserts, and
+//                        + Σ_{b∈C with a return}    freq(b)  ]   // disable-before-ret
+//   merge iff  ToggleSaved - ToggleAdded  >=  dwell_per_instr * Σ_{b∈C} freq(b)*|b|
+//
+// Block (not edge) frequency is the accurate weight here precisely because emit
+// places each switch at a block entry / before a return, so a switch executes at
+// its block's frequency; summing the disable and enable sides (rather than max) and
+// subtracting the re-asserts/disable-before-return that emit inserts *inside* a
+// merged corridor is what keeps region mode from ever costing more toggles than it
+// saves. This is the frequency-aware replacement for the static
+// `-taint-region-merge-gap`: cold/long gaps merge, hot/short gaps stay split, and
+// the P≈40-64 crossover falls out of the tunable. Merging only EXTENDS coverage, so
+// it can never leave a Need uncovered — the soundness verifier still passes.
+// One-sided corridors (a leading preamble or trailing epilogue — no toggle pair to
+// save) are left Off. A clobber inside a corridor no longer disqualifies it: its
+// re-assert is costed in ToggleAdded, so a corridor merges iff it is still a net
+// toggle win.
+static void admitOffCorridors(MachineFunction &MF, Module &M,
                               DenseSet<const MachineBasicBlock *> &OnBlocks,
                               const TaintSummaryInfo *TSI,
                               const MachineLoopInfo &MLI) {
-  Module &M = *const_cast<Module *>(MF.getFunction().getParent());
   auto On = [&](const MachineBasicBlock *B) { return OnBlocks.count(B) != 0; };
+
+  // Nothing to do unless some block is Off — skip the block-frequency dataflow in
+  // the degenerate whole-function-covered case (region == function granularity).
+  if (llvm::all_of(MF, [&](const MachineBasicBlock &B) { return On(&B); }))
+    return;
 
   MachineBranchProbabilityInfo MBPI;
   MachineBlockFrequencyInfo MBFI(MF, MBPI, MLI);
+  auto Freq = [&](const MachineBasicBlock *B) {
+    return MBFI.getBlockFreqRelativeToEntryBlock(B);
+  };
 
-  // Toggling PSTATE.DIT off and back on costs ~2 * ~30 serializing cyc (measured
-  // on M4, utils/taint_dit_cost_model.md).
-  constexpr double TogglePairCyc = 60.0;
+  // Each MSR DIT switch is a single serializing toggle (~30 cyc, measured on M4;
+  // utils/taint_dit_cost_model.md).
+  constexpr double SwitchCyc = 30.0;
 
   // Partition the Off blocks into maximal CFG-connected components. Two Off blocks
   // that are CFG-adjacent are in the same component, so distinct components are
-  // never adjacent — evaluating each against the original On/Off partition and
-  // extending OnBlocks afterward is order-independent.
+  // never adjacent — and every Off neighbor of a corridor block is in the same
+  // corridor, so merging a corridor removes exactly its On<->corridor boundary
+  // switches (no new On->Off boundary is created downstream). Evaluating each
+  // component against the original On/Off partition and extending OnBlocks
+  // afterward is order-independent.
   SmallPtrSet<const MachineBasicBlock *, 16> Seen;
   SmallVector<SmallVector<const MachineBasicBlock *, 8>, 8> ToMerge;
   for (MachineBasicBlock &Root : MF) {
@@ -1629,40 +1651,50 @@ static void admitOffCorridors(MachineFunction &MF,
         flood(P);
     }
 
-    // Classify the corridor and accumulate its cost terms.
-    bool EntryDisable = false, ExitEnable = false, HasClobber = false;
-    double FreqDisable = 0.0, FreqEnable = 0.0, Dwell = 0.0;
+    // Switches removed by merging (the On<->corridor boundary), and switches added
+    // inside the now-covered corridor (re-asserts after clobbers, disables before
+    // returns) — mirroring exactly what the emit loop below inserts.
+    bool HasOnPred = false, HasOnSucc = false;
+    double SavedFreq = 0.0, AddedFreq = 0.0, Dwell = 0.0;
+    SmallPtrSet<const MachineBasicBlock *, 8> OnSuccs;
     for (const MachineBasicBlock *B : Comp) {
-      double Fb = MBFI.getBlockFreqRelativeToEntryBlock(B);
+      double Fb = Freq(B);
       unsigned NumReal = 0;
+      bool HasReturn = false;
       for (const MachineInstr &MI : *B) {
         if (!MI.isMetaInstruction())
           ++NumReal;
-        if (clobbersDIT(MI, TSI, M))
-          HasClobber = true;
+        if (clobbersDIT(MI, TSI, M) && !MI.isTerminator())
+          AddedFreq += Fb; // emit re-asserts DIT after this clobber
+        if (MI.isReturn())
+          HasReturn = true;
       }
+      if (HasReturn)
+        AddedFreq += Fb; // emit disables DIT before the block's return
       Dwell += Fb * NumReal;
       if (llvm::any_of(B->predecessors(), On)) {
-        EntryDisable = true;
-        FreqDisable += Fb;
+        HasOnPred = true;
+        SavedFreq += Fb; // emit's disable at this block's entry disappears
       }
-      if (llvm::any_of(B->successors(), On)) {
-        ExitEnable = true;
-        FreqEnable += Fb;
-      }
+      for (const MachineBasicBlock *S : B->successors())
+        if (On(S))
+          OnSuccs.insert(S); // emit's enable at S's entry disappears
     }
+    HasOnSucc = !OnSuccs.empty();
+    for (const MachineBasicBlock *S : OnSuccs)
+      SavedFreq += Freq(S);
 
-    // Only an interior corridor (a toggle pair to save) with no clobber qualifies.
-    if (!EntryDisable || !ExitEnable || HasClobber)
+    // Only an interior corridor (an actual toggle pair to save) qualifies.
+    if (!HasOnPred || !HasOnSucc)
       continue;
 
-    double ToggleSaved = TogglePairCyc * std::max(FreqDisable, FreqEnable);
-    double DwellSaved = TaintDitDwellPerInstr * Dwell;
+    double ToggleNet = SwitchCyc * (SavedFreq - AddedFreq);
+    double DwellCost = TaintDitDwellPerInstr * Dwell;
     LLVM_DEBUG(dbgs() << "  admission corridor in " << MF.getName() << ": "
-                      << Comp.size() << " blk, toggle=" << ToggleSaved
-                      << " dwell=" << DwellSaved
-                      << (ToggleSaved >= DwellSaved ? " => MERGE\n" : " => split\n"));
-    if (ToggleSaved >= DwellSaved)
+                      << Comp.size() << " blk, toggleNet=" << ToggleNet
+                      << " dwell=" << DwellCost
+                      << (ToggleNet >= DwellCost ? " => MERGE\n" : " => split\n"));
+    if (ToggleNet >= DwellCost)
       ToMerge.push_back(std::move(Comp));
   }
 
@@ -1734,7 +1766,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   // only EXTENDS OnBlocks (coverage grows), so every Need stays covered and the
   // soundness verifier below still passes; on a dwell≈0 core it coarsens toward
   // function granularity, on a DIT-sensitive core it stays narrow. §5.6.
-  admitOffCorridors(MF, OnBlocks, TSI, MLI);
+  admitOffCorridors(MF, M, OnBlocks, TSI, MLI);
 
   auto On = [&](const MachineBasicBlock *B) { return OnBlocks.count(B) != 0; };
 

@@ -544,7 +544,7 @@ non-convergence (mitigate: VSETVLI worklist pattern); the Need-gate must match
 | G2 ✅ done (Track C) | `isDITProtected` membership hook + `-taint-uncovered-report` (`classifyDITUncovered`) | closes G2 (no false assurance) |
 | B(a) ✅ done | region placement scaffold behind `-taint-dit-placement=region`; Need set + soundness verifier + graceful fallback | machinery; narrows trailing epilogue |
 | B(b) ✅ done | loop-aware `On(b)` placement: preamble excluded, enable hoisted to loop preheader / multi-entry pred edges; irreducible→fallback | the dwell win (convolve: 67-instr preamble now DIT-off, no per-iteration toggle) |
-| B(c) ✅ done | admission test (`admitOffCorridors`): merge an interior Off corridor between two On regions when `60·max(freq(disable),freq(enable)) ≥ dwell_per_instr·Σ freq(b)·\|b\|` (MBFI-weighted); tunable `-taint-dit-dwell-per-instr` (default 1.0 ⇒ ~60-instr static crossover). Purely a perf optimization — merging only EXTENDS `OnBlocks`, so it CANNOT leak (verifier always passes). On a dwell≈0 core it coarsens toward function granularity; on DIT-sensitive cores it stays narrow. | cost-model-driven placement |
+| B(c) ✅ done | admission test (`admitOffCorridors`): merge an interior Off corridor between two On regions when the **emit-accurate net toggle saving** beats the dwell — `c_sw·(Σ removed boundary switches − Σ re-asserts/disable-before-return emit adds inside the merged corridor) ≥ dwell_per_instr·Σ freq(b)·\|b\|`, all MBFI block-frequency weighted; tunable `-taint-dit-dwell-per-instr` (default 1.0 ⇒ ~60-instr static crossover). Purely a perf optimization — merging only EXTENDS `OnBlocks`, so it CANNOT leak (verifier always passes). On a dwell≈0 core it coarsens toward function granularity; on DIT-sensitive cores it stays narrow. | cost-model-driven placement |
 | **B(d) ← NEXT** | `EntryDIT` summary (coupled greatest fixed point with placement), entry/exit toggle elision for internal tainted chains; fixes the deferred residual-only-callee `PreservesDIT` spurious re-assert | P1 interior-zero-toggle perf |
 
 **Current impl state (2026-07-16):** all of the above through B(c) are committed and
@@ -559,15 +559,38 @@ B(a): tail-call crash; B(b): EH-label/irreducible/multi-entry) — all fixed.
 increment-(b) `OnBlocks` partition (`admitOffCorridors` in `TaintAnalysis.cpp`), not
 a rewrite of emitted `MSR` instructions: it floods the Off blocks into maximal
 CFG-connected corridors, and for each *interior* corridor (has both an On-pred edge
-= a real disable and an On-succ edge = a real enable) with no DIT clobber inside,
-compares the bounding toggle-pair cost against the frequency-weighted dwell and, if
-merging wins, folds the corridor's blocks into `OnBlocks` before the existing sound
-emit + verify run. Because it only grows coverage, the single sound emit path and
-the verifier are reused unchanged. Leading preambles / trailing epilogues (bounded
-on one side only — no pair to save) and clobber-bearing corridors are never merged.
-`-taint-region-merge-gap` still feeds the *report* files (per `CLAUDE.md`) but no
-longer has any bearing on placement; `-taint-dit-dwell-per-instr` is its
-frequency-aware placement replacement (set it very large to recover pure (b)).
+= a real disable and an On-succ edge = a real enable) it compares the **net** toggle
+change against the frequency-weighted dwell and, if merging wins, folds the
+corridor's blocks into `OnBlocks` before the existing sound emit + verify run.
+Because it only grows coverage, the single sound emit path and the verifier are
+reused unchanged. Leading preambles / trailing epilogues (bounded on one side only —
+no pair to save) are never merged. `-taint-region-merge-gap` still feeds the *report*
+files (per `CLAUDE.md`) but no longer has any bearing on placement;
+`-taint-dit-dwell-per-instr` is its frequency-aware placement replacement (set it
+very large to recover pure (b)).
+
+*Cost model — emit-accurate (post-review, 2026-07-16).* The first cut scored a
+corridor as `60·max(freq(disable),freq(enable))` and blanket-refused any corridor
+containing a clobber. A `/code-review high` found (no soundness bugs — every defect
+was safe-direction over-approximation, but) a cluster of *precision* defects that
+could make region mode emit **more** toggles than it saves (defeating the feature):
+`max` instead of summing the two boundary sides over-credited savings; a single
+clobber anywhere in a flooded component vetoed the whole merge; and the model never
+counted the re-asserts / disable-before-return that emit inserts *inside* a merged
+corridor. Fixed by scoring exactly what emit does — every switch sits at a block
+boundary, so block (not edge) frequency is the true per-switch cost:
+`ToggleNet = c_sw·[ Σ_{b∈C,On-pred} freq(b) + Σ_{s∉C,On-succ of C} freq(s) − Σ_{non-term clobber∈C} freq(blk) − Σ_{b∈C w/ return} freq(b) ]`,
+merge iff `ToggleNet ≥ dwell_per_instr·Σ freq(b)·|b|`. A clobber-bearing corridor is
+now a *decision* (its re-assert is costed), not a veto — it merges only when still a
+net win, which the flood guarantees is well-defined because every Off neighbor of a
+corridor block is in the same corridor (merging removes exactly the On↔corridor
+boundary switches, creating no new downstream On→Off boundary). Tests
+`@clobber_corridor` (merge at dwell=0 with a re-assert after the `BL`, split at
+dwell=1000) and `@corridor` (straight-line crossover) lock this in. **Known residual
+coarseness (not a bug, deferred):** the flood is one aggregate verdict per connected
+Off region, so a region mixing a hot-short sub-gap and a cold-long sub-region gets a
+single merge/split answer; the block-frequency weighting makes the hot part dominate
+correctly, but true per-sub-gap decisions would need to decompose the component.
 
 ---
 

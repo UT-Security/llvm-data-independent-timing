@@ -33,10 +33,41 @@
 # SPLIT: MSRpstateImm4 26, 0
 # SPLIT-NEXT: RET_ReallyLR
 
+# @clobber_corridor — the corridor (bb.1) contains a non-preserving external call
+# (BL @ext, a DIT clobber) between two Needs (bb.0/bb.2 tainted ADDs; the secret
+# survives the call in callee-saved $w19). A clobber no longer blanket-disqualifies
+# a corridor from merging (that was the increment (c) review's finding [0]): its
+# re-assert is COSTED, so the merge is a decision, not a veto. Merging still saves a
+# net toggle here (removes the entry disable + exit enable, adds one re-assert), so
+# at dwell=0 the corridor merges — DIT is NOT disabled before the BL, and a re-assert
+# MSR DIT #1 lands right AFTER it (soundness: the callee may clear DIT). At dwell=1000
+# the corridor splits — DIT is disabled at bb.1's entry, before the BL. Either way
+# the soundness verifier passes (bb.2's Need stays covered).
+# MERGE-LABEL: name: clobber_corridor
+# MERGE: MSRpstateImm4 26, 1
+# MERGE: BL @ext
+# MERGE-NEXT: MSRpstateImm4 26, 1
+# MERGE: MSRpstateImm4 26, 0
+# MERGE-NEXT: RET_ReallyLR
+
+# SPLIT-LABEL: name: clobber_corridor
+# SPLIT: MSRpstateImm4 26, 1
+# SPLIT: MSRpstateImm4 26, 0
+# SPLIT-NEXT: BL @ext
+# SPLIT: MSRpstateImm4 26, 1
+# SPLIT: MSRpstateImm4 26, 0
+# SPLIT-NEXT: RET_ReallyLR
+
 --- |
   target triple = "aarch64-unknown-linux-gnu"
 
+  declare void @ext()
+
   define i32 @corridor(i32 "tainted" %s, i32 %p) {
+    ret i32 0
+  }
+
+  define i32 @clobber_corridor(i32 "tainted" %s) {
     ret i32 0
   }
 
@@ -70,6 +101,35 @@ body:             |
     liveins: $w0, $w1
 
     renamable $w0 = ADDWri killed renamable $w0, 1, 0
+    RET_ReallyLR implicit $w0
+
+...
+---
+name:            clobber_corridor
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0:
+    successors: %bb.1
+    liveins: $w0
+
+    renamable $w19 = ORRWrs $wzr, killed renamable $w0, 0
+    renamable $w19 = ADDWri renamable $w19, 1, 0
+    B %bb.1
+
+  bb.1:
+    successors: %bb.2
+    liveins: $w19
+
+    BL @ext, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp
+    B %bb.2
+
+  bb.2:
+    liveins: $w19
+
+    renamable $w0 = ADDWri killed renamable $w19, 1, 0
     RET_ReallyLR implicit $w0
 
 ...
