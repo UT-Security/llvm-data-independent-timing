@@ -401,6 +401,30 @@ missed. Corrected objective and staging:
   excluded and the real dwell win lands.
 - (c) admission-merge, (d) interproc — unchanged.
 
+**(b) as implemented (2026-07-16) — the `On(b)` set, simpler than a general
+lateness dataflow but capturing the two wins directly.** Rather than the LCM
+latest pass, (b) defines the DIT-on block set as
+```
+On(b) = HasNeed(b)  OR  (b is in a loop that (transitively) contains a Need)
+```
+computed from a locally-built `MachineLoopInfo` (`MachineDominatorTree MDT(MF);
+MachineLoopInfo MLI(MDT)` — no MFAM plumbing). Two consequences:
+- **Preamble excluded:** a clean preamble block (no need, not in a need-loop) is
+  Off, so DIT is not enabled over it — the (a) gap closed.
+- **Loop-hoist for free:** the *whole* outermost need-loop is On, so the Off→On
+  boundary is the loop *preheader*, and the enable is placed at the preheader's
+  end (executed once) — never at the loop header (which the backedge re-enters
+  every iteration). Loop nests hoist to the outermost preheader because a need in
+  an inner loop marks every enclosing loop as a need-loop.
+Emit: enable at each Off→On boundary (hoisted to the preheader when the On-entry
+is a loop header); disable at each On→Off boundary (the Off side is a loop exit,
+outside the loop, so entered once — no hoist needed); re-assert after non-
+terminator clobbers; the (a) return/tail-call rules unchanged. A need-loop
+lacking a preheader (can't hoist ⇒ would be per-iteration) triggers the graceful
+fallback to function granularity for that function. The soundness verifier
+(unchanged) validates every emit. This replaces (a)'s anticipation region; it
+degenerates identically on loop-free code, so (a)'s tests still hold.
+
 Everything below is the base structure; apply the two corrections above to it.
 
 (`AArch64SMEPeepholeOpt` gives the local pair-cancellation intuition for the

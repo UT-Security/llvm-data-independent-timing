@@ -53,6 +53,21 @@
 # REGION-NEXT: TCRETURNdi @ext
 # REGION-NOT: MSRpstateImm4 26, 0
 
+# @loop_hoist — increment (b): a Need inside a loop, behind a clean preamble.
+# Region mode leaves the preamble (bb.0, bb.1 body) DIT-OFF, HOISTS the enable to
+# the loop preheader (bb.1's terminator), keeps NO enable inside the loop body
+# (bb.2, so no per-iteration toggle), and disables at the loop exit (bb.3).
+# Function mode would put DIT on at entry, covering the whole preamble.
+# REGION-LABEL: name: loop_hoist
+# REGION: bb.0
+# REGION-NOT: MSRpstateImm4
+# REGION: bb.1
+# REGION: MSRpstateImm4 26, 1
+# REGION: bb.2
+# REGION-NOT: MSRpstateImm4 26, 1
+# REGION: bb.3
+# REGION: MSRpstateImm4 26, 0
+
 --- |
   target triple = "aarch64-unknown-linux-gnu"
 
@@ -67,6 +82,10 @@
   declare i32 @ext(i32)
 
   define i32 @tailcall_secret(i32 "tainted" %s) {
+    ret i32 0
+  }
+
+  define i32 @loop_hoist(i32 "tainted" %s, i32 %n) {
     ret i32 0
   }
 
@@ -125,5 +144,41 @@ body:             |
     liveins: $w0
 
     TCRETURNdi @ext, 0, csr_aarch64_aapcs, implicit $sp, implicit $w0
+
+...
+---
+name:            loop_hoist
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+  - { reg: '$w1' }
+body:             |
+  bb.0:
+    successors: %bb.1
+    liveins: $w0, $w1
+
+    renamable $w2 = ADDWri renamable $w1, 5, 0
+    B %bb.1
+
+  bb.1:
+    successors: %bb.2
+    liveins: $w0, $w1
+
+    renamable $w3 = ADDWri renamable $w1, 6, 0
+    B %bb.2
+
+  bb.2:
+    successors: %bb.2, %bb.3
+    liveins: $w0, $w1
+
+    renamable $w0 = ADDWri killed renamable $w0, 1, 0
+    CBNZW renamable $w1, %bb.2
+    B %bb.3
+
+  bb.3:
+    liveins: $w0
+
+    RET_ReallyLR implicit $w0
 
 ...

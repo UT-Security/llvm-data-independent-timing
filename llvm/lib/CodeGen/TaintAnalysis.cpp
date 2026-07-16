@@ -17,8 +17,10 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachinePassManager.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
@@ -1529,44 +1531,66 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   if (NeedCount == 0)
     return 0;
 
-  // Anticipation (backward, AND-meet, greatest fixed point → init true):
-  //   ANTIN[b] = HasNeed[b] || (∧_{s∈succ} ANTIN[s]);  no succ ⇒ ANTOUT=false.
-  DenseMap<const MachineBasicBlock *, bool> ANTIN;
-  for (MachineBasicBlock &MBB : MF)
-    ANTIN[&MBB] = true;
-  bool Changed = true;
-  while (Changed) {
-    Changed = false;
-    for (MachineBasicBlock &MBB : MF) {
-      bool AntOut = !MBB.succ_empty();
-      for (MachineBasicBlock *S : MBB.successors())
-        AntOut &= ANTIN[S];
-      bool AntIn = HasNeed.lookup(&MBB) || AntOut;
-      if (AntIn != ANTIN[&MBB]) {
-        ANTIN[&MBB] = AntIn;
-        Changed = true;
-      }
-    }
-  }
+  // Increment (b): loop-aware DIT-on block set (utils/taint_dit_placement.md
+  // §5.6). On(b) = HasNeed(b) OR b is in a loop that (transitively) contains a
+  // Need. This excludes a clean preamble (Off) and makes the WHOLE outermost
+  // need-loop On, so the Off→On boundary is the loop preheader (enable executed
+  // once) rather than the loop header (re-entered every iteration by the
+  // backedge). Loop info is built locally — no MFAM plumbing needed here.
+  MachineDominatorTree MDT(MF);
+  MachineLoopInfo MLI(MDT);
 
-  // Emit. Enable on entering an anticipated block whose incoming DIT is off
-  // (some predecessor is unanticipated, or it is the entry block); re-assert
-  // after each clobber inside an anticipated block; disable before returns and
-  // on entering an unanticipated block from an anticipated predecessor.
+  // Loops that (transitively, via block membership incl. sub-loops) contain a
+  // Need. Marking every loop enclosing a need-block hoists the region to the
+  // outermost need-loop.
+  DenseSet<const MachineLoop *> NeedLoops;
+  for (MachineBasicBlock &MBB : MF)
+    if (HasNeed.lookup(&MBB))
+      for (MachineLoop *L = MLI.getLoopFor(&MBB); L; L = L->getParentLoop())
+        NeedLoops.insert(L);
+  auto On = [&](const MachineBasicBlock *B) -> bool {
+    if (HasNeed.lookup(B))
+      return true;
+    for (MachineLoop *L = MLI.getLoopFor(B); L; L = L->getParentLoop())
+      if (NeedLoops.count(L))
+        return true;
+    return false;
+  };
+
+  // Emit. Enable at each Off→On boundary (hoisted to the preheader when the
+  // On-entry block is a loop header, so the enable is not re-executed on the
+  // backedge); re-assert after non-terminator clobbers; disable before non-Need
+  // returns and on entering an Off block from an On predecessor.
   unsigned Toggles = 0;
+  bool NeedFallback = false;
   for (MachineBasicBlock &MBB : MF) {
-    if (ANTIN[&MBB]) {
+    if (On(&MBB)) {
       bool OnAtEntry = !MBB.pred_empty();
       for (MachineBasicBlock *P : MBB.predecessors())
-        OnAtEntry &= ANTIN[P];
+        OnAtEntry &= On(P);
       if (!OnAtEntry) {
-        TII->insertTimingModeSwitch(MBB, MBB.begin(), DebugLoc(),
-                                    /*Enable=*/true);
+        // Off→On boundary. If MBB is a loop header, hoist the enable to the
+        // preheader (executed once). No unique preheader ⇒ cannot hoist without
+        // an edge split (restricted post-PEI) ⇒ fall back to function
+        // granularity for this function rather than emit a per-iteration toggle.
+        MachineLoop *L = MLI.getLoopFor(&MBB);
+        if (L && L->getHeader() == &MBB) {
+          MachineBasicBlock *PH = L->getLoopPreheader();
+          if (!PH) {
+            NeedFallback = true;
+            break;
+          }
+          TII->insertTimingModeSwitch(*PH, PH->getFirstTerminator(),
+                                      DebugLoc(), /*Enable=*/true);
+        } else {
+          TII->insertTimingModeSwitch(MBB, MBB.begin(), DebugLoc(),
+                                      /*Enable=*/true);
+        }
         ++Toggles;
       }
-      // Re-assert after each clobber that is NOT a terminator. A non-preserving
-      // tail call is a clobber AND a terminator: nothing follows it in this
-      // function, and inserting after a terminator is invalid MIR.
+      // Re-assert after each clobber that is NOT a terminator (a non-preserving
+      // tail call is a clobber AND a terminator: nothing follows it here, and
+      // inserting after a terminator is invalid MIR).
       SmallVector<MachineInstr *, 8> Clobbers;
       for (MachineInstr &MI : MBB)
         if (clobbersDIT(MI, TSI, M) && !MI.isTerminator())
@@ -1576,10 +1600,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                                     C->getDebugLoc(), /*Enable=*/true);
         ++Toggles;
       }
-      // Disable before the block's return — found by scan (it need not be the
-      // last slot; a trailing DBG_VALUE/meta may follow). BUT if the return is
-      // itself a Need (a secret-passing tail call), DIT must stay ON through it
-      // so the callee inherits it (Scenario B) — do not disable.
+      // Disable before the block's return (found by scan — it need not be the
+      // last slot). Skip if the return is itself a Need (a secret-passing tail
+      // call): DIT must stay ON through it so the callee inherits it.
       for (MachineInstr &MI : MBB) {
         if (!MI.isReturn())
           continue;
@@ -1591,15 +1614,33 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
         break;
       }
     } else {
+      // Off block: disable on entering from an On predecessor. An On→Off edge's
+      // Off side is a loop exit (outside the loop), entered once per exit — no
+      // hoisting needed.
       bool AnyPredOn = false;
       for (MachineBasicBlock *P : MBB.predecessors())
-        AnyPredOn |= ANTIN[P];
+        AnyPredOn |= On(P);
       if (AnyPredOn) {
         TII->insertTimingModeSwitch(MBB, MBB.begin(), DebugLoc(),
                                     /*Enable=*/false);
         ++Toggles;
       }
     }
+  }
+
+  if (NeedFallback) {
+    for (MachineBasicBlock &MBB : MF) {
+      SmallVector<MachineInstr *, 8> ToErase;
+      for (MachineInstr &MI : MBB)
+        if (TII->getTimingModeSwitch(MI))
+          ToErase.push_back(&MI);
+      for (MachineInstr *I : ToErase)
+        I->eraseFromParent();
+    }
+    errs() << "taint: DIT region placement: need-loop without a preheader in "
+           << MF.getName() << "; fell back to function granularity\n";
+    emitFunctionGranularityDIT(MF, TSI);
+    return NeedCount;
   }
   LLVM_DEBUG(dbgs() << "  DIT region placement in " << MF.getName() << ": "
                     << Toggles << " toggle(s) over " << NeedCount
@@ -1626,7 +1667,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
     }
     return Cur;
   };
-  Changed = true;
+  bool Changed = true;
   while (Changed) {
     Changed = false;
     for (MachineBasicBlock &MBB : MF) {
