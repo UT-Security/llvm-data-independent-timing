@@ -1501,6 +1501,58 @@ static bool clobbersDIT(const MachineInstr &MI, const TaintSummaryInfo *TSI,
   return !(TSI && Callee && TSI->getSummary(*Callee).PreservesDIT);
 }
 
+// Insertion point at a block's start, PAST leading EH/GC labels, CFI, and debug.
+// A mode switch must not displace a landing-pad EH_LABEL (the exception tables
+// key the landing-pad PC on it) or sit among frame CFI.
+static MachineBasicBlock::iterator
+regionEntryInsertPt(MachineBasicBlock &MBB) {
+  auto It = MBB.begin(), E = MBB.end();
+  while (It != E && (It->isEHLabel() || It->isGCLabel() ||
+                     It->isCFIInstruction() || It->isDebugInstr()))
+    ++It;
+  return It;
+}
+
+// True if MBB lies on a cycle (reachable from one of its own successors). Used
+// to detect an irreducible cycle MachineLoopInfo does not model: a plain
+// begin() enable there would be re-executed every iteration (per-iteration
+// toggle) — such a function falls back to whole-function granularity instead.
+static bool blockInCycle(const MachineBasicBlock *MBB) {
+  SmallPtrSet<const MachineBasicBlock *, 16> Seen;
+  SmallVector<const MachineBasicBlock *, 16> WL(MBB->succ_begin(),
+                                                MBB->succ_end());
+  while (!WL.empty()) {
+    const MachineBasicBlock *B = WL.pop_back_val();
+    if (B == MBB)
+      return true;
+    if (!Seen.insert(B).second)
+      continue;
+    WL.append(B->succ_begin(), B->succ_end());
+  }
+  return false;
+}
+
+// Region placement could not prove/achieve coverage for this function: erase the
+// region switches we inserted (the input had none, so every DIT switch present
+// is ours) and re-emit the always-safe whole-function policy. Never aborts the
+// TU. Shared by the no-hoist and verifier-failure paths.
+static void fallbackToFunctionGranularity(MachineFunction &MF,
+                                          const TaintSummaryInfo *TSI,
+                                          StringRef Reason) {
+  const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+  for (MachineBasicBlock &MBB : MF) {
+    SmallVector<MachineInstr *, 8> ToErase;
+    for (MachineInstr &MI : MBB)
+      if (TII->getTimingModeSwitch(MI))
+        ToErase.push_back(&MI);
+    for (MachineInstr *I : ToErase)
+      I->eraseFromParent();
+  }
+  errs() << "taint: DIT region placement fell back to function granularity in "
+         << MF.getName() << " (" << Reason << ")\n";
+  emitFunctionGranularityDIT(MF, TSI);
+}
+
 // Increment (a): anticipation-coarse region placement. Builds the ANTIN backward
 // lattice (a need is anticipated on every forward path), enables DIT on entering
 // each anticipated region from an unanticipated (or entry) edge, re-asserts after
@@ -1548,19 +1600,22 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
     if (HasNeed.lookup(&MBB))
       for (MachineLoop *L = MLI.getLoopFor(&MBB); L; L = L->getParentLoop())
         NeedLoops.insert(L);
-  auto On = [&](const MachineBasicBlock *B) -> bool {
-    if (HasNeed.lookup(B))
-      return true;
-    for (MachineLoop *L = MLI.getLoopFor(B); L; L = L->getParentLoop())
-      if (NeedLoops.count(L))
-        return true;
-    return false;
-  };
+  // Precompute the On block set once (one nest-walk per block) so later queries
+  // are O(1) lookups rather than repeated getLoopFor/getParentLoop walks.
+  DenseSet<const MachineBasicBlock *> OnBlocks;
+  for (MachineBasicBlock &MBB : MF) {
+    bool IsOn = HasNeed.lookup(&MBB);
+    for (MachineLoop *L = MLI.getLoopFor(&MBB); L && !IsOn; L = L->getParentLoop())
+      IsOn = NeedLoops.count(L);
+    if (IsOn)
+      OnBlocks.insert(&MBB);
+  }
+  auto On = [&](const MachineBasicBlock *B) { return OnBlocks.count(B) != 0; };
 
-  // Emit. Enable at each Off→On boundary (hoisted to the preheader when the
-  // On-entry block is a loop header, so the enable is not re-executed on the
-  // backedge); re-assert after non-terminator clobbers; disable before non-Need
-  // returns and on entering an Off block from an On predecessor.
+  // Emit. Enable at each Off→On boundary (hoisted out of loops); re-assert after
+  // non-terminator clobbers; disable before non-Need returns and on entering an
+  // Off block from an On predecessor. Insertions at a block start go PAST leading
+  // EH labels / CFI so they cannot displace a landing-pad label.
   unsigned Toggles = 0;
   bool NeedFallback = false;
   for (MachineBasicBlock &MBB : MF) {
@@ -1569,24 +1624,38 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       for (MachineBasicBlock *P : MBB.predecessors())
         OnAtEntry &= On(P);
       if (!OnAtEntry) {
-        // Off→On boundary. If MBB is a loop header, hoist the enable to the
-        // preheader (executed once). No unique preheader ⇒ cannot hoist without
-        // an edge split (restricted post-PEI) ⇒ fall back to function
-        // granularity for this function rather than emit a per-iteration toggle.
+        // Off→On boundary.
         MachineLoop *L = MLI.getLoopFor(&MBB);
         if (L && L->getHeader() == &MBB) {
-          MachineBasicBlock *PH = L->getLoopPreheader();
-          if (!PH) {
-            NeedFallback = true;
-            break;
+          // Natural loop header: hoist the enable out of the loop so it is not
+          // re-executed on the backedge.
+          if (MachineBasicBlock *PH = L->getLoopPreheader()) {
+            TII->insertTimingModeSwitch(*PH, PH->getFirstTerminator(),
+                                        DebugLoc(), /*Enable=*/true);
+            ++Toggles;
+          } else {
+            // No unique preheader (header reached from ≥2 external edges). Place
+            // the enable at the end of each external (non-loop) predecessor —
+            // each is entered once, so still no per-iteration toggle, and no
+            // whole-function fallback.
+            for (MachineBasicBlock *P : MBB.predecessors())
+              if (!L->contains(P)) {
+                TII->insertTimingModeSwitch(*P, P->getFirstTerminator(),
+                                            DebugLoc(), /*Enable=*/true);
+                ++Toggles;
+              }
           }
-          TII->insertTimingModeSwitch(*PH, PH->getFirstTerminator(),
-                                      DebugLoc(), /*Enable=*/true);
+        } else if (blockInCycle(&MBB)) {
+          // On-entry block in a cycle MachineLoopInfo does not model
+          // (irreducible): a begin() enable would be per-iteration and cannot be
+          // hoisted. Fall back to whole-function granularity for this function.
+          NeedFallback = true;
+          break;
         } else {
-          TII->insertTimingModeSwitch(MBB, MBB.begin(), DebugLoc(),
+          TII->insertTimingModeSwitch(MBB, regionEntryInsertPt(MBB), DebugLoc(),
                                       /*Enable=*/true);
+          ++Toggles;
         }
-        ++Toggles;
       }
       // Re-assert after each clobber that is NOT a terminator (a non-preserving
       // tail call is a clobber AND a terminator: nothing follows it here, and
@@ -1621,7 +1690,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       for (MachineBasicBlock *P : MBB.predecessors())
         AnyPredOn |= On(P);
       if (AnyPredOn) {
-        TII->insertTimingModeSwitch(MBB, MBB.begin(), DebugLoc(),
+        TII->insertTimingModeSwitch(MBB, regionEntryInsertPt(MBB), DebugLoc(),
                                     /*Enable=*/false);
         ++Toggles;
       }
@@ -1629,17 +1698,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   }
 
   if (NeedFallback) {
-    for (MachineBasicBlock &MBB : MF) {
-      SmallVector<MachineInstr *, 8> ToErase;
-      for (MachineInstr &MI : MBB)
-        if (TII->getTimingModeSwitch(MI))
-          ToErase.push_back(&MI);
-      for (MachineInstr *I : ToErase)
-        I->eraseFromParent();
-    }
-    errs() << "taint: DIT region placement: need-loop without a preheader in "
-           << MF.getName() << "; fell back to function granularity\n";
-    emitFunctionGranularityDIT(MF, TSI);
+    fallbackToFunctionGranularity(MF, TSI, "irreducible need-loop, cannot hoist");
     return NeedCount;
   }
   LLVM_DEBUG(dbgs() << "  DIT region placement in " << MF.getName() << ": "
@@ -1706,23 +1765,8 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                 return true;
               });
 
-  if (!Sound) {
-    // The verifier could not prove every Need is DIT-covered. Rather than abort
-    // the whole TU, degrade this function to the always-safe whole-function
-    // policy: erase the region switches we inserted (the input had none, so
-    // every DIT switch present is ours) and re-emit function granularity.
-    for (MachineBasicBlock &MBB : MF) {
-      SmallVector<MachineInstr *, 8> ToErase;
-      for (MachineInstr &MI : MBB)
-        if (TII->getTimingModeSwitch(MI))
-          ToErase.push_back(&MI);
-      for (MachineInstr *I : ToErase)
-        I->eraseFromParent();
-    }
-    errs() << "taint: DIT region placement could not prove coverage in "
-           << MF.getName() << "; fell back to function granularity\n";
-    emitFunctionGranularityDIT(MF, TSI);
-  }
+  if (!Sound)
+    fallbackToFunctionGranularity(MF, TSI, "verifier: uncovered need");
   return NeedCount;
 }
 

@@ -416,14 +416,33 @@ MachineLoopInfo MLI(MDT)` — no MFAM plumbing). Two consequences:
   end (executed once) — never at the loop header (which the backedge re-enters
   every iteration). Loop nests hoist to the outermost preheader because a need in
   an inner loop marks every enclosing loop as a need-loop.
-Emit: enable at each Off→On boundary (hoisted to the preheader when the On-entry
-is a loop header); disable at each On→Off boundary (the Off side is a loop exit,
-outside the loop, so entered once — no hoist needed); re-assert after non-
-terminator clobbers; the (a) return/tail-call rules unchanged. A need-loop
-lacking a preheader (can't hoist ⇒ would be per-iteration) triggers the graceful
-fallback to function granularity for that function. The soundness verifier
-(unchanged) validates every emit. This replaces (a)'s anticipation region; it
-degenerates identically on loop-free code, so (a)'s tests still hold.
+Emit: enable at each Off→On boundary — hoisted to the preheader when the On-entry
+is a natural loop header; when the header has no unique preheader (≥2 external
+entry edges), placed at the end of *each external predecessor* (each entered
+once, so still no per-iteration toggle and no whole-function fallback); disable at
+each On→Off boundary (the Off side is a loop exit, outside the loop, entered once
+— no hoist needed); re-assert after non-terminator clobbers; the (a) return/
+tail-call rules unchanged. Insertions at a block start go PAST leading EH labels
+/ CFI (`regionEntryInsertPt`) so they cannot displace a landing-pad `EH_LABEL`. A
+Need in an **irreducible** cycle (which `MachineLoopInfo` does not model, so it
+cannot be hoisted) triggers the graceful fallback to function granularity for
+that function — detected by `blockInCycle` on a non-header On-entry. The
+soundness verifier (unchanged) validates every emit and is the last-resort net.
+
+**Not** byte-identical to (a) on loop-free code: (a)'s backward `ANTIN` marked a
+clean preamble that all forward paths reach a need as anticipated (On), so it
+enabled at function/region entry; (b)'s `On = HasNeed ∨ in-need-loop` leaves that
+preamble Off and enables only at the need. (b) is strictly *narrower*/better. It
+degenerates to function granularity only when the whole function is On (e.g.
+whole-function taint). (a)'s remaining tests (`@whole`, `@narrows`,
+`@tailcall_secret`) still pass because none has a clean loop-free preamble
+*before* the need.
+
+**Deferred to (d) (interproc):** a residual-only callee (needs=0) emits no DIT
+switches in region mode and therefore *does* preserve DIT, but its `PreservesDIT`
+summary bit is still `false` (it is computed from `functionHasTaintedRuns`, the
+function-granularity notion), so callers emit a spurious post-call re-assert.
+Sound, perf-only; fix belongs with the (d) `EntryDIT`/`PreservesDIT` rework.
 
 Everything below is the base structure; apply the two corrections above to it.
 

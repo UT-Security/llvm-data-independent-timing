@@ -68,6 +68,20 @@
 # REGION: bb.3
 # REGION: MSRpstateImm4 26, 0
 
+# @multi_entry — a need-loop header (bb.3) with NO unique preheader (reached from
+# two external edges bb.1, bb.2). Region mode enables DIT at the end of EACH
+# external predecessor (entered once), keeps NO enable in the loop header itself
+# (no per-iteration toggle), and does NOT fall back to whole-function coarse
+# placement — the common multi-entry shape the review flagged.
+# REGION-LABEL: name: multi_entry
+# REGION: bb.1
+# REGION: MSRpstateImm4 26, 1
+# REGION: bb.2
+# REGION: MSRpstateImm4 26, 1
+# REGION: bb.3
+# REGION-NOT: MSRpstateImm4 26, 1
+# REGION: MSRpstateImm4 26, 0
+
 --- |
   target triple = "aarch64-unknown-linux-gnu"
 
@@ -86,6 +100,10 @@
   }
 
   define i32 @loop_hoist(i32 "tainted" %s, i32 %n) {
+    ret i32 0
+  }
+
+  define i32 @multi_entry(i32 "tainted" %s, i32 %c, i32 %n) {
     ret i32 0
   }
 
@@ -177,6 +195,48 @@ body:             |
     B %bb.3
 
   bb.3:
+    liveins: $w0
+
+    RET_ReallyLR implicit $w0
+
+...
+---
+name:            multi_entry
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+  - { reg: '$w1' }
+  - { reg: '$w2' }
+body:             |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $w0, $w1, $w2
+
+    CBZW renamable $w1, %bb.2
+    B %bb.1
+
+  bb.1:
+    successors: %bb.3
+    liveins: $w0, $w2
+
+    B %bb.3
+
+  bb.2:
+    successors: %bb.3
+    liveins: $w0, $w2
+
+    B %bb.3
+
+  bb.3:
+    successors: %bb.3, %bb.4
+    liveins: $w0, $w2
+
+    renamable $w0 = ADDWri killed renamable $w0, 1, 0
+    CBNZW renamable $w2, %bb.3
+    B %bb.4
+
+  bb.4:
     liveins: $w0
 
     RET_ReallyLR implicit $w0
