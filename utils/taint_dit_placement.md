@@ -541,9 +541,19 @@ non-convergence (mitigate: VSETVLI worklist pattern); the Need-gate must match
 |---|---|---|
 | P0 ✅ done | Re-assert DIT=1 after call sites inside instrumented functions | closes G1 (soundness) |
 | P0.5 ✅ done | `-taint-callsite-report` escape diagnostics; `PreservesDIT` summary bit + re-assert elision | G3 escapes visible; removes redundant P0 toggles |
-| P1 | `isDITCoveredOpcode` + residual report | closes G2 (no false assurance) |
-| P2 | Intraprocedural LCM placement with MBFI | P2/P3 perf, exact scopes |
-| P3 | `EntryDIT` summary, entry/exit toggle elision, save/restore fallback | P1 perf, full G3 |
+| G2 ✅ done (Track C) | `isDITProtected` membership hook + `-taint-uncovered-report` (`classifyDITUncovered`) | closes G2 (no false assurance) |
+| B(a) ✅ done | region placement scaffold behind `-taint-dit-placement=region`; Need set + soundness verifier + graceful fallback | machinery; narrows trailing epilogue |
+| B(b) ✅ done | loop-aware `On(b)` placement: preamble excluded, enable hoisted to loop preheader / multi-entry pred edges; irreducible→fallback | the dwell win (convolve: 67-instr preamble now DIT-off, no per-iteration toggle) |
+| **B(c) ← NEXT** | **admission test: merge Off corridors between On regions when `60·freq(toggle) ≥ Σ gap dwell` (MBFI-weighted); deprecate `-taint-region-merge-gap`. §5.6 base structure.** Purely a perf optimization — merging only extends coverage, so it CANNOT leak (verifier always passes); lower-risk than (a)/(b). On M4 (dwell≈0) it coarsens; on DIT-sensitive cores it stays narrow. Needs `MachineBlockFrequencyInfo` + a tunable `dwell_per_instr` cl::opt calibrated by the measured P≈40–64 crossover. | cost-model-driven placement |
+| B(d) | `EntryDIT` summary (coupled greatest fixed point with placement), entry/exit toggle elision for internal tainted chains; fixes the deferred residual-only-callee `PreservesDIT` spurious re-assert | P1 interior-zero-toggle perf |
+
+**Current impl state (2026-07-16):** all of the above through B(b)+review-fixes are
+committed and pushed on `interproc_taint` (HEAD `2e585cc`). Region mode is behind
+`-taint-dit-placement=region` (default `function` = shipped, untouched). 15 lit
+tests pass (`taint-analysis-*.mir`); the soundness verifier + graceful fallback to
+function granularity are the safety net under region mode. Reviews (workflow
+`/code-review high`) run per increment have each caught real bugs (P0: 4 leaks;
+B(a): tail-call crash; B(b): EH-label/irreducible/multi-entry) — all fixed.
 
 ---
 
