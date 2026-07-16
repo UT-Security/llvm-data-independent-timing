@@ -429,6 +429,9 @@ public:
                               MachineBasicBlock::iterator MI, const DebugLoc &DL,
                               bool Enable) const override;
 
+  std::optional<bool>
+  getTimingModeSwitch(const MachineInstr &MI) const override;
+
   std::optional<unsigned>
   getNumStoredValueRegs(const MachineInstr &MI) const override;
 

@@ -31,6 +31,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/Path.h"
@@ -85,6 +86,23 @@ static cl::opt<unsigned> TaintRegionMergeGap(
     cl::desc("Merge barrier-protected taint regions in the same basic block "
              "when separated by at most this many clean instructions"),
     cl::init(2));
+
+// Track B: PSTATE.DIT placement granularity. `function` is the shipped
+// whole-function policy; `region` is the WIP cost-model-driven region placement
+// (utils/taint_dit_placement.md §5.6). Increment (a) implements the
+// anticipation-coarse scaffolding of `region`.
+namespace {
+enum class DITPlacementMode { Function, Region };
+} // namespace
+static cl::opt<DITPlacementMode> TaintDITPlacement(
+    "taint-dit-placement", cl::desc("PSTATE.DIT placement granularity"),
+    cl::init(DITPlacementMode::Function),
+    cl::values(clEnumValN(DITPlacementMode::Function, "function",
+                          "whole-function: DIT on for any tainted function "
+                          "(default, shipped)"),
+               clEnumValN(DITPlacementMode::Region, "region",
+                          "cost-model region placement (WIP, increment a: "
+                          "anticipation-coarse)")));
 
 /// Unified cell extraction from a MachineMemOperand.
 /// Returns the base kind (Stack/Global/Unknown), offset, and optional size.
@@ -1426,6 +1444,189 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
   return printTaintSourceRegions(TaintedRuns, MF.getName(), OS);
 }
 
+//===----------------------------------------------------------------------===//
+// Track B: cost-model region placement (utils/taint_dit_placement.md §5.6)
+//===----------------------------------------------------------------------===//
+
+// An instruction that must execute with PSTATE.DIT=1. Coverable-tainted
+// data-processing / loads / stores (DIT protects their data-value timing —
+// including a secret-address load's data value, the LVP channel), PLUS any
+// secret-passing call (the callee inherits DIT — Scenario B; note isDITProtected
+// is false for a call, so the call term is explicit). Divides/sqrt, secret
+// branches, and returns are NOT needs — DIT cannot protect them (they are
+// residuals, see classifyDITUncovered). §5.6 Correction 1.
+static bool needsDIT(const MachineInstr &MI, const TaintFacts &F,
+                     const TargetInstrInfo &TII) {
+  if (!isTaintedInstruction(MI, F))
+    return false;
+  return TII.isDITProtected(MI) || MI.isCall();
+}
+
+// A call whose callee may clear PSTATE.DIT on its own exit (no callee-saved
+// convention). After it, DIT must be re-asserted if the region continues.
+static bool clobbersDIT(const MachineInstr &MI, const TaintSummaryInfo *TSI,
+                        Module &M) {
+  if (!MI.isCall())
+    return false;
+  const Function *Callee = findCalledFunction(M, MI);
+  return !(TSI && Callee && TSI->getSummary(*Callee).PreservesDIT);
+}
+
+// Increment (a): anticipation-coarse region placement. Builds the ANTIN backward
+// lattice (a need is anticipated on every forward path), enables DIT on entering
+// each anticipated region from an unanticipated (or entry) edge, re-asserts after
+// every clobber inside the region, and disables on region exits and before
+// returns. Degenerates to whole-function granularity when all blocks anticipate
+// (byte-identical), and narrows trailing (unanticipated) clean blocks. Preamble
+// narrowing and loop-hoisting are increment (b). See §5.6.
+static unsigned insertTaintDITRegions(MachineFunction &MF,
+                                      const TaintResult &TR,
+                                      const TaintSummaryInfo *TSI,
+                                      AAResults *AA) {
+  const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+  Module &M = *const_cast<Module *>(MF.getFunction().getParent());
+
+  // Local facts: does each block contain a Need? (one replay walk)
+  DenseMap<const MachineBasicBlock *, bool> HasNeed;
+  unsigned NeedCount = 0;
+  replayTaint(MF, TR, TSI, AA,
+              [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
+                if (needsDIT(MI, F, *TII)) {
+                  HasNeed[MI.getParent()] = true;
+                  ++NeedCount;
+                }
+                return true;
+              });
+  if (NeedCount == 0)
+    return 0;
+
+  // Anticipation (backward, AND-meet, greatest fixed point → init true):
+  //   ANTIN[b] = HasNeed[b] || (∧_{s∈succ} ANTIN[s]);  no succ ⇒ ANTOUT=false.
+  DenseMap<const MachineBasicBlock *, bool> ANTIN;
+  for (MachineBasicBlock &MBB : MF)
+    ANTIN[&MBB] = true;
+  bool Changed = true;
+  while (Changed) {
+    Changed = false;
+    for (MachineBasicBlock &MBB : MF) {
+      bool AntOut = !MBB.succ_empty();
+      for (MachineBasicBlock *S : MBB.successors())
+        AntOut &= ANTIN[S];
+      bool AntIn = HasNeed.lookup(&MBB) || AntOut;
+      if (AntIn != ANTIN[&MBB]) {
+        ANTIN[&MBB] = AntIn;
+        Changed = true;
+      }
+    }
+  }
+
+  // Emit. Enable on entering an anticipated block whose incoming DIT is off
+  // (some predecessor is unanticipated, or it is the entry block); re-assert
+  // after each clobber inside an anticipated block; disable before returns and
+  // on entering an unanticipated block from an anticipated predecessor.
+  unsigned Toggles = 0;
+  for (MachineBasicBlock &MBB : MF) {
+    if (ANTIN[&MBB]) {
+      bool OnAtEntry = !MBB.pred_empty();
+      for (MachineBasicBlock *P : MBB.predecessors())
+        OnAtEntry &= ANTIN[P];
+      if (!OnAtEntry) {
+        TII->insertTimingModeSwitch(MBB, MBB.begin(), DebugLoc(),
+                                    /*Enable=*/true);
+        ++Toggles;
+      }
+      SmallVector<MachineInstr *, 8> Clobbers;
+      for (MachineInstr &MI : MBB)
+        if (clobbersDIT(MI, TSI, M))
+          Clobbers.push_back(&MI);
+      for (MachineInstr *C : Clobbers) {
+        TII->insertTimingModeSwitch(MBB, std::next(C->getIterator()),
+                                    C->getDebugLoc(), /*Enable=*/true);
+        ++Toggles;
+      }
+      if (!MBB.empty() && MBB.back().isReturn()) {
+        TII->insertTimingModeSwitch(MBB, MBB.back().getIterator(),
+                                    MBB.back().getDebugLoc(), /*Enable=*/false);
+        ++Toggles;
+      }
+    } else {
+      bool AnyPredOn = false;
+      for (MachineBasicBlock *P : MBB.predecessors())
+        AnyPredOn |= ANTIN[P];
+      if (AnyPredOn) {
+        TII->insertTimingModeSwitch(MBB, MBB.begin(), DebugLoc(),
+                                    /*Enable=*/false);
+        ++Toggles;
+      }
+    }
+  }
+  LLVM_DEBUG(dbgs() << "  DIT region placement in " << MF.getName() << ": "
+                    << Toggles << " toggle(s) over " << NeedCount
+                    << " need(s)\n");
+
+  // Soundness verifier (§5.6 hard gate): forward 1-bit "DIT on" dataflow over the
+  // EMITTED MIR (AND-meet at joins, clobber ⇒ off), asserting DIT is on at every
+  // Need. A missed domination is a leaked secret ⇒ fatal, not silent.
+  // AND-meet (DIT-on required from every predecessor) ⇒ initialize the fixed
+  // point OPTIMISTICALLY to true, else a loop whose DIT is carried in (no enable
+  // inside the loop) would never converge to on (the backedge would start false
+  // and the meet would pin it there — a false "uncovered" report). The entry
+  // boundary is off, enforced by `In = !pred_empty()` below.
+  DenseMap<const MachineBasicBlock *, bool> OnOut, OnIn;
+  for (MachineBasicBlock &MBB : MF)
+    OnOut[&MBB] = true;
+  auto stepBlock = [&](MachineBasicBlock &MBB, bool In) -> bool {
+    bool Cur = In;
+    for (MachineInstr &MI : MBB) {
+      if (auto Sw = TII->getTimingModeSwitch(MI))
+        Cur = *Sw;
+      else if (clobbersDIT(MI, TSI, M))
+        Cur = false;
+    }
+    return Cur;
+  };
+  Changed = true;
+  while (Changed) {
+    Changed = false;
+    for (MachineBasicBlock &MBB : MF) {
+      bool In = !MBB.pred_empty();
+      for (MachineBasicBlock *P : MBB.predecessors())
+        In &= OnOut[P];
+      OnIn[&MBB] = In;
+      bool Out = stepBlock(MBB, In);
+      if (Out != OnOut[&MBB]) {
+        OnOut[&MBB] = Out;
+        Changed = true;
+      }
+    }
+  }
+  // Final check: replay (which supplies per-MI TaintFacts) tracking the DIT-on
+  // state seeded from OnIn at each block boundary; every Need must be on.
+  // replayTaint visits each block's instructions contiguously in layout order,
+  // so a block-change reset is sufficient.
+  const MachineBasicBlock *CurBlk = nullptr;
+  bool CurOn = false;
+  replayTaint(MF, TR, TSI, AA,
+              [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
+                if (MI.getParent() != CurBlk) {
+                  CurBlk = MI.getParent();
+                  CurOn = OnIn.lookup(CurBlk);
+                }
+                if (auto Sw = TII->getTimingModeSwitch(MI)) {
+                  CurOn = *Sw;
+                  return true;
+                }
+                if (needsDIT(MI, F, *TII) && !CurOn)
+                  report_fatal_error(
+                      "taint: DIT region placement left a secret-dependent "
+                      "instruction outside DIT coverage (verifier)");
+                if (clobbersDIT(MI, TSI, M))
+                  CurOn = false;
+                return true;
+              });
+  return NeedCount;
+}
+
 unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
                                       const TaintResult &TR,
                                       const TaintSummaryInfo *TSI,
@@ -1443,6 +1644,11 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
 
   if (TaintedRuns.empty())
     return TaintedInstrCount;
+
+  // Track B: cost-model region placement (WIP). Opt-in; default stays
+  // function-granularity below, so shipped codegen is untouched.
+  if (TaintDITPlacement == DITPlacementMode::Region)
+    return insertTaintDITRegions(MF, TR, TSI, AA);
 
   // Function granularity: run the whole function in data-independent-timing
   // mode when it contains any tainted instruction. Per-region toggles would

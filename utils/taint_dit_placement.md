@@ -354,13 +354,58 @@ protocol bits come back unknown; default to the caller-side re-assert otherwise.
 
 ### 5.6 Refined implementation design (Track B, 2026-07-16) — the plan of record
 
-Design pass over the three in-tree mode-switch idioms (§5 named them). **Verdict:
-this is `RISCVInsertVSETVLI`'s structure specialized to a single boolean mode**,
-NOT full lazy-code-motion — the "expression" is one nullary fact (`DIT==1`), so
-KRS's temporary-live-range/isolation passes collapse; only anticipation +
-availability remain, plus a frequency post-pass. (`AArch64SMEPeepholeOpt` gives
-the local pair-cancellation intuition for the admission pass; `X86VZeroUpper` the
-any-path-forward-insert-at-first-hazard template for disables.)
+Design pass over the three in-tree mode-switch idioms (§5 named them). Base
+structure is `RISCVInsertVSETVLI`'s (a boolean mode). **Two corrections found
+while implementing increment (a) (2026-07-16), before any code — read these; they
+change the formulation:**
+
+**Correction 1 (soundness — the `Need` set).** `isDITProtected(call)` is *false*
+(a call is not in the DIT covered set), so the original
+`Need = isTainted && isDITProtected && classifyDITUncovered==null` would DROP
+secret-passing calls — breaking Scenario B (the callee must run with DIT on to
+inherit it). Corrected definition:
+```
+Need(MI) = isTaintedInstruction(MI, F) && (isDITProtected(MI) || MI.isCall())
+```
+This also (correctly) keeps a **secret-address load** in the Need set: its data
+*value* is DIT-covered (the LVP channel) even though its address is not, so it
+must run under DIT — the `classifyDITUncovered != null` test would have wrongly
+excluded it and under-protected the exact value-timing channel the project
+targets. (The load is *also* a residual for its address — an instruction can be
+both a Need and a residual; the two are not mutually exclusive.)
+
+**Correction 2 (objective — dwell is the live range; earliest ≠ minimal).** The
+original "enable at *earliest* anticipated" is anticipation/down-safe placement,
+which enables as early as `ANTIN` holds. But `ANTIN` is *true in a clean preamble
+that flows into a need* (a need is coming on all paths), so earliest placement
+**covers the public preamble** — the exact thing we narrow (convolve's
+`entry → for.body.lr.ph → loop`: `ANTIN` true from `entry`). Loop-hoisting cannot
+fix it (the enable is already *before* the loop). Root cause: **dwell IS the live
+range of the `DIT==1` fact**, so minimizing dwell needs LCM's *lateness/latest*
+(sink the enable down to just-before-need), which the "no live range" dismissal
+missed. Corrected objective and staging:
+- The dwell-minimal seed is the **minimal need-region** (just-before-first-need to
+  just-after-last-need) — which the existing `collectTaintedRuns` already computes
+  per block. Coarsen *upward* from there (loop-hoist + admission-merge), rather
+  than start maximal (earliest) and fail to shrink.
+- **Increment (a) = anticipation-coarse scaffolding**, deliberately: it builds the
+  `ANTIN` backward lattice + availability + the emit + the verifier, degenerating
+  to function granularity (byte-identical when whole-function tainted) and
+  narrowing only the *trailing* clean epilogue (`¬ANTIN` blocks). It does NOT
+  narrow the preamble — that is (b). This is sound and never worse than function
+  granularity (coarse ⇒ toggles at coarse boundaries, never per-iteration), and
+  the `ANTIN` lattice it builds is the first LCM pass, reused by (b).
+- **Increment (b) = lateness + loop-hoist together** (they are coupled: you sink
+  the enable to the latest safe point, which is the loop *preheader* for a
+  loop-resident need, never *into* the loop). This is where the preamble is
+  excluded and the real dwell win lands.
+- (c) admission-merge, (d) interproc — unchanged.
+
+Everything below is the base structure; apply the two corrections above to it.
+
+(`AArch64SMEPeepholeOpt` gives the local pair-cancellation intuition for the
+admission pass; `X86VZeroUpper` the any-path-forward-insert-at-first-hazard
+template for disables.)
 
 **Dataflow (two boolean fixed points over the machine CFG, seeded by one
 `replayTaint` walk).** Local facts per block: `NEED(b)` = ∃ MI with

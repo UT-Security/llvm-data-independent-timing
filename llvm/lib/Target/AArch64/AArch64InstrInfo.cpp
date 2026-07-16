@@ -7038,6 +7038,18 @@ void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
       .addImm(Enable ? 1 : 0);
 }
 
+std::optional<bool>
+AArch64InstrInfo::getTimingModeSwitch(const MachineInstr &MI) const {
+  if (MI.getOpcode() != AArch64::MSRpstateImm4)
+    return std::nullopt;
+  const auto *DIT = AArch64PState::lookupPStateImm0_15ByName("DIT");
+  if (!DIT || MI.getNumOperands() < 2 || !MI.getOperand(0).isImm() ||
+      !MI.getOperand(1).isImm() ||
+      MI.getOperand(0).getImm() != DIT->Encoding)
+    return std::nullopt;
+  return MI.getOperand(1).getImm() != 0;
+}
+
 std::optional<unsigned>
 AArch64InstrInfo::getNumStoredValueRegs(const MachineInstr &MI) const {
   // Read-modify-write memory operands have no distinct value operand to point

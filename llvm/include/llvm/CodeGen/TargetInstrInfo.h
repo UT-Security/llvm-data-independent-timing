@@ -1689,6 +1689,16 @@ public:
                                       MachineBasicBlock::iterator MI,
                                       const DebugLoc &DL, bool Enable) const;
 
+  /// If MI is a data-independent-timing mode switch (the instruction
+  /// insertTimingModeSwitch emits — e.g. AArch64 `MSR DIT, #imm`), return
+  /// whether it ENABLES (true) or disables (false) the mode; otherwise
+  /// std::nullopt. Lets a target-independent pass recognise its own emitted
+  /// switches (e.g. the DIT-placement soundness verifier).
+  virtual std::optional<bool>
+  getTimingModeSwitch(const MachineInstr &MI) const {
+    return std::nullopt;
+  }
+
   /// Return how many of MI's leading explicit register use operands hold the
   /// value written to memory, as opposed to the address it is written to. A
   /// store-pair, for instance, has two.

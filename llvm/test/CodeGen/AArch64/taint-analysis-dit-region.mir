@@ -1,0 +1,100 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=FUNC
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=region %s -o - | FileCheck %s --check-prefix=REGION
+
+# Track B increment (a): anticipation-coarse region placement, behind
+# -taint-dit-placement=region (default is function granularity). Two properties:
+#
+#  1. DEGENERACY (@whole): when every block anticipates a need (whole-function
+#     taint), region mode is byte-identical to function granularity — MSR DIT #1
+#     at entry, #0 before the return. Same CHECK pattern passes in both modes.
+#
+#  2. NARROWING (@narrows): a trailing clean block (bb.1's public epilogue) is
+#     NOT anticipated, so region mode disables DIT at that block's ENTRY (the
+#     epilogue runs with DIT off), whereas function granularity keeps DIT on
+#     through the epilogue and disables only before the return. The DIFFERENCE is
+#     the position of `MSR DIT, #0` relative to the epilogue's ADDWri.
+#
+# 26 is the PSTATE.DIT pstatefield encoding.
+
+# @whole — identical in both modes (degeneracy):
+# FUNC-LABEL: name: whole
+# FUNC: MSRpstateImm4 26, 1
+# FUNC: ADDWri
+# FUNC: MSRpstateImm4 26, 0
+# FUNC-NEXT: RET_ReallyLR
+# REGION-LABEL: name: whole
+# REGION: MSRpstateImm4 26, 1
+# REGION: ADDWri
+# REGION: MSRpstateImm4 26, 0
+# REGION-NEXT: RET_ReallyLR
+
+# @narrows bb.1 — function mode keeps DIT on THROUGH the epilogue ADDWri, disables
+# before the return:
+# FUNC-LABEL: name: narrows
+# FUNC: bb.1
+# FUNC: ADDWri
+# FUNC: MSRpstateImm4 26, 0
+# FUNC-NEXT: RET_ReallyLR
+
+# @narrows bb.1 — region mode disables DIT at the epilogue's ENTRY, before its
+# ADDWri (the clean epilogue is excluded from the region):
+# REGION-LABEL: name: narrows
+# REGION: bb.1
+# REGION: MSRpstateImm4 26, 0
+# REGION-NEXT: {{.*}}ADDWri
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @whole(i32 "tainted" %s) {
+    ret i32 0
+  }
+
+  define i32 @narrows(i32 "tainted" %s, i32 %p) {
+    ret i32 0
+  }
+
+...
+---
+name:            whole
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0:
+    liveins: $w0
+
+    renamable $w0 = ADDWri killed renamable $w0, 1, 0
+    RET_ReallyLR implicit $w0
+
+...
+---
+name:            narrows
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+  - { reg: '$w1' }
+body:             |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $w0, $w1
+
+    renamable $w0 = ADDWri killed renamable $w0, 1, 0
+    CBZW renamable $w1, %bb.2
+    B %bb.1
+
+  bb.1:
+    liveins: $w0, $w1
+
+    renamable $w2 = ADDWri killed renamable $w1, 1, 0
+    $w0 = COPY killed renamable $w2
+    RET_ReallyLR implicit $w0
+
+  bb.2:
+    liveins: $w0
+
+    RET_ReallyLR implicit $w0
+
+...
