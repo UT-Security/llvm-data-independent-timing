@@ -32,6 +32,7 @@ namespace llvm {
 // Forward declarations
 class TaintSummaryInfo;
 class Module;
+class TargetInstrInfo;
 class TargetRegisterInfo;
 class MachineInstr;
 class GlobalVariable;
@@ -65,6 +66,13 @@ extern cl::opt<bool> TaintInsertDIT;
 /// passing tainted/pointee-tainted arguments to callees the analysis cannot
 /// instrument (external declarations, indirect calls).
 extern cl::opt<std::string> TaintCallsiteReportFile;
+
+/// Command-line option for the DIT-uncovered report (gap G2): tainted
+/// instructions PSTATE.DIT does not actually protect — divide/sqrt (not
+/// DIT-listed), secret-dependent memory addresses (cache/TLB timing), and
+/// secret-dependent branches (control-flow timing). Counting these as protected
+/// is silent false assurance; the report surfaces them for audit.
+extern cl::opt<std::string> TaintUncoveredReportFile;
 
 /// Selects which of TaintState's register bitvectors an operation applies to.
 enum class TaintKind {
@@ -363,6 +371,15 @@ void replayTaint(
 
 /// True if MI is secret-dependent and therefore belongs inside a barrier region.
 bool isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F);
+
+/// G2 diagnostic: if MI is a tainted instruction that PSTATE.DIT does NOT
+/// protect, return the reason ("divide-or-sqrt", "secret-address",
+/// "secret-branch"); otherwise nullptr. Distinguishes a secret store *address*
+/// (uncovered) from secret store *data* (covered) via the value/address operand
+/// split, so it does not false-positive on secret data written to a public slot.
+const char *classifyDITUncovered(const MachineInstr &MI, const TaintFacts &F,
+                                 const TaintState &S,
+                                 const TargetInstrInfo &TII);
 
 /// Find the called function from a call instruction.
 /// Returns nullptr for indirect calls.

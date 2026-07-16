@@ -1,0 +1,48 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-uncovered-report=%t %s -o /dev/null
+# RUN: FileCheck %s --input-file=%t
+
+# Gap G2: a function run in PSTATE.DIT mode is NOT protected on every tainted
+# instruction. Some tainted instructions stay data-dependent-timed even with
+# DIT=1, so counting them as protected is silent false assurance. The uncovered
+# report surfaces them for audit / constant-time rewriting:
+#   - not-dit-covered        : the instruction is not in the Arm DIT covered set
+#                              (divide/sqrt, or anything the membership list does
+#                              not recognise); the printed opcode identifies it
+#   - secret memory address  : cache/TLB timing (DIT covers the data value, not
+#                              the address)
+#   - secret-dependent branch: control-flow timing
+#
+# Here arg 0 is secret. SDIVXr divides on it (SDIV is absent from the DIT covered
+# set -> not-dit-covered), and LDRXui loads from it as an address (secret-address).
+# The ADDXri on the secret IS in the covered set, so it must NOT be reported.
+
+# CHECK-DAG: UNCOVERED not-dit-covered func=uncovered {{.*}}SDIVXr
+# CHECK-DAG: UNCOVERED secret-address func=uncovered {{.*}}LDRXui
+# CHECK-NOT: ADDXri
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i64 @uncovered(i64 "tainted" %s, i64 %p) {
+    ret i64 0
+  }
+
+...
+---
+name:            uncovered
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$x1' }
+body:             |
+  bb.0:
+    liveins: $x0, $x1
+
+    $x2 = SDIVXr $x0, $x1
+    $x3 = LDRXui $x0, 0 :: (load (s64))
+    $x4 = ADDXri $x0, 1, 0
+    $x0 = ADDXri $x2, 0, 0
+    RET_ReallyLR implicit $x0
+
+...

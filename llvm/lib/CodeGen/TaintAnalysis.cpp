@@ -73,6 +73,13 @@ cl::opt<std::string> llvm::TaintCallsiteReportFile(
              "calls)"),
     cl::value_desc("file"));
 
+cl::opt<std::string> llvm::TaintUncoveredReportFile(
+    "taint-uncovered-report",
+    cl::desc("Output file for tainted instructions PSTATE.DIT does not protect "
+             "(divide/sqrt, secret-dependent addresses, secret branches) — "
+             "silent false assurance otherwise (gap G2)"),
+    cl::value_desc("file"));
+
 static cl::opt<unsigned> TaintRegionMergeGap(
     "taint-region-merge-gap",
     cl::desc("Merge barrier-protected taint regions in the same basic block "
@@ -245,6 +252,34 @@ static bool anyTaintedStoreDataRegUse(TaintKind K, const MachineInstr &MI,
       break;
   }
 
+  return false;
+}
+
+/// Complement of anyTaintedStoreDataRegUse: is any ADDRESS operand of a store
+/// (the register uses AFTER the leading stored-value registers) tainted of kind
+/// K? Lets the G2 diagnostic tell a secret store ADDRESS (uncovered by DIT —
+/// cache/TLB timing) from secret store DATA (which DIT covers, and which is
+/// address-tainted by the over-approximation, so a naive whole-instruction check
+/// would false-positive on it). Returns false when the value/address split is
+/// unknown, to avoid a false "uncovered" report.
+static bool anyTaintedStoreAddressRegUse(TaintKind K, const MachineInstr &MI,
+                                         const TaintState &S) {
+  if (!MI.mayStore())
+    return false;
+  std::optional<unsigned> ValueRegs = getStoredValueRegCount(MI);
+  if (!ValueRegs)
+    return false;
+  unsigned Skip = *ValueRegs;
+  for (const MachineOperand &MO : MI.operands()) {
+    if (!MO.isReg() || !MO.isUse() || MO.isImplicit())
+      continue;
+    if (Skip > 0) {
+      --Skip; // skip a stored-value register
+      continue;
+    }
+    if (S.test(K, MO.getReg()))
+      return true;
+  }
   return false;
 }
 
@@ -629,6 +664,60 @@ bool llvm::isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F) {
   bool PassesPointeeSecretToCall = MI.isCall() && F.UsesPointee;
   return F.UsesData || F.DefsData || LoadsSecretPointee || AddressSensitive ||
          PassesPointeeSecretToCall;
+}
+
+// Public: declared in TaintAnalysis.h — the G2 diagnostic classifier.
+const char *llvm::classifyDITUncovered(const MachineInstr &MI,
+                                       const TaintFacts &F, const TaintState &S,
+                                       const TargetInstrInfo &TII) {
+  if (!isTaintedInstruction(MI, F))
+    return nullptr;
+
+  // Address- and control-flow hazards are checked FIRST: DIT covers neither, and
+  // they are orthogonal to whether the instruction's own data-value timing is in
+  // the covered set (a load is data-value-covered yet its address still leaks; a
+  // branch is not in the covered set at all but its hazard is the direction, not
+  // its latency — so it must be labelled secret-branch, not not-dit-covered).
+
+  // Load: every register a pure load uses is an address operand (the loaded
+  // value is a def), so a secret in any of them is a secret ADDRESS — cache/TLB
+  // timing, which DIT does not cover. A load of secret *data* through a clean
+  // pointer is UsesPointee (not UsesData/UsesAddress) and IS covered.
+  if (MI.mayLoad() && !MI.mayStore() && (F.UsesData || F.UsesAddress))
+    return "secret-address";
+
+  // Store: check ONLY the address operands. Secret store *data* is DIT-covered
+  // (and is address-tainted by the over-approximation, so a whole-instruction
+  // UsesAddress check would false-positive on it — the reason this uses the
+  // value/address split). A raw uncomputed secret used directly as a store
+  // address is the one under-flagged case (getStoredValueRegCount unknown ->
+  // not flagged); computed/address-tainted store addresses are caught.
+  if (MI.mayStore() &&
+      (anyTaintedStoreAddressRegUse(TaintKind::Data, MI, S) ||
+       anyTaintedStoreAddressRegUse(TaintKind::Address, MI, S)))
+    return "secret-address";
+
+  // Secret-dependent branch: control-flow timing, not covered.
+  if (MI.isBranch() && F.UsesData)
+    return "secret-branch";
+
+  // A call or return is a control transfer, not a data-value-timing site. A
+  // call's secret argument is protected in the callee by inherited DIT (Scenario
+  // B) and audited by the call-site ESCAPE report; a return just hands its value
+  // to the caller (tracked by taint propagation). Neither is a not-dit-covered
+  // instruction. (A secret-dependent conditional branch was already caught above
+  // as secret-branch.)
+  if (MI.isCall() || MI.isReturn())
+    return nullptr;
+
+  // The instruction's own data-value timing: is it in the Arm DIT covered set?
+  // isDITProtected is a membership list (utils/taint_dit_spec.md) — false covers
+  // the documented divide/sqrt exclusions AND anything not provably covered. The
+  // printed opcode identifies which (e.g. SDIVXr).
+  if (!TII.isDITProtected(MI))
+    return "not-dit-covered";
+
+  return nullptr;
 }
 
 // Public: declared in TaintAnalysis.h — the single replay used by every

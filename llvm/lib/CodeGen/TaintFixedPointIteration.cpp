@@ -28,6 +28,8 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TaintAnalysis.h"
 #include "llvm/CodeGen/TaintSummaryInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
@@ -486,6 +488,39 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
                 if (Facts.UsesPointee)
                   *CallsiteOS << " pointee-tainted-args";
                 *CallsiteOS << " (covered by inherited DIT)\n";
+                return true;
+              });
+        });
+  }
+
+  // Step 3d: DIT-uncovered report (gap G2). A function running in DIT mode is
+  // NOT protected on every tainted instruction: divide/sqrt are not DIT-listed,
+  // a secret-dependent memory ADDRESS leaks through cache/TLB timing (DIT covers
+  // the data value, not the address), and a secret-dependent BRANCH leaks
+  // through control-flow timing. Counting these as protected is silent false
+  // assurance — surface them for audit / constant-time rewriting.
+  if (auto UncoveredOSPtr =
+          openTaintReport(TaintUncoveredReportFile, "taint uncovered report")) {
+    raw_fd_ostream &UncoveredOS = *UncoveredOSPtr;
+    forEachAnalyzed(
+        M, FAM, Results,
+        [&](Function &F, MachineFunction &MF, const TaintResult &TR,
+            AAResults *AA) {
+          const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+          replayTaint(
+              MF, TR, &TSI, AA,
+              [&](MachineInstr &MI, const TaintFacts &Facts,
+                  const TaintState &S) {
+                const char *Reason = classifyDITUncovered(MI, Facts, S, *TII);
+                if (!Reason)
+                  return true;
+                UncoveredOS << "UNCOVERED " << Reason
+                            << " func=" << F.getName()
+                            << " bb=" << MI.getParent()->getNumber();
+                if (const DebugLoc &DL = MI.getDebugLoc())
+                  UncoveredOS << " line=" << DL.getLine();
+                UncoveredOS << " : ";
+                MI.print(UncoveredOS, /*IsStandalone=*/true);
                 return true;
               });
         });

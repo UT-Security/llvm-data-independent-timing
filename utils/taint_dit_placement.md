@@ -87,18 +87,31 @@ after every non-tail call site inside instrumented functions (cheap, always
 sound; lit-covered by `caller_fn` in `taint-analysis-dit.mir`). Eliding
 provably-redundant re-asserts is the P3 summary work (§5.3).
 
-### G2 (unsound in principle): tainted instructions the spec does not cover
+### G2 (unsound in principle) — **DIAGNOSED (2026-07-16)**: tainted instructions the spec does not cover
 The run collector treats all tainted instructions alike, but per §2.2 a tainted
 `SDIV`/`UDIV` (or FP div/sqrt) is *not* protected by DIT=1. Silent false
-assurance. Similarly, runs include **address-sensitive loads/stores**
-(`isAddressSensitiveMemoryAccess`) and branches on tainted flags — DIT provides
-no guarantee for either. These hazards are simply NOT COVERED by this project:
-the ISB/DSB mode that nominally addressed the speculative ones was a placeholder
-and was removed 2026-07-14, and speculation is out of scope. They must be
-diagnosed (G2) rather than silently counted as protected.
-*Fix:* classify per-instruction coverability (§5, `isDITCoveredOpcode`) and emit
-a diagnostic/report section for uncoverable tainted instructions instead of
-counting them as protected.
+assurance. Similarly, runs include **address-sensitive loads/stores** (a
+secret-dependent address leaks via cache/TLB timing — DIT covers the loaded data
+*value*, not the address) and **branches on tainted flags** (control-flow timing)
+— DIT provides no guarantee for either. These hazards are NOT COVERED by this
+project (speculation is out of scope; the ISB/DSB placeholder for it was removed
+2026-07-14).
+*Status:* **diagnosed** — a new `TargetInstrInfo::isDITProtected(MI)` hook drives
+a `-taint-uncovered-report=<file>` report that emits an `UNCOVERED
+<not-dit-covered|secret-address|secret-branch>` line per tainted-but-unprotected
+instruction, instead of silently counting them protected. The hook is a
+**membership list** against the Arm DIT covered set (`utils/taint_dit_spec.md`):
+it returns true only for the enumerated covered integer data-processing, for
+loads/stores (data value, by class), and for FP/SIMD data-processing (by class,
+minus the explicitly-excluded divide/sqrt), and **defaults to uncovered** so an
+unrecognised instruction is flagged rather than assumed protected (the safe
+direction). Lit: `taint-analysis-dit-uncovered.mir`. Known limitations: a *raw*
+(uncomputed) secret used directly as a store address is under-flagged (only
+computed/address-tainted store addresses are caught; loads catch it via the
+all-uses-are-address rule); and an unrecognised-but-actually-covered opcode
+produces a spurious audit line until the covered switch is extended. Actually
+*protecting* these (constant-time rewrite / substitution) remains out of scope —
+the report is for audit.
 
 ### G3 (leak-adjacent) — **PARTIALLY ADDRESSED**: exceptional exits, unknown callees
 Unwinds/`longjmp` out of an instrumented function leave DIT=1 in the unwinder and
@@ -255,16 +268,37 @@ Treat "PSTATE.DIT == 1" as a dataflow fact and place toggles by lazy-code-motion
 over the machine CFG, extended interprocedurally by the existing fixed-point
 framework.
 
-### 5.1 Instruction classifier (new target hook)
-`AArch64InstrInfo::isDITCoveredOpcode(const MachineInstr &)` — returns whether
-the opcode is in the Arm ARM DIT list. Start conservative: integer
-data-processing minus `SDIV`/`UDIV`, moves, NEON/crypto per the list; loads and
-stores are *covered for data, not address*. Drives two things:
-- **Need set:** `Need(MI) = isTainted(MI) && isDITCoveredOpcode(MI)` — the
-  instructions that must execute under DIT=1.
-- **Residual report:** tainted instructions with `!isDITCoveredOpcode` (tainted
-  divides, address-sensitive accesses, tainted-flag branches) go to a
-  `-taint-dit-residual-output` report — visible, not silently "protected".
+### 5.1 Instruction classifier — **BUILT (Track C, 2026-07-16); it gates placement**
+The classifier is the already-shipped `TargetInstrInfo::isDITProtected(MI)`
+membership hook (`utils/taint_dit_spec.md`, `classifyDITUncovered`,
+`-taint-uncovered-report`). §5 does **not** re-implement it — it *consumes* it.
+
+**Coverability gates region creation — the load-bearing rule for §5.** A tainted
+instruction DIT cannot protect must never cause a DIT region to exist or grow:
+wrapping a secret `SDIV` in DIT pays a ~30-cyc toggle for zero protection (the
+divide stays data-value-timed regardless). So the placement "need" set is
+**coverable-tainted only**:
+
+```
+Need(MI)     = isTainted(MI) && isDITProtected(MI)     // drives MSR DIT placement
+Residual(MI) = isTainted(MI) && !isDITProtected(MI)    // -> -taint-uncovered-report only
+```
+
+Consequences the placement pass must honour:
+- **Uncoverable tainted instructions do not anticipate/require DIT.** They are
+  excluded from down-safety and availability entirely — they can sit inside a DIT
+  region (harmless) or outside it (also harmless: DIT wouldn't protect them
+  either way), but they must never be the *reason* a toggle is inserted or a
+  region extended. A function whose *only* tainted instructions are uncoverable
+  needs **zero** toggles (and just emits residual-report lines).
+- **`secret-address` and `secret-branch` are residual too**, not just
+  divide/sqrt — DIT covers neither, so neither belongs in the Need set.
+- **Fixes the current over-count:** today (function granularity) uncoverable
+  instructions are swept into the wrapped region and counted as "protected". §5's
+  Need/Residual split is what stops the region reports overstating coverage.
+
+This is exactly why Track C precedes Track B: the coverability classifier is not a
+side report, it is the **filter on the placement objective's input**.
 
 ### 5.2 Intraprocedural placement (dataflow, frequency-aware)
 Standard two-pass formulation over MachineBasicBlocks:

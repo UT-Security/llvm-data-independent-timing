@@ -432,6 +432,8 @@ public:
   std::optional<unsigned>
   getNumStoredValueRegs(const MachineInstr &MI) const override;
 
+  bool isDITProtected(const MachineInstr &MI) const override;
+
   MCInst getNop() const override;
 
   bool isSchedulingBoundary(const MachineInstr &MI,

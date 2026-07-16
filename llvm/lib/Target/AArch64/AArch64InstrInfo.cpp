@@ -7087,6 +7087,143 @@ AArch64InstrInfo::getNumStoredValueRegs(const MachineInstr &MI) const {
   }
 }
 
+// True if MI has any FP/SIMD/SVE register operand. Used to recognise FP and
+// Advanced SIMD data-processing as a class: the DIT spec covers essentially all
+// of it EXCEPT divide/sqrt (which isDITProtected excludes explicitly first), so
+// recognising the class avoids enumerating the hundreds of covered SIMD opcodes.
+static bool usesOrDefsFPReg(const MachineInstr &MI) {
+  for (const MachineOperand &MO : MI.operands()) {
+    if (!MO.isReg() || !MO.getReg().isPhysical())
+      continue;
+    Register R = MO.getReg();
+    if (AArch64::FPR8RegClass.contains(R) ||
+        AArch64::FPR16RegClass.contains(R) ||
+        AArch64::FPR32RegClass.contains(R) ||
+        AArch64::FPR64RegClass.contains(R) ||
+        AArch64::FPR128RegClass.contains(R) ||
+        AArch64::ZPRRegClass.contains(R))
+      return true;
+  }
+  return false;
+}
+
+bool AArch64InstrInfo::isDITProtected(const MachineInstr &MI) const {
+  // Membership list against the Arm DIT covered set (utils/taint_dit_spec.md):
+  // return true ONLY for instructions the spec guarantees are timing-independent
+  // of non-address register data values, and DEFAULT FALSE so an instruction we
+  // cannot place in the covered set is flagged for audit rather than silently
+  // assumed protected. Under-approximating coverage is the safe direction.
+  switch (MI.getOpcode()) {
+  // --- Documented EXCLUSIONS: divide & square root (integer and FP/SIMD) are
+  // NOT in the covered set — they stay data-value-timed even with DIT=1. Listed
+  // first so the FP-class fallback below does not sweep the FP forms back in. ---
+  case AArch64::SDIVWr: case AArch64::SDIVXr:
+  case AArch64::UDIVWr: case AArch64::UDIVXr:
+  case AArch64::FDIVHrr: case AArch64::FDIVSrr: case AArch64::FDIVDrr:
+  case AArch64::FDIVv4f16: case AArch64::FDIVv8f16: case AArch64::FDIVv2f32:
+  case AArch64::FDIVv4f32: case AArch64::FDIVv2f64:
+  case AArch64::FSQRTHr: case AArch64::FSQRTSr: case AArch64::FSQRTDr:
+  case AArch64::FSQRTv4f16: case AArch64::FSQRTv8f16: case AArch64::FSQRTv2f32:
+  case AArch64::FSQRTv4f32: case AArch64::FSQRTv2f64:
+    return false;
+
+  // --- Integer data-processing covered set (transcribed from the DIT spec) ---
+  // add / subtract (immediate, plain/shifted/extended register, carry)
+  case AArch64::ADCSWr: case AArch64::ADCSXr: case AArch64::ADCWr:
+  case AArch64::ADCXr: case AArch64::ADDSWri: case AArch64::ADDSWrr:
+  case AArch64::ADDSWrs: case AArch64::ADDSWrx: case AArch64::ADDSXri:
+  case AArch64::ADDSXrr: case AArch64::ADDSXrs: case AArch64::ADDSXrx:
+  case AArch64::ADDSXrx64: case AArch64::ADDWri: case AArch64::ADDWrr:
+  case AArch64::ADDWrs: case AArch64::ADDWrx: case AArch64::ADDXri:
+  case AArch64::ADDXrr: case AArch64::ADDXrs: case AArch64::ADDXrx:
+  case AArch64::ADDXrx64: case AArch64::SBCSWr: case AArch64::SBCSXr:
+  case AArch64::SBCWr: case AArch64::SBCXr: case AArch64::SUBSWri:
+  case AArch64::SUBSWrr: case AArch64::SUBSWrs: case AArch64::SUBSWrx:
+  case AArch64::SUBSXri: case AArch64::SUBSXrr: case AArch64::SUBSXrs:
+  case AArch64::SUBSXrx: case AArch64::SUBSXrx64: case AArch64::SUBWri:
+  case AArch64::SUBWrr: case AArch64::SUBWrs: case AArch64::SUBWrx:
+  case AArch64::SUBXri: case AArch64::SUBXrr: case AArch64::SUBXrs:
+  case AArch64::SUBXrx: case AArch64::SUBXrx64:
+  // logical (immediate, shifted register)
+  case AArch64::ANDSWri: case AArch64::ANDSWrr: case AArch64::ANDSWrs:
+  case AArch64::ANDSXri: case AArch64::ANDSXrr: case AArch64::ANDSXrs:
+  case AArch64::ANDWri: case AArch64::ANDWrr: case AArch64::ANDWrs:
+  case AArch64::ANDXri: case AArch64::ANDXrr: case AArch64::ANDXrs:
+  case AArch64::BICSWrr: case AArch64::BICSWrs: case AArch64::BICSXrr:
+  case AArch64::BICSXrs: case AArch64::BICWrr: case AArch64::BICWrs:
+  case AArch64::BICXrr: case AArch64::BICXrs: case AArch64::EONWrr:
+  case AArch64::EONWrs: case AArch64::EONXrr: case AArch64::EONXrs:
+  case AArch64::EORWri: case AArch64::EORWrr: case AArch64::EORWrs:
+  case AArch64::EORXri: case AArch64::EORXrr: case AArch64::EORXrs:
+  case AArch64::ORNWrr: case AArch64::ORNWrs: case AArch64::ORNXrr:
+  case AArch64::ORNXrs: case AArch64::ORRWri: case AArch64::ORRWrr:
+  case AArch64::ORRWrs: case AArch64::ORRXri: case AArch64::ORRXrr:
+  case AArch64::ORRXrs:
+  // bitfield / extract / move-wide
+  case AArch64::BFMWri: case AArch64::BFMXri: case AArch64::EXTRWrri:
+  case AArch64::EXTRXrri: case AArch64::MOVKWi: case AArch64::MOVKXi:
+  case AArch64::MOVNWi: case AArch64::MOVNXi: case AArch64::MOVZWi:
+  case AArch64::MOVZXi: case AArch64::SBFMWri: case AArch64::SBFMXri:
+  case AArch64::UBFMWri: case AArch64::UBFMXri:
+  // variable shift / multiply
+  case AArch64::ASRVWr: case AArch64::ASRVXr: case AArch64::LSLVWr:
+  case AArch64::LSLVXr: case AArch64::LSRVWr: case AArch64::LSRVXr:
+  case AArch64::RORVWr: case AArch64::RORVXr: case AArch64::MADDWrrr:
+  case AArch64::MADDXrrr: case AArch64::MSUBWrrr: case AArch64::MSUBXrrr:
+  case AArch64::SMADDLrrr: case AArch64::SMSUBLrrr: case AArch64::SMULHrr:
+  case AArch64::UMADDLrrr: case AArch64::UMSUBLrrr: case AArch64::UMULHrr:
+  // conditional compare / select
+  case AArch64::CCMNWi: case AArch64::CCMNWr: case AArch64::CCMNXi:
+  case AArch64::CCMNXr: case AArch64::CCMPWi: case AArch64::CCMPWr:
+  case AArch64::CCMPXi: case AArch64::CCMPXr: case AArch64::CSELWr:
+  case AArch64::CSELXr: case AArch64::CSINCWr: case AArch64::CSINCXr:
+  case AArch64::CSINVWr: case AArch64::CSINVXr: case AArch64::CSNEGWr:
+  case AArch64::CSNEGXr:
+  // 1-source data-processing
+  case AArch64::ABSWr: case AArch64::ABSXr: case AArch64::CLSWr:
+  case AArch64::CLSXr: case AArch64::CLZWr: case AArch64::CLZXr:
+  case AArch64::RBITWr: case AArch64::RBITXr: case AArch64::REV16Wr:
+  case AArch64::REV16Xr: case AArch64::REV32Xr: case AArch64::REVWr:
+  case AArch64::REVXr:
+  // CRC32
+  case AArch64::CRC32Brr: case AArch64::CRC32CBrr: case AArch64::CRC32CHrr:
+  case AArch64::CRC32CWrr: case AArch64::CRC32CXrr: case AArch64::CRC32Hrr:
+  case AArch64::CRC32Wrr: case AArch64::CRC32Xrr:
+  // min / max (FEAT_CSSC)
+  case AArch64::SMAXWri: case AArch64::SMAXWrr: case AArch64::SMAXXri:
+  case AArch64::SMAXXrr: case AArch64::SMINWri: case AArch64::SMINWrr:
+  case AArch64::SMINXri: case AArch64::SMINXrr: case AArch64::UMAXWri:
+  case AArch64::UMAXWrr: case AArch64::UMAXXri: case AArch64::UMAXXrr:
+  case AArch64::UMINWri: case AArch64::UMINWrr: case AArch64::UMINXri:
+  case AArch64::UMINXrr:
+  // flag manipulation
+  case AArch64::CFINV: case AArch64::RMIF: case AArch64::SETF16:
+  case AArch64::SETF8:
+    return true;
+
+  default:
+    break;
+  }
+
+  // Register copies and immediate moves: value-timing-independent.
+  if (MI.isCopy() || MI.isMoveImmediate())
+    return true;
+
+  // Loads and stores: covered as a class for the DATA value (the blanket Arm
+  // guarantee that load/store timing is insensitive to the value loaded/stored).
+  // The ADDRESS side is not covered and is diagnosed separately (secret-address).
+  if (MI.mayLoad() || MI.mayStore())
+    return true;
+
+  // FP / Advanced SIMD data-processing: covered by the spec as a class, minus the
+  // divide/sqrt already excluded above. Recognised by an FP/vector operand.
+  if (usesOrDefsFPReg(MI))
+    return true;
+
+  // Not provably in the DIT-covered set -> not protected (membership default).
+  return false;
+}
+
 MCInst AArch64InstrInfo::getNop() const { return MCInstBuilder(AArch64::NOP); }
 
 // AArch64 supports MachineCombiner.
