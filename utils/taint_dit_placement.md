@@ -352,6 +352,102 @@ protocol bits come back unknown; default to the caller-side re-assert otherwise.
 - Extend `-taint-regions-output` to print DIT scopes (enable/disable points +
   frequency estimates) so `taint_region_distance.py`-style tooling can audit.
 
+### 5.6 Refined implementation design (Track B, 2026-07-16) — the plan of record
+
+Design pass over the three in-tree mode-switch idioms (§5 named them). **Verdict:
+this is `RISCVInsertVSETVLI`'s structure specialized to a single boolean mode**,
+NOT full lazy-code-motion — the "expression" is one nullary fact (`DIT==1`), so
+KRS's temporary-live-range/isolation passes collapse; only anticipation +
+availability remain, plus a frequency post-pass. (`AArch64SMEPeepholeOpt` gives
+the local pair-cancellation intuition for the admission pass; `X86VZeroUpper` the
+any-path-forward-insert-at-first-hazard template for disables.)
+
+**Dataflow (two boolean fixed points over the machine CFG, seeded by one
+`replayTaint` walk).** Local facts per block: `NEED(b)` = ∃ MI with
+`isTaintedInstruction(MI,F) && isDITProtected(MI) && classifyDITUncovered(...)==
+nullptr` (the §5.1 coverability gate — *reuse `classifyDITUncovered`, do not
+re-derive*); `CLOBBER` = each call with `!PreservesDIT(callee)`.
+
+- **Anticipation** (backward, AND-meet = down-safe): `ANTIN(b)=NEED(b) ∨ ANTOUT(b)`;
+  `ANTOUT(b)=⋀_{s} ANTIN(s)` (a return/exit successor contributes false). No kill
+  term — a clobber does not remove a *future* need.
+- **Availability** (forward, AND-meet = domination): `AVIN(b)=⋀_{p} AVOUT(p)` (entry:
+  `EntryDIT(F)`); `AVOUT(b)=enableAfterLastClobber(b) ∨ (AVIN(b) ∧ ¬hasClobber(b))`.
+  GEN depends on where enables are placed ⇒ availability and the enable frontier
+  are mutually dependent — resolve with VSETVLI's worklist (`computeIncomingVLVTYPE`
+  pattern), recomputing to a per-function fixed point.
+- **Frontier:** enable `MSR DIT #1` where `ANTIN(b) ∧ ¬AVOUT(p)` (earliest
+  anticipated ∧ ¬available), or after a clobber that a Need follows; disable
+  `MSR DIT #0` where `AVOUT(b) ∧ ¬ANTIN(s)` (latest available ∧ ¬anticipated) and
+  before returns. **Degeneracy invariant (the increment-(a) test): whole-function
+  taint ⇒ byte-identical to today's `insertTaintDITSwitches`.**
+
+**Loop hoisting (the frequency win).** Down-safety deliberately won't hoist into a
+maybe-zero-trip loop; hoisting is a separate frequency-gated relaxation. **Gate on
+exact `MachineLoopInfo` membership (primary, PGO-independent), MBFI only to size
+the trade:** for an enable in block `q` inside loop `L` with preheader `PH`, hoist
+to `end(PH)` iff `freq(block(q)) > freq(PH)`; symmetrically sink in-loop disables
+to `L`'s exit blocks (post-dominator frontier). Recurse outward over the loop
+nest. This is what turns convolve's thousands-of-dynamic toggles into ~2 (§P4).
+
+**Admission test (replaces `-taint-region-merge-gap`).** A *post-pass* (a
+frequency-weighted cost compare is not a lattice meet), analogous to
+`coalesceVSETVLIs`. For each DIT-off corridor between a dwell-motivated disable
+`d` and enable `e` with no clobber inside: merge (drop `d`,`e`) iff
+`60cyc·max(freq(d),freq(e)) ≥ Σ_{b∈corridor} freq(b)·|b|·c_dwell`. This is the
+*derived* merge-gap: static "≤N clean instrs" → "toggle pair costs more than the
+dwell saved," frequency built in (cold long gaps merge, hot short gaps split; the
+P≈40-64 crossover falls out). **Never merge across a clobber-driven re-assert** —
+tag dwell-motivated toggles at creation so the post-pass can tell them from
+correctness toggles. `-taint-region-merge-gap` becomes a transitional override
+(threshold→∞ recovers pre-admission behavior).
+
+**Interprocedural.** `PreservesDIT` (built) = the *transparency* function of the
+availability lattice: `TRANSP(call):=PreservesDIT(callee)`, so a `!PreservesDIT`
+call is a CLOBBER and gap G1's re-assert folds into availability with zero new
+machinery, now demand-driven (only when a Need follows). `EntryDIT` (new) =
+internal ∧ ¬address-taken ∧ every call site direct in-TU ∧ DIT available at every
+call site ⇒ F omits its entry enable and exit disables (caller owns the state; the
+P1 zero-toggle interior). Because availability-at-call-site is a placement result
+that feeds `AVIN(entry)`, `{placement, EntryDIT}` is a **coupled greatest fixed
+point** — seed true, retract (monotone; retraction only adds toggles) when a
+caller leaves DIT unavailable at a call site or F becomes externally reachable,
+bounded like the existing `MaxIterations=100`. External/indirect ⇒ false (sound:
+whatever the callee leaves is what the caller continues with).
+
+**G4 domination — discharged structurally.** Availability's AND-over-preds meet
+means `AVIN(b)=true` ⟺ DIT established and unclobbered on *every* incoming path =
+the domination obligation, no block-layout assumptions. EH/landing-pad/cold-split
+edges are ordinary CFG edges and participate in the meet automatically. Critical
+edges that can't be realized: split if a real preheader/exit exists, else place at
+`begin(b)` accepting extra dwell (over-approx = safe; post-PEI CFG is rigid so
+this is the default).
+
+**Soundness verifier (the hard gate at every increment).** A forward 1-bit replay
+(enable→on, disable→off, `!PreservesDIT` call→off, AND-meet at joins) that
+**asserts DIT-on at every Need MI**. Cheap, per-function, lit-runnable; a single
+missed domination is a leaked secret, so it gates every stage.
+
+**Staging** (all behind `-taint-dit-placement={function|region}`, default
+`function` so the 14 lit tests and current codegen are untouched until opted in;
+verifier green at every step):
+- **(a)** Intraproc boolean dataflow (anticipation + availability + frontier), no
+  hoist/merge. Test: whole-function-taint ⇒ byte-identical to `function` mode;
+  uncoverable-only function ⇒ zero toggles.
+- **(b)** Loop hoisting (`MachineLoopInfo`+MBFI). Test: convolve-shaped hot loop ⇒
+  enable in preheader, `CHECK-NOT` in the loop body, nothing on the backedge.
+- **(c)** Admission-test merging. Test: short-cold gap merges, long/hot gap splits;
+  threshold→∞ reduces to (b).
+- **(d)** Interproc `EntryDIT` + coupled fixed point. Test: internal tainted chain
+  ⇒ interior callee has no entry enable/exit disable; Scenario-B assert stays
+  silent; verifier confirms callee Needs still dominated by the caller's enable.
+
+**Top risks:** post-PEI CFG rigidity (mitigate: existing boundaries + safe
+in-block fallback); MBFI unreliability without PGO (mitigate: loop *membership* is
+the correctness gate, MBFI only sizes the cost trade); availability/GEN coupling
+non-convergence (mitigate: VSETVLI worklist pattern); the Need-gate must match
+`classifyDITUncovered` exactly (reuse it; test interleaved coverable/uncoverable).
+
 ### Roadmap
 | Phase | Work | Payoff |
 |---|---|---|
