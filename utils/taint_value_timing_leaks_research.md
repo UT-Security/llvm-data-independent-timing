@@ -48,9 +48,13 @@ mitigation.** Papers:
 - **FLOP** — Kim, Chuang, Genkin, Yarom, *Breaking the Apple M3 CPU via False
   Load Output Predictions*, USENIX Security 2025. The **Load Value Predictor (LVP)**.
 - **SLAP** — Kim, Genkin, Yarom, *Data Speculation Attacks via Load Address
-  Prediction on Apple Silicon*, IEEE S&P 2025. The **Load Address Predictor (LAP)** —
-  address, not value; closer to our address-taint / §G2 territory than to the core
-  value-timing thesis. Present on M2/A15+.
+  Prediction on Apple Silicon*, IEEE S&P 2025. The **Load Address Predictor (LAP)**,
+  M2/A15+. **OUT OF SCOPE for this project.** The LAP predicts which *address* is
+  accessed, not operand *values*; DIT's guarantee is value-domain (data-operand
+  instruction timing), not address-domain — address/cache/TLB timing is explicitly
+  *not* what DIT covers (cf. §G2). So the LAP is neither our threat model nor
+  something DIT is claimed to fix. Noted here only to disambiguate it from the LVP;
+  no follow-up warranted.
 
 What FLOP establishes (quotes verbatim from the PDF):
 
