@@ -43,6 +43,16 @@
 # REGION: MSRpstateImm4 26, 0
 # REGION-NEXT: {{.*}}ADDWri
 
+# @tailcall_secret — a secret forwarded through a TAIL call (TCRETURN, which is
+# isCall && isReturn). A pre-fix region build inserted a DIT re-assert AFTER the
+# terminator (invalid MIR → MachineVerifier crash). Now: DIT is enabled at entry
+# and stays ON through the tail call so the (external) callee inherits it
+# (Scenario B) — no MSR DIT #0 before it, and nothing after the terminator.
+# REGION-LABEL: name: tailcall_secret
+# REGION: MSRpstateImm4 26, 1
+# REGION-NEXT: TCRETURNdi @ext
+# REGION-NOT: MSRpstateImm4 26, 0
+
 --- |
   target triple = "aarch64-unknown-linux-gnu"
 
@@ -51,6 +61,12 @@
   }
 
   define i32 @narrows(i32 "tainted" %s, i32 %p) {
+    ret i32 0
+  }
+
+  declare i32 @ext(i32)
+
+  define i32 @tailcall_secret(i32 "tainted" %s) {
     ret i32 0
   }
 
@@ -96,5 +112,18 @@ body:             |
     liveins: $w0
 
     RET_ReallyLR implicit $w0
+
+...
+---
+name:            tailcall_secret
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0:
+    liveins: $w0
+
+    TCRETURNdi @ext, 0, csr_aarch64_aapcs, implicit $sp, implicit $w0
 
 ...

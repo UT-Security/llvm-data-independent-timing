@@ -1448,6 +1448,33 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
 // Track B: cost-model region placement (utils/taint_dit_placement.md §5.6)
 //===----------------------------------------------------------------------===//
 
+// Whole-function granularity: MSR DIT #1 at entry, #0 before every return
+// (isReturn is tested before isCall, so a tail call is treated as a return and
+// never gets a re-assert appended after it — a terminator), #1 re-asserted after
+// every non-tail, non-DIT-preserving call. The shipped policy, and the safe
+// fallback when region placement cannot prove coverage.
+static void emitFunctionGranularityDIT(MachineFunction &MF,
+                                       const TaintSummaryInfo *TSI) {
+  const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+  Module *M = const_cast<Module *>(MF.getFunction().getParent());
+  MachineBasicBlock &Entry = MF.front();
+  TII->insertTimingModeSwitch(Entry, Entry.begin(), DebugLoc(),
+                              /*Enable=*/true);
+  for (MachineBasicBlock &MBB : MF)
+    for (MachineInstr &MI : MBB) {
+      if (MI.isReturn()) {
+        TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
+                                    /*Enable=*/false);
+      } else if (MI.isCall()) {
+        const Function *Callee = findCalledFunction(*M, MI);
+        if (TSI && Callee && TSI->getSummary(*Callee).PreservesDIT)
+          continue;
+        TII->insertTimingModeSwitch(MBB, std::next(MI.getIterator()),
+                                    MI.getDebugLoc(), /*Enable=*/true);
+      }
+    }
+}
+
 // An instruction that must execute with PSTATE.DIT=1. Coverable-tainted
 // data-processing / loads / stores (DIT protects their data-value timing —
 // including a secret-address load's data value, the LVP channel), PLUS any
@@ -1486,13 +1513,15 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   Module &M = *const_cast<Module *>(MF.getFunction().getParent());
 
-  // Local facts: does each block contain a Need? (one replay walk)
+  // Local facts: which instructions are Needs, and which blocks contain one.
   DenseMap<const MachineBasicBlock *, bool> HasNeed;
+  DenseSet<const MachineInstr *> NeedSet;
   unsigned NeedCount = 0;
   replayTaint(MF, TR, TSI, AA,
               [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
                 if (needsDIT(MI, F, *TII)) {
                   HasNeed[MI.getParent()] = true;
+                  NeedSet.insert(&MI);
                   ++NeedCount;
                 }
                 return true;
@@ -1535,19 +1564,31 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                                     /*Enable=*/true);
         ++Toggles;
       }
+      // Re-assert after each clobber that is NOT a terminator. A non-preserving
+      // tail call is a clobber AND a terminator: nothing follows it in this
+      // function, and inserting after a terminator is invalid MIR.
       SmallVector<MachineInstr *, 8> Clobbers;
       for (MachineInstr &MI : MBB)
-        if (clobbersDIT(MI, TSI, M))
+        if (clobbersDIT(MI, TSI, M) && !MI.isTerminator())
           Clobbers.push_back(&MI);
       for (MachineInstr *C : Clobbers) {
         TII->insertTimingModeSwitch(MBB, std::next(C->getIterator()),
                                     C->getDebugLoc(), /*Enable=*/true);
         ++Toggles;
       }
-      if (!MBB.empty() && MBB.back().isReturn()) {
-        TII->insertTimingModeSwitch(MBB, MBB.back().getIterator(),
-                                    MBB.back().getDebugLoc(), /*Enable=*/false);
-        ++Toggles;
+      // Disable before the block's return — found by scan (it need not be the
+      // last slot; a trailing DBG_VALUE/meta may follow). BUT if the return is
+      // itself a Need (a secret-passing tail call), DIT must stay ON through it
+      // so the callee inherits it (Scenario B) — do not disable.
+      for (MachineInstr &MI : MBB) {
+        if (!MI.isReturn())
+          continue;
+        if (!NeedSet.count(&MI)) {
+          TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
+                                      /*Enable=*/false);
+          ++Toggles;
+        }
+        break;
       }
     } else {
       bool AnyPredOn = false;
@@ -1606,6 +1647,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   // so a block-change reset is sufficient.
   const MachineBasicBlock *CurBlk = nullptr;
   bool CurOn = false;
+  bool Sound = true;
   replayTaint(MF, TR, TSI, AA,
               [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
                 if (MI.getParent() != CurBlk) {
@@ -1617,13 +1659,29 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                   return true;
                 }
                 if (needsDIT(MI, F, *TII) && !CurOn)
-                  report_fatal_error(
-                      "taint: DIT region placement left a secret-dependent "
-                      "instruction outside DIT coverage (verifier)");
+                  Sound = false;
                 if (clobbersDIT(MI, TSI, M))
                   CurOn = false;
                 return true;
               });
+
+  if (!Sound) {
+    // The verifier could not prove every Need is DIT-covered. Rather than abort
+    // the whole TU, degrade this function to the always-safe whole-function
+    // policy: erase the region switches we inserted (the input had none, so
+    // every DIT switch present is ours) and re-emit function granularity.
+    for (MachineBasicBlock &MBB : MF) {
+      SmallVector<MachineInstr *, 8> ToErase;
+      for (MachineInstr &MI : MBB)
+        if (TII->getTimingModeSwitch(MI))
+          ToErase.push_back(&MI);
+      for (MachineInstr *I : ToErase)
+        I->eraseFromParent();
+    }
+    errs() << "taint: DIT region placement could not prove coverage in "
+           << MF.getName() << "; fell back to function granularity\n";
+    emitFunctionGranularityDIT(MF, TSI);
+  }
   return NeedCount;
 }
 
@@ -1631,7 +1689,6 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
                                       const TaintResult &TR,
                                       const TaintSummaryInfo *TSI,
                                       raw_ostream *RegionsOS, AAResults *AA) {
-  const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   unsigned TaintedInstrCount = 0;
   SmallVector<TaintedRun, 64> TaintedRuns =
       collectTaintedRuns(MF, TR, TSI, TaintedInstrCount, AA);
@@ -1646,37 +1703,18 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
     return TaintedInstrCount;
 
   // Track B: cost-model region placement (WIP). Opt-in; default stays
-  // function-granularity below, so shipped codegen is untouched.
-  if (TaintDITPlacement == DITPlacementMode::Region)
-    return insertTaintDITRegions(MF, TR, TSI, AA);
+  // function-granularity below, so shipped codegen is untouched. Both modes
+  // report the same tainted-instruction count.
+  if (TaintDITPlacement == DITPlacementMode::Region) {
+    insertTaintDITRegions(MF, TR, TSI, AA);
+    return TaintedInstrCount;
+  }
 
   // Function granularity: run the whole function in data-independent-timing
   // mode when it contains any tainted instruction. Per-region toggles would
   // clear an enclosing region's DIT when a tainted callee's exit switch runs
   // inside a caller's still-open region.
-  MachineBasicBlock &Entry = MF.front();
-  TII->insertTimingModeSwitch(Entry, Entry.begin(), DebugLoc(),
-                              /*Enable=*/true);
-  // The DIT scope ends on any exit, including tail calls; a tainted callee
-  // re-enables it for itself. After a non-tail call the callee may have cleared
-  // DIT on its own exit (PSTATE.DIT has no callee-saved convention), so
-  // re-assert it to keep the rest of this function protected — unless the
-  // callee's summary proves it preserves DIT (in-TU, not instrumented, only
-  // preserving calls).
-  Module *M = const_cast<Module *>(MF.getFunction().getParent());
-  for (MachineBasicBlock &MBB : MF)
-    for (MachineInstr &MI : MBB) {
-      if (MI.isReturn()) {
-        TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
-                                    /*Enable=*/false);
-      } else if (MI.isCall()) {
-        const Function *Callee = findCalledFunction(*M, MI);
-        if (TSI && Callee && TSI->getSummary(*Callee).PreservesDIT)
-          continue;
-        TII->insertTimingModeSwitch(MBB, std::next(MI.getIterator()),
-                                    MI.getDebugLoc(), /*Enable=*/true);
-      }
-    }
+  emitFunctionGranularityDIT(MF, TSI);
 
   return TaintedInstrCount;
 }
