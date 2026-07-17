@@ -109,22 +109,34 @@ static cl::opt<DITPlacementMode> TaintDITPlacement(
                           "anticipation-coarse)")));
 
 // Track B increment (c): the admission test (utils/taint_dit_placement.md §5.6).
-// A DIT toggle PAIR (disable then re-enable across a clean corridor) costs
-// ~60 serializing cycles; DIT dwell costs ~`dwell-per-instr` cycles per covered
-// instruction. An interior Off corridor between two On regions is merged (kept
-// DIT-on straight through) when the toggle pair costs more than the dwell it
-// would save, weighted by MachineBlockFrequencyInfo. This is the frequency-aware
-// replacement for the static `-taint-region-merge-gap` proxy: at freq 1, a
-// corridor of N instructions merges iff 60 >= dwell-per-instr * N, so the default
-// 1.0 puts the static crossover at ~60 clean instructions (the measured P≈40-64
-// fine-grain crossover). dwell-per-instr=0 => always merge (coarsen, e.g. an M4
-// where dwell≈0); a very large value => never merge (recovers pure increment-(b)
-// placement). Only reached under -taint-dit-placement=region.
+// A DIT mode switch (MSR DIT) costs `switch-cyc` cycles; DIT dwell costs
+// `dwell-per-instr` cycles per covered instruction. An interior Off corridor
+// between two On regions is merged (kept DIT-on straight through) when the toggle
+// pair it removes costs at least the dwell it would add, both weighted by
+// MachineBlockFrequencyInfo. Together these knobs are the frequency-aware
+// replacement for the static `-taint-region-merge-gap` proxy.
+//
+// The switch cost DEFAULTS TO 0 — free toggles ⇒ the admission test never merges
+// (any positive dwell wins), so region mode shows the FINEST-GRAIN placement
+// increment (b) produces (smallest DIT groups). Dial `switch-cyc` up (toward the
+// measured ~30 cyc/switch on the M4) to watch groups coalesce: at freq 1 a corridor
+// of N instructions merges iff `switch-cyc * 2 >= dwell-per-instr * N`, so
+// switch-cyc=30, dwell-per-instr=1 puts the static crossover at ~60 clean
+// instructions (the measured P≈40-64 fine-grain crossover). Only reached under
+// -taint-dit-placement=region.
+static cl::opt<double> TaintDitSwitchCyc(
+    "taint-dit-switch-cyc",
+    cl::desc("Cost in cycles of one PSTATE.DIT mode switch (MSR DIT), used by the "
+             "region-placement admission test. 0 (default) makes toggles free so "
+             "the admission test never merges — the finest-grain DIT placement; "
+             "raise it (e.g. 30) to coalesce small DIT groups"),
+    cl::init(0.0));
+
 static cl::opt<double> TaintDitDwellPerInstr(
     "taint-dit-dwell-per-instr",
     cl::desc("DIT dwell cost in cycles per covered instruction, used by the "
              "region-placement admission test to decide whether to merge a "
-             "clean corridor between two DIT regions (0 = always merge)"),
+             "clean corridor between two DIT regions"),
     cl::init(1.0));
 
 /// Unified cell extraction from a MachineMemOperand.
@@ -1619,9 +1631,10 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
     return MBFI.getBlockFreqRelativeToEntryBlock(B);
   };
 
-  // Each MSR DIT switch is a single serializing toggle (~30 cyc, measured on M4;
-  // utils/taint_dit_cost_model.md).
-  constexpr double SwitchCyc = 30.0;
+  // Cost of one MSR DIT switch. Tunable via -taint-dit-switch-cyc; defaults to 0
+  // (free toggles ⇒ never merge ⇒ finest-grain groups). The measured cost on the
+  // M4 is ~30 cyc/switch (utils/taint_dit_cost_model.md).
+  const double SwitchCyc = TaintDitSwitchCyc;
 
   // Partition the Off blocks into maximal CFG-connected components. Two Off blocks
   // that are CFG-adjacent are in the same component, so distinct components are

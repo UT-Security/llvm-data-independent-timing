@@ -569,6 +569,16 @@ files (per `CLAUDE.md`) but no longer has any bearing on placement;
 `-taint-dit-dwell-per-instr` is its frequency-aware placement replacement (set it
 very large to recover pure (b)).
 
+*Switch cost defaults to 0 — finest grain first (2026-07-17).* `-taint-dit-switch-cyc`
+(cycles per `MSR DIT`) defaults to **0**, so toggles are free and the admission test
+never merges (any positive `-taint-dit-dwell-per-instr` wins): region mode then emits
+the smallest DIT groups increment (b) can produce — each `On…Off…On` corridor stays
+split, DIT wrapping only the minimal Need regions. This is the deliberate starting
+point for exploring placement; dial `switch-cyc` up toward the measured ~30 cyc/switch
+(pair ≈ 60) to watch groups coalesce (crossover `switch-cyc·2 ≥ dwell_per_instr·N` at
+freq 1). The admission lit test pins `-taint-dit-switch-cyc=30` so its "60-cyc pair"
+narrative is independent of the default.
+
 *Cost model — emit-accurate (post-review, 2026-07-16).* The first cut scored a
 corridor as `60·max(freq(disable),freq(enable))` and blanket-refused any corridor
 containing a clobber. A `/code-review high` found (no soundness bugs — every defect
