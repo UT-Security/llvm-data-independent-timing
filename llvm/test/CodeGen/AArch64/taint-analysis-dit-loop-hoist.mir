@@ -1,0 +1,81 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=region %s -o - | FileCheck %s --check-prefix=HOIST
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=region -taint-dit-loop-hoist=0 %s -o - | FileCheck %s --check-prefix=MIN
+
+# -taint-dit-loop-hoist toggles loop coarsening. @loop_public is a loop whose
+# HEADER (bb.1) holds a secret Need (a tainted ADD) but whose BODY (bb.2) does only
+# public work (no Need) before the backedge.
+#
+#  * hoist=1 (default, HOIST): the whole need-loop {bb.1,bb.2} is covered, so the
+#    enable hoists ONCE to the loop preheader (bb.0's terminator) and the public
+#    body bb.2 runs DIT-on with no switch inside the loop.
+#  * hoist=0 (MIN, block-minimal): only the Need-containing block bb.1 is covered.
+#    The enable lands at bb.1's entry (re-run every iteration — the deliberate cost
+#    of covering the fewest instructions), bb.2 is DISABLED at its entry and runs
+#    the public work DIT-off, and the exit bb.3 disables before the return.
+#
+# Both are sound (the verifier gates every build). 26 is the PSTATE.DIT pstatefield.
+
+# HOIST-LABEL: name: loop_public
+# HOIST: bb.0
+# HOIST: MSRpstateImm4 26, 1
+# HOIST: bb.1
+# HOIST-NOT: MSRpstateImm4
+# HOIST: bb.2
+# HOIST-NOT: MSRpstateImm4
+# HOIST: bb.3
+# HOIST: MSRpstateImm4 26, 0
+
+# MIN-LABEL: name: loop_public
+# MIN: bb.0
+# MIN-NOT: MSRpstateImm4
+# MIN: bb.1
+# MIN: MSRpstateImm4 26, 1
+# MIN: bb.2
+# MIN: MSRpstateImm4 26, 0
+# MIN: bb.3
+# MIN: MSRpstateImm4 26, 0
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @loop_public(i32 "tainted" %s, i32 %n) {
+    ret i32 0
+  }
+
+...
+---
+name:            loop_public
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+  - { reg: '$w1' }
+body:             |
+  bb.0:
+    successors: %bb.1
+    liveins: $w0, $w1
+
+    renamable $w2 = ADDWri renamable $w1, 5, 0
+    B %bb.1
+
+  bb.1:
+    successors: %bb.2, %bb.3
+    liveins: $w0, $w1
+
+    renamable $w0 = ADDWri renamable $w0, 1, 0
+    CBZW renamable $w1, %bb.3
+    B %bb.2
+
+  bb.2:
+    successors: %bb.1
+    liveins: $w0, $w1
+
+    renamable $w1 = ADDWri renamable $w1, 1, 0
+    B %bb.1
+
+  bb.3:
+    liveins: $w0
+
+    RET_ReallyLR implicit $w0
+
+...

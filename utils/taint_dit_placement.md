@@ -569,6 +569,24 @@ files (per `CLAUDE.md`) but no longer has any bearing on placement;
 `-taint-dit-dwell-per-instr` is its frequency-aware placement replacement (set it
 very large to recover pure (b)).
 
+*Loop hoisting is toggleable — block-minimal coverage first (2026-07-17).*
+`-taint-dit-loop-hoist` (default **true** = increment (b)) gates the loop
+coarsening. Set it **false** for BLOCK-MINIMAL coverage: `On(b) = HasNeed(b)` only,
+so DIT wraps just the blocks that actually contain a secret instruction and
+everything else — including a loop's non-secret body blocks — runs unprotected. The
+cost is a per-iteration enable/disable around a need-block reached by a backedge
+(the enable lands at the need-block's entry instead of the preheader; the
+irreducible-cycle fallback is skipped because per-iteration toggling is now the
+intended behavior, not a hazard). Pairs naturally with `-taint-dit-switch-cyc=0`
+(per-iteration toggles are free), and the soundness verifier still gates every
+build. Measured on `firefox_convolve_int` at `-O2` (switch-cyc=0): `convolve_pixel_int`
+drops from 78% → **66%** of instructions covered (100 vs 67 DIT-off) as the in-loop
+non-need blocks flip off; 0 fallbacks; checksum unchanged vs unhardened. This is the
+current finest granularity (block-level); protecting only the Need *instructions*
+within a block would need a sub-block (instruction-level) emit, not yet built.
+Test: `taint-analysis-dit-loop-hoist.mir` (`@loop_public` — hoist covers the public
+loop body, block-minimal leaves it DIT-off).
+
 *Switch cost defaults to 0 — finest grain first (2026-07-17).* `-taint-dit-switch-cyc`
 (cycles per `MSR DIT`) defaults to **0**, so toggles are free and the admission test
 never merges (any positive `-taint-dit-dwell-per-instr` wins): region mode then emits

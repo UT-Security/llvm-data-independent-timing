@@ -139,6 +139,21 @@ static cl::opt<double> TaintDitDwellPerInstr(
              "clean corridor between two DIT regions"),
     cl::init(1.0));
 
+// When true (default), a Need inside a loop coarsens the whole enclosing
+// need-loop(s) On so the enable hoists to the loop preheader (executed once) — the
+// increment-(b) behavior. When false, coverage is BLOCK-MINIMAL: On(b)=HasNeed(b)
+// only, so DIT wraps just the blocks that actually contain a secret instruction and
+// everything else — including the rest of a loop's body — runs unprotected, at the
+// cost of a per-iteration enable/disable around a need-block reached by a backedge.
+// Set false to protect the fewest instructions (pairs naturally with
+// -taint-dit-switch-cyc=0, where per-iteration toggles are free). Region mode only.
+static cl::opt<bool> TaintDitLoopHoist(
+    "taint-dit-loop-hoist",
+    cl::desc("Coarsen need-loops On and hoist the DIT enable to the loop preheader "
+             "(default true); false = block-minimal coverage (only need-containing "
+             "blocks are DIT-on, per-iteration toggles allowed)"),
+    cl::init(true));
+
 /// Unified cell extraction from a MachineMemOperand.
 /// Returns the base kind (Stack/Global/Unknown), offset, and optional size.
 struct CellInfo {
@@ -1757,14 +1772,17 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
 
   // Loops that (transitively, via block membership incl. sub-loops) contain a
   // Need. Marking every loop enclosing a need-block hoists the region to the
-  // outermost need-loop.
+  // outermost need-loop. Skipped in block-minimal mode (-taint-dit-loop-hoist=0),
+  // where only need-containing blocks are covered.
   DenseSet<const MachineLoop *> NeedLoops;
-  for (MachineBasicBlock &MBB : MF)
-    if (HasNeed.lookup(&MBB))
-      for (MachineLoop *L = MLI.getLoopFor(&MBB); L; L = L->getParentLoop())
-        NeedLoops.insert(L);
+  if (TaintDitLoopHoist)
+    for (MachineBasicBlock &MBB : MF)
+      if (HasNeed.lookup(&MBB))
+        for (MachineLoop *L = MLI.getLoopFor(&MBB); L; L = L->getParentLoop())
+          NeedLoops.insert(L);
   // Precompute the On block set once (one nest-walk per block) so later queries
-  // are O(1) lookups rather than repeated getLoopFor/getParentLoop walks.
+  // are O(1) lookups rather than repeated getLoopFor/getParentLoop walks. In
+  // block-minimal mode NeedLoops is empty, so On(b) reduces to HasNeed(b).
   DenseSet<const MachineBasicBlock *> OnBlocks;
   for (MachineBasicBlock &MBB : MF) {
     bool IsOn = HasNeed.lookup(&MBB);
@@ -1796,7 +1814,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
         OnAtEntry &= On(P);
       if (!OnAtEntry) {
         // Off→On boundary.
-        MachineLoop *L = MLI.getLoopFor(&MBB);
+        MachineLoop *L = TaintDitLoopHoist ? MLI.getLoopFor(&MBB) : nullptr;
         if (L && L->getHeader() == &MBB) {
           // Natural loop header: hoist the enable out of the loop so it is not
           // re-executed on the backedge.
@@ -1816,13 +1834,19 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                 ++Toggles;
               }
           }
-        } else if (blockInCycle(&MBB)) {
+        } else if (TaintDitLoopHoist && blockInCycle(&MBB)) {
           // On-entry block in a cycle MachineLoopInfo does not model
           // (irreducible): a begin() enable would be per-iteration and cannot be
           // hoisted. Fall back to whole-function granularity for this function.
+          // Only a concern when hoisting; block-minimal mode intends per-iteration
+          // toggles and places the enable at the block entry below.
           NeedFallback = true;
           break;
         } else {
+          // Block entry. In block-minimal mode this is a need-block reached by a
+          // backedge, so the enable (and the matching disable on the On→Off exit)
+          // is per-iteration — the deliberate cost of covering the fewest
+          // instructions. Sound either way: the verifier below is the hard gate.
           TII->insertTimingModeSwitch(MBB, regionEntryInsertPt(MBB), DebugLoc(),
                                       /*Enable=*/true);
           ++Toggles;
