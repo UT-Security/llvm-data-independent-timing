@@ -42,11 +42,17 @@ struct FunctionMemEffects {
   /// Indices of pointer arguments through whose pointee the function may write a
   /// secret (P1 argument-provenance mod-set, utils/taint_memory_summary_research.md
   /// §11/P1). Precise alternative to WritesSecretToUnknown for the canonical
-  /// callee->caller-through-memory write (a store through a pointer parameter):
-  /// the caller taints only the memory it passed for that argument rather than
-  /// poisoning all of its memory. Populated for DIRECT stores whose destination
-  /// resolves (via the MMO's underlying IR Value) to a function Argument; a store
-  /// whose provenance cannot be resolved still escalates to WritesSecretToUnknown.
+  /// callee->caller-through-memory write (a store through a pointer parameter).
+  /// Populated for DIRECT stores whose destination resolves (via the MMO's
+  /// underlying IR Value) to a function Argument; a store whose provenance cannot
+  /// be resolved still escalates to WritesSecretToUnknown.
+  ///
+  /// NOTE (staging): as of P1a this set is *recorded* precisely but *applied*
+  /// bluntly — the call site still treats a non-empty set as a full
+  /// ExternalMemClobbered, so behavior is byte-identical to blunt-TOP P0. P1b
+  /// makes the application precise: taint only the pointee of the pointer the
+  /// caller actually passed for argument i, instead of poisoning all of its
+  /// memory.
   SmallSet<unsigned, 4> WritesSecretThroughArgPointee;
 
   /// TOP: the function may have written a secret to memory the analysis cannot

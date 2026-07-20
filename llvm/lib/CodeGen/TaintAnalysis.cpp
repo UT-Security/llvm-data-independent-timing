@@ -1007,8 +1007,14 @@ FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
       llvm::sort(Args);
       for (unsigned A : Args)
         dbgs() << " arg" << A;
+      // SmallPtrSet iteration order is unspecified — sort by name so the dump is
+      // deterministic across runs (and lit-testable with multiple globals).
+      SmallVector<StringRef, 4> Globals;
       for (const GlobalVariable *GV : ME.WritesSecretToGlobal)
-        dbgs() << " @" << GV->getName();
+        Globals.push_back(GV->getName());
+      llvm::sort(Globals);
+      for (StringRef G : Globals)
+        dbgs() << " @" << G;
       if (ME.WritesSecretToUnknown)
         dbgs() << " UNKNOWN(TOP)";
       dbgs() << "\n";

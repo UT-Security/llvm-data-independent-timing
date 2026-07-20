@@ -14,8 +14,11 @@
 # @writes_global stores the same secret into a named global, which stays precise
 # (a distinct bucket), confirming the arg case is not swallowing the global case.
 
-# CHECK-DAG: mem-effects[writes_through_arg]: arg0
-# CHECK-DAG: mem-effects[writes_global]: @g
+# The patterns are end-anchored ({{$}}): `arg0` must be the WHOLE bucket list, so a
+# regression that records arg0 but ALSO leaves TOP set (dump `arg0 UNKNOWN(TOP)`)
+# fails the test — the point of P1a is precise INSTEAD of TOP, not in addition to it.
+# CHECK-DAG: mem-effects[writes_through_arg]: arg0{{$}}
+# CHECK-DAG: mem-effects[writes_global]: @g{{$}}
 
 --- |
   target triple = "aarch64-unknown-linux-gnu"
