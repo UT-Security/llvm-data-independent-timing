@@ -32,8 +32,27 @@
 # ANNOT-LABEL: name: plumbing
 # ANNOT-NOT: MSRpstateImm4
 
+# @global_writer writes the secret into a module GLOBAL (mod-set WritesSecretToGlobal)
+# — instrumented in both modes (a directly-tainted store). @global_plumbing calls it
+# with a zero and then LOADS the global: in inference the whole-global taint poisons
+# that load (instrumented), in annotation-driven the cross-function whole-global taint
+# is not consumed (clean). This covers the whole-global consumption gate — distinct
+# from @plumbing's ExternalMemClobbered path — and pins that a global-mediated flood
+# is suppressed too, not just the pointer-arg one.
+# INFER-LABEL: name: global_writer
+# INFER: MSRpstateImm4 26, 1
+# ANNOT-LABEL: name: global_writer
+# ANNOT: MSRpstateImm4 26, 1
+
+# INFER-LABEL: name: global_plumbing
+# INFER: MSRpstateImm4 26, 1
+# ANNOT-LABEL: name: global_plumbing
+# ANNOT-NOT: MSRpstateImm4
+
 --- |
   target triple = "aarch64-unknown-linux-gnu"
+
+  @g = internal global i32 0
 
   define void @writer(ptr %out, i32 "tainted" %s) {
     store i32 %s, ptr %out
@@ -42,6 +61,15 @@
 
   define i32 @plumbing(ptr %q) {
     %slot = alloca i32
+    ret i32 0
+  }
+
+  define void @global_writer(i32 "tainted" %s) {
+    store i32 %s, ptr @g
+    ret void
+  }
+
+  define i32 @global_plumbing() {
     ret i32 0
   }
 
@@ -77,6 +105,35 @@ body:             |
     $w1 = COPY $wzr
     BL @writer, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit $x0, implicit $w1
     renamable $w0 = LDRWui %stack.0.slot, 0 :: (load (s32) from %ir.slot)
+    renamable $w0 = ADDWri killed renamable $w0, 1, 0
+    RET_ReallyLR implicit $w0
+
+...
+---
+name:            global_writer
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0:
+    liveins: $w0
+
+    renamable $x8 = ADRP target-flags(aarch64-page) @g
+    STRWui killed renamable $w0, killed renamable $x8, target-flags(aarch64-pageoff) @g :: (store (s32) into @g)
+    RET_ReallyLR
+
+...
+---
+name:            global_plumbing
+tracksRegLiveness: true
+isSSA:           false
+body:             |
+  bb.0:
+    $w0 = COPY $wzr
+    BL @global_writer, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit $w0
+    renamable $x8 = ADRP target-flags(aarch64-page) @g
+    renamable $w0 = LDRWui killed renamable $x8, target-flags(aarch64-pageoff) @g :: (load (s32) from @g)
     renamable $w0 = ADDWri killed renamable $w0, 1, 0
     RET_ReallyLR implicit $w0
 

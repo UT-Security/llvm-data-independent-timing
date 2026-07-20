@@ -79,9 +79,12 @@ cl::opt<bool> llvm::TaintInsertDIT(
 // functions on Firefox's filter TU, 72 of them via memory poison alone). This mode
 // instead TRUSTS the analyst's per-function secret-argument annotations: it keeps
 // seeding declared functions and propagating taint through registers / return
-// values, but does NOT apply a callee's memory mod-set as a caller-side clobber, so
-// only the declared functions and their direct register/return flow are
-// instrumented. The mod-set is still COMPUTED and surfaced in the reports as an
+// values, but a LOAD does not consume the cross-function memory poison (a callee's
+// mod-set applied as ExternalMemClobbered / whole-global, or another TU's
+// unknown-mem taint), so only the declared functions and their direct register/
+// return flow are instrumented. Suppression is at the single load-consumption choke
+// point, NOT at the mod-set application, so the mod-set stays fully COMPUTED
+// (including its transitive re-export) and is surfaced in the reports as an
 // advisory ("function X writes a secret to caller-visible memory — its consumer may
 // need annotating"). SOUNDNESS NOTE: this shifts soundness from automatic
 // over-approximation to annotation completeness — a missing annotation UNDER-covers
@@ -577,8 +580,16 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     // load is secret. Stack loads are handled separately below — the existing
     // heap poison never covered them, and that is exactly where the callee->
     // caller-through-memory leak lived (the reload of a buffer a callee wrote).
-    bool HeapPoisoned = S.UnknownMemTainted || S.isExternalMemClobbered() ||
-                        (TSI && TSI->hasUnknownMemTainted());
+    // Annotation-driven mode: a load does NOT consume the CROSS-function memory
+    // poison (a callee's mod-set applied as ExternalMemClobbered / whole-global, or
+    // another TU's unknown-mem taint). This is the single choke point that turns off
+    // the flood while leaving the mod-set fully computed for the advisory. Intra-
+    // procedural memory taint (this function's own stores, and cell-level taint) is
+    // unaffected in both modes.
+    bool CrossFn = !TaintAnnotationDriven;
+    bool HeapPoisoned = S.UnknownMemTainted ||
+                        (CrossFn && (S.isExternalMemClobbered() ||
+                                     (TSI && TSI->hasUnknownMemTainted())));
 
     for (MachineMemOperand *MMO : MI.memoperands()) {
       if (!MMO) {
@@ -594,7 +605,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // through a pointer into this frame — blunt P0 poisons every stack load
         // after such a call. Provenance-based escaped-object precision (only
         // poison stack objects whose address escaped) is the P1 refinement.
-        bool Tainted = S.isExternalMemClobbered() ||
+        bool Tainted = (CrossFn && S.isExternalMemClobbered()) ||
                        (CI.Size
                             ? S.isTaintedStackCell(CI.FI, CI.Offset, *CI.Size)
                             : S.anyTaintedStackCellForFI(CI.FI));
@@ -622,7 +633,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
                             << " (poisoned by unknown mem)\n");
         } else {
           bool Tainted =
-              S.isWholeGlobalTainted(CI.GV) ||
+              (CrossFn && S.isWholeGlobalTainted(CI.GV)) ||
               (CI.Size ? S.isTaintedGlobalCell(CI.GV, CI.Offset, *CI.Size)
                        : S.anyTaintedGlobalCellForGV(CI.GV));
           if (Tainted) {
@@ -698,30 +709,28 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       }
 
       // Apply the callee's memory-effects (mod-set): what secret it may have
-      // written into caller-visible memory. This is the callee->caller-through-
-      // memory transfer. Applied unconditionally — the summary is context-
-      // insensitive (computed over the callee's joined tainted-arg set), so a
-      // call site not passing the taint is over-approximated, the sound way.
-      // The callee->caller-through-memory transfer. Applied unconditionally in the
-      // default (inference) mode — the sound over-approximation. In
-      // annotation-driven mode it is NOT applied as a clobber (the analyst's
-      // per-function annotations are trusted instead); the mod-set is still
-      // computed above and left for the reports as an advisory. Whole-global writes
-      // stay precise and are cheap, so they are applied in both modes.
+      // written into caller-visible memory (the callee->caller-through-memory
+      // transfer). Applied in BOTH modes — the summary is context-insensitive, and
+      // the mod-set must stay COMPLETE because its own transitive re-export
+      // (computeFunctionMemEffects) reads these clobber/global bits and the reports
+      // surface them as the annotation-driven advisory. Annotation-driven mode does
+      // NOT gate the transfer here; it suppresses only the FLOOD, at the point where
+      // a load would consume the cross-function poison (see the load handling below,
+      // gated on TaintAnnotationDriven). So codegen is precise while the mod-set and
+      // its advisory remain intact.
       const FunctionMemEffects &ME = Summary.MemEffects;
       for (const GlobalVariable *GV : ME.WritesSecretToGlobal)
         S.setTaintedWholeGlobal(GV);
-      if (ME.WritesSecretToUnknown && !TaintAnnotationDriven) {
+      if (ME.WritesSecretToUnknown) {
         S.setExternalMemClobbered();
         LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
                           << " writes secret to unknown memory (mod-set TOP)\n");
       }
-      // P1a: the callee writes a secret through one of its pointer arguments.
-      // The precise fix (P1b) taints only the pointee of the pointer THIS caller
-      // passed for that argument; until then, apply it soundly-but-bluntly as a
-      // full clobber so behavior is byte-identical to P0. Skipped in
-      // annotation-driven mode.
-      if (!ME.WritesSecretThroughArgPointee.empty() && !TaintAnnotationDriven) {
+      // P1a: the callee writes a secret through one of its pointer arguments. The
+      // precise fix (P1b) taints only the pointee of the pointer THIS caller passed;
+      // until then it is a blunt clobber. (Its flood is suppressed at consumption in
+      // annotation-driven mode, like the TOP case above.)
+      if (!ME.WritesSecretThroughArgPointee.empty()) {
         S.setExternalMemClobbered();
         LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
                           << " writes secret through a pointer arg (P1a: blunt "
@@ -734,12 +743,11 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       // This is blunt-TOP P0; a libc model table and IR memory(...) attributes
       // would refine it (research §11 vii/viii), deferred pending measurement.
       if (HasTaintedArg) {
-        // The return value is a register effect — keep it in both modes. The
-        // memory clobber (this opaque call may have written the secret anywhere)
-        // is the flood source; skip it in annotation-driven mode.
+        // Return value (register effect) + memory clobber, both applied in both
+        // modes. Annotation-driven mode suppresses the clobber's FLOOD at load
+        // consumption (below), not here, so the mod-set stays complete.
         taintCallResultDefs(MI, S, TRI);
-        if (!TaintAnnotationDriven)
-          S.setExternalMemClobbered();
+        S.setExternalMemClobbered();
         if (Callee)
           LLVM_DEBUG(dbgs() << "        conservative: external call to "
                             << Callee->getName()
