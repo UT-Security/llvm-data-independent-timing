@@ -462,6 +462,64 @@ unresolved indirect call).
 
 ---
 
+## P1 implementation plan — argument-provenance memory effects (design of record, 2026-07-20)
+
+Implements §11's recommendation (the `{writes-secret-through-pointer-arg i}` mod-set
+component) as the concrete next increment. Motivated by measurement: applying the
+current **blunt-TOP P0** to the real Firefox SVG-filter TU (`gfx/2d/FilterNodeSoftware.cpp`)
+floods DIT into **77-78 of 490 functions from `ConvolvePixel` alone** - of which only
+**~43 genuinely load/store secret pixel values** (real LVP leaks, correct to cover) and
+**~32 are spurious** (rect math, destructors, refcount/container plumbing), plus **74
+more** flagged via address/branch taint DIT can't even cover. See
+`memory/firefox-filter-dit-flood.md`.
+
+**The problem, precisely.** `ConvolvePixel` writes a secret through its pointer
+argument `aTargetData` (`FilterNodeSoftware.cpp:2407`). `computeFunctionMemEffects`
+classifies a store's destination into only {own-stack, named-global, **unknown**}; a
+pointer *argument* is none of the first two, so it falls to **unknown = TOP**
+(`WritesSecretToUnknown`, `TaintAnalysis.cpp:966`). At the call site
+(`FilterNodeSoftware.cpp:2555`, inside `FilterNodeConvolveMatrixSoftware::DoRender`) TOP
+becomes `S.setExternalMemClobbered()`, poisoning **every** subsequent load in the
+caller - which then re-exports TOP and floods the call graph. The store is fully
+analyzable; the **summary vocabulary just has no word for "through argument i,"** so a
+known fact is rounded up to the top of the lattice. A representation gap, not an
+analysis limit.
+
+**The fix.** Add the fourth bucket. Resolve the store's pointer to an `Argument` at the
+IR level (post-prologepilog MIR still carries `MachineMemOperand`'s underlying IR
+`Value`; `getUnderlyingObject` -> `dyn_cast<Argument>`, §11.viii), record the arg index,
+and at the call site taint only the memory the caller passed for that argument.
+
+**Success metric (measured on the Firefox filter TU):** 78 instrumented -> **~43**
+(drop the 32 plumbing); the 74 address/branch-only -> **~0**; soundness verifier
+fallbacks stay 0; the ~43 legitimate pixel handlers stay covered (no under-taint).
+
+**Staging** (each verifier-gated + `/code-review`, mirroring the placement increments):
+- **P1a - representation + provenance compute (this increment).** `CellInfo` gains an
+  `Arg` kind (via `getCellFromMMO` -> `getUnderlyingObject` -> `Argument::getArgNo`);
+  `FunctionMemEffects` gains `WritesSecretThroughArgPointee` (arg-index set, joined in
+  the fixed point via `operator==`). `computeFunctionMemEffects` records the arg index
+  for an arg-resolved tainted store instead of TOP. **Kept behavior-preserving and
+  sound:** the caller still applies a non-empty arg-set as a full `ExternalMemClobbered`
+  (blunt), so codegen is byte-identical to P0; only the *representation* is now precise.
+  Observable/tested via an `LLVM_DEBUG` mem-effects dump (`-debug-only=taint-analysis`).
+  Direct stores only - a transitive arg-write through a callee still escalates to TOP
+  (sound, refined later).
+- **P1b - precise call-site application (the payoff).** Replace the blunt clobber: for
+  each arg index in the callee's `WritesSecretThroughArgPointee`, resolve the pointer
+  the caller passed for that arg and taint *only* its pointee/alias set (existing pointee
+  machinery + `AAResults`); fall back to `ExternalMemClobbered` if the passed pointer
+  can't be resolved to a caller cell. Re-measure Firefox 78 -> ~43.
+- **P1c - libc/known-decl model table.** `memcpy`/`memmove`/`memset`/`__*_chk` ->
+  writes-through-dest-arg, so common external calls stop forcing TOP (§11.vii).
+
+**Soundness invariant (unchanged, non-negotiable, §12):** every truncation
+over-approximates. Unresolvable pointer provenance, escaped/aliased pointer AA can't
+bound, indirect/unmodeled external call -> TOP -> `ExternalMemClobbered`. Under-taint is
+a leaked secret and never happens; the forward soundness verifier remains the backstop.
+
+---
+
 ## Refuted in verification — DO NOT REUSE
 
 - Precise aliasing-sensitive bottom-up summarization does not scale in practice: the

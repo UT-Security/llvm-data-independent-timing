@@ -157,10 +157,11 @@ static cl::opt<bool> TaintDitLoopHoist(
 /// Unified cell extraction from a MachineMemOperand.
 /// Returns the base kind (Stack/Global/Unknown), offset, and optional size.
 struct CellInfo {
-  enum Kind { Stack, Global, Unknown };
+  enum Kind { Stack, Global, Arg, Unknown };
   Kind K = Unknown;
   int FI = 0;
   const GlobalVariable *GV = nullptr;
+  unsigned ArgNo = 0; // valid when K == Arg (P1 argument-provenance)
   int64_t Offset = 0;
   std::optional<uint64_t> Size; // nullopt if unknown/scalable
 };
@@ -180,9 +181,18 @@ static CellInfo getCellFromMMO(const MachineMemOperand &MMO) {
     return CI;
   }
   if (const Value *V = MMO.getValue()) {
-    if (auto *GV = dyn_cast<GlobalVariable>(getUnderlyingObject(V))) {
+    const Value *UO = getUnderlyingObject(V);
+    if (auto *GV = dyn_cast<GlobalVariable>(UO)) {
       CI.K = CellInfo::Global;
       CI.GV = GV;
+      return CI;
+    }
+    // P1 argument provenance: a store/load whose pointer bottoms out at a
+    // function Argument is the canonical callee->caller-through-memory access.
+    // Record which argument so the mod-set can name it precisely instead of TOP.
+    if (auto *A = dyn_cast<Argument>(UO)) {
+      CI.K = CellInfo::Arg;
+      CI.ArgNo = A->getArgNo();
       return CI;
     }
   }
@@ -677,6 +687,17 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
                           << " writes secret to unknown memory (mod-set TOP)\n");
       }
+      // P1a: the callee writes a secret through one of its pointer arguments.
+      // The precise fix (P1b) taints only the pointee of the pointer THIS caller
+      // passed for that argument; until then, apply it soundly-but-bluntly as a
+      // full clobber so behavior is byte-identical to P0. The arg-set is already
+      // recorded precisely in the summary; only its application is still coarse.
+      if (!ME.WritesSecretThroughArgPointee.empty()) {
+        S.setExternalMemClobbered();
+        LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
+                          << " writes secret through a pointer arg (P1a: blunt "
+                             "clobber pending P1b)\n");
+      }
     } else {
       // External declaration or indirect call: the analysis cannot see what it
       // does to memory. If it receives a secret (in any argument register),
@@ -955,19 +976,44 @@ FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
             // the caller cannot see it, so it is NOT a caller-visible effect.
             // A fixed object is an incoming stack/byval argument slot, which
             // the caller CAN see; blunt P0 maps that to TOP (mapping it to the
-            // specific argument is the provenance-based P1 refinement).
+            // specific argument is a further provenance refinement).
             if (MFI.isFixedObjectIndex(CI.FI))
               ME.WritesSecretToUnknown = true;
           } else if (CI.K == CellInfo::Global) {
             ME.WritesSecretToGlobal.insert(CI.GV);
+          } else if (CI.K == CellInfo::Arg) {
+            // P1a: a store whose destination pointer bottoms out at pointer
+            // argument i — the canonical callee->caller-through-memory write.
+            // Record the precise provenance instead of TOP. Soundness in P1a is
+            // still guaranteed by the caller, which applies a non-empty arg-set
+            // as a full clobber (blunt) until P1b consumes it precisely.
+            ME.WritesSecretThroughArgPointee.insert(CI.ArgNo);
           } else {
-            // Unknown/heap — includes a store through a pointer argument, which
-            // is the canonical callee->caller-through-memory write.
+            // Unknown/heap — a store through a pointer the analysis cannot trace
+            // to an argument or global. Sound direction: TOP.
             ME.WritesSecretToUnknown = true;
           }
         }
         return true;
       });
+
+  LLVM_DEBUG({
+    if (!ME.WritesSecretThroughArgPointee.empty() ||
+        !ME.WritesSecretToGlobal.empty() || ME.WritesSecretToUnknown) {
+      dbgs() << "  mem-effects[" << MF.getName() << "]:";
+      // Emit arg indices in sorted order for deterministic test output.
+      SmallVector<unsigned, 4> Args(ME.WritesSecretThroughArgPointee.begin(),
+                                    ME.WritesSecretThroughArgPointee.end());
+      llvm::sort(Args);
+      for (unsigned A : Args)
+        dbgs() << " arg" << A;
+      for (const GlobalVariable *GV : ME.WritesSecretToGlobal)
+        dbgs() << " @" << GV->getName();
+      if (ME.WritesSecretToUnknown)
+        dbgs() << " UNKNOWN(TOP)";
+      dbgs() << "\n";
+    }
+  });
 
   return ME;
 }

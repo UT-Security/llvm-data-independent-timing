@@ -39,15 +39,26 @@ struct FunctionMemEffects {
   /// direct in-TU call that writes one global does not poison every global.
   SmallPtrSet<const GlobalVariable *, 4> WritesSecretToGlobal;
 
+  /// Indices of pointer arguments through whose pointee the function may write a
+  /// secret (P1 argument-provenance mod-set, utils/taint_memory_summary_research.md
+  /// §11/P1). Precise alternative to WritesSecretToUnknown for the canonical
+  /// callee->caller-through-memory write (a store through a pointer parameter):
+  /// the caller taints only the memory it passed for that argument rather than
+  /// poisoning all of its memory. Populated for DIRECT stores whose destination
+  /// resolves (via the MMO's underlying IR Value) to a function Argument; a store
+  /// whose provenance cannot be resolved still escalates to WritesSecretToUnknown.
+  SmallSet<unsigned, 4> WritesSecretThroughArgPointee;
+
   /// TOP: the function may have written a secret to memory the analysis cannot
-  /// pin down — through a pointer argument, to the heap, or transitively via a
-  /// call it makes to an unknown/unknown-writing callee. Mandatory default for
+  /// pin down — to the heap, through an unresolvable pointer, or transitively via
+  /// a call it makes to an unknown/unknown-writing callee. Mandatory default for
   /// external declarations and indirect calls that receive a secret.
   bool WritesSecretToUnknown = false;
 
   bool operator==(const FunctionMemEffects &O) const {
     return WritesSecretToUnknown == O.WritesSecretToUnknown &&
-           WritesSecretToGlobal == O.WritesSecretToGlobal;
+           WritesSecretToGlobal == O.WritesSecretToGlobal &&
+           WritesSecretThroughArgPointee == O.WritesSecretThroughArgPointee;
   }
   bool operator!=(const FunctionMemEffects &O) const { return !(*this == O); }
 };

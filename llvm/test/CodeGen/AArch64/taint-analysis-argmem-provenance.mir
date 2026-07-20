@@ -1,0 +1,65 @@
+# REQUIRES: asserts
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -debug-only=taint-analysis %s -o /dev/null 2>&1 | FileCheck %s
+
+# P1a (argument-provenance memory effects, utils/taint_memory_summary_research.md
+# P1). A store of a secret through a POINTER ARGUMENT is the canonical
+# callee->caller-through-memory write. Before P1a it was summarized as blunt TOP
+# (WritesSecretToUnknown) because the mod-set had no way to name the argument; now
+# computeFunctionMemEffects resolves the store's destination through the MMO's
+# underlying IR Value to the function Argument and records "writes secret through
+# arg i" precisely.
+#
+# @writes_through_arg stores the tainted arg %s (arg 1) through the pointer arg %out
+# (arg 0), so the mem-effects summary must name arg0 — NOT UNKNOWN(TOP).
+# @writes_global stores the same secret into a named global, which stays precise
+# (a distinct bucket), confirming the arg case is not swallowing the global case.
+
+# CHECK-DAG: mem-effects[writes_through_arg]: arg0
+# CHECK-DAG: mem-effects[writes_global]: @g
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  @g = internal global i32 0
+
+  define void @writes_through_arg(ptr %out, i32 "tainted" %s) {
+    store i32 %s, ptr %out
+    ret void
+  }
+
+  define void @writes_global(i32 "tainted" %s) {
+    store i32 %s, ptr @g
+    ret void
+  }
+
+...
+---
+name:            writes_through_arg
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$w1' }
+body:             |
+  bb.0:
+    liveins: $x0, $w1
+
+    STRWui killed renamable $w1, killed renamable $x0, 0 :: (store (s32) into %ir.out)
+    RET_ReallyLR
+
+...
+---
+name:            writes_global
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0:
+    liveins: $w0
+
+    renamable $x8 = ADRP target-flags(aarch64-page) @g
+    STRWui killed renamable $w0, killed renamable $x8, target-flags(aarch64-pageoff) @g :: (store (s32) into @g)
+    RET_ReallyLR
+
+...
