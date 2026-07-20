@@ -1,0 +1,83 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=INFER
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-annotation-driven %s -o - | FileCheck %s --check-prefix=ANNOT
+
+# -taint-annotation-driven: trust per-function secret annotations instead of
+# INFERRING secrecy across function boundaries through memory. The default
+# (inference) mode applies a callee's memory mod-set to the caller as a full
+# ExternalMemClobbered — sound, but on real object-oriented C++ it floods taint
+# across the module (measured: 1 seed -> 78/490 functions on Firefox's filter TU,
+# 78 -> 6 under this mode). Annotation-driven mode keeps seeding declared functions
+# and propagating through registers/returns, but does NOT apply the mod-set as a
+# caller clobber.
+#
+# @writer is seeded (its "tainted" arg %s) and stores the secret through its pointer
+# arg — instrumented in BOTH modes (a directly-tainted store; annotation-driven does
+# not weaken coverage of declared functions).
+#
+# @plumbing passes NO secret (it calls @writer with a zero) — it is a pure caller. In
+# inference mode @writer's mod-set is applied unconditionally, so @plumbing's later
+# stack reload is clobbered->tainted and @plumbing is instrumented (the flood). In
+# annotation-driven mode the mod-set is not applied, the reload stays clean, and
+# @plumbing is NOT instrumented. This is the flood collapse in miniature.
+#
+# 26 is the PSTATE.DIT pstatefield encoding.
+
+# INFER-LABEL: name: writer
+# INFER: MSRpstateImm4 26, 1
+# ANNOT-LABEL: name: writer
+# ANNOT: MSRpstateImm4 26, 1
+
+# INFER-LABEL: name: plumbing
+# INFER: MSRpstateImm4 26, 1
+# ANNOT-LABEL: name: plumbing
+# ANNOT-NOT: MSRpstateImm4
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define void @writer(ptr %out, i32 "tainted" %s) {
+    store i32 %s, ptr %out
+    ret void
+  }
+
+  define i32 @plumbing(ptr %q) {
+    %slot = alloca i32
+    ret i32 0
+  }
+
+...
+---
+name:            writer
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$w1' }
+body:             |
+  bb.0:
+    liveins: $x0, $w1
+
+    STRWui killed renamable $w1, killed renamable $x0, 0 :: (store (s32) into %ir.out)
+    RET_ReallyLR
+
+...
+---
+name:            plumbing
+tracksRegLiveness: true
+isSSA:           false
+stack:
+  - { id: 0, name: slot, offset: 0, size: 4, alignment: 4 }
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0:
+    liveins: $x0
+
+    STRWui $wzr, %stack.0.slot, 0 :: (store (s32) into %ir.slot)
+    $w1 = COPY $wzr
+    BL @writer, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit $x0, implicit $w1
+    renamable $w0 = LDRWui %stack.0.slot, 0 :: (load (s32) from %ir.slot)
+    renamable $w0 = ADDWri killed renamable $w0, 1, 0
+    RET_ReallyLR implicit $w0
+
+...

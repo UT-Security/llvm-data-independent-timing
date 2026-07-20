@@ -71,6 +71,29 @@ cl::opt<bool> llvm::TaintInsertDIT(
     cl::desc("Insert PSTATE.DIT mode switches around tainted code"),
     cl::init(false));
 
+// Annotation-driven mode. By default the analysis INFERS secrecy across function
+// boundaries by propagating a callee's memory mod-set into the caller (the
+// callee->caller-through-memory transfer), which is sound (over-approximating) but
+// on heavily object-oriented C++ floods taint across the whole module from opaque
+// virtual/external calls and shared surface buffers (measured: 1 seed -> 78/490
+// functions on Firefox's filter TU, 72 of them via memory poison alone). This mode
+// instead TRUSTS the analyst's per-function secret-argument annotations: it keeps
+// seeding declared functions and propagating taint through registers / return
+// values, but does NOT apply a callee's memory mod-set as a caller-side clobber, so
+// only the declared functions and their direct register/return flow are
+// instrumented. The mod-set is still COMPUTED and surfaced in the reports as an
+// advisory ("function X writes a secret to caller-visible memory — its consumer may
+// need annotating"). SOUNDNESS NOTE: this shifts soundness from automatic
+// over-approximation to annotation completeness — a missing annotation UNDER-covers
+// (leaks). This is the standard constant-time-tool trade (cf. FaCT's secret labels).
+static cl::opt<bool> TaintAnnotationDriven(
+    "taint-annotation-driven",
+    cl::desc("Trust per-function secret-arg annotations instead of propagating "
+             "secrets through memory across calls (no callee->caller mod-set "
+             "clobber). Precise, but soundness then depends on annotation "
+             "completeness. The mod-set is still reported as an advisory."),
+    cl::init(false));
+
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
     "taint-callsite-report",
     cl::desc("Output file for call sites passing secret data to callees the "
@@ -679,10 +702,16 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       // memory transfer. Applied unconditionally — the summary is context-
       // insensitive (computed over the callee's joined tainted-arg set), so a
       // call site not passing the taint is over-approximated, the sound way.
+      // The callee->caller-through-memory transfer. Applied unconditionally in the
+      // default (inference) mode — the sound over-approximation. In
+      // annotation-driven mode it is NOT applied as a clobber (the analyst's
+      // per-function annotations are trusted instead); the mod-set is still
+      // computed above and left for the reports as an advisory. Whole-global writes
+      // stay precise and are cheap, so they are applied in both modes.
       const FunctionMemEffects &ME = Summary.MemEffects;
       for (const GlobalVariable *GV : ME.WritesSecretToGlobal)
         S.setTaintedWholeGlobal(GV);
-      if (ME.WritesSecretToUnknown) {
+      if (ME.WritesSecretToUnknown && !TaintAnnotationDriven) {
         S.setExternalMemClobbered();
         LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
                           << " writes secret to unknown memory (mod-set TOP)\n");
@@ -690,9 +719,9 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       // P1a: the callee writes a secret through one of its pointer arguments.
       // The precise fix (P1b) taints only the pointee of the pointer THIS caller
       // passed for that argument; until then, apply it soundly-but-bluntly as a
-      // full clobber so behavior is byte-identical to P0. The arg-set is already
-      // recorded precisely in the summary; only its application is still coarse.
-      if (!ME.WritesSecretThroughArgPointee.empty()) {
+      // full clobber so behavior is byte-identical to P0. Skipped in
+      // annotation-driven mode.
+      if (!ME.WritesSecretThroughArgPointee.empty() && !TaintAnnotationDriven) {
         S.setExternalMemClobbered();
         LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
                           << " writes secret through a pointer arg (P1a: blunt "
@@ -705,8 +734,12 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       // This is blunt-TOP P0; a libc model table and IR memory(...) attributes
       // would refine it (research §11 vii/viii), deferred pending measurement.
       if (HasTaintedArg) {
+        // The return value is a register effect — keep it in both modes. The
+        // memory clobber (this opaque call may have written the secret anywhere)
+        // is the flood source; skip it in annotation-driven mode.
         taintCallResultDefs(MI, S, TRI);
-        S.setExternalMemClobbered();
+        if (!TaintAnnotationDriven)
+          S.setExternalMemClobbered();
         if (Callee)
           LLVM_DEBUG(dbgs() << "        conservative: external call to "
                             << Callee->getName()
