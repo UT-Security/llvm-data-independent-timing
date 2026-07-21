@@ -117,22 +117,24 @@ static cl::opt<unsigned> TaintRegionMergeGap(
              "when separated by at most this many clean instructions"),
     cl::init(2));
 
-// Track B: PSTATE.DIT placement granularity. `function` is the shipped
-// whole-function policy; `region` is the WIP cost-model-driven region placement
-// (utils/taint_dit_placement.md §5.6). Increment (a) implements the
-// anticipation-coarse scaffolding of `region`.
+// Track B: PSTATE.DIT placement granularity. `region` (the DEFAULT) is fine-grain
+// cost-model placement — DIT covers only the secret-dependent regions, leaving clean
+// preambles off and hoisting enables out of loops (utils/taint_dit_placement.md §5.6;
+// tuned by -taint-dit-switch-cyc / -taint-dit-dwell-per-instr / -taint-dit-loop-hoist).
+// `function` is the coarse whole-function policy (DIT on entry-to-return for any
+// tainted function). Region placement carries a soundness verifier and falls back to
+// function granularity per-function if it cannot prove coverage, so it is always safe.
 namespace {
 enum class DITPlacementMode { Function, Region };
 } // namespace
 static cl::opt<DITPlacementMode> TaintDITPlacement(
     "taint-dit-placement", cl::desc("PSTATE.DIT placement granularity"),
-    cl::init(DITPlacementMode::Function),
+    cl::init(DITPlacementMode::Region),
     cl::values(clEnumValN(DITPlacementMode::Function, "function",
-                          "whole-function: DIT on for any tainted function "
-                          "(default, shipped)"),
+                          "whole-function: DIT on entry-to-return for any tainted "
+                          "function (coarse)"),
                clEnumValN(DITPlacementMode::Region, "region",
-                          "cost-model region placement (WIP, increment a: "
-                          "anticipation-coarse)")));
+                          "fine-grain cost-model region placement (default)")));
 
 // Track B increment (c): the admission test (utils/taint_dit_placement.md §5.6).
 // A DIT mode switch (MSR DIT) costs `switch-cyc` cycles; DIT dwell costs

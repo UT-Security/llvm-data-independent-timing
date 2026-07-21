@@ -1,5 +1,5 @@
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=FUNC
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=region %s -o - | FileCheck %s --check-prefix=REGION
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=function %s -o - | FileCheck %s --check-prefix=FUNC
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=REGION
 
 # Track B increment (a): anticipation-coarse region placement, behind
 # -taint-dit-placement=region (default is function granularity). Two properties:

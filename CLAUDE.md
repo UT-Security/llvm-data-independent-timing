@@ -41,12 +41,19 @@ build with otherwise identical codegen, for A/B benchmarking). Without it, the
 analysis still runs and the report files are still produced, but codegen is
 untouched.
 
-**Function granularity:** `MSR DIT, #1` at entry of any function containing taint,
-`MSR DIT, #0` before each return. Requires FEAT_DIT (Armv8.4+) at run time — Apple
+**Placement granularity (`-taint-dit-placement`): DEFAULT is now `region`
+(fine-grain).** Region placement covers only the secret-dependent regions — clean
+preambles stay DIT-off, enables are hoisted out of loops — tuned by
+`-taint-dit-switch-cyc` (default 0 = finest), `-taint-dit-dwell-per-instr`, and
+`-taint-dit-loop-hoist`. It carries a soundness verifier and falls back per-function
+to whole-function coverage if it cannot prove coverage, so it is always safe. See
+`utils/taint_dit_placement.md`. Requires FEAT_DIT (Armv8.4+) at run time — Apple
 M-series has it (`sysctl hw.optional.arm.FEAT_DIT`), Neoverse N1 does not ⇒ SIGILL
 there; verify via objdump/lit or `qemu-aarch64 -cpu max`.
 
-Function granularity avoids per-region toggles clearing an enclosing region's DIT
+**`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at
+entry of any function containing taint, `MSR DIT, #0` before each return. Whole-
+function coverage avoids per-region toggles clearing an enclosing region's DIT
 across calls; `MSR DIT, #1` is also re-asserted after every non-tail call site (a
 callee may clear DIT on its exit — gap G1, fixed), except when the callee's
 `PreservesDIT` summary bit proves the re-assert redundant (in-TU, uninstrumented,
@@ -182,11 +189,13 @@ build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/
 ```
 End-to-end reference: harden `playground/firefox_convolve_int.c` and compare
 per-symbol DIT placement between the clang flag and the wrapper — they must match
-exactly. Expected at -O2: one `msr DIT, #0x1` at entry of each tainted function and
-one `msr DIT, #0x0` before each return; **no `isb`/`dsb` anywhere** (the ISB/DSB
-mode was removed 2026-07-14 — its old expectation was 14 ISB + 14 DSB). Count
-mnemonics, not `grep` hits on the objdump output — file paths themselves often
-contain "isb"/"dit" and inflate naive counts.
+exactly. Under the **default `region` placement** each tainted function's clean
+preamble is DIT-off and the `msr DIT, #0x1` sits at the loop preheader, not the entry
+(add `-mllvm -taint-dit-placement=function` for the old whole-function reference: one
+`msr DIT, #0x1` at entry, one `msr DIT, #0x0` before each return). **No `isb`/`dsb`
+anywhere** in either mode (the ISB/DSB mode was removed 2026-07-14 — its old
+expectation was 14 ISB + 14 DSB). Count mnemonics, not `grep` hits on the objdump
+output — file paths themselves often contain "isb"/"dit" and inflate naive counts.
 
 `playground/firefox_convolve_int.c` is a good *correctness* reference but a **bad
 performance benchmark for placement**: it is DIT-insensitive (whole-program DIT =

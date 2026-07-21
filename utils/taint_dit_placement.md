@@ -547,11 +547,13 @@ non-convergence (mitigate: VSETVLI worklist pattern); the Need-gate must match
 | B(c) ✅ done | admission test (`admitOffCorridors`): merge an interior Off corridor between two On regions when the **emit-accurate net toggle saving** beats the dwell — `c_sw·(Σ removed boundary switches − Σ re-asserts/disable-before-return emit adds inside the merged corridor) ≥ dwell_per_instr·Σ freq(b)·\|b\|`, all MBFI block-frequency weighted; tunable `-taint-dit-dwell-per-instr` (default 1.0 ⇒ ~60-instr static crossover). Purely a perf optimization — merging only EXTENDS `OnBlocks`, so it CANNOT leak (verifier always passes). On a dwell≈0 core it coarsens toward function granularity; on DIT-sensitive cores it stays narrow. | cost-model-driven placement |
 | **B(d) ← NEXT** | `EntryDIT` summary (coupled greatest fixed point with placement), entry/exit toggle elision for internal tainted chains; fixes the deferred residual-only-callee `PreservesDIT` spurious re-assert | P1 interior-zero-toggle perf |
 
-**Current impl state (2026-07-16):** all of the above through B(c) are committed and
-pushed on `interproc_taint`. Region mode is behind `-taint-dit-placement=region`
-(default `function` = shipped, untouched). 16 lit tests pass (`taint-analysis-*.mir`,
-incl. `taint-analysis-dit-admission.mir`); the soundness verifier + graceful fallback
-to function granularity are the safety net under region mode. Reviews (workflow
+**Current impl state (2026-07-21):** all of the above through B(c) are committed and
+pushed on `interproc_taint`. **Region placement is now the DEFAULT**
+(`-taint-dit-placement=region`, `cl::init(Region)`); `-taint-dit-placement=function`
+is the opt-in coarse policy. The soundness verifier + graceful per-function fallback
+to whole-function coverage make the default safe. All 19 lit tests pass
+(`taint-analysis-*.mir`); `taint-analysis-dit-region.mir`'s FUNC run line was pinned to
+explicit `-taint-dit-placement=function` when the default flipped. Reviews (workflow
 `/code-review high`) run per increment have each caught real bugs (P0: 4 leaks;
 B(a): tail-call crash; B(b): EH-label/irreducible/multi-entry) — all fixed.
 
