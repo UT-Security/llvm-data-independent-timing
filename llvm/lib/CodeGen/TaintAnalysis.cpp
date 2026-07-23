@@ -167,20 +167,24 @@ static cl::opt<double> TaintDitDwellPerInstr(
              "clean corridor between two DIT regions"),
     cl::init(1.0));
 
-// When true (default), a Need inside a loop coarsens the whole enclosing
-// need-loop(s) On so the enable hoists to the loop preheader (executed once) — the
-// increment-(b) behavior. When false, coverage is BLOCK-MINIMAL: On(b)=HasNeed(b)
-// only, so DIT wraps just the blocks that actually contain a secret instruction and
-// everything else — including the rest of a loop's body — runs unprotected, at the
+// DEFAULT is now false = BLOCK-MINIMAL coverage: On(b)=HasNeed(b) only, so DIT wraps
+// just the blocks that actually contain a secret instruction — a loop's public
+// scaffolding (loop control, coordinate/index math) that shares no block with a
+// secret op runs UNPROTECTED — the fewest non-secret instructions covered, at the
 // cost of a per-iteration enable/disable around a need-block reached by a backedge.
-// Set false to protect the fewest instructions (pairs naturally with
-// -taint-dit-switch-cyc=0, where per-iteration toggles are free). Region mode only.
+// Pairs with -taint-dit-switch-cyc=0 (per-iteration toggles free; the finest
+// placement). Set true to coarsen each need-loop On and hoist the single enable to
+// the loop preheader (one toggle, whole loop covered) — the right default for
+// SERIALIZING switch hardware (~30 cyc/switch on M4), where per-iteration toggling in
+// a hot loop is expensive; raising -taint-dit-switch-cyc re-coarsens via the
+// admission test either way. Region mode only.
 static cl::opt<bool> TaintDitLoopHoist(
     "taint-dit-loop-hoist",
-    cl::desc("Coarsen need-loops On and hoist the DIT enable to the loop preheader "
-             "(default true); false = block-minimal coverage (only need-containing "
-             "blocks are DIT-on, per-iteration toggles allowed)"),
-    cl::init(true));
+    cl::desc("Coarsen need-loops On and hoist the DIT enable to the loop preheader; "
+             "default FALSE = block-minimal coverage (only need-containing blocks are "
+             "DIT-on, per-iteration toggles allowed — the fewest non-secret instrs). "
+             "Set true for serializing-switch hardware."),
+    cl::init(false));
 
 /// Unified cell extraction from a MachineMemOperand.
 /// Returns the base kind (Stack/Global/Unknown), offset, and optional size.

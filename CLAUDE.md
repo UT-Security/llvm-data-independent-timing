@@ -43,9 +43,13 @@ untouched.
 
 **Placement granularity (`-taint-dit-placement`): DEFAULT is now `region`
 (fine-grain).** Region placement covers only the secret-dependent regions — clean
-preambles stay DIT-off, enables are hoisted out of loops — tuned by
+preambles and public loop scaffolding (coordinate/index math) stay DIT-off — tuned by
 `-taint-dit-switch-cyc` (default 0 = finest), `-taint-dit-dwell-per-instr`, and
-`-taint-dit-loop-hoist`. It carries a soundness verifier and falls back per-function
+`-taint-dit-loop-hoist` (**default 0 = block-minimal**: DIT wraps only the blocks
+containing a secret op, with per-iteration toggles around a need-block in a loop; set
+`=1` to coarsen each need-loop On and hoist one enable to the preheader — the right
+choice for serializing-switch hardware where per-iteration toggling is costly).
+It carries a soundness verifier and falls back per-function
 to whole-function coverage if it cannot prove coverage, so it is always safe. See
 `utils/taint_dit_placement.md`. Requires FEAT_DIT (Armv8.4+) at run time — Apple
 M-series has it (`sysctl hw.optional.arm.FEAT_DIT`), Neoverse N1 does not ⇒ SIGILL

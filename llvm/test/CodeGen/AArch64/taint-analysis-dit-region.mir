@@ -1,8 +1,9 @@
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=function %s -o - | FileCheck %s --check-prefix=FUNC
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=REGION
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-loop-hoist=1 %s -o - | FileCheck %s --check-prefix=REGION
 
 # Track B increment (a): anticipation-coarse region placement, behind
-# -taint-dit-placement=region (default is function granularity). Two properties:
+# -taint-dit-placement=region (now the default; =function is the coarse opt-in).
+# The REGION run line pins -taint-dit-loop-hoist=1 to check loop coarsening. Two properties:
 #
 #  1. DEGENERACY (@whole): when every block anticipates a need (whole-function
 #     taint), region mode is byte-identical to function granularity — MSR DIT #1
