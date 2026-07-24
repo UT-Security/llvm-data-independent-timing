@@ -74,6 +74,14 @@ extern cl::opt<std::string> TaintCallsiteReportFile;
 /// is silent false assurance; the report surfaces them for audit.
 extern cl::opt<std::string> TaintUncoveredReportFile;
 
+/// Command-line option for the memory-clobber report: every call site that
+/// makes the caller treat memory as secret (sets ExternalMemClobbered / a
+/// whole-global). These are the sources of cross-function memory taint — the
+/// points where a "taint explosion" originates — so they can be pinpointed and
+/// audited. Distinct from the escape report (which is about secrets leaving to
+/// callees we cannot instrument).
+extern cl::opt<std::string> TaintClobberReportFile;
+
 /// Selects which of TaintState's register bitvectors an operation applies to.
 enum class TaintKind {
   Data,    ///< The value itself is secret.

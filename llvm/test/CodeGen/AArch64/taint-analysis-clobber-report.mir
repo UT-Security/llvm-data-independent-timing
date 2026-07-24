@@ -1,0 +1,78 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN:   -taint-clobber-report=%t %s -o /dev/null
+# RUN: FileCheck %s --input-file=%t --implicit-check-not=no_clobber
+
+# The memory-clobber report lists every call site that makes the caller treat
+# memory as secret (the sources of a cross-function taint explosion). Here:
+#
+#  * @via_external passes a secret (x0) to an external declaration -> the callee
+#    may write it anywhere caller-visible, so a blunt TOP clobber: external-arg.
+#  * @via_indirect passes a secret (x0) through an indirect (BLR) call, target in
+#    x1 -> indirect-arg.
+#  * @no_clobber calls an external decl but passes NO secret (x0 is clean); it
+#    must NOT appear (enforced by --implicit-check-not=no_clobber).
+
+# CHECK-DAG: CLOBBER external-arg callee=ext_sink caller=via_external {{.*}}data
+# CHECK-DAG: CLOBBER indirect-arg callee=<indirect> caller=via_indirect {{.*}}data
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  declare void @ext_sink(i64)
+
+  define void @via_external(i64 "tainted" %s) {
+    ret void
+  }
+
+  define void @via_indirect(i64 "tainted" %s, ptr %f) {
+    ret void
+  }
+
+  define void @no_clobber(i64 %s) {
+    ret void
+  }
+
+...
+---
+name:            via_external
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0:
+    liveins: $x0
+
+    BL @ext_sink, csr_aarch64_aapcs, implicit $x0, implicit-def dead $lr, implicit $sp, implicit-def $sp
+    RET_ReallyLR
+
+...
+---
+name:            via_indirect
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$x1' }
+body:             |
+  bb.0:
+    liveins: $x0, $x1
+
+    BLR $x1, csr_aarch64_aapcs, implicit $x0, implicit-def dead $lr, implicit $sp, implicit-def $sp
+    RET_ReallyLR
+
+...
+---
+name:            no_clobber
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0:
+    liveins: $x0
+
+    BL @ext_sink, csr_aarch64_aapcs, implicit $x0, implicit-def dead $lr, implicit $sp, implicit-def $sp
+    RET_ReallyLR
+
+...

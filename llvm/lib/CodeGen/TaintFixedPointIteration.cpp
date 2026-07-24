@@ -513,6 +513,73 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
         });
   }
 
+  // Step 3c-2: Memory-clobber report — the *sources* of cross-function memory
+  // taint. Every call site listed here makes the caller treat memory as secret
+  // (sets ExternalMemClobbered, or a whole-global taint), which then poisons
+  // every subsequent load in sound mode. These are the points where a "taint
+  // explosion" originates, so they can be pinpointed and audited. Reasons:
+  //   external-arg / indirect-arg : a callee we cannot instrument receives a
+  //       *passed* secret (data or pointee arg) -> blunt TOP (whole memory).
+  //   modset-top                  : an in-TU callee's mod-set is TOP (it does
+  //       something to memory we could not pin down) -> whole memory.
+  //   modset-argptr               : an in-TU callee writes a secret through a
+  //       pointer arg; still applied bluntly (P1a) -> whole memory.
+  //   modset-global               : an in-TU callee writes a secret into a
+  //       specific global (precise: only that global is poisoned).
+  // The mod-set reasons fire regardless of what THIS caller passes, because a
+  // callee mod-set is context-insensitive (matches propagateTaintMI).
+  if (auto ClobberOSPtr =
+          openTaintReport(TaintClobberReportFile, "taint clobber report")) {
+    raw_fd_ostream &ClobberOS = *ClobberOSPtr;
+    forEachAnalyzed(
+        M, FAM, Results,
+        [&](Function &F, MachineFunction &MF, const TaintResult &TR,
+            AAResults *AA) {
+          const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
+          replayTaint(
+              MF, TR, &TSI, AA, /*Post=*/{},
+              /*Pre=*/[&](MachineInstr &MI, const TaintState &State) {
+                if (!MI.isCall())
+                  return true;
+                const Function *Callee = findCalledFunction(M, MI);
+                CallArgTaint Arg = taintedCallArguments(MI, State, TRI);
+                const char *Reason = nullptr;
+                std::string Detail;
+                if (Callee && !Callee->isDeclaration()) {
+                  const FunctionMemEffects &ME =
+                      TSI.getSummary(*Callee).MemEffects;
+                  if (ME.WritesSecretToUnknown) {
+                    Reason = "modset-top";
+                  } else if (!ME.WritesSecretThroughArgPointee.empty()) {
+                    Reason = "modset-argptr";
+                  } else if (!ME.WritesSecretToGlobal.empty()) {
+                    Reason = "modset-global";
+                    for (const GlobalVariable *GV : ME.WritesSecretToGlobal)
+                      Detail += (Detail.empty() ? " globals=" : ",") +
+                                GV->getName().str();
+                  }
+                } else if (Arg.any()) {
+                  Reason = Callee ? "external-arg" : "indirect-arg";
+                  if (Arg.Data)
+                    Detail += " data";
+                  if (Arg.Pointee)
+                    Detail += " pointee";
+                }
+                if (!Reason)
+                  return true;
+                ClobberOS << "CLOBBER " << Reason
+                          << " callee=" << (Callee ? Callee->getName()
+                                                   : StringRef("<indirect>"))
+                          << " caller=" << F.getName()
+                          << " bb=" << MI.getParent()->getNumber();
+                if (const DebugLoc &DL = MI.getDebugLoc())
+                  ClobberOS << " line=" << DL.getLine();
+                ClobberOS << Detail << "\n";
+                return true;
+              });
+        });
+  }
+
   // Step 3d: DIT-uncovered report (gap G2). A function running in DIT mode is
   // NOT protected on every tainted instruction: divide/sqrt are not DIT-listed,
   // a secret-dependent memory ADDRESS leaks through cache/TLB timing (DIT covers

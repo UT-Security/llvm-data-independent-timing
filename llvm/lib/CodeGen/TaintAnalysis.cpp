@@ -123,6 +123,14 @@ cl::opt<std::string> llvm::TaintUncoveredReportFile(
              "silent false assurance otherwise (gap G2)"),
     cl::value_desc("file"));
 
+cl::opt<std::string> llvm::TaintClobberReportFile(
+    "taint-clobber-report",
+    cl::desc("Output file for call sites that make the caller treat memory as "
+             "secret (ExternalMemClobbered / whole-global) — the sources of "
+             "cross-function memory taint, i.e. where a taint explosion "
+             "originates"),
+    cl::value_desc("file"));
+
 static cl::opt<unsigned> TaintRegionMergeGap(
     "taint-region-merge-gap",
     cl::desc("Merge barrier-protected taint regions in the same basic block "
