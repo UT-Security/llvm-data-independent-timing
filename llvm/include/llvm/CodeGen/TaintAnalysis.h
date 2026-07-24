@@ -381,6 +381,25 @@ const char *classifyDITUncovered(const MachineInstr &MI, const TaintFacts &F,
                                  const TaintState &S,
                                  const TargetInstrInfo &TII);
 
+/// Taint carried by a call's *passed arguments* — the secret an ABI-compliant
+/// callee can actually read. Only argument-register use operands (AAPCS64:
+/// X0-X7 / V0-V7, encodings 0-7) count; a register merely live or clobbered
+/// across the call is not an argument and is excluded. `Pointee` covers a
+/// public pointer argument whose pointee is secret (a real reach), which must
+/// stay distinct from `Data` so callers can keep protecting it.
+struct CallArgTaint {
+  bool Data = false;    ///< a secret passed by value in an argument register
+  bool Pointee = false; ///< an argument pointer whose pointee is secret
+  bool any() const { return Data || Pointee; }
+};
+
+/// Compute which kinds of secret a call passes to its callee. Empty for
+/// non-calls. This is the "secret is *passed*" test (fix B): a secret merely
+/// live across the call does not count, because an ABI-compliant callee cannot
+/// read caller-saved / non-argument registers as inputs.
+CallArgTaint taintedCallArguments(const MachineInstr &MI, const TaintState &S,
+                                  const TargetRegisterInfo *TRI);
+
 /// Find the called function from a call instruction.
 /// Returns nullptr for indirect calls.
 const Function *findCalledFunction(Module &M, const MachineInstr &MI);

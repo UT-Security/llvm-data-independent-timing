@@ -87,6 +87,17 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
         bool SummaryChanged = false;
         for (const auto &[PhysReg, VirtReg] : CalleeMF->getRegInfo().liveins()) {
           unsigned ArgIdx = TRI->getEncodingValue(PhysReg);
+          // AAPCS64 passes incoming arguments only in X0-X7 / V0-V7 (encodings
+          // 0-7). x30 (LR), x29 (FP) and sp are livein of every function but
+          // never carry an argument value, so a caller's taint on them is NOT a
+          // secret passed to this callee. Skipping them is the safe direction (a
+          // caller never passes data in x30/x29/sp) and stops a tainted *scratch*
+          // use of x30 in the caller — e.g. the register allocator reusing x30
+          // after the return address is spilled — from spuriously seeding the
+          // callee's return-address register as secret. See
+          // taint-analysis-lr-not-arg.mir.
+          if (ArgIdx > 7)
+            continue;
           if (S.isTainted(PhysReg) &&
               CalleeSummary.TaintedArgIndices.insert(ArgIdx).second) {
             SummaryChanged = true;
@@ -454,11 +465,20 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
           bool FnInstrumented = functionHasTaintedRuns(MF, TR, &TSI, AA);
+          const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
           replayTaint(
-              MF, TR, &TSI, AA,
-              [&](MachineInstr &MI, const TaintFacts &Facts,
-                  const TaintState &) {
-                if (!MI.isCall() || (!Facts.UsesData && !Facts.UsesPointee))
+              MF, TR, &TSI, AA, /*Post=*/{},
+              /*Pre=*/[&](MachineInstr &MI, const TaintState &State) {
+                // Fix B: only a secret genuinely *passed* to the callee matters
+                // — a secret merely live/clobbered across the call is not
+                // something an ABI-compliant callee can read. Read the state
+                // ENTERING the call (the Pre hook): arguments are set up before
+                // the call, and the call then clears/sets result registers, so
+                // the leaving state would misread a tainted *return* value in x0
+                // as a passed argument. (propagateArgTaintToCallees uses Pre for
+                // the same reason.)
+                CallArgTaint Arg = taintedCallArguments(MI, State, TRI);
+                if (!MI.isCall() || !Arg.any())
                   return true;
 
                 // (B) The enclosing function must be DIT-instrumented, else the
@@ -483,9 +503,9 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
                             << " bb=" << MI.getParent()->getNumber();
                 if (const DebugLoc &DL = MI.getDebugLoc())
                   *CallsiteOS << " line=" << DL.getLine();
-                if (Facts.UsesData)
+                if (Arg.Data)
                   *CallsiteOS << " tainted-args";
-                if (Facts.UsesPointee)
+                if (Arg.Pointee)
                   *CallsiteOS << " pointee-tainted-args";
                 *CallsiteOS << " (covered by inherited DIT)\n";
                 return true;

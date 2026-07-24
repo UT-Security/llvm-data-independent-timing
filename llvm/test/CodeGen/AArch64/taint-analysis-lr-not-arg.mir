@@ -1,0 +1,66 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s
+
+# Regression: x30 (LR) is not an argument register, so a caller's taint on it
+# must never seed the callee's entry as secret.
+#
+# @caller has a secret arg (%s in $x0) and copies it into $x30 — modelling the
+# register allocator reusing x30 as a general-purpose scratch after the return
+# address has been spilled. At the BL, $x30 is tainted. AAPCS64 passes arguments
+# only in X0-X7 / V0-V7 (encodings 0-7); x30's encoding is 30, which is NOT an
+# argument index. The interproc arg-taint seeding must therefore ignore the
+# caller's tainted $x30 and leave @callee's return-address register clean.
+#
+# @callee takes a CLEAN arg and its only potential taint source is its livein
+# $lr. It copies $lr and feeds it to a DIT-protected data-processing op (ADDXrs).
+# If the seeding wrongly marked "arg 30" tainted, that op would be a Need and
+# @callee would be DIT-instrumented. With the fix it is not: no MSR DIT anywhere
+# in @callee. (26 is the PSTATE.DIT pstatefield encoding.)
+
+# @caller legitimately handles the secret, so it may carry DIT — we do not pin it.
+# CHECK-LABEL: name: callee
+# CHECK-NOT: MSRpstateImm4
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define void @caller(i64 "tainted" %s) {
+    ret void
+  }
+
+  define i64 @callee(i64 %p) {
+    ret i64 0
+  }
+
+...
+---
+name:            caller
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0:
+    liveins: $x0
+
+    $lr = COPY $x0
+    BL @callee, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit $lr, implicit-def $sp
+    RET_ReallyLR
+
+...
+---
+name:            callee
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$lr' }
+body:             |
+  bb.0:
+    liveins: $x0, $lr
+
+    renamable $x9 = ADDXri $lr, 0, 0
+    renamable $x9 = ADDXrs killed renamable $x9, renamable $x9, 0
+    $x0 = COPY killed renamable $x9
+    RET_ReallyLR implicit $x0
+
+...

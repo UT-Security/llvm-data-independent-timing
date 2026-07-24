@@ -1,0 +1,88 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN:   -taint-callsite-report=%t %s -o /dev/null
+# RUN: FileCheck %s --input-file=%t --implicit-check-not=ext_noarg
+
+# Fix B: the call-site ESCAPE audit (and the interproc mem-clobber it shares a
+# trigger with) counts a secret only when it is *passed* to the callee — i.e. a
+# tainted register appears as an argument-register USE operand (AAPCS64: X0-X7 /
+# V0-V7). A secret merely live/clobbered across the call is not something an
+# ABI-compliant callee can read, so it must not count.
+#
+#  * @live_not_passed: a secret (x9) is attached to the call but NOT in an
+#    argument position — modelling a caller-saved temporary live across the call
+#    (or the call's own implicit-def LR clobber, the ConvolvePixel/abort case).
+#    Before fix B this escaped ("any tainted use"); now it does not. Enforced by
+#    --implicit-check-not=ext_noarg (ext_noarg must appear NOWHERE in the report).
+#
+#  * @passed_data: the secret is passed by value in x0 -> escapes as tainted-args.
+#
+#  * @passed_pointee (MUST NOT REGRESS): a PUBLIC pointer in x0 whose pointee is
+#    secret is a genuine reach (channel 2) -> must still escape, as
+#    pointee-tainted-args. Dropping this would be unsound.
+
+# CHECK-DAG: ESCAPE external callee=ext_data caller=passed_data {{.*}}tainted-args
+# CHECK-DAG: ESCAPE external callee=ext_ptr caller=passed_pointee {{.*}}pointee-tainted-args
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  declare void @ext_noarg()
+  declare void @ext_data(i64)
+  declare void @ext_ptr(ptr)
+
+  define void @live_not_passed(i64 "tainted" %s) {
+    ret void
+  }
+
+  define void @passed_data(i64 "tainted" %s) {
+    ret void
+  }
+
+  define void @passed_pointee(ptr "tainted-pointee" %p) {
+    ret void
+  }
+
+...
+---
+name:            live_not_passed
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0:
+    liveins: $x0
+
+    $x9 = COPY $x0
+    BL @ext_noarg, csr_aarch64_aapcs, implicit $x9, implicit-def dead $lr, implicit $sp, implicit-def $sp
+    RET_ReallyLR
+
+...
+---
+name:            passed_data
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0:
+    liveins: $x0
+
+    BL @ext_data, csr_aarch64_aapcs, implicit $x0, implicit-def dead $lr, implicit $sp, implicit-def $sp
+    RET_ReallyLR
+
+...
+---
+name:            passed_pointee
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0:
+    liveins: $x0
+
+    BL @ext_ptr, csr_aarch64_aapcs, implicit $x0, implicit-def dead $lr, implicit $sp, implicit-def $sp
+    RET_ReallyLR
+
+...

@@ -97,6 +97,18 @@ static cl::opt<bool> TaintAnnotationDriven(
              "completeness. The mod-set is still reported as an advisory."),
     cl::init(false));
 
+// Diagnostic A/B toggle for fix B. Default (true): a secret counts as reaching
+// a callee only when *passed* in an argument register (data or pointee). false:
+// the old blunt behavior — any tainted register live/clobbered across the call
+// triggers the callee's return + ExternalMemClobbered TOP. Lets us attribute the
+// sound-mode flood to the trigger (not the clobber mechanism).
+static cl::opt<bool> TaintCallArgPrecise(
+    "taint-call-arg-precise",
+    cl::desc("Count a secret as reaching a callee only when passed in an "
+             "argument register (fix B). Set =0 to restore the blunt "
+             "any-tainted-register-live-at-the-call trigger for A/B."),
+    cl::init(true), cl::Hidden);
+
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
     "taint-callsite-report",
     cl::desc("Output file for call sites passing secret data to callees the "
@@ -413,10 +425,44 @@ static bool isABIResultRegDef(const MachineOperand &MO,
 // is essential: memcpy(dst, secret_src, n) passes a public pointer whose pointee
 // is secret — data taint alone misses it, so the callee could copy the secret
 // into caller-visible memory with no TOP mod-set applied (missing-barrier leak).
-static bool anyTaintedCallArgument(const MachineInstr &MI,
-                                   const TaintState &S) {
-  return MI.isCall() && (anyRegUseOfKind(TaintKind::Data, MI, S) ||
-                         anyRegUseOfKind(TaintKind::Pointee, MI, S));
+// Fix B: a secret is *passed* to a callee only if a tainted register appears as
+// a genuine argument-register USE operand of the call. AAPCS64 passes arguments
+// in X0-X7 / V0-V7 (encodings 0-7); a register merely live across the call
+// (caller-saved) or the call's implicit-def LR clobber is NOT an argument an
+// ABI-compliant callee can read as input, so it must not count as a passed
+// secret. Pointee taint on an argument pointer DOES count — a public pointer to
+// secret memory is a real reach (channel 2). Soundness rests on the callee being
+// ABI-compliant; a callee that scavenges caller-saved registers would need
+// in-process code execution, which defeats DIT regardless. See
+// taint-analysis-call-arg-passed.mir.
+CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
+                                        const TaintState &S,
+                                        const TargetRegisterInfo *TRI) {
+  CallArgTaint R;
+  if (!MI.isCall())
+    return R;
+  for (const MachineOperand &MO : MI.uses()) {
+    // MI.uses() spans implicit-defs too (e.g. the LR clobber); skip defs.
+    if (!MO.isReg() || MO.isDef() || !MO.getReg().isValid() ||
+        !MO.getReg().isPhysical())
+      continue;
+    if (TRI->getEncodingValue(MO.getReg()) > 7)
+      continue; // not an argument-passing register
+    if (S.test(TaintKind::Data, MO.getReg()))
+      R.Data = true;
+    if (S.test(TaintKind::Pointee, MO.getReg()))
+      R.Pointee = true;
+  }
+  return R;
+}
+
+static bool anyTaintedCallArgument(const MachineInstr &MI, const TaintState &S,
+                                   const TargetRegisterInfo *TRI) {
+  if (!TaintCallArgPrecise)
+    // Blunt A/B fallback: any tainted register anywhere in the call's operands.
+    return MI.isCall() && (anyRegUseOfKind(TaintKind::Data, MI, S) ||
+                           anyRegUseOfKind(TaintKind::Pointee, MI, S));
+  return taintedCallArguments(MI, S, TRI).any();
 }
 
 static void clearCallResultDefs(const MachineInstr &MI, TaintState &S,
@@ -694,7 +740,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
   if (MI.isCall() && TSI && M) {
     LLVM_DEBUG(dbgs() << "      handling call instruction\n");
 
-    bool HasTaintedArg = anyTaintedCallArgument(MI, S);
+    bool HasTaintedArg = anyTaintedCallArgument(MI, S, TRI);
     clearCallResultDefs(MI, S, TRI);
 
     // Step 1: Find the callee function
@@ -1265,6 +1311,12 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
 
   for (const auto &[PhysReg, VirtReg] : MRI.liveins()) {
     unsigned ArgIdx = TRI->getEncodingValue(PhysReg);
+    // Only real argument registers (X0-X7 / V0-V7, encodings 0-7) carry incoming
+    // taint. x30/x29/sp are livein of every function but never argument-passing,
+    // so never seed them even if a stale index leaked into the summary — this
+    // mirrors the producer-side guard in propagateArgTaintToCallees.
+    if (ArgIdx > 7)
+      continue;
     if (llvm::is_contained(TaintedArgIndices, ArgIdx))
       seedArg(TaintKind::Data, PhysReg, VirtReg, ArgIdx, "tainted");
     if (llvm::is_contained(PointeeTaintedArgIndices, ArgIdx))
