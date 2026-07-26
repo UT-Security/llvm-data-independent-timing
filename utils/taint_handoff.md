@@ -1,10 +1,15 @@
 # Session handoff — taint analysis / DIT hardening
 
+> ⚠️ **STALE (2026-07-14). The current entry point is `utils/taint_OVERVIEW.md`.**
+> Much below is out of date: the callee→caller memory bug is FIXED, region
+> placement is now the default (not function granularity), tests are 22 (not 12),
+> and the flood attribution here/elsewhere was corrected (it was the `$lr` seeding
+> bug, not the memory model). Kept only for historical context — the M4 rationale
+> and the prior-art reading order are still useful. **Read `taint_OVERVIEW.md` first.**
+
 **Written:** 2026-07-14, on the Linux dev box (Neoverse N1, **no FEAT_DIT**).
 **For:** a fresh Claude Code session on an **Apple M4 Mac mini** after cloning this repo.
 **Branch:** `interproc_taint`.
-
-Read this file first. It is the entry point. Everything it references is committed.
 
 ## Why the M4 matters — the one thing this machine could not do
 

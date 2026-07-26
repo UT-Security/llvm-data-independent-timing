@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+> **New here? Read `utils/taint_OVERVIEW.md` first** — the single consolidated
+> entry-point doc (how it works, how to run it, limitations, current state). This
+> file holds the authoritative operating instructions; the overview is the map.
+
 This is an **LLVM fork** (branch `interproc_taint`) implementing **interprocedural
 taint analysis + PSTATE.DIT hardening** for AArch64: secret data entry points are
 declared in a taint-source file, taint is propagated through registers/stack/global
