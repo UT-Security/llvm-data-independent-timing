@@ -108,6 +108,10 @@ these). Region spacing: `utils/taint_region_distance.py OUT.hardened.mir`.
 | Taint cl::opts (`-taint-insert-dit` etc. are `extern cl::opt` globals) | `llvm/include/llvm/CodeGen/TaintAnalysis.h` |
 | `-ftaint-harden` flag + in-process 3-phase codegen (`RunTaintHardenCodegen`) | `clang/lib/CodeGen/BackendUtil.cpp`; flag in `clang/include/clang/Options/Options.td`, `clang/include/clang/Basic/CodeGenOptions.h`, forwarding in `clang/lib/Driver/ToolChains/Clang.cpp` |
 | Firefox integration guide | `utils/taint_firefox_integration.md` |
+| **Context-insensitive mod-sets — the dominant false-positive source** (measured on libsodium: 169 of 199 FPs). Also records that P1b is a far smaller lever than assumed: only 17 of 583 secret-writing call sites resolve provenance to an argument | `utils/taint_context_insensitivity.md` |
+| Two spill soundness bugs fixed 2026-07-27 (`implicit-def` as use; narrowed reload) + what spilling *does* do correctly | `utils/taint_spill_soundness_bugs.md` |
+| `-taint-frame-addr-args` prototype (default OFF): the `f(&local_secret)` under-taint, measured cost | `utils/taint_frame_addr_fallback.md` |
+| libsodium/CIO head-to-head rig (built, reusable) | `~/Documents/libsodium-stable/`, `~/Documents/cio/` |
 | `TargetInstrInfo::insertTimingModeSwitch` hook (emits `MSR DIT`; the `insertInstructionBarrier`/`insertDataBarrier` ISB/DSB hooks were removed 2026-07-14) | `llvm/include/llvm/CodeGen/TargetInstrInfo.h`, `llvm/lib/Target/AArch64/AArch64InstrInfo.cpp` |
 | DIT placement: state, gaps, optimal-placement design | `utils/taint_dit_placement.md` |
 | **What PSTATE.DIT actually guarantees** (covered instruction set, exclusions = divide/sqrt, address-timing not covered). The `isDITProtected` membership hook is transcribed from this — keep in sync | `utils/taint_dit_spec.md` |
@@ -156,6 +160,21 @@ hardened MIR text; (3) legacy PM `start-after=prologepilog` → object.
 - Taint over-approximation is always the safe direction: a spurious barrier costs
   performance, a missing one costs the secret. Any "can't classify" path must fall
   back to treating every register use as secret.
+- **`MachineInstr::uses()` spans implicit DEFS.** It starts after the *explicit*
+  defs, so `implicit-def $xN` (which every 32-bit AArch64 result carries) and a
+  call's `$lr` clobber appear in it. Any "does this instruction read a secret?"
+  walk MUST guard with `MO.isDef()` — check `isReg()` first, `isDef()` asserts on
+  non-register operands. Without the guard an instruction that merely *overwrites*
+  a tainted register looks like it *read* one and re-taints its own defs, so taint
+  can never leave a register (fixed 2026-07-27, was inflating tainted-instruction
+  counts by ~33%; test `taint-analysis-implicit-def.mir`).
+- **Memory cells are keyed `(FI/GV, offset, size)`; the READ path must test
+  OVERLAP, not equality.** Spilling 8 secret bytes and reloading the low 4 from the
+  same slot used to miss the cell entirely and return the secret as public — an
+  under-taint. The CLEAR path deliberately stays exact-match (widening a clear
+  would drop taint a partial public store never overwrote). Fixed 2026-07-27; test
+  `taint-analysis-stack-partial-reload.mir`. Both bugs and what spilling *does*
+  do correctly: `utils/taint_spill_soundness_bugs.md`.
 - **Callee→caller taint through memory — FIXED (blunt-TOP P0, 2026-07-15).** Was: a
   callee writing a secret into caller-visible memory (`copy(buf, secret)`, `memcpy(...)`)
   left the caller's reload untainted. Now `FunctionTaintSummary` carries a
@@ -209,9 +228,18 @@ output — file paths themselves often contain "isb"/"dit" and inflate naive cou
 performance benchmark for placement**: it is DIT-insensitive (whole-program DIT =
 0.968x), so it cannot show a placement win. See `utils/taint_dit_cost_model.md`.
 
-All 12 tests pass as of 2026-07-13 (`taint-analysis-store-pair.mir` was added then,
-covering a secret in the *second* register of an `STP`/`STNP` store-pair — it fails
-on any build that classifies stores by mnemonic prefix).
+All 24 tests pass as of 2026-07-27. Recently added:
+- `taint-analysis-implicit-def.mir`, `taint-analysis-stack-partial-reload.mir`
+  (2026-07-27) — the two spill soundness bugs in the gotchas above. Each was
+  verified to FAIL against the pre-fix code, not just to pass after it. See
+  `utils/taint_spill_soundness_bugs.md`.
+- `taint-analysis-store-pair.mir` (2026-07-13) — a secret in the *second* register
+  of an `STP`/`STNP` store-pair; fails on any build that classifies stores by
+  mnemonic prefix.
+
+`taint-analysis-memory.mir` was also updated on 2026-07-27: a source-level local is
+now resolved to its frame object (`getCellFromMMO`'s alloca case) and tracked as a
+precise stack cell, where it previously fell into the unknown-memory set.
 
 The three previously-failing tests were fixed on 2026-07-13; the old note blaming
 all three on stale CHECK strings was only right about one of them:

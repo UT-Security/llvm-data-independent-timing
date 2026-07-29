@@ -1,8 +1,15 @@
 # Interprocedural Taint Analysis + PSTATE.DIT Hardening — Consolidated Overview
 
 **This is the single entry-point document.** Read it first. It supersedes the stale
-`taint_handoff.md` (2026-07-14). Last updated 2026-07-26.
-Branch: `interproc_taint`. Target arch: **AArch64 only**. HEAD at time of writing: `71be809`.
+`taint_handoff.md` (2026-07-14). Last updated **2026-07-29**.
+Branch: `interproc_taint` (**all work goes here** — `main` is the upstream LLVM mirror and
+has never carried taint work). Target arch: **AArch64 only**.
+
+> **Picking this up fresh? Read §8b (what the last session found) and §10 (current state +
+> next actions). The short version: two soundness bugs were fixed, the libsodium/CIO
+> head-to-head is set up and measured, and the dominant remaining problem is
+> context-insensitive mod-sets (§9.6). Runtime has never been measured — that is the gating
+> number for the open prototype.**
 
 The deeper reference docs (`utils/taint_*.md`) are still valid for detail; this doc is the
 map. `CLAUDE.md` at the repo root holds the authoritative operating instructions and is kept
@@ -77,6 +84,7 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
 | `-taint-dit-switch-cyc` (default 0), `-taint-dit-dwell-per-instr` (default 1.0) | cost-model knobs for region merging admission. |
 | `-taint-annotation-driven` | **default false (= sound mode).** Opt-in: trust annotations, suppress cross-function memory poison at consumption. See §6. |
 | `-taint-call-arg-precise` (default true, hidden) | A/B toggle for "fix B"; `=0` restores the blunt any-live-register call trigger. |
+| `-taint-frame-addr-args` (**default false**, hidden) | **Prototype.** Treat a stack/frame address passed as a call argument as pointee-tainted when the frame may hold a secret — closes the `f(&local_secret)` under-taint. Recall vs CIO 48%→84%, but 9.1× taint volume. See `utils/taint_frame_addr_fallback.md`. |
 | `-taint-callsite-report=F` | ESCAPE report: secrets passed to callees we can't instrument. |
 | `-taint-uncovered-report=F` | tainted instrs DIT can't protect (divide/sqrt, secret-address, secret-branch). |
 | `-taint-clobber-report=F` | call sites that make the caller treat memory as secret (taint-explosion sources). |
@@ -204,6 +212,52 @@ code, one `GenerateNormal<float>` seed propagates cleanly to `ColorComponentAtPo
 **upstream inlining** removing call edges before the MIR analysis runs — not the analysis. Use
 `-O2` (the real target and canonical flag), not `-O3` (over-inlines).
 
+## 8b. The libsodium / CIO head-to-head, and two soundness bugs (2026-07-27→29)
+
+**Setup (reusable — it is all on disk).** `~/Documents/libsodium-stable/` is a built
+libsodium 1.0.21 with `libsodium-whole.bc` (WLLVM + `llvm-link`, all 932 functions in one
+module, so our per-TU scope becomes whole-library). `~/Documents/cio/` is the CIO artifact.
+Their seed config is `libsodium.uarch_checker.config` and its format is **identical to
+ours** (`symbol,arg_index`); copied verbatim to `secret.txt`, name-mapped to
+`secret_m4.txt`, and pointee-typed to `secret_m4_pointee.txt` (the variant to use — see
+below). Reports in `rpt_clean/` (fallback off) and `rpt_cleanfa/` (on); function-level diff
+vs CIO in `cio_vs_ours.txt`.
+
+Two gotchas found the hard way: 3 of CIO's 21 seed names only exist after *their* rename
+patches (`chacha20_encrypt_bytes_ref`, `stream_ref_ref`, `stream_ref_xor_ic_ref`) and
+`taint-annotate` **silently ignores** unmatched names — always pre-flight the seed list
+against `llvm-nm`. And CIO's `arg_index` is an index into SysV GPR arg registers, capped at
+5, so their four `crypto_aead_*,8` lines are **dead**: they never seed the AEAD key. Ours
+does.
+
+**Pointer args must be typed `pointee`.** Their format has no pointee concept and their
+memory domain makes that harmless (every unresolvable load returns TOP, and **TOP = Taint**).
+Ours distinguishes: a load through a *data*-tainted pointer is a secret ADDRESS, not secret
+data. Transcribing their config literally left 462 `secret-address` UNCOVERED lines; typing
+the 48 pointer args as `pointee` cut it to 205 and is the faithful translation.
+
+**Bug A — `implicit-def` counted as a use (OVER-taint).** `MI.uses()` spans implicit defs, so
+`dead $w0 = MOVi32imm 1, implicit-def $x0` with `$x0` tainted re-tainted its own defs: taint
+could never leave a register. **−33% tainted instructions** once fixed.
+**Bug B — narrowed reload of a spilled secret (UNDER-taint = leaked secret).** Cell lookup
+required an exact `(FI,offset,size)` match, so spill-8/reload-low-4 returned the secret as
+public. Read path now tests overlap; clear path stays exact-match.
+Both in `utils/taint_spill_soundness_bugs.md`, both regression-tested, each test verified to
+**fail against the pre-fix code**. That doc also records what spilling *does* do correctly,
+and a method note (rematerialization defeated the first repro).
+
+**Results after the fixes** (libsodium, 109/932 functions instrumented, fallback off):
+`__text` **+1.14%** vs unhardened, 711 DIT switches, 48% recall against CIO's alert set.
+With `-taint-frame-addr-args=1`: 286/932, +3.94%, **84% recall**, but **9.1×** tainted
+instructions. For scale, CIO's own libsodium cost is **+62%/+208%/+266%** code size and up
+to **27.84×** runtime.
+
+**Correctness audit (the important part).** Of the 19 CIO functions we don't instrument,
+**15 are unreachable from any seed** — artifacts of their blunt domain, not our misses; the
+rest are init/abort paths that process no secret, plus one thin forwarding wrapper
+(`crypto_stream_chacha20_ietf`) that is a modeling difference, not a leak. The miss direction
+is clean. The **false-positive** direction is where the work is: see §9.6.
+
 ## 9. Limitations (what this does NOT protect — be honest with reviewers)
 
 1. **DIT coverage gaps (intra-procedural).** Even inside an instrumented function DIT does not
@@ -222,26 +276,60 @@ code, one `GenerateNormal<float>` seed propagates cleanly to `ColorComponentAtPo
    incompatible with LTO for that TU (lowers to object eagerly).
 5. **Channel-3 memory gap:** an external callee that reads a secret *global* on its own (no
    secret argument) and re-exports it is not caught by the argument path.
-6. **P1 memory precision deferred:** the mod-set is blunt (whole-object, weak updates, every
+6. **Mod-sets are context-INSENSITIVE, and that is now the dominant false-positive source.**
+   A callee's mod-set is per function, so once *any* caller passes a secret into
+   `crypto_hash_sha512_update`, every other caller of it absorbs `ExternalMemClobbered` —
+   e.g. `crypto_auth_hmacsha512`, which handles no seeded secret, is instrumented anyway.
+   Measured on libsodium: **48 of 63** (fallback off) and **169 of 199** (fallback on) of
+   the functions we instrument but CIO does not are outside the seed call-graph closure
+   entirely. Bigger than every other over-taint source measured. See
+   `utils/taint_context_insensitivity.md`.
+7. **P1 memory precision deferred:** the mod-set is blunt (whole-object, weak updates, every
    truncation → TOP). Precise arg-i / per-offset provenance + a libc model table are P1;
    note that at the MIR stage, `getUnderlyingObject` often can't reach the `Argument` through
    optimized code (`memory/mir-stage-too-late-for-provenance.md`).
-7. **Inlining flattens visible propagation** at higher opt (see §8). The analysis is correct;
+8. **Inlining flattens visible propagation** at higher opt (see §8). The analysis is correct;
    the call edges are just gone before it runs.
-8. **FEAT_DIT required at runtime** (Apple M-series yes; Neoverse N1 → SIGILL). Verify via
+9. **FEAT_DIT required at runtime** (Apple M-series yes; Neoverse N1 → SIGILL). Verify via
    objdump/lit or `qemu-aarch64 -cpu max`.
 
 ## 10. Current state
 
-- **Tests:** 22 lit tests pass — `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` +
+- **Tests:** 24 lit tests pass — `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` +
   `llvm/test/Transforms/TaintAnnotate`. Run:
   `build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate`
 - **Placement defaults:** `region` granularity, `loop-hoist=0` (block-minimal).
-- **Sound mode is the default**; annotation-driven is opt-in.
-- **Unpushed commits:** `2d81ec4` (fix #1 + fix B), `71be809` (clobber report).
+- **Sound mode is the default**; annotation-driven is opt-in. `-taint-frame-addr-args` is a
+  prototype, **default off** — turning it on is not yet justified (see next actions).
 - **Validated:** flood 78→5 on `FilterNodeSoftware`; `FilterProcessingScalar` (2nd TU) does
   not flood (2/2, 6/7 with surface workers) — sound == annotation-driven on both. Holds at
-  `-O2` (5 genuine functions, `ColorComponentAtPoint` reached via propagation).
+  `-O2` (5 genuine functions, `ColorComponentAtPoint` reached via propagation). libsodium
+  head-to-head vs CIO measured end to end (§8b).
+
+### Next actions, in priority order
+
+1. **Measure RUNTIME.** Everything so far is static counts. The dwell term decides whether
+   the frame-address prototype is viable (2,447 toggles × ~30 cyc is only the toggle half).
+   CIO's own drivers are reusable: `~/Documents/cio/eval_ed25519.c`, `eval_argon2id.c`,
+   `eval_chacha20_poly1305_{encrypt,decrypt}.c`, at `-O0`, 1000 iters / 25 warmup (100 for
+   argon2id) — swap their `rdtsc` for `cntvct_el0`/`pmccntr_el0`. (`eval_aesni256gcm_*` are
+   x86-only; libsodium 1.0.18 also has no ARM AES-GCM, though 1.0.21 does via `armcrypto`.)
+2. **Attack the context-insensitivity FP source (§9.6)** — the largest measured over-taint
+   source. Cheap probe first: gate mod-set application on whether *this* call site passes a
+   secret (matches how the external/indirect path already gates on `HasTaintedArg`). It is
+   **not sound in general** — a callee can write a secret obtained from a global — so put it
+   behind a flag next to `-taint-annotation-driven` and treat the delta as an upper bound on
+   what precise application could buy.
+3. **Provenance recovery, THEN P1b.** Note the correction in
+   `utils/taint_context_insensitivity.md`: only **17 of 583** secret-writing call sites
+   resolve provenance to an argument at all (566 are TOP). So P1b — precise application of
+   `WritesSecretThroughArgPointee` — currently has almost nothing to act on; it is worth
+   doing only after more stores resolve to arg-*i*, which likely means analyzing at IR and
+   carrying facts to MIR (`memory/mir-stage-too-late-for-provenance.md`).
+4. **Still open from before:** find a DIT-sensitive real workload (placement quality is
+   unevaluable without one — `firefox_convolve_int` is 0.968x); reduce the SPEC 2026 ~15% to
+   code patterns. `playground/dit_bench/int8_mac_dit.c` is a written-but-never-run
+   sensitivity gate for int8 quantized MAC — **its results were never recorded anywhere.**
 
 ## 11. Code map (where things live)
 
@@ -256,6 +344,7 @@ code, one `GenerateNormal<float>` seed propagates cleanly to `ColorComponentAtPo
 | Store payload classification (`getNumStoredValueRegs`) | `AArch64InstrInfo.cpp` (never classify stores by mnemonic prefix) |
 | Tests | `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` |
 | Scratch experiments (not shipping) | `playground/` |
+| **libsodium/CIO comparison rig** (built, reusable) | `~/Documents/libsodium-stable/` (`libsodium-whole.bc`, `secret_m4_pointee.txt`, `rpt_clean/`, `rpt_cleanfa/`, `cio_vs_ours.txt`) and `~/Documents/cio/` (artifact + `eval_*.c` benchmark drivers) |
 
 ## 12. Deeper reference docs (this doc is the map; these are the territory)
 
@@ -265,6 +354,12 @@ code, one `GenerateNormal<float>` seed propagates cleanly to `ColorComponentAtPo
 - `utils/taint_dit_cost_model.md` — toggle (~30 cyc) + dwell (~15% SPEC), the measured numbers.
 - `utils/taint_value_timing_leaks_research.md` — motivation: LVP, Firefox, THOR/AMX.
 - `utils/taint_memory_summary_research.md` — mod-set summary design + P1 refinements.
+- `utils/taint_context_insensitivity.md` — **the dominant false-positive source**, measured,
+  with the correction that P1b is a much smaller lever than assumed (17 of 583 sites).
+- `utils/taint_spill_soundness_bugs.md` — the two 2026-07-27 bugs, what spilling *does* do
+  correctly, and how to force a real spill (rematerialization defeats the naive attempt).
+- `utils/taint_frame_addr_fallback.md` — the `-taint-frame-addr-args` prototype: the
+  `f(&local_secret)` gap, why the frame is more trackable than assumed, measured cost.
 - `utils/taint_ct_call_handling.md`, `utils/taint_cio_and_ct_literature.md` — prior art
   (CIO/Jasmin/FaCT/DECLASSIFLOW); read before any novelty claim.
 - `utils/taint_firefox_integration.md` — Firefox integration guide.
