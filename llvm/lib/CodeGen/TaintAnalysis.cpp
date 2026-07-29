@@ -28,8 +28,12 @@
 #include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/CodeGen/TaintSummaryInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Argument.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Module.h"
@@ -108,6 +112,18 @@ static cl::opt<bool> TaintCallArgPrecise(
              "argument register (fix B). Set =0 to restore the blunt "
              "any-tainted-register-live-at-the-call trigger for A/B."),
     cl::init(true), cl::Hidden);
+
+// Fallback for the register<->stack-cell link the MIR stage cannot
+// reconstruct (declared extern in TaintAnalysis.h). Post-prologepilog a local
+// buffer's address is `$sp + imm` with no FrameIndex and no MMO, so passing
+// &local to a callee transfers no taint and the callee is analyzed as clean.
+// Off by default while the over-taint cost is measured.
+cl::opt<bool> llvm::TaintFrameAddrArgs(
+    "taint-frame-addr-args",
+    cl::desc("Treat a stack/frame address passed as a call argument as "
+             "pointee-tainted when the frame may hold a secret. Closes the "
+             "under-taint where &local is handed to a callee."),
+    cl::init(false), cl::Hidden);
 
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
     "taint-callsite-report",
@@ -218,7 +234,24 @@ struct CellInfo {
   std::optional<uint64_t> Size; // nullopt if unknown/scalable
 };
 
-static CellInfo getCellFromMMO(const MachineMemOperand &MMO) {
+/// Find the frame object backing AI. Returns nullopt when the alloca has no
+/// frame object (promoted to registers, or optimized away), in which case the
+/// caller leaves the cell Unknown — the over-approximating direction.
+static std::optional<int> findFrameIndexForAlloca(const MachineFunction &MF,
+                                                  const AllocaInst *AI) {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  for (int FI = MFI.getObjectIndexBegin(), E = MFI.getObjectIndexEnd(); FI != E;
+       ++FI) {
+    if (MFI.isDeadObjectIndex(FI))
+      continue;
+    if (MFI.getObjectAllocation(FI) == AI)
+      return FI;
+  }
+  return std::nullopt;
+}
+
+static CellInfo getCellFromMMO(const MachineMemOperand &MMO,
+                               const MachineFunction *MF) {
   CellInfo CI;
   CI.Offset = MMO.getOffset();
 
@@ -237,6 +270,39 @@ static CellInfo getCellFromMMO(const MachineMemOperand &MMO) {
     if (auto *GV = dyn_cast<GlobalVariable>(UO)) {
       CI.K = CellInfo::Global;
       CI.GV = GV;
+      return CI;
+    }
+    // A source-level local. These arrive as ordinary IR pointers (%ir.nonce,
+    // %ir.add.ptr6), NOT as FixedStackPseudoSourceValue — that pseudo-value
+    // covers spill slots and fixed (incoming-argument) objects. Without this
+    // case every user local fell through to Unknown, so the "cell-level stack
+    // precision" the design claims covered spills but not the buffers secrets
+    // actually live in, and every store into a local made the function's
+    // mod-set TOP.
+    if (auto *AI = dyn_cast<AllocaInst>(UO)) {
+      if (!MF)
+        return CI; // no frame info to resolve against: stay Unknown
+      std::optional<int> FI = findFrameIndexForAlloca(*MF, AI);
+      if (!FI)
+        return CI;
+      CI.K = CellInfo::Stack;
+      CI.FI = *FI;
+      // Offset within the object is trustworthy only when the access pointer is
+      // the alloca plus a CONSTANT offset. Under a variable index (a[i]) the
+      // access could touch any part of the object, so drop to whole-object
+      // (Size = nullopt): the load path then reads it with
+      // anyTaintedStackCellForFI and the store path records it under the size-0
+      // sentinel. Keeping a bogus precise (offset,size) would let a store and a
+      // load of the same object miss each other — an UNDER-taint.
+      const DataLayout &DL = MF->getFunction().getDataLayout();
+      APInt Off(DL.getIndexTypeSizeInBits(V->getType()), 0);
+      const Value *Base =
+          V->stripAndAccumulateConstantOffsets(DL, Off,
+                                               /*AllowNonInbounds=*/true);
+      if (Base == UO)
+        CI.Offset += Off.getSExtValue();
+      else
+        CI.Size = std::nullopt;
       return CI;
     }
     // P1 argument provenance: a store/load whose pointer bottoms out at a
@@ -289,9 +355,42 @@ static bool unknownMemMayTaintLoad(const MachineMemOperand &MMO,
 
 static bool anyRegUseOfKind(TaintKind K, const MachineInstr &MI,
                             const TaintState &S) {
-  for (const MachineOperand &MO : MI.uses())
-    if (MO.isReg() && S.test(K, MO.getReg()))
+  for (const MachineOperand &MO : MI.uses()) {
+    // MI.uses() starts after the EXPLICIT defs, so it still spans implicit
+    // DEFS (on AArch64 a 32-bit result carries `implicit-def $xN`, and calls
+    // carry the $lr clobber). Counting those as uses made an instruction that
+    // merely re-defines a tainted register look like it READ one: e.g.
+    // `dead $w0 = MOVi32imm 1, implicit-def $x0` with $x0 tainted set its own
+    // defs as tainted instead of clearing them — a self-sustaining loop taint
+    // could never leave. taintedCallArguments already guards this way.
+    if (!MO.isReg() || MO.isDef())
+      continue;
+    if (S.test(K, MO.getReg()))
       return true;
+  }
+  return false;
+}
+
+/// True if MI reads the stack or frame pointer directly. That is the base an
+/// address into the local frame is formed from once prologepilog has run
+/// (`$x0 = ADDXri $sp, 232`), and the seed for TaintKind::FrameAddr. Uses the
+/// generic TRI/TargetLowering queries rather than naming registers, so it does
+/// not hard-code an AArch64 register number.
+static bool anyFrameBaseUse(const MachineInstr &MI,
+                            const TargetRegisterInfo *TRI) {
+  const MachineFunction *MF = MI.getMF();
+  if (!MF)
+    return false;
+  Register FP = TRI->getFrameRegister(*MF);
+  Register SP = MF->getSubtarget().getTargetLowering()
+                    ->getStackPointerRegisterToSaveRestore();
+  for (const MachineOperand &MO : MI.uses()) {
+    if (!MO.isReg() || MO.isDef() || !MO.getReg().isValid())
+      continue;
+    Register R = MO.getReg();
+    if ((FP.isValid() && R == FP) || (SP.isValid() && R == SP))
+      return true;
+  }
   return false;
 }
 
@@ -460,6 +559,13 @@ CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
       R.Data = true;
     if (S.test(TaintKind::Pointee, MO.getReg()))
       R.Pointee = true;
+    // Fallback (-taint-frame-addr-args): the argument is an address into a
+    // frame that may hold a secret. The analysis cannot prove what it points
+    // at — post-prologepilog the FrameIndex is gone — so it must assume the
+    // worst rather than report a clean argument. This is the ed25519 case:
+    // `$x1 = ADDXri $sp, 232` (&nonce) handed to ge25519_scalarmult_base.
+    if (TaintFrameAddrArgs && S.isFrameAddrToSecret(MO.getReg()))
+      R.Pointee = true;
   }
   return R;
 }
@@ -479,8 +585,9 @@ static void clearCallResultDefs(const MachineInstr &MI, TaintState &S,
     if (!isABIResultRegDef(MO, TRI))
       continue;
     Register R = MO.getReg();
-    for (TaintKind K :
-         {TaintKind::Data, TaintKind::Pointee, TaintKind::Address})
+    // FrameAddr included: a value returned by a call is not a frame address.
+    for (TaintKind K : {TaintKind::Data, TaintKind::Pointee, TaintKind::Address,
+                        TaintKind::FrameAddr})
       updateWithAliases(K, R, S, TRI, /*Set=*/false);
   }
 }
@@ -537,6 +644,16 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     updateAllRegDefs(TaintKind::Data, MI, S, TRI, UsesData);
     updateAllRegDefs(TaintKind::Pointee, MI, S, TRI, UsesPointee);
     updateAllRegDefs(TaintKind::Address, MI, S, TRI, UsesData || UsesAddress);
+
+    // Frame-address provenance: an address computed from SP/FP, or from a
+    // register already holding one, is itself a frame address. Any other
+    // computation clears the fact (a def that is not derived from the frame is
+    // not a frame address). Pure loads/stores/calls are excluded by the guard
+    // above and handled separately.
+    if (TaintFrameAddrArgs)
+      updateAllRegDefs(TaintKind::FrameAddr, MI, S, TRI,
+                       anyFrameBaseUse(MI, TRI) ||
+                           anyRegUseOfKind(TaintKind::FrameAddr, MI, S));
   }
 
   // Store handling: track taint into stack/global cells precisely.
@@ -547,7 +664,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     for (MachineMemOperand *MMO : MI.memoperands()) {
       if (!MMO)
         continue;
-      CellInfo CI = getCellFromMMO(*MMO);
+      CellInfo CI = getCellFromMMO(*MMO, MI.getMF());
 
       // Write one cell. A known size means we know exactly what the store
       // overwrote, so the update is strong (taint or clear). An unknown size
@@ -659,18 +776,20 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           ShouldTaint = true;
         continue;
       }
-      CellInfo CI = getCellFromMMO(*MMO);
+      CellInfo CI = getCellFromMMO(*MMO, MI.getMF());
       if (CI.K == CellInfo::Stack) {
         // A call that clobbered unknown memory (mod-set TOP) may have written
         // through a pointer into this frame — blunt P0 poisons every stack load
         // after such a call. Provenance-based escaped-object precision (only
         // poison stack objects whose address escaped) is the P1 refinement.
-        bool Tainted = (CrossFn && S.isExternalMemClobbered()) ||
-                       (CI.Size
-                            ? S.isTaintedStackCell(CI.FI, CI.Offset, *CI.Size)
-                            : S.anyTaintedStackCellForFI(CI.FI));
+        bool Tainted =
+            (CrossFn && S.isExternalMemClobbered()) ||
+            (CI.Size ? S.isTaintedStackCellOverlapping(CI.FI, CI.Offset,
+                                                       *CI.Size)
+                     : S.anyTaintedStackCellForFI(CI.FI));
         bool PointeeTainted =
-            CI.Size ? S.isPointeeTaintedStackCell(CI.FI, CI.Offset, *CI.Size)
+            CI.Size ? S.isPointeeTaintedStackCellOverlapping(CI.FI, CI.Offset,
+                                                            *CI.Size)
                     : S.anyPointeeTaintedStackCellForFI(CI.FI);
         if (Tainted) {
           ShouldTaint = true;
@@ -694,7 +813,8 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         } else {
           bool Tainted =
               (CrossFn && S.isWholeGlobalTainted(CI.GV)) ||
-              (CI.Size ? S.isTaintedGlobalCell(CI.GV, CI.Offset, *CI.Size)
+              (CI.Size ? S.isTaintedGlobalCellOverlapping(CI.GV, CI.Offset,
+                                                          *CI.Size)
                        : S.anyTaintedGlobalCellForGV(CI.GV));
           if (Tainted) {
             ShouldTaint = true;
@@ -741,6 +861,13 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     updateAllRegDefs(TaintKind::Data, MI, S, TRI, ShouldTaint);
     updateAllRegDefs(TaintKind::Pointee, MI, S, TRI, ShouldPointeeTaint);
     updateAllRegDefs(TaintKind::Address, MI, S, TRI, /*Set=*/false);
+    // A loaded value is not treated as a frame address. KNOWN LIMITATION: a
+    // reloaded spilled pointer genuinely can be one, so this under-approximates
+    // FrameAddr and the fallback fires less often than it ideally would. That
+    // is a residual gap, not a regression — it is strictly more coverage than
+    // not tracking frame addresses at all.
+    if (TaintFrameAddrArgs)
+      updateAllRegDefs(TaintKind::FrameAddr, MI, S, TRI, /*Set=*/false);
   }
 
   // NEW: Handle function calls for interprocedural taint propagation
@@ -935,6 +1062,13 @@ void llvm::replayTaint(
         F.UsesData = anyRegUseOfKind(TaintKind::Data, MI, S);
         F.UsesPointee = anyRegUseOfKind(TaintKind::Pointee, MI, S);
         F.UsesAddress = anyRegUseOfKind(TaintKind::Address, MI, S);
+        // A call handed a frame address that may point at a secret counts as
+        // passing a pointee secret, so isTaintedInstruction makes it a DIT
+        // Need (the callee inherits DIT) and it shows up in the reports. Kept
+        // here rather than in anyRegUseOfKind so the fact stays confined to
+        // call boundaries.
+        if (TaintFrameAddrArgs && MI.isCall() && !F.UsesPointee)
+          F.UsesPointee = taintedCallArguments(MI, S, TRI).Pointee;
       }
 
       propagateTaintMI(MI, S, TRI, TSI, M, AA);
@@ -1071,7 +1205,7 @@ FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
             ME.WritesSecretToUnknown = true;
             continue;
           }
-          CellInfo CI = getCellFromMMO(*MMO);
+          CellInfo CI = getCellFromMMO(*MMO, MI.getMF());
           if (CI.K == CellInfo::Stack) {
             // A non-fixed frame object is this function's own private stack —
             // the caller cannot see it, so it is NOT a caller-visible effect.

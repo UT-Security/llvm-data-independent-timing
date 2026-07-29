@@ -5,13 +5,17 @@
 # Arg 0 is tainted. It gets stored to a stack slot, then loaded back.
 # The analysis should propagate taint through the store → load path.
 
-# The MIR addresses the slot through $sp rather than a frame index, so the store
-# lands in the unknown-memory set rather than a stack cell.
+# The MIR addresses the slot through $sp rather than a frame index, but the MMO's
+# underlying object is the alloca, which getCellFromMMO resolves to its frame
+# object (MachineFrameInfo::getObjectAllocation). So this is tracked as a precise
+# stack CELL, not the blunt unknown-memory set. Before that case existed, every
+# source-level local fell through to Unknown — the expectations below used to read
+# "taint unknown mem value %slot" / "load from tainted unknown/heap mem".
 # CHECK: TaintAnalysis: analyzing function store_load
 # CHECK:   IR arg 0 has 'tainted' attribute
 # CHECK:   Marked virtual register
-# CHECK:      taint unknown mem value %slot
-# CHECK:      load from tainted unknown/heap mem
+# CHECK:      taint stack cell FI=0 off=0 sz=4 (store)
+# CHECK:      load from tainted stack cell FI=0 off=0
 # CHECK:      set %{{[0-9]+}} as tainted
 # CHECK: Total tainted regs: {{[1-9][0-9]*}}
 

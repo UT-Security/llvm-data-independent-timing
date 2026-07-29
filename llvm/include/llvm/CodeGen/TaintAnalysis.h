@@ -74,6 +74,15 @@ extern cl::opt<std::string> TaintCallsiteReportFile;
 /// is silent false assurance; the report surfaces them for audit.
 extern cl::opt<std::string> TaintUncoveredReportFile;
 
+/// Fallback for the register<->stack-cell link lost at the MIR stage: treat a
+/// stack/frame address passed as a call argument as pointee-tainted when the
+/// frame may hold a secret. Without it the analysis reports a confident "clean"
+/// for a call it has no information about — an under-taint, i.e. a leaked
+/// secret (the ed25519 nonce -> ge25519_scalarmult_base case). Off by default
+/// while the over-taint cost is being measured; -taint-frame-addr-args=1
+/// enables it. See utils/taint_frame_addr_fallback.md.
+extern cl::opt<bool> TaintFrameAddrArgs;
+
 /// Command-line option for the memory-clobber report: every call site that
 /// makes the caller treat memory as secret (sets ExternalMemClobbered / a
 /// whole-global). These are the sources of cross-function memory taint — the
@@ -87,6 +96,18 @@ enum class TaintKind {
   Data,    ///< The value itself is secret.
   Pointee, ///< The value is a pointer to secret memory.
   Address, ///< The value may be used as a secret-dependent memory address.
+  /// NOT a taint kind — a provenance fact, tracked here to reuse the same
+  /// subreg/superreg-aware register machinery. The value is an address derived
+  /// from the stack/frame pointer. The analysis runs post-prologepilog, so a
+  /// local buffer's address is just `$sp + imm`: no FrameIndex, no memory
+  /// operand, and therefore no link to the tainted stack cell it points at.
+  /// Without this fact, taking the address of a secret local and passing it to
+  /// a callee transfers nothing and the callee is silently analyzed as clean
+  /// (the ed25519 `nonce` -> ge25519_scalarmult_base case). Consumed ONLY at a
+  /// call boundary, where it is converted to Pointee taint if the frame may
+  /// hold a secret; intra-function load handling is deliberately unaffected so
+  /// stack-cell precision is preserved.
+  FrameAddr,
 };
 
 /// TaintState holds the result of taint analysis for a MachineFunction.
@@ -97,6 +118,11 @@ struct TaintState {
   SparseBitVector<> TaintedRegs;
   SparseBitVector<> PointeeTaintedRegs;
   SparseBitVector<> AddressTaintedRegs;
+  /// Provenance, not taint: registers holding a stack/frame-derived address.
+  /// See TaintKind::FrameAddr. Excluded from empty()/countRegs() precisely
+  /// because it is not taint — a function holding only frame addresses is not
+  /// tainted and must not become instrumented on that basis.
+  SparseBitVector<> FrameAddrRegs;
   DenseSet<StackCell> TaintedStackCells;
   DenseSet<StackCell> PointeeTaintedStackCells;
   DenseSet<GlobalCell> TaintedGlobalCells;
@@ -122,6 +148,7 @@ public:
     return TaintedRegs == O.TaintedRegs &&
            PointeeTaintedRegs == O.PointeeTaintedRegs &&
            AddressTaintedRegs == O.AddressTaintedRegs &&
+           FrameAddrRegs == O.FrameAddrRegs &&
            TaintedStackCells == O.TaintedStackCells &&
            PointeeTaintedStackCells == O.PointeeTaintedStackCells &&
            TaintedGlobalCells == O.TaintedGlobalCells &&
@@ -138,6 +165,7 @@ public:
     TaintedRegs |= O.TaintedRegs;
     PointeeTaintedRegs |= O.PointeeTaintedRegs;
     AddressTaintedRegs |= O.AddressTaintedRegs;
+    FrameAddrRegs |= O.FrameAddrRegs;
     for (const auto &C : O.TaintedStackCells)
       TaintedStackCells.insert(C);
     for (const auto &C : O.PointeeTaintedStackCells)
@@ -171,6 +199,23 @@ public:
   void setExternalMemClobbered() { ExternalMemClobbered = true; }
   bool isExternalMemClobbered() const { return ExternalMemClobbered; }
 
+  /// True if this frame may hold a secret, so an address into it may point at
+  /// one. Deliberately coarse: any tainted stack cell, or a call-induced
+  /// clobber that may have written a secret anywhere in the frame. This is the
+  /// term that bounds the FrameAddr fallback — with a clean frame the fallback
+  /// never fires, so a function with no stack secrets pays nothing.
+  bool frameMayHoldSecret() const {
+    return ExternalMemClobbered || !TaintedStackCells.empty() ||
+           !PointeeTaintedStackCells.empty();
+  }
+
+  /// True if R is a frame address that may point at a secret — the
+  /// over-approximating fallback for the register<->stack-cell link the MIR
+  /// stage cannot reconstruct. Consumed at call boundaries only.
+  bool isFrameAddrToSecret(Register R) const {
+    return test(TaintKind::FrameAddr, R) && frameMayHoldSecret();
+  }
+
   /// The register bitvector holding taint of kind K.
   SparseBitVector<> &regs(TaintKind K) {
     switch (K) {
@@ -180,6 +225,8 @@ public:
       return PointeeTaintedRegs;
     case TaintKind::Address:
       return AddressTaintedRegs;
+    case TaintKind::FrameAddr:
+      return FrameAddrRegs;
     }
     llvm_unreachable("unhandled TaintKind");
   }
@@ -215,6 +262,16 @@ public:
     return test(TaintKind::Address, R);
   }
 
+  /// Do byte ranges [AOff,AOff+ASz) and [BOff,BOff+BSz) overlap? Size 0 is the
+  /// unknown-extent sentinel (recorded by an unknown-size store) and is treated
+  /// as covering the whole object — the safe direction.
+  static bool rangesOverlap(int64_t AOff, uint64_t ASz, int64_t BOff,
+                            uint64_t BSz) {
+    if (ASz == 0 || BSz == 0)
+      return true;
+    return AOff < BOff + (int64_t)BSz && BOff < AOff + (int64_t)ASz;
+  }
+
   // Stack cell methods
   void setTaintedStackCell(int FI, int64_t Off, uint64_t Sz) {
     TaintedStackCells.insert({FI, {Off, Sz}});
@@ -225,6 +282,22 @@ public:
   bool isTaintedStackCell(int FI, int64_t Off, uint64_t Sz) const {
     return TaintedStackCells.contains({FI, {Off, Sz}});
   }
+  /// READ-side test: does any tainted cell of this object overlap the accessed
+  /// byte range? Exact (FI,Off,Sz) matching was an UNDER-TAINT: spilling 8
+  /// secret bytes and reloading the low 4 (`STRXui` then `LDRWui` on the same
+  /// slot) missed the cell entirely and handed the secret back as public. The
+  /// CLEAR path deliberately stays exact-match — widening a clear would drop
+  /// taint a partial public store did not actually overwrite.
+  bool isTaintedStackCellOverlapping(int FI, int64_t Off, uint64_t Sz) const {
+    if (TaintedStackCells.contains({FI, {Off, Sz}}))
+      return true; // fast path: identical access shape
+    for (const auto &C : TaintedStackCells)
+      if (C.first == FI &&
+          rangesOverlap(Off, Sz, C.second.first, C.second.second))
+        return true;
+    return false;
+  }
+
   /// Fallback: any cell for this FI tainted? O(n) scan.
   bool anyTaintedStackCellForFI(int FI) const {
     for (const auto &C : TaintedStackCells)
@@ -241,6 +314,18 @@ public:
   bool isPointeeTaintedStackCell(int FI, int64_t Off, uint64_t Sz) const {
     return PointeeTaintedStackCells.contains({FI, {Off, Sz}});
   }
+  /// READ-side overlap test for pointee taint (see isTaintedStackCellOverlapping).
+  bool isPointeeTaintedStackCellOverlapping(int FI, int64_t Off,
+                                            uint64_t Sz) const {
+    if (PointeeTaintedStackCells.contains({FI, {Off, Sz}}))
+      return true;
+    for (const auto &C : PointeeTaintedStackCells)
+      if (C.first == FI &&
+          rangesOverlap(Off, Sz, C.second.first, C.second.second))
+        return true;
+    return false;
+  }
+
   bool anyPointeeTaintedStackCellForFI(int FI) const {
     for (const auto &C : PointeeTaintedStackCells)
       if (C.first == FI)
@@ -261,6 +346,18 @@ public:
                            uint64_t Sz) const {
     return TaintedGlobalCells.contains({GV, {Off, Sz}});
   }
+  /// READ-side overlap test for globals (see isTaintedStackCellOverlapping).
+  bool isTaintedGlobalCellOverlapping(const GlobalVariable *GV, int64_t Off,
+                                      uint64_t Sz) const {
+    if (TaintedGlobalCells.contains({GV, {Off, Sz}}))
+      return true;
+    for (const auto &C : TaintedGlobalCells)
+      if (C.first == GV &&
+          rangesOverlap(Off, Sz, C.second.first, C.second.second))
+        return true;
+    return false;
+  }
+
   bool anyTaintedGlobalCellForGV(const GlobalVariable *GV) const {
     for (const auto &C : TaintedGlobalCells)
       if (C.first == GV)

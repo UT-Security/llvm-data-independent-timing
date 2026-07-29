@@ -106,7 +106,13 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
                               << " now tainted (via " << printReg(PhysReg, TRI)
                               << ")\n");
           }
-          if (S.isPointeeTainted(PhysReg) &&
+          // The FrameAddr fallback lands here: an argument register holding an
+          // address into a frame that may hold a secret seeds the callee's
+          // pointee-tainted args. Without it, `f(&local_secret)` transfers
+          // nothing and the callee is analyzed as clean — the under-taint the
+          // ed25519 nonce case exposed.
+          if ((S.isPointeeTainted(PhysReg) ||
+               (TaintFrameAddrArgs && S.isFrameAddrToSecret(PhysReg))) &&
               CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
             SummaryChanged = true;
             LLVM_DEBUG(dbgs() << "  caller " << MF.getName() << " -> callee "
