@@ -26,6 +26,22 @@ command and ask them to run it and paste the output.
 - Build dir: `build/` (Debug, all targets). Typical: `ninja -C build clang llc opt`
 - All tools referenced below are `build/bin/...`
 
+**macOS: create `build/bin/clang.cfg` after configuring a fresh build dir.** A
+from-source clang does not infer the macOS SDK, so any `#include <stdio.h>` fails with
+`'stdio.h' file not found`. Clang reads a default config file sitting next to the
+binary, which fixes every invocation at once:
+
+```
+printf -- '-isysroot %s\n' "$(xcrun --show-sdk-path)" > build/bin/clang.cfg
+```
+
+`build/` is gitignored, so this must be redone per build dir. Verified not to disturb
+the test suites (all 1403 `clang/test/Driver` tests pass with it present);
+`--no-default-config` opts out of it for a single invocation. The alternative is
+`-DDEFAULT_SYSROOT=$(xcrun --show-sdk-path)` at cmake time, or passing
+`-isysroot $(xcrun --show-sdk-path)` on every command line. `utils/taint_harden_c.sh`
+already auto-detects the SDK itself and needs none of this.
+
 ## How to run the pipeline
 
 ### Preferred: one-shot clang flag
@@ -35,7 +51,9 @@ build/bin/clang -O2 -ftaint-harden=<taint-src-file> -c file.c -o file.o
 ```
 
 Flag absent ⇒ codegen byte-for-byte unchanged. Verify:
-`build/bin/llvm-objdump -d file.o | grep -E '\bmsr\b.*\bdit\b'`
+`build/bin/llvm-objdump -d file.o | grep -iE '\bmsr\b.*\bdit\b'`
+(**`-i` is required** — objdump prints the operand uppercase, `msr DIT, #0x1`, so the
+case-sensitive form silently reports zero on a correctly hardened object.)
 
 ### Protection: PSTATE.DIT (the only mode)
 
@@ -111,7 +129,8 @@ these). Region spacing: `utils/taint_region_distance.py OUT.hardened.mir`.
 | **Context-insensitive mod-sets — the dominant false-positive source** (measured on libsodium: 169 of 199 FPs). Also records that P1b is a far smaller lever than assumed: only 17 of 583 secret-writing call sites resolve provenance to an argument | `utils/taint_context_insensitivity.md` |
 | Two spill soundness bugs fixed 2026-07-27 (`implicit-def` as use; narrowed reload) + what spilling *does* do correctly | `utils/taint_spill_soundness_bugs.md` |
 | `-taint-frame-addr-args` prototype (default OFF): the `f(&local_secret)` under-taint, measured cost | `utils/taint_frame_addr_fallback.md` |
-| libsodium/CIO head-to-head rig (built, reusable) | `~/Documents/libsodium-stable/`, `~/Documents/cio/` |
+| **libsodium/CIO head-to-head rig — SCRIPTED.** Build + seed + analyze + archives + `make check`; then the runtime A/B/D/E/C matrix. The old hand-built copies under `~/Documents/libsodium-stable/` and `~/Documents/cio/` were **lost** — do not look for them, run the scripts | `utils/taint_libsodium_eval.sh`, `utils/taint_libsodium_bench.sh` (work dir `~/Documents/libsodium-1.0.21/`; benchmark drivers `~/Documents/crypto-dit-benchmarks/`, untracked, `BENCH_DIR=` overridable) |
+| **End-to-end runtime, MEASURED 2026-08-03 — a negative on libsodium.** Blanket DIT is free (1.00–1.02x); taint-driven placement costs +46%..+94% at the *shipped defaults*, ~half that when tuned for serializing switches. The defaults (`-taint-dit-switch-cyc=0`) assert toggles are free; on M4 they are ~30 cyc. No measured workload yet justifies fine-grained placement | `utils/taint_dit_cost_model.md` (table + caveats) |
 | `TargetInstrInfo::insertTimingModeSwitch` hook (emits `MSR DIT`; the `insertInstructionBarrier`/`insertDataBarrier` ISB/DSB hooks were removed 2026-07-14) | `llvm/include/llvm/CodeGen/TargetInstrInfo.h`, `llvm/lib/Target/AArch64/AArch64InstrInfo.cpp` |
 | DIT placement: state, gaps, optimal-placement design | `utils/taint_dit_placement.md` |
 | **What PSTATE.DIT actually guarantees** (covered instruction set, exclusions = divide/sqrt, address-timing not covered). The `isDITProtected` membership hook is transcribed from this — keep in sync | `utils/taint_dit_spec.md` |

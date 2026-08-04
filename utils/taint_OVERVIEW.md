@@ -1,15 +1,19 @@
 # Interprocedural Taint Analysis + PSTATE.DIT Hardening — Consolidated Overview
 
 **This is the single entry-point document.** Read it first. It supersedes the stale
-`taint_handoff.md` (2026-07-14). Last updated **2026-07-29**.
+`taint_handoff.md` (2026-07-14). Last updated **2026-08-03**.
 Branch: `interproc_taint` (**all work goes here** — `main` is the upstream LLVM mirror and
 has never carried taint work). Target arch: **AArch64 only**.
 
-> **Picking this up fresh? Read §8b (what the last session found) and §10 (current state +
-> next actions). The short version: two soundness bugs were fixed, the libsodium/CIO
-> head-to-head is set up and measured, and the dominant remaining problem is
-> context-insensitive mod-sets (§9.6). Runtime has never been measured — that is the gating
-> number for the open prototype.**
+> **Picking this up fresh? Read §7 and §10 first.** The short version: the libsodium/CIO
+> rig is now **scripted and reproducible** (`utils/taint_libsodium_eval.sh` — the old
+> hand-built copies were lost), `make check` passes 86/86 on the hardened library, and
+> **end-to-end runtime is finally measured — as a NEGATIVE.** On libsodium, blanket DIT
+> is free (1.00–1.02x) while taint-driven placement costs +46%..+94% at the shipped
+> defaults. That is what `cost = toggles + dwell` predicts when dwell ≈ 0, so it is not a
+> refutation — but **no measured workload yet justifies fine-grained placement**, and
+> finding a DIT-sensitive one is now the blocking gap. The dominant *precision* problem
+> remains context-insensitive mod-sets (§9.6).
 
 The deeper reference docs (`utils/taint_*.md`) are still valid for detail; this doc is the
 map. `CLAUDE.md` at the repo root holds the authoritative operating instructions and is kept
@@ -50,9 +54,12 @@ DOIT are built to suppress.
 ### Preferred: one-shot clang flag
 ```
 build/bin/clang -O2 -ftaint-harden=<taint-src-file> -c file.c -o file.o
-# verify a barrier landed:
-build/bin/llvm-objdump -d file.o | grep -E '\bmsr\b.*\bdit\b'
+# verify a barrier landed (-i is REQUIRED: objdump prints `msr DIT, #0x1` uppercase):
+build/bin/llvm-objdump -d file.o | grep -iE '\bmsr\b.*\bdit\b'
 ```
+
+On macOS a from-source clang needs the SDK pointed out or `#include <stdio.h>` fails;
+see the `build/bin/clang.cfg` one-liner in `CLAUDE.md` §Build.
 
 ### Taint-source file format (one entry per line)
 ```
@@ -172,6 +179,15 @@ the TUs measured, so annotation-driven is opt-in insurance rather than load-bear
   spot, not DIT. Bad workloads for evaluating a placement *win*.
 - The project owner implemented a **non-serializing DIT switch in GEM5** (via register
   renaming) — so on that model set `-taint-dit-switch-cyc` low and prefer the finest groups.
+- ⚠️ **END-TO-END RUNTIME IS NOW MEASURED, and on libsodium it is a NEGATIVE
+  (2026-08-03).** Blanket DIT costs **1.00–1.02x** there (free); taint-driven placement
+  at the **shipped defaults** costs **+46% (ed25519 sign) to +94% (AEAD encrypt)**.
+  Tuning for serializing switches (`-taint-dit-switch-cyc=30 -taint-dit-loop-hoist=1`)
+  recovers about half. Whole-function ≈ tuned region. On a dwell≈0 workload coarse DIT
+  dominates ours on both cost *and* coverage. This is what the model predicts when
+  `dwell ≈ 0` — not a refutation — but it means **the shipped defaults are mistuned for
+  real serializing hardware**, and no measured workload yet justifies fine placement.
+  Full table + caveats: `utils/taint_dit_cost_model.md`.
 
 Full detail: `utils/taint_dit_cost_model.md`, `utils/taint_dit_placement.md`.
 
@@ -214,14 +230,45 @@ code, one `GenerateNormal<float>` seed propagates cleanly to `ColorComponentAtPo
 
 ## 8b. The libsodium / CIO head-to-head, and two soundness bugs (2026-07-27→29)
 
-**Setup (reusable — it is all on disk).** `~/Documents/libsodium-stable/` is a built
-libsodium 1.0.21 with `libsodium-whole.bc` (WLLVM + `llvm-link`, all 932 functions in one
-module, so our per-TU scope becomes whole-library). `~/Documents/cio/` is the CIO artifact.
-Their seed config is `libsodium.uarch_checker.config` and its format is **identical to
-ours** (`symbol,arg_index`); copied verbatim to `secret.txt`, name-mapped to
-`secret_m4.txt`, and pointee-typed to `secret_m4_pointee.txt` (the variant to use — see
-below). Reports in `rpt_clean/` (fallback off) and `rpt_cleanfa/` (on); function-level diff
-vs CIO in `cio_vs_ours.txt`.
+**Setup — SCRIPTED, do not rebuild by hand (2026-08-03).** The original rig lived in an
+untracked home directory (`~/Documents/libsodium-stable/`, `~/Documents/cio/`) and **was
+lost**. It is now reproducible from a clean machine by two tracked scripts:
+
+```
+utils/taint_libsodium_eval.sh     # fetch -> patch -> build -> bitcode -> seed ->
+                                  # analyze -> archives -> check -> report
+utils/taint_libsodium_bench.sh    # runtime A/B/D/E/C matrix (see §7)
+```
+
+`taint_libsodium_eval.sh` fetches libsodium 1.0.21 and CIO's
+`libsodium.uarch_checker.config` (from `counter-optimization/cio`, 65 lines / 21
+symbols, format **identical to ours**), applies the rename patch, builds whole-library
+bitcode (WLLVM + `llvm-link`, `--disable-asm`), derives the pointee-typed seed file, and
+emits `libsodium-{baseline,hardened,tuned,func}.a` plus reports in `rpt/`. Stages are
+independently runnable (`--list`).
+
+*Verification status (2026-08-03, be precise about this):* the rig was first rebuilt by
+hand and the numbers below come from that run. The script's `seed` stage was then
+verified to regenerate the seed file **byte-identically** (65/65 lines), and its
+`report` stage and `taint_libsodium_bench.sh` were run end to end against those
+artifacts. The `fetch/patch/build/bitcode/analyze/archives/check` stages are
+transcriptions of the verified manual commands but have **not** yet been run as a
+single clean-machine pass — do that once and delete this paragraph.
+
+**Three things the script encodes that cost real time to rediscover:**
+- **Pre-flight seed names against IR `define` names, NOT `llvm-nm`.** On Mach-O
+  `llvm-nm` prints object names with a leading `_`, so a naive check reports **21/21
+  MISSING** on a perfectly good seed file. `taint-annotate` ignores unmatched names
+  *silently*, so getting this backwards yields a completely unseeded run that looks
+  successful. The script hard-fails on any unresolved line and on zero attributes.
+- **The 3 renamed statics are all in `crypto_stream/chacha20/ref/chacha20_ref.c`**
+  (`chacha20_encrypt_bytes`, `stream_ref`, `stream_ref_xor_ic`). Rename with `\b`
+  anchoring — `stream_ref` must not match inside `stream_ref_xor_ic`. They are `static`
+  and `stream_ref`/`stream_ref_xor_ic` also exist in `salsa20/ref/`, which is almost
+  certainly why CIO patched them: after `llvm-link` merges the module, colliding
+  statics get `.N` suffixes and seeding by plain name stops working.
+- **`--disable-asm` is required** or hand-written `.S` never enters the bitcode and is
+  invisible to the analysis. These numbers describe C-only libsodium.
 
 Two gotchas found the hard way: 3 of CIO's 21 seed names only exist after *their* rename
 patches (`chacha20_encrypt_bytes_ref`, `stream_ref_ref`, `stream_ref_xor_ic_ref`) and
@@ -248,6 +295,12 @@ and a method note (rematerialization defeated the first repro).
 
 **Results after the fixes** (libsodium, 109/932 functions instrumented, fallback off):
 `__text` **+1.14%** vs unhardened, 711 DIT switches, 48% recall against CIO's alert set.
+*(2026-08-03 scripted rebuild reproduces this: 105/926 instrumented, **+1.09%** `__text`,
+647 switches, ESCAPE **35** — exact — CLOBBER 610. UNCOVERED came back 168 vs 203, the
+one delta not yet explained; the rest is consistent with the `--disable-asm` build
+config, 926 vs 932 functions. **`make check` passes 86/86** on the hardened library, with
+the baseline whole-bitcode object run first as a control to prove the round-trip is
+lossless.)*
 With `-taint-frame-addr-args=1`: 286/932, +3.94%, **84% recall**, but **9.1×** tainted
 instructions. For scale, CIO's own libsodium cost is **+62%/+208%/+266%** code size and up
 to **27.84×** runtime.
@@ -308,12 +361,15 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 
 ### Next actions, in priority order
 
-1. **Measure RUNTIME.** Everything so far is static counts. The dwell term decides whether
-   the frame-address prototype is viable (2,447 toggles × ~30 cyc is only the toggle half).
-   CIO's own drivers are reusable: `~/Documents/cio/eval_ed25519.c`, `eval_argon2id.c`,
-   `eval_chacha20_poly1305_{encrypt,decrypt}.c`, at `-O0`, 1000 iters / 25 warmup (100 for
-   argon2id) — swap their `rdtsc` for `cntvct_el0`/`pmccntr_el0`. (`eval_aesni256gcm_*` are
-   x86-only; libsodium 1.0.18 also has no ARM AES-GCM, though 1.0.21 does via `armcrypto`.)
+1. ~~**Measure RUNTIME.**~~ **DONE 2026-08-03 — see §7 and `taint_dit_cost_model.md`.**
+   Result was a negative on libsodium: coarse DIT is free (1.00–1.02x), taint-driven
+   placement costs +46%/+94% at the shipped defaults. Run it yourself with
+   `utils/taint_libsodium_bench.sh`. **Two follow-ups this created:**
+   (a) **Retune the shipped defaults** — `-taint-dit-switch-cyc=0` encodes "toggles are
+   free", which is false by ~30 cyc on M4 and costs ~2x the tuned overhead;
+   (b) **argon2id was never run** (CIO's headline 27.84x worst case) because the harness
+   does 1000 iterations of a memory-hard KDF — do it at a reduced iteration count.
+   No `sudo` ⇒ no kperf cycles; re-run with `sudo -E` for real cycle counts.
 2. **Attack the context-insensitivity FP source (§9.6)** — the largest measured over-taint
    source. Cheap probe first: gate mod-set application on whether *this* call site passes a
    secret (matches how the external/indirect path already gates on `HasTaintedArg`). It is
@@ -326,10 +382,16 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
    `WritesSecretThroughArgPointee` — currently has almost nothing to act on; it is worth
    doing only after more stores resolve to arg-*i*, which likely means analyzing at IR and
    carrying facts to MIR (`memory/mir-stage-too-late-for-provenance.md`).
-4. **Still open from before:** find a DIT-sensitive real workload (placement quality is
-   unevaluable without one — `firefox_convolve_int` is 0.968x); reduce the SPEC 2026 ~15% to
-   code patterns. `playground/dit_bench/int8_mac_dit.c` is a written-but-never-run
-   sensitivity gate for int8 quantized MAC — **its results were never recorded anywhere.**
+4. **A DIT-sensitive real workload is now THE blocking gap — promote it.** Three
+   workloads have come back insensitive: `firefox_convolve_int` 0.968x, the int8 MAC
+   gate **1.000x** (run 2026-08-03, previously never run — results now in
+   `taint_dit_cost_model.md`), and libsodium **1.00–1.02x**. Until one is found,
+   fine-grained placement cannot be shown to win on *anything*, and the honest position
+   is that coarse DIT is the better engineering choice on every workload measured. The
+   LVP pointer-chase (**4.00x**) is the one confirmed sensitive pattern — find a real
+   application shaped like it. Also still open: reduce the SPEC 2026 ~15% to code
+   patterns. Caveat on the int8 gate: its `DEP` shape never demonstrated it *can* detect
+   the LVP, so fix that probe (byte vs 4-byte load) before citing it as a general result.
 
 ## 11. Code map (where things live)
 
@@ -344,7 +406,8 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 | Store payload classification (`getNumStoredValueRegs`) | `AArch64InstrInfo.cpp` (never classify stores by mnemonic prefix) |
 | Tests | `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` |
 | Scratch experiments (not shipping) | `playground/` |
-| **libsodium/CIO comparison rig** (built, reusable) | `~/Documents/libsodium-stable/` (`libsodium-whole.bc`, `secret_m4_pointee.txt`, `rpt_clean/`, `rpt_cleanfa/`, `cio_vs_ours.txt`) and `~/Documents/cio/` (artifact + `eval_*.c` benchmark drivers) |
+| **libsodium/CIO rig — SCRIPTED** (the old `~/Documents/libsodium-stable/` + `~/Documents/cio/` copies were lost; do not look for them) | `utils/taint_libsodium_eval.sh` (build+analyze+archives+`make check`), `utils/taint_libsodium_bench.sh` (runtime A/B/D/E/C). Default work dir `~/Documents/libsodium-1.0.21/`. |
+| Runtime benchmark drivers (kperf cycles, P-core pinning) — **untracked, outside the repo**; vendor or pin it or this rig will be lost the same way | `~/Documents/crypto-dit-benchmarks/` (`perf.c`, `libcpupin.dylib`, per-primitive drivers); override with `BENCH_DIR=` |
 
 ## 12. Deeper reference docs (this doc is the map; these are the territory)
 

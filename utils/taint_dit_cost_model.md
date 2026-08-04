@@ -131,6 +131,80 @@ to look for the sensitive patterns — **untested, listed for the next session**
   32-instruction loop with a hot L1 working set exercises almost none of the
   machinery DIT constrains.
 
+## ★ END-TO-END RUNTIME, MEASURED (2026-08-03) — libsodium, and it is a NEGATIVE
+
+**This is the "measure runtime" item that was next-action #1 for the whole project.**
+Everything before this section was either a microbenchmark or a static count. Rig and
+repro: `utils/taint_libsodium_eval.sh` + `utils/taint_libsodium_bench.sh`.
+
+Five configurations, identical benchmark source, libsodium 1.0.21 (`--disable-asm`,
+whole-library bitcode), min-of-5, `cntvct_el0` ticks/op:
+
+| benchmark | metric | A base | B default | D tuned | E function | C whole-DIT | B/A | D/A | E/A | **C/A** |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ed25519 | Sign | 9637 | 14113 | 11161 | 11014 | 9833 | 1.464x | 1.158x | 1.143x | **1.020x** |
+| ed25519 | Verify | 19971 | 21938 | 20699 | 20835 | 20360 | 1.098x | 1.036x | 1.043x | **1.019x** |
+| aead_chacha20poly1305 | Encrypt | 1279 | 2477 | 1934 | 2016 | 1279 | 1.937x | 1.512x | 1.576x | **1.000x** |
+| aead_chacha20poly1305 | Decrypt | 1317 | 2525 | 1983 | 2088 | 1323 | 1.917x | 1.506x | 1.585x | **1.005x** |
+
+- **A** unhardened, DIT never set. **B** taint-hardened at the *shipped defaults*
+  (`region`, `switch-cyc=0`, `loop-hoist=0`). **D** taint-hardened tuned for
+  serializing switches (`switch-cyc=30`, `loop-hoist=1`). **E** `placement=function`.
+  **C** unhardened + DIT set across the whole measured region (the coarse mitigation
+  FLOP/Safari ship).
+
+**The four findings, in order of importance:**
+
+1. **Blanket DIT is FREE on libsodium (1.000–1.020x).** These primitives are
+   DIT-insensitive on M4. That is now three independent workloads agreeing —
+   `firefox_convolve_int` (0.968x), the int8 MAC gate (below), and libsodium.
+2. **Every taint-driven policy costs MORE than blanket DIT.** At the shipped defaults:
+   **+46%** on ed25519 sign, **+94%** on AEAD encrypt. On this workload the coarse
+   mitigation dominates ours on *both* axes — it is faster *and* covers strictly more
+   code.
+3. **The toggle-cost diagnosis is confirmed, and the shipped defaults are mistuned for
+   real hardware.** `switch-cyc=0` asserts toggles are free; they are ~30 cyc and
+   serializing here. Retuning (D) recovers about half the loss — 1.46→1.16 and
+   1.94→1.51. This is the first measurement backing the placement doc's claim that
+   `loop-hoist=1` is the right choice for serializing-switch hardware.
+4. **Function granularity ≈ tuned region placement** (E ≈ D). Exactly what the model
+   predicts when dwell ≈ 0: narrowing coverage buys nothing, so you only pay toggles.
+
+**What this does and does not mean.** It does **not** refute the approach — it is what
+`cost = toggles×30cyc + dwell×time` predicts when `dwell ≈ 0`, and the value
+proposition was always conditional on dwell being real. What it establishes is that
+**libsodium-on-M4 cannot justify fine-grained placement**, and it puts a number behind
+`taint_ct_call_handling.md` §5.2's warning: *"it is worth approximately nothing on DIT
+unless DIT-everywhere is measurably expensive."* On DIT-insensitive workloads the
+analysis's value is the **audit** output (ESCAPE / UNCOVERED / CLOBBER), not speed.
+
+**Caveats.** No `sudo` ⇒ no kperf cycle counters; these are 24 MHz `cntvct_el0` deltas
+over 1000 iterations, so ratios are solid and absolute cycles are not. argon2id —
+CIO's headline 27.84x worst case — was **not** run: the harness does 1000 iterations of
+a memory-hard KDF and takes hours. AEAD's very short op (~1279 ticks) amplifies
+per-call toggle cost proportionally.
+
+### int8 quantized MAC — the DIT-sensitivity gate, run at last (2026-08-03)
+
+`playground/dit_bench/int8_mac_dit.c` was committed but never run and its results were
+never recorded. Run now: **flat 1.000x in all eight cells** (4 activation patterns ×
+{PAR, DEP loop shapes}), DIT on vs off. More important than the ratio: the *activation
+data itself* does not change timing even with DIT **off** — ZERO/CONST/SPARSE/RAND are
+indistinguishable (PAR 1225.2–1226.1 µs; DEP 239.0–239.1 ms). There is no
+value-dependent timing here for DIT to suppress. Reproducible to within 0.1% across
+three runs; the calibration line varies (2.7–4.6 GHz) because it runs before the core
+boosts, and is not the measurement.
+
+The machine is not at fault: `lvp_dit.c` in the same session shows the LVP alive and
+DIT killing it at exactly **4.00x**.
+
+**Honest limitation.** The `DEP` shape was designed to be the sensitive case and showed
+nothing, so the benchmark never demonstrated it *can* detect the LVP. That leaves "int8
+MAC is not LVP-exploitable" and "this DEP construction fails to engage the LVP"
+unseparated. One concrete suspect: `a[idx]` is a sign-extending **byte** load, where
+`lvp_dit.c`'s working probe uses 4-byte loads. Fix the probe before citing this as a
+general result about int8 MAC.
+
 ## What this means for the project
 
 **The project's premise stands.** The handoff's rationale — *"DIT is NOT free…
@@ -198,6 +272,17 @@ workload is DIT-insensitive"*, **not** *"DIT is free."*
 
 ## Open
 
+- **A DIT-sensitive REAL workload is now the single blocking gap.** Three workloads
+  have come back insensitive (firefox_convolve 0.968x, int8 MAC 1.000x, libsodium
+  1.00–1.02x). Until one is found, fine-grained placement cannot be shown to win on
+  anything, and the honest position is that coarse/whole-process DIT is the better
+  engineering choice on every workload measured so far. The LVP pointer-chase (4.00x)
+  is the one confirmed sensitive pattern — a *real* application built around that
+  access pattern is what to hunt for next.
+- **Retune the shipped defaults.** `-taint-dit-switch-cyc=0` encodes "toggles are
+  free", which is false on M4 by ~30 cyc each, and measurably costs ~2x the overhead
+  of the tuned setting. Either change the defaults to the serializing-hardware values
+  or make the cost model derive them from a target hint.
 - **Where does the SPEC 2026 15% come from?** Which benchmarks, which core, and
   which code patterns. This is the number that drives the whole dwell term, and
   reducing it to a set of *patterns* is what would let the region-admission test

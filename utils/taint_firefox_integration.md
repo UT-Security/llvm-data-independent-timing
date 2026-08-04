@@ -82,13 +82,16 @@ _ZN7mozilla3gfx19FilterNodeSoftware18RenderConvolve...EPKhj,1,pointee
    (`-I`, `-D`, `--target=`, `-std=`, sysroot, …) — just add it to the existing
    command line for that TU. Nothing else about the invocation changes.
 
-**Protection mode.** PSTATE.DIT, function granularity, is the only mode (the
-ISB/DSB speculation-barrier mode was removed 2026-07-14). It needs FEAT_DIT at
-run time. Formerly selected with `-mllvm -taint-barrier-mode=dit` (added next to
-`-ftaint-harden`) switches to **function-granularity PSTATE.DIT** — `MSR DIT, #1`
-at entry / `MSR DIT, #0` before returns of any function containing taint. Note the
-different threat model (data-independent *timing*, not anti-speculation) and the
-hardware requirement: FEAT_DIT (Armv8.4+) at run time, or the instruction SIGILLs.
+**Protection mode.** PSTATE.DIT is the only mode (the ISB/DSB speculation-barrier
+mode, and the `-taint-barrier-mode` selector that chose between them, were removed
+2026-07-14 — do not look for that flag). Placement granularity defaults to
+**`region`** (fine-grain: only the secret-dependent regions run with DIT on, clean
+preambles and public loop scaffolding stay DIT-off). Add
+`-mllvm -taint-dit-placement=function` for the coarse whole-function policy
+(`MSR DIT, #1` at entry / `MSR DIT, #0` before each return of any function
+containing taint). Note the threat model (data-independent *timing*, not
+anti-speculation) and the hardware requirement: FEAT_DIT (Armv8.4+) at run time, or
+the instruction SIGILLs.
 
 **Debug info (`-g`) is fully supported.** `-g -O2 -ftaint-harden` produces the same
 barriers as the non-debug build, `llvm-dwarfdump --verify` is clean, and call-site
@@ -162,12 +165,13 @@ for that subset.
 ## 7. Verifying the result
 
 ```
-# Barriers landed in the object:
-<repo>/build/bin/llvm-objdump -d file.o | grep -E '\bmsr\b.*\bdit\b'
+# Barriers landed in the object (-i / uppercase DIT is REQUIRED — objdump prints
+# `msr DIT, #0x1`, so a lowercase case-sensitive match silently reports zero):
+<repo>/build/bin/llvm-objdump -d file.o | grep -iE '\bmsr\b.*\bdit\b'
 
 # Per-symbol barrier counts (to compare against the reference wrapper):
 <repo>/build/bin/llvm-objdump -d file.o \
-  | awk '/^[0-9a-f]+ </{s=$0} /\bmsr\b.*\bdit\b/{n[s]++} END{for(k in n)print n[k],k}'
+  | awk '/^[0-9a-f]+ </{s=$2} /msr[ \t]+DIT/{print s, $NF}' | sort | uniq -c
 ```
 
 Differential parity against the trusted multi-tool flow (`utils/taint_harden_c.sh`)
