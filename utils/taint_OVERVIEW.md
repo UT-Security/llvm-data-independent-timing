@@ -373,11 +373,16 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
    `utils/taint_libsodium_bench.sh`. **Two follow-ups this created:**
    (a) **Retune the shipped defaults** — `-taint-dit-switch-cyc=0` encodes "toggles are
    free", which is false by ~30 cyc on M4 and costs ~2x the tuned overhead;
-   (b) ~~argon2id was never run~~ **run 2026-08-05 at `ITERS=5 WARMUP=1`: ~1.03x, i.e.
-   free.** Overhead is amortized by operation length — **+94%** on a 1.28 µs AEAD
-   encrypt, **+46%** on a 9.64 µs ed25519 sign, **+1%** on a 271.6 ms argon2id KDF.
-   Against CIO's **27.84x** on this same primitive that is the project's strongest
-   head-to-head number; re-run with more reps before publishing it (`REPS=1` so far).
+   (b) ~~argon2id was never run~~ **run 2026-08-05 (interleaved, `REPS=5`, medians):
+   overhead is UNMEASURABLE — every config within ±0.2% of baseline, blanket DIT
+   included.** Against CIO's **27.84x** on this same primitive, that is the project's
+   strongest head-to-head number.
+   **Overhead is amortized by operation length** — **+94%** on a 1.28 µs AEAD encrypt,
+   **+46%** on a 9.64 µs ed25519 sign, **<1%** on a 271.6 ms argon2id KDF. Cost tracks
+   executed toggles relative to runtime, so short operations pay and long ones do not.
+   ⚠️ Getting this number required fixing two harness bugs (variant-outer loop confounded
+   config with thermal drift; `min`-of-N latched onto a cold-start outlier) — both
+   documented in `taint_dit_cost_model.md`, both fixed in the script.
    No `sudo` ⇒ no kperf cycles; re-run with `sudo -E` for real cycle counts.
 2. **Attack the context-insensitivity FP source (§9.6)** — the largest measured over-taint
    source. Cheap probe first: gate mod-set application on whether *this* call site passes a

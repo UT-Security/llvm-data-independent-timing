@@ -192,13 +192,59 @@ default 1000 iterations: its loops are nested, giving `66 x num_runs` hashes at
 for the matrix**. Re-run at `ITERS=5 WARMUP=1` (~9 min) via the new override in
 `taint_libsodium_bench.sh`:
 
+**Result: NO MEASURABLE OVERHEAD.** Corrected run (interleaved, `REPS=5`, medians):
+
 | benchmark | metric | A base | B default | D tuned | E function | C whole-DIT |
 |---|---|---|---|---|---|---|
-| argon2id | KDF (ns/op) | 271,631,726 | 274,218,358 | 278,528,223 | 279,203,905 | 280,045,832 |
-| | vs base | — | 1.010x | 1.025x | 1.028x | 1.031x |
+| argon2id | KDF median (ms) | 280.5 | 281.0 | 280.4 | 281.0 | 279.9 |
+| | vs base | — | **1.002x** | **1.000x** | **1.002x** | **0.998x** |
 
-**Everything is within ~3% of baseline, including blanket DIT — that is at or below the
-noise floor for `REPS=1`.** Do not read the ordering (B fastest, C slowest) as signal.
+Every configuration is within **±0.2%** of baseline — including blanket DIT. Between-config
+spread of the medians is **0.4%** against a within-config spread of 4.1%, so the harness
+correctly reports these as *not resolvable*: the true differences are smaller than what
+this setup can measure. The honest claim is **"argon2id overhead is unmeasurable, well
+under 1%"**, not any specific ratio.
+
+> ### ⚠️ A measurement bug, and the lesson (2026-08-05)
+>
+> The first `REPS=1` run reported `1.010/1.025/1.028/1.031x` and the `REPS=5` re-run
+> reported `1.036/1.040/1.041/1.042x`. **Both were artifacts.** `taint_libsodium_bench.sh`
+> originally looped *variant outer, reps inner*, which confounds configuration with
+> wall-clock time. On argon2id each configuration takes ~9 min, so across a 45-min run
+> the machine warms up and whichever config ran first wins:
+>
+> ```
+> A baseline  271.7  275.1  279.7  280.3  281.3   <- monotonic drift, 3.5%
+> B default   281.6  281.5  282.2  282.7  282.6
+> D tuned     282.6  283.1  284.7  282.9  283.2
+> E function  282.8  283.4  283.3  283.1  283.2
+> C whole-DIT 283.1  283.2  283.2  283.2  283.8
+> ```
+>
+> Baseline's own spread (**3.5%**) is as large as the entire between-config spread
+> (**4.2%**) — when within-group variance matches between-group variance there is no
+> signal. `min-of-N` made it worse by selecting baseline's coldest run. Comparing like
+> with like — baseline's *warm* sample (281.3) against the others' minima (281.5–283.1)
+> — every configuration is within **~0.6%**.
+>
+> **Two fixes, both in `taint_libsodium_bench.sh`:**
+> 1. **Interleave.** Build all variants first, then run round-robin (rep outer, variant
+>    inner) so drift hits every config equally. **Any benchmark whose per-configuration
+>    runtime is long enough for the machine to drift needs this** — ed25519/AEAD escaped
+>    it only because each config there takes seconds.
+> 2. **Report the MEDIAN, not min-of-N.** `min` assumes noise only ever makes a run
+>    slower, so the fastest sample is cleanest. That is false here: argon2id's very first
+>    process launch came in at **273.0 ms** against a 280–284 ms steady state, so `min`
+>    latched onto a cold-start outlier and *still* reported a spurious **1.026x** even
+>    after interleaving. Median ignores it and gives ±0.2%.
+>
+> A within-config vs between-config spread line now prints automatically and flags
+> `NOT RESOLVABLE` when the two are comparable.
+>
+> **Residual, not fixed:** each config still holds a fixed *position within* a rep (A
+> always first), so rep 1's cold slot always lands on baseline. Diluted across 5 reps and
+> harmless at this effect size, but rotating the order per rep would be needed to resolve
+> sub-1% differences.
 
 **The finding that matters: instrumentation overhead is amortized by operation length.**
 
@@ -211,9 +257,9 @@ noise floor for `REPS=1`.** Do not read the ordering (B fastest, C slowest) as s
 The cost tracks *executed toggles relative to runtime*, not a fixed per-call charge (the
 absolute deltas are 1.2 µs and 4.5 µs for AEAD and ed25519, not equal). argon2id spends
 its time memory-bound over a 256 MiB working set, so its toggles vanish into the noise.
-**Against CIO's own 27.84x on this exact primitive, ~1.03x is the project's strongest
-head-to-head number** — worth stating whenever the libsodium negative above is cited.
-Caveat: `REPS=1` at 5 iterations; re-run with more reps before publishing it.
+**Against CIO's own 27.84x on this exact primitive, ours is unmeasurable (≤1%)** — the
+project's strongest head-to-head number, worth stating whenever the libsodium negative
+above is cited.
 
 ### int8 quantized MAC — the DIT-sensitivity gate, run at last (2026-08-03)
 

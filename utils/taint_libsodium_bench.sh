@@ -95,6 +95,15 @@ for b in $BENCHES; do
   fi
 
   : > "$OUT/$b.raw"
+
+  # Build every variant FIRST, then interleave the runs (rep outer, variant inner).
+  #
+  # This ordering is load-bearing. With variant as the outer loop, configuration is
+  # confounded with wall-clock time: on argon2id (~9 min per config) the machine warms
+  # up across a 45-min run, so whichever config ran first wins. Measured 2026-08-05 --
+  # baseline's own 5 samples drifted 271.7 -> 281.3 ms (3.5%) monotonically, as large
+  # as the entire between-config spread (4.2%), manufacturing a bogus ~1.04x for every
+  # hardened variant. Round-robin spreads any drift evenly across configs instead.
   for v in $VARIANTS; do
     label=${v%%:*}; rest=${v#*:}; arch=${rest%:*}; dit=${rest#*:}
     bin="$OUT/$b.$arch.$dit"
@@ -108,26 +117,51 @@ for b in $BENCHES; do
       nd=$("$LLVM_BIN/llvm-objdump" -d "$bin" 2>/dev/null | grep -cE 'msr[[:space:]]+DIT' | head -1 | tr -dc '0-9')
       [[ "${nd:-0}" -lt 10 ]] && echo "WARNING: $b/$label has only ${nd:-0} msr DIT" >&2
     fi
+  done
 
-    for _ in $(seq 1 "$REPS"); do
+  for r in $(seq 1 "$REPS"); do
+    for v in $VARIANTS; do
+      label=${v%%:*}; rest=${v#*:}; arch=${rest%:*}; dit=${rest#*:}
+      bin="$OUT/$b.$arch.$dit"
+      [[ -x "$bin" ]] || continue
       ENABLE_DIT="$dit" PIN_CPU="$PIN" DYLD_INSERT_LIBRARIES="$BENCH_DIR/libcpupin.dylib" \
         "$bin" 2>/dev/null | awk -v L="$label" '/^=== /{print L, $2, $3}' >> "$OUT/$b.raw"
     done
   done
 
-  awk -v bench="$b" -v vars="$VARIANTS" '
-    { key=$2; v=$3+0
-      if (!((key,$1) in m) || v < m[key,$1]) m[key,$1]=v
-      if (!(key in seen)) { seen[key]=1; order[++n]=key } }
-    END{ nv=split(vars,V," ")
-      for(i=1;i<=n;i++){ k=order[i]
-        printf "%-24s %-9s", bench, k
-        for(j=1;j<=nv;j++){ split(V[j],p,":"); printf " %10d", m[k,p[1]] }
-        printf "   |"
-        a=m[k,"A"]
-        for(j=1;j<=nv;j++){ split(V[j],p,":"); if(p[1]!="A")
-          printf " %7.3fx", (a? m[k,p[1]]/a : 0) }
-        printf "\n" } }' "$OUT/$b.raw"
+  # MEDIAN is the primary statistic, not min-of-N. min assumes noise only ever makes a
+  # run slower, so the fastest sample is the cleanest -- false here: on 2026-08-05
+  # argon2id's very first process launch came in 273.0 ms against a 280-284 ms steady
+  # state, so min latched onto a cold-start outlier and reported a spurious 1.026x for
+  # every hardened variant. Median ignores it and gives +-0.2%.
+  BENCH="$b" VARS="$VARIANTS" python3 - "$OUT/$b.raw" <<'PY'
+import os, sys, statistics as st
+bench, vars_ = os.environ['BENCH'], os.environ['VARS'].split()
+labels = [v.split(':')[0] for v in vars_]
+data = {}
+order = []
+for ln in open(sys.argv[1]):
+    p = ln.split()
+    if len(p) < 3: continue
+    lab, key, val = p[0], p[1], float(p[2])
+    data.setdefault((key, lab), []).append(val)
+    if key not in order: order.append(key)
+for key in order:
+    med = {c: st.median(data[(key, c)]) for c in labels if (key, c) in data}
+    if 'A' not in med: continue
+    base = med['A']
+    print(f"{bench:<24} {key:<9}" + "".join(f" {med.get(c,0):10.0f}" for c in labels)
+          + "   |" + "".join(f" {med[c]/base:7.3f}x" for c in labels if c != 'A' and c in med))
+    # Noise floor: worst within-config spread vs the between-config range of medians.
+    # Comparable magnitudes mean the ratios are not resolvable at this sample count.
+    spreads = [(max(v) - min(v)) / min(v) for c, v in
+               ((c, data[(key, c)]) for c in labels if (key, c) in data) if min(v) > 0]
+    worst = max(spreads) if spreads else 0.0
+    betw = (max(med.values()) - min(med.values())) / min(med.values()) if med else 0.0
+    flag = "   <-- NOT RESOLVABLE, ratios above are noise" if worst >= 0.5 * betw else ""
+    print(f"{'':<24} {'(noise)':<9} within-config spread {worst*100:.1f}%"
+          f"   between-config {betw*100:.1f}%{flag}")
+PY
 done
 
 cat <<EOF
