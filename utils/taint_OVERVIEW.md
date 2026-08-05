@@ -1,7 +1,7 @@
 # Interprocedural Taint Analysis + PSTATE.DIT Hardening — Consolidated Overview
 
 **This is the single entry-point document.** Read it first. It supersedes the stale
-`taint_handoff.md` (2026-07-14). Last updated **2026-08-03**.
+`taint_handoff.md` (2026-07-14). Last updated **2026-08-05**.
 Branch: `interproc_taint` (**all work goes here** — `main` is the upstream LLVM mirror and
 has never carried taint work). Target arch: **AArch64 only**.
 
@@ -9,7 +9,7 @@ has never carried taint work). Target arch: **AArch64 only**.
 > rig is now **scripted and reproducible** (`utils/taint_libsodium_eval.sh` — the old
 > hand-built copies were lost), `make check` passes 86/86 on the hardened library, and
 > **end-to-end runtime is finally measured — as a NEGATIVE.** On libsodium, blanket DIT
-> is free (1.00–1.02x) while taint-driven placement costs +46%..+94% at the shipped
+> is free (0.998–1.003x) while taint-driven placement costs +45%..+94% at the shipped
 > defaults. That is what `cost = toggles + dwell` predicts when dwell ≈ 0, so it is not a
 > refutation — but **no measured workload yet justifies fine-grained placement**, and
 > finding a DIT-sensitive one is now the blocking gap. The dominant *precision* problem
@@ -180,7 +180,7 @@ the TUs measured, so annotation-driven is opt-in insurance rather than load-bear
 - The project owner implemented a **non-serializing DIT switch in GEM5** (via register
   renaming) — so on that model set `-taint-dit-switch-cyc` low and prefer the finest groups.
 - ⚠️ **END-TO-END RUNTIME IS NOW MEASURED, and on libsodium it is a NEGATIVE
-  (2026-08-03).** Blanket DIT costs **1.00–1.02x** there (free); taint-driven placement
+  (2026-08-03).** Blanket DIT costs **0.998–1.003x** there (free); taint-driven placement
   at the **shipped defaults** costs **+46% (ed25519 sign) to +94% (AEAD encrypt)**.
   Tuning for serializing switches (`-taint-dit-switch-cyc=30 -taint-dit-loop-hoist=1`)
   recovers about half. Whole-function ≈ tuned region. On a dwell≈0 workload coarse DIT
@@ -368,8 +368,8 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 ### Next actions, in priority order
 
 1. ~~**Measure RUNTIME.**~~ **DONE 2026-08-03 — see §7 and `taint_dit_cost_model.md`.**
-   Result was a negative on libsodium: coarse DIT is free (1.00–1.02x), taint-driven
-   placement costs +46%/+94% at the shipped defaults. Run it yourself with
+   Result was a negative on libsodium: coarse DIT is free (0.998–1.003x), taint-driven
+   placement costs +45%..+94% at the shipped defaults. Run it yourself with
    `utils/taint_libsodium_bench.sh`. **Two follow-ups this created:**
    (a) **Retune the shipped defaults** — `-taint-dit-switch-cyc=0` encodes "toggles are
    free", which is false by ~30 cyc on M4 and costs ~2x the tuned overhead;
@@ -399,7 +399,7 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 4. **A DIT-sensitive real workload is now THE blocking gap — promote it.** Three
    workloads have come back insensitive: `firefox_convolve_int` 0.968x, the int8 MAC
    gate **1.000x** (run 2026-08-03, previously never run — results now in
-   `taint_dit_cost_model.md`), and libsodium **1.00–1.02x**. Until one is found,
+   `taint_dit_cost_model.md`), and libsodium **0.998–1.003x**. Until one is found,
    fine-grained placement cannot be shown to win on *anything*, and the honest position
    is that coarse DIT is the better engineering choice on every workload measured. The
    LVP pointer-chase (**4.00x**) is the one confirmed sensitive pattern — find a real

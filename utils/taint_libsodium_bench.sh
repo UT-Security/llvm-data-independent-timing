@@ -166,7 +166,12 @@ done
 
 cat <<EOF
 
-min-of-$REPS reported; units = cntvct_el0 ticks per operation (RATIOS are the signal).
+MEDIAN of $REPS reported (not min -- min latches onto cold-start outliers; see the
+argon2id note in utils/taint_dit_cost_model.md). Runs are interleaved round-robin so
+thermal drift hits every configuration equally.
+Units = cntvct_el0 ticks/op = NANOSECONDS here (cntfrq_el0 is 1 GHz on M4, though the
+counter advances in 41 ns steps). It measures TIME, not cycles: it is DVFS-independent,
+so ratios are not frequency-normalized -- pin to a P-core and prefer sudo for kperf.
 Raw per-rep samples: $OUT/*.raw
 
 Reading the result: if C/A ~ 1.00 the workload is DIT-INSENSITIVE, blanket DIT is

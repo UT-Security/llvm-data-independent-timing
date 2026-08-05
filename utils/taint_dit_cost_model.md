@@ -138,14 +138,24 @@ Everything before this section was either a microbenchmark or a static count. Ri
 repro: `utils/taint_libsodium_eval.sh` + `utils/taint_libsodium_bench.sh`.
 
 Five configurations, identical benchmark source, libsodium 1.0.21 (`--disable-asm`,
-whole-library bitcode), min-of-5, `cntvct_el0` ticks/op:
+whole-library bitcode). **Re-measured 2026-08-05 with the corrected harness**
+(interleaved round-robin, median of 10, `cntvct_el0` ns/op):
 
 | benchmark | metric | A base | B default | D tuned | E function | C whole-DIT | B/A | D/A | E/A | **C/A** |
 |---|---|---|---|---|---|---|---|---|---|---|
-| ed25519 | Sign | 9637 | 14113 | 11161 | 11014 | 9833 | 1.464x | 1.158x | 1.143x | **1.020x** |
-| ed25519 | Verify | 19971 | 21938 | 20699 | 20835 | 20360 | 1.098x | 1.036x | 1.043x | **1.019x** |
-| aead_chacha20poly1305 | Encrypt | 1279 | 2477 | 1934 | 2016 | 1279 | 1.937x | 1.512x | 1.576x | **1.000x** |
-| aead_chacha20poly1305 | Decrypt | 1317 | 2525 | 1983 | 2088 | 1323 | 1.917x | 1.506x | 1.585x | **1.005x** |
+| ed25519 | Sign | 9808 | 14263 | 11222 | 11005 | 9842 | 1.454x | 1.144x | 1.122x | **1.003x** |
+| ed25519 | Verify | 20492 | 22224 | 20862 | 20880 | 20548 | 1.085x | 1.018x | 1.019x | **1.003x** |
+| aead_chacha20poly1305 | Encrypt | 1280 | 2483 | 1942 | 2028 | 1279 | 1.941x | 1.518x | 1.585x | **1.000x** |
+| aead_chacha20poly1305 | Decrypt | 1318 | 2528 | 1988 | 2091 | 1316 | 1.918x | 1.507x | 1.586x | **0.998x** |
+
+Noise floors from the same run (within-config spread vs between-config range):
+AEAD encrypt **2.2% vs 94.1%** and decrypt **2.3% vs 92.2%** — solidly resolvable;
+ed25519 Sign **2.5% vs 45.4%** — solid; ed25519 **Verify 2.8% vs 8.5% — marginal**, and
+in a noisier back-to-back run it tripped the `NOT RESOLVABLE` check (5.9% vs 8.7%).
+**Treat Verify's ~1.08x as indicative only**; Sign and AEAD are the trustworthy figures.
+The earlier min-of-5 numbers (1.464/1.098/1.937/1.917) agree to within ~1%, confirming
+the harness bugs that wrecked argon2id did not distort these — each config here takes
+seconds, so there is no room for thermal drift.
 
 - **A** unhardened, DIT never set. **B** taint-hardened at the *shipped defaults*
   (`region`, `switch-cyc=0`, `loop-hoist=0`). **D** taint-hardened tuned for
@@ -248,11 +258,11 @@ under 1%"**, not any specific ratio.
 
 **The finding that matters: instrumentation overhead is amortized by operation length.**
 
-| operation | duration | default-placement overhead |
-|---|---|---|
-| AEAD chacha20poly1305 encrypt | **1.28 µs** | **+94%** |
-| ed25519 sign | **9.64 µs** | **+46%** |
-| argon2id KDF | **271.6 ms** | **+1%** |
+| operation | duration | default-placement overhead | absolute delta |
+|---|---|---|---|
+| AEAD chacha20poly1305 encrypt | **1.28 µs** | **+94%** | 1.2 µs |
+| ed25519 sign | **9.81 µs** | **+45%** | 4.5 µs |
+| argon2id KDF | **280.5 ms** | **~0%** | 0.5 ms (within noise) |
 
 The cost tracks *executed toggles relative to runtime*, not a fixed per-call charge (the
 absolute deltas are 1.2 µs and 4.5 µs for AEAD and ed25519, not equal). argon2id spends
