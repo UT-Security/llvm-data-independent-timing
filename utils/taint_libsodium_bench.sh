@@ -71,13 +71,34 @@ printf '   |'
 for v in $VARIANTS; do l=${v%%:*}; [[ $l == A ]] || printf ' %8s' "$l/A"; done
 printf '\n'
 
+cleanup() { [[ -n "${PATCHED:-}" && -f "$PATCHED" ]] && rm -f "$PATCHED"; }
+trap cleanup EXIT
+
 for b in $BENCHES; do
   [[ -f "$BENCH_DIR/$b/$b.c" ]] || { echo "skip $b (no source)" >&2; continue; }
+
+  # ITERS/WARMUP override. The drivers hardcode num_runs=1000 / warmup=100 as
+  # locals, which is infeasible for argon2id: its loops are nested, giving
+  # 66*num_runs hashes at OPSLIMIT/MEMLIMIT_MODERATE (~0.7s each) = ~12h PER
+  # configuration. Patch a sibling copy -- sibling so the driver's
+  # #include "../utils.h" / "../perf.c" still resolve -- and remove it after.
+  SRC="$BENCH_DIR/$b/$b.c"; PATCHED=""
+  if [[ -n "${ITERS:-}" || -n "${WARMUP:-}" ]]; then
+    PATCHED="$BENCH_DIR/$b/.taint_iters_$b.c"
+    # sed -E: BSD sed has no \+ in BRE, and would silently substitute nothing.
+    sed -E -e "s/(num_runs *= *)[0-9]+/\1${ITERS:-1000}/" \
+           -e "s/(warmup_runs *= *)[0-9]+/\1${WARMUP:-100}/" "$SRC" > "$PATCHED"
+    grep -q "num_runs = ${ITERS:-1000}" "$PATCHED" \
+      || { rm -f "$PATCHED"; echo "ERROR: $b iteration override did not apply" >&2; exit 1; }
+    SRC="$PATCHED"
+    echo "note: $b iteration override -> num_runs=${ITERS:-1000} warmup=${WARMUP:-100}"
+  fi
+
   : > "$OUT/$b.raw"
   for v in $VARIANTS; do
     label=${v%%:*}; rest=${v#*:}; arch=${rest%:*}; dit=${rest#*:}
     bin="$OUT/$b.$arch.$dit"
-    clang -Wall -O2 -I"$BENCH_DIR" -I"$INC" -o "$bin" "$BENCH_DIR/$b/$b.c" \
+    clang -Wall -O2 -I"$BENCH_DIR" -I"$INC" -o "$bin" "$SRC" \
           "$WORK/libsodium-$arch.a" -lm 2>/dev/null \
       || { echo "$b/$label: build FAILED" >&2; continue; }
 

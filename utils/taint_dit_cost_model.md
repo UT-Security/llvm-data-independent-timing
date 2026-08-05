@@ -178,11 +178,42 @@ proposition was always conditional on dwell being real. What it establishes is t
 unless DIT-everywhere is measurably expensive."* On DIT-insensitive workloads the
 analysis's value is the **audit** output (ESCAPE / UNCOVERED / CLOBBER), not speed.
 
-**Caveats.** No `sudo` ⇒ no kperf cycle counters; these are 24 MHz `cntvct_el0` deltas
-over 1000 iterations, so ratios are solid and absolute cycles are not. argon2id —
-CIO's headline 27.84x worst case — was **not** run: the harness does 1000 iterations of
-a memory-hard KDF and takes hours. AEAD's very short op (~1279 ticks) amplifies
-per-call toggle cost proportionally.
+**Caveats.** No `sudo` ⇒ no kperf cycle counters; these are `cntvct_el0` deltas over
+1000 iterations, so ratios are solid and absolute *cycles* are not (the counter measures
+time, not cycles). **`cntfrq_el0` on this M4 is 1 GHz, so 1 tick = 1 ns** — an earlier
+version of this file said 24 MHz, which was wrong. Verified against a direct
+`clock_gettime` measurement of one argon2id hash: 271,631,726 ticks vs 0.271 s.
+
+### argon2id — the long-operation case, and it is FREE (2026-08-05)
+
+argon2id is CIO's headline worst case (**27.84x**). It could not be run at the harness's
+default 1000 iterations: its loops are nested, giving `66 x num_runs` hashes at
+`OPSLIMIT/MEMLIMIT_MODERATE` (0.271 s each, measured) ≈ **5.5 h per configuration, ~27 h
+for the matrix**. Re-run at `ITERS=5 WARMUP=1` (~9 min) via the new override in
+`taint_libsodium_bench.sh`:
+
+| benchmark | metric | A base | B default | D tuned | E function | C whole-DIT |
+|---|---|---|---|---|---|---|
+| argon2id | KDF (ns/op) | 271,631,726 | 274,218,358 | 278,528,223 | 279,203,905 | 280,045,832 |
+| | vs base | — | 1.010x | 1.025x | 1.028x | 1.031x |
+
+**Everything is within ~3% of baseline, including blanket DIT — that is at or below the
+noise floor for `REPS=1`.** Do not read the ordering (B fastest, C slowest) as signal.
+
+**The finding that matters: instrumentation overhead is amortized by operation length.**
+
+| operation | duration | default-placement overhead |
+|---|---|---|
+| AEAD chacha20poly1305 encrypt | **1.28 µs** | **+94%** |
+| ed25519 sign | **9.64 µs** | **+46%** |
+| argon2id KDF | **271.6 ms** | **+1%** |
+
+The cost tracks *executed toggles relative to runtime*, not a fixed per-call charge (the
+absolute deltas are 1.2 µs and 4.5 µs for AEAD and ed25519, not equal). argon2id spends
+its time memory-bound over a 256 MiB working set, so its toggles vanish into the noise.
+**Against CIO's own 27.84x on this exact primitive, ~1.03x is the project's strongest
+head-to-head number** — worth stating whenever the libsodium negative above is cited.
+Caveat: `REPS=1` at 5 iterations; re-run with more reps before publishing it.
 
 ### int8 quantized MAC — the DIT-sensitivity gate, run at last (2026-08-03)
 
