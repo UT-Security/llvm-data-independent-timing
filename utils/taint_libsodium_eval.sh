@@ -79,8 +79,15 @@ if want fetch; then
   info "fetch libsodium $SODIUM_VER"
   mkdir -p "$(dirname "$WORK")"
   if [[ ! -d "$WORK" ]]; then
+    # The tarball always unpacks to libsodium-<VER>/, which need not match the
+    # basename of WORK -- rename if the caller chose a different directory name.
     ( cd "$(dirname "$WORK")" && curl -sSL --max-time 300 -o "$TARBALL" "$URL" \
       && tar xzf "$TARBALL" ) || die "download/unpack failed"
+    extracted="$(dirname "$WORK")/libsodium-$SODIUM_VER"
+    if [[ "$extracted" != "$WORK" ]]; then
+      [[ -d "$extracted" ]] || die "tarball did not unpack to $extracted"
+      mv "$extracted" "$WORK" || die "could not rename $extracted -> $WORK"
+    fi
   fi
   [[ -x "$WORK/configure" ]] || die "no configure script in $WORK"
   [[ -f "$WORK/cio.config" ]] || curl -sSL --max-time 60 -o "$WORK/cio.config" "$CIO_CFG_URL" \

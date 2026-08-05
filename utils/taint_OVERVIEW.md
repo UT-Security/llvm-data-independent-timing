@@ -247,13 +247,19 @@ bitcode (WLLVM + `llvm-link`, `--disable-asm`), derives the pointee-typed seed f
 emits `libsodium-{baseline,hardened,tuned,func}.a` plus reports in `rpt/`. Stages are
 independently runnable (`--list`).
 
-*Verification status (2026-08-03, be precise about this):* the rig was first rebuilt by
-hand and the numbers below come from that run. The script's `seed` stage was then
-verified to regenerate the seed file **byte-identically** (65/65 lines), and its
-`report` stage and `taint_libsodium_bench.sh` were run end to end against those
-artifacts. The `fetch/patch/build/bitcode/analyze/archives/check` stages are
-transcriptions of the verified manual commands but have **not** yet been run as a
-single clean-machine pass — do that once and delete this paragraph.
+*Verification (2026-08-05): a full clean-machine pass was run* — all nine stages from an
+empty directory, into a work dir with a deliberately non-default name — and it
+**reproduced every number exactly**: 926 functions, 48 pointee + 17 data attrs across 21
+functions, 647/516/611 switches, `__text` +1.09%/+0.85%/+1.00%, ESCAPE 35 / UNCOVERED
+168 / CLOBBER 610, and **`make check` 86/86 on both the baseline control and the
+hardened library**. The generated seed file is byte-identical to the hand-built one
+(65/65 lines), and the benchmark matrix run against the clean archives matches to within
+run-to-run noise. The rig is reproducible from scratch.
+
+One benign difference to expect: `libsodium.a.ORIG` differs in size between work dirs
+(577,600 vs 564,728 bytes) because WLLVM embeds **absolute bitcode paths** in a section,
+so a longer work-dir path makes a bigger archive. The emitted objects are identical
+(`__text` 244,596 in both), i.e. codegen is path-independent.
 
 **Three things the script encodes that cost real time to rediscover:**
 - **Pre-flight seed names against IR `define` names, NOT `llvm-nm`.** On Mach-O
