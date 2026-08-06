@@ -37,19 +37,34 @@ utils/taint_dit_precision.py region=r.txt function=f.txt
 ## Precision alone is a trap — it trades against switch count
 
 The two terms pull in opposite directions, and that tension *is* the placement
-problem (`taint_dit_cost_model.md`). Measured on libsodium's `chacha20_ref.c`:
+problem (`taint_dit_cost_model.md`). Whole libsodium, both policies:
 
 | | region | function |
 |---|---|---|
-| precision | **68.6%** | 64.0% |
-| precision, loop-weighted | **88.9%** | 87.6% |
-| mode switches | 40 | **20** |
+| secret instructions | 2,176 | 2,176 |
+| under DIT | 3,018 | 4,813 |
+| collateral | **842** | 2,637 |
+| precision | **72.1%** | 45.2% |
+| precision, loop-weighted | **88.1%** | 55.9% |
+| mode switches | 189 | **146** |
 
-Region placement wins precision by 4.6 points — and by only **1.3 points** once
-weighted by loop depth — while emitting **twice** the toggles. On hardware where
-`MSR DIT` serializes that trade is a loss, which is exactly what the gem5 numbers
-show: aead's region placement costs +20.5% there versus +9.4% for function
-placement, at indistinguishable coverage.
+Region placement is far more precise — 842 instructions of collateral against
+2,637 — for only 1.3x the switches. **And it still loses at run time**: aead's
+region placement costs +20.5% on serializing-DIT hardware versus +9.4% for
+function placement, at indistinguishable protection coverage.
+
+That gap is the metric's most important caveat. `switches` is a *static* count,
+and static counts do not know that one toggle sits in a per-iteration loop body
+while another runs once at function entry. Region placement concentrates its
+extra toggles exactly where they execute most. So:
+
+> **Neither `precision` nor `switches` is trustworthy unweighted.** Read
+> `wprecision` for the dwell side, and remember that no static number captures
+> executed toggles at all — that needs a dynamic counter (see "What it is not").
+
+The single-TU view shows the same trade at smaller scale: on `chacha20_ref.c`
+region wins precision 68.6% vs 64.0% (88.9% vs 87.6% weighted) for twice the
+toggles, 40 against 20.
 
 **So do not optimize `precision` on its own.** The objective is
 `precision` subject to a switch budget, with the budget set by the target's toggle
@@ -81,9 +96,12 @@ is precisely the collateral that costs.
 ## What it is not
 
 - **Static, not dynamic.** These are instruction counts in the emitted code, with
-  loop depth as a stand-in for execution frequency. A real profile would be
-  better; gem5 could supply a true dynamic count by tallying committed
-  instructions with `cc_reg::Dit` set, which is not implemented.
+  loop depth as a stand-in for execution frequency. `switches` in particular has
+  no weighted variant and is the weakest number here — a toggle in a hot loop and
+  one at function entry count the same, which is precisely the difference between
+  aead's +9.4% and +20.5%. A real profile would be better; gem5 could supply a
+  true dynamic count by tallying committed instructions with `cc_reg::Dit` set,
+  and executed mode switches alongside it. Not implemented.
 - **`need` is the analysis's opinion.** It inherits every imprecision of the taint
   analysis — context-insensitive mod-sets, TU-scoped propagation. An over-tainting
   bug inflates `need` and makes placement look *better* than it is.
@@ -92,6 +110,20 @@ is precisely the collateral that costs.
 - **`coverage` is not 100% even under whole-function placement**: the `MSR DIT, #0`
   precedes the return, so the return itself runs with DIT off. See
   `taint-analysis-dit-precision.mir`.
+
+## Where the collateral actually is
+
+`taint_dit_precision.py` ranks the worst functions. The single largest source in
+libsodium under function placement:
+
+```
+crypto_aead_aes256gcm_decrypt_detached_afternm  collateral=1,529  precision=1.5%
+```
+
+A large function with 23 secret instructions runs 1,529 public ones in DIT mode —
+by itself 58% of the whole library's collateral under that policy. Region
+placement cuts the same function to 77. Concentration like this is the argument
+for per-function policy selection rather than one global choice.
 
 ## Implementation
 
