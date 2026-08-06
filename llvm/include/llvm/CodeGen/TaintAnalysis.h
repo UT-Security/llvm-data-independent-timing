@@ -74,6 +74,10 @@ extern cl::opt<std::string> TaintCallsiteReportFile;
 /// is silent false assurance; the report surfaces them for audit.
 extern cl::opt<std::string> TaintUncoveredReportFile;
 
+/// Output file for DIT accounting: per function, how many instructions must run
+/// with PSTATE.DIT set versus how many actually do.
+extern cl::opt<std::string> TaintDITPrecisionReportFile;
+
 /// Fallback for the register<->stack-cell link lost at the MIR stage: treat a
 /// stack/frame address passed as a call argument as pointee-tainted when the
 /// frame may hold a secret. Without it the analysis reports a confident "clean"

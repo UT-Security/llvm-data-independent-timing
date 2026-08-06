@@ -132,6 +132,15 @@ cl::opt<std::string> llvm::TaintCallsiteReportFile(
              "calls)"),
     cl::value_desc("file"));
 
+cl::opt<std::string> llvm::TaintDITPrecisionReportFile(
+    "taint-dit-precision-report",
+    cl::desc("Output file for DIT accounting: per function, how many "
+             "instructions must run with DIT set vs how many actually do. "
+             "collateral = public code paying DIT's cost for nothing; "
+             "precision = need/underdit is the number placement should "
+             "maximize (see utils/taint_dit_precision.md)"),
+    cl::value_desc("file"));
+
 cl::opt<std::string> llvm::TaintUncoveredReportFile(
     "taint-uncovered-report",
     cl::desc("Output file for tainted instructions PSTATE.DIT does not protect "
@@ -1856,6 +1865,169 @@ static bool clobbersDIT(const MachineInstr &MI, const TaintSummaryInfo *TSI,
   return !(TSI && Callee && TSI->getSummary(*Callee).PreservesDIT);
 }
 
+// Forward 1-bit "DIT on" dataflow over the EMITTED MIR: a mode switch sets the
+// state, a DIT-clobbering call clears it, joins AND-meet (DIT must arrive on
+// from every predecessor). Returns the on-entry state of each block.
+//
+// AND-meet ⇒ initialize OPTIMISTICALLY to true, else a loop whose DIT is carried
+// in (no enable inside the loop) would never converge to on — the backedge would
+// start false and the meet would pin it there, reporting a false "uncovered".
+// The entry boundary is off, enforced by `In = !pred_empty()`.
+//
+// Shared by the region-placement soundness verifier and the DIT accounting below
+// so the two can never disagree about which instructions run with DIT set.
+static DenseMap<const MachineBasicBlock *, bool>
+computeDITOnEntry(MachineFunction &MF, const TaintSummaryInfo *TSI, Module &M,
+                  const TargetInstrInfo *TII) {
+  DenseMap<const MachineBasicBlock *, bool> OnOut, OnIn;
+  for (MachineBasicBlock &MBB : MF)
+    OnOut[&MBB] = true;
+  auto stepBlock = [&](MachineBasicBlock &MBB, bool In) -> bool {
+    bool Cur = In;
+    for (MachineInstr &MI : MBB) {
+      if (auto Sw = TII->getTimingModeSwitch(MI))
+        Cur = *Sw;
+      else if (clobbersDIT(MI, TSI, M))
+        Cur = false;
+    }
+    return Cur;
+  };
+  bool Changed = true;
+  while (Changed) {
+    Changed = false;
+    for (MachineBasicBlock &MBB : MF) {
+      bool In = !MBB.pred_empty();
+      for (MachineBasicBlock *P : MBB.predecessors())
+        In &= OnOut[P];
+      OnIn[&MBB] = In;
+      bool Out = stepBlock(MBB, In);
+      if (Out != OnOut[&MBB]) {
+        OnOut[&MBB] = Out;
+        Changed = true;
+      }
+    }
+  }
+  return OnIn;
+}
+
+//===----------------------------------------------------------------------===//
+// DIT accounting: how much of the DIT-covered code actually needs to be
+//===----------------------------------------------------------------------===//
+
+namespace {
+// Counts over the EMITTED code of one function. `Need` is the set placement
+// exists to cover; `UnderDIT` is what it actually covers. Collateral =
+// UnderDIT - Need is the public code paying DIT's cost for nothing, and
+// Need/UnderDIT is the precision a placement policy should maximize.
+struct DITAccounting {
+  uint64_t Need = 0;      // instructions that MUST run with DIT=1
+  uint64_t UnderDIT = 0;  // instructions that DO run with DIT=1 (excl. switches)
+  uint64_t Total = 0;     // all real instructions (excl. switches)
+  uint64_t Switches = 0;  // MSR DIT instructions emitted
+  // Same three, weighted by 10^min(loop depth, 4). A block inside a hot loop
+  // costs far more than a straight-line block, and the unweighted ratio hides
+  // exactly the case that matters — convolve's 14 toggles look cheap statically
+  // and cost 7.16x when executed per pixel.
+  uint64_t WNeed = 0, WUnderDIT = 0, WTotal = 0;
+
+  void add(const DITAccounting &O) {
+    Need += O.Need; UnderDIT += O.UnderDIT; Total += O.Total;
+    Switches += O.Switches;
+    WNeed += O.WNeed; WUnderDIT += O.WUnderDIT; WTotal += O.WTotal;
+  }
+};
+} // namespace
+
+// Walk the emitted function once, tracking DIT-on state, and tally the four
+// counts. Runs AFTER placement so it measures what was actually emitted, and is
+// policy-agnostic — region and function granularity are directly comparable.
+static DITAccounting computeDITAccounting(MachineFunction &MF,
+                                          const TaintResult &TR,
+                                          const TaintSummaryInfo *TSI,
+                                          AliasAnalysis *AA,
+                                          const MachineLoopInfo &MLI) {
+  const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+  Module &M = *const_cast<Module *>(MF.getFunction().getParent());
+  DenseMap<const MachineBasicBlock *, bool> OnIn =
+      computeDITOnEntry(MF, TSI, M, TII);
+
+  DITAccounting A;
+  const MachineBasicBlock *CurBlk = nullptr;
+  bool CurOn = false;
+  uint64_t W = 1;
+
+  replayTaint(MF, TR, TSI, AA,
+              [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
+                if (MI.getParent() != CurBlk) {
+                  CurBlk = MI.getParent();
+                  CurOn = OnIn.lookup(CurBlk);
+                  unsigned D = std::min(MLI.getLoopDepth(CurBlk), 4u);
+                  W = 1;
+                  for (unsigned i = 0; i < D; ++i)
+                    W *= 10;
+                }
+                // A mode switch is overhead, not covered work: count it apart
+                // and let it change the state.
+                if (auto Sw = TII->getTimingModeSwitch(MI)) {
+                  CurOn = *Sw;
+                  ++A.Switches;
+                  return true;
+                }
+                if (MI.isDebugInstr() || MI.isCFIInstruction() ||
+                    MI.isPosition())
+                  return true;
+
+                ++A.Total;
+                A.WTotal += W;
+                bool IsNeed = needsDIT(MI, F, *TII);
+                if (IsNeed) {
+                  ++A.Need;
+                  A.WNeed += W;
+                }
+                if (CurOn) {
+                  ++A.UnderDIT;
+                  A.WUnderDIT += W;
+                }
+                if (clobbersDIT(MI, TSI, M))
+                  CurOn = false;
+                return true;
+              });
+  return A;
+}
+
+// Module-wide running totals, emitted per function into the precision report so
+// a consumer can sum them (utils/taint_dit_precision.py).
+static void reportDITAccounting(MachineFunction &MF, const DITAccounting &A,
+                                raw_ostream &OS) {
+  auto pct = [](uint64_t N, uint64_t D) -> double {
+    return D ? (100.0 * (double)N / (double)D) : 0.0;
+  };
+  OS << MF.getName() << " need=" << A.Need << " underdit=" << A.UnderDIT
+     << " collateral=" << (A.UnderDIT >= A.Need ? A.UnderDIT - A.Need : 0)
+     << " total=" << A.Total << " switches=" << A.Switches
+     << " precision=" << format("%.1f", pct(A.Need, A.UnderDIT))
+     << " coverage=" << format("%.1f", pct(A.UnderDIT, A.Total))
+     << " wneed=" << A.WNeed << " wunderdit=" << A.WUnderDIT
+     << " wtotal=" << A.WTotal
+     << " wprecision=" << format("%.1f", pct(A.WNeed, A.WUnderDIT)) << "\n";
+}
+
+// Write one line of DIT accounting for this function, if the report was asked
+// for. Runs after placement, so it measures emitted code.
+static void emitDITPrecisionReport(MachineFunction &MF, const TaintResult &TR,
+                                   const TaintSummaryInfo *TSI,
+                                   AliasAnalysis *AA) {
+  if (TaintDITPrecisionReportFile.empty())
+    return;
+  auto OS = openTaintReport(TaintDITPrecisionReportFile, "DIT precision report",
+                            /*Append=*/true);
+  if (!OS)
+    return;
+  MachineDominatorTree MDT(MF);
+  MachineLoopInfo MLI(MDT);
+  reportDITAccounting(MF, computeDITAccounting(MF, TR, TSI, AA, MLI), *OS);
+}
+
 // Insertion point at a block's start, PAST leading EH/GC labels, CFI, and debug.
 // A mode switch must not displace a landing-pad EH_LABEL (the exception tables
 // key the landing-pad PC on it) or sit among frame CFI.
@@ -2215,34 +2387,8 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   // inside the loop) would never converge to on (the backedge would start false
   // and the meet would pin it there — a false "uncovered" report). The entry
   // boundary is off, enforced by `In = !pred_empty()` below.
-  DenseMap<const MachineBasicBlock *, bool> OnOut, OnIn;
-  for (MachineBasicBlock &MBB : MF)
-    OnOut[&MBB] = true;
-  auto stepBlock = [&](MachineBasicBlock &MBB, bool In) -> bool {
-    bool Cur = In;
-    for (MachineInstr &MI : MBB) {
-      if (auto Sw = TII->getTimingModeSwitch(MI))
-        Cur = *Sw;
-      else if (clobbersDIT(MI, TSI, M))
-        Cur = false;
-    }
-    return Cur;
-  };
-  bool Changed = true;
-  while (Changed) {
-    Changed = false;
-    for (MachineBasicBlock &MBB : MF) {
-      bool In = !MBB.pred_empty();
-      for (MachineBasicBlock *P : MBB.predecessors())
-        In &= OnOut[P];
-      OnIn[&MBB] = In;
-      bool Out = stepBlock(MBB, In);
-      if (Out != OnOut[&MBB]) {
-        OnOut[&MBB] = Out;
-        Changed = true;
-      }
-    }
-  }
+  DenseMap<const MachineBasicBlock *, bool> OnIn =
+      computeDITOnEntry(MF, TSI, M, TII);
   // Final check: replay (which supplies per-MI TaintFacts) tracking the DIT-on
   // state seeded from OnIn at each block boundary; every Need must be on.
   // replayTaint visits each block's instructions contiguously in layout order,
@@ -2294,6 +2440,7 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   // report the same tainted-instruction count.
   if (TaintDITPlacement == DITPlacementMode::Region) {
     insertTaintDITRegions(MF, TR, TSI, AA);
+    emitDITPrecisionReport(MF, TR, TSI, AA);
     return TaintedInstrCount;
   }
 
@@ -2302,6 +2449,7 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   // clear an enclosing region's DIT when a tainted callee's exit switch runs
   // inside a caller's still-open region.
   emitFunctionGranularityDIT(MF, TSI);
+  emitDITPrecisionReport(MF, TR, TSI, AA);
 
   return TaintedInstrCount;
 }

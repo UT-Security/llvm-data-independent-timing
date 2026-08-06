@@ -1,0 +1,63 @@
+# RUN: rm -f %t.prec
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=function -taint-dit-precision-report=%t.prec %s -o /dev/null
+# RUN: FileCheck %s --input-file=%t.prec --check-prefix=FUNC
+# RUN: rm -f %t.reg
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=region -taint-dit-precision-report=%t.reg %s -o /dev/null
+# RUN: FileCheck %s --input-file=%t.reg --check-prefix=REGION
+
+# DIT accounting: how much of the DIT-covered code actually needs to be.
+#
+#   need       instructions that MUST execute with PSTATE.DIT=1
+#   underdit   instructions that DO execute with DIT=1 (mode switches excluded)
+#   collateral underdit - need: public code paying DIT's cost for nothing
+#   precision  need/underdit, the number a placement policy should maximize
+#   switches   MSR DIT instructions emitted (the other half of the cost)
+#
+# The point of the metric is that precision and switches pull against each other:
+# finer placement raises precision and costs more toggles. Measured on libsodium's
+# chacha20_encrypt_bytes_ref, region placement buys 5.4 points of precision for 11x
+# the toggles — which is why it loses on serializing-DIT hardware.
+# See utils/taint_dit_precision.md.
+
+# `mixed` has one tainted ADD among four public instructions.
+#
+# underdit is 4, not 5, and that is not an off-by-one: whole-function placement
+# emits `MSR DIT, #0` immediately BEFORE the return, so the RET itself executes
+# with DIT already off. coverage is therefore 80%, not 100%, even though the
+# policy is "the whole function". Anything reasoning about DIT residency has to
+# account for that trailing instruction.
+# FUNC: mixed need=1 underdit=4 collateral=3 total=5 switches=2 precision=25.0 coverage=80.0
+
+# Region placement must do no worse on precision: it may leave clean code outside
+# the region, never more inside it. On a function this small the two policies
+# coincide exactly.
+# REGION: mixed need=1 underdit=4 collateral=3 total=5 switches=2 precision=25.0
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i64 @mixed(i64 "tainted" %a, i64 %b) {
+  entry:
+    ret i64 %a
+  }
+...
+---
+name:            mixed
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$x1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1
+
+    ; public scaffolding — must NOT count as need
+    $x2 = ADDXri $x1, 1, 0
+    $x3 = ADDXri $x2, 2, 0
+    ; the one secret-dependent op: $x0 is the tainted argument
+    $x4 = ADDXrr $x0, $x3
+    ; public again
+    $x5 = ADDXri $x1, 3, 0
+    RET_ReallyLR implicit $x0
+...

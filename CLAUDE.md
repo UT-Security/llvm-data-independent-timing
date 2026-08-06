@@ -113,7 +113,8 @@ Taint source auto-detected as `<basename>_secret.txt`. Steps it performs: clang
 -start-after=prologepilog -filetype=obj`. Report files: `-taint-output`,
 `-taint-regions-output`, `-taint-source-regions-output`,
 `-taint-callsite-report` (secret-escape call sites; the clang flag doesn't emit
-these). Region spacing: `utils/taint_region_distance.py OUT.hardened.mir`.
+these), `-taint-dit-precision-report` (DIT accounting — need/underdit/collateral/
+switches per function; reachable from clang as `-mllvm -taint-dit-precision-report=`). Region spacing: `utils/taint_region_distance.py OUT.hardened.mir`.
 
 ## Architecture
 
@@ -128,6 +129,7 @@ these). Region spacing: `utils/taint_region_distance.py OUT.hardened.mir`.
 | Firefox integration guide | `utils/taint_firefox_integration.md` |
 | **Context-insensitive mod-sets — the dominant false-positive source** (measured on libsodium: 169 of 199 FPs). Also records that P1b is a far smaller lever than assumed: only 17 of 583 secret-writing call sites resolve provenance to an argument | `utils/taint_context_insensitivity.md` |
 | Two spill soundness bugs fixed 2026-07-27 (`implicit-def` as use; narrowed reload) + what spilling *does* do correctly | `utils/taint_spill_soundness_bugs.md` |
+| **DIT precision metric** (`-taint-dit-precision-report`): per function, how many instructions MUST run with DIT vs how many DO. `precision = need/underdit` is the number placement should maximize — but only against a switch budget, and always read the loop-weighted variant (unweighted, convolve's region placement looks 13 points better while being 7.16x slower) | `utils/taint_dit_precision.md`, `utils/taint_dit_precision.py` |
 | **Tail-call DIT gap fixed 2026-08-05** — whole-function placement cleared DIT *before* a tail call, so the callee receiving the secret ran unprotected (found on libsodium `crypto_sign`). Also records the permanent residual: after a tail call DIT may stay set indefinitely, so **an instrumented function does not restore DIT on every exit path** | `utils/taint_dit_tailcall_gap.md` |
 | `-taint-frame-addr-args` prototype (default OFF): the `f(&local_secret)` under-taint, measured cost | `utils/taint_frame_addr_fallback.md` |
 | **libsodium/CIO head-to-head rig — SCRIPTED.** Build + seed + analyze + archives + `make check`; then the runtime A/B/D/E/C matrix. The old hand-built copies under `~/Documents/libsodium-stable/` and `~/Documents/cio/` were **lost** — do not look for them, run the scripts | `utils/taint_libsodium_eval.sh`, `utils/taint_libsodium_bench.sh` (work dir `~/Documents/libsodium-1.0.21/`; benchmark drivers `~/Documents/crypto-dit-benchmarks/`, untracked, `BENCH_DIR=` overridable) |
@@ -257,7 +259,10 @@ output — file paths themselves often contain "isb"/"dit" and inflate naive cou
 performance benchmark for placement**: it is DIT-insensitive (whole-program DIT =
 0.968x), so it cannot show a placement win. See `utils/taint_dit_cost_model.md`.
 
-All 25 tests pass as of 2026-08-05. Recently added:
+All 26 tests pass as of 2026-08-06. Recently added:
+- `taint-analysis-dit-precision.mir` (2026-08-06) — the DIT accounting numbers.
+  Pins a non-obvious one: under whole-function placement `coverage` is NOT 100%,
+  because `MSR DIT, #0` precedes the return so the return runs with DIT off.
 - `taint-analysis-tailcall.mir` (2026-08-05) — the tail-call DIT gap in the
   gotchas above. Verified to FAIL against the pre-fix `llc` (`CHECK-NOT:
   MSRpstateImm4 26, 0` matched, i.e. the clear was being emitted before
