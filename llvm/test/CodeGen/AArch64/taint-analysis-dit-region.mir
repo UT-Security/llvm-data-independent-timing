@@ -53,6 +53,20 @@
 # REGION: MSRpstateImm4 26, 1
 # REGION-NEXT: TCRETURNdi @ext
 # REGION-NOT: MSRpstateImm4 26, 0
+#
+# Whole-function placement must reach the SAME conclusion. It did not until
+# 2026-08-05: emitFunctionGranularityDIT tested isReturn() before isCall(), so
+# the tail call took the return path and got MSR DIT #0 emitted before it,
+# handing the secret to the callee with DIT=0. The case was already here, but
+# only REGION checked it, so the suite never saw the bug.
+# utils/taint_dit_tailcall_gap.md
+# FUNC-LABEL: name: tailcall_secret
+# FUNC: MSRpstateImm4 26, 1
+# FUNC-NEXT: TCRETURNdi @ext
+# FUNC-NOT: MSRpstateImm4 26, 0
+# The label below BOUNDS the FUNC-NOT: without a following positive directive
+# it would run to end-of-file and match loop_hoist's legitimate clear.
+# FUNC-LABEL: name: loop_hoist
 
 # @loop_hoist — increment (b): a Need inside a loop, behind a clean preamble.
 # Region mode leaves the preamble (bb.0, bb.1 body) DIT-OFF, HOISTS the enable to

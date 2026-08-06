@@ -1,0 +1,83 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=function %s -o - | FileCheck %s
+
+# A tail call must NOT be given the `MSR DIT, #0` that a return gets.
+#
+# On AArch64 a tail call (TCRETURN*) is BOTH isReturn() and isCall(). Whole-
+# function placement clears DIT "before every return", and emitFunctionGranularityDIT
+# tested isReturn() first, so the clear landed immediately before the tail
+# branch — precisely where control transfers to the callee, with this function's
+# secret arguments still live in the argument registers. The callee then ran
+# with DIT=0.
+#
+# Reached from libsodium: crypto_sign is a one-line wrapper that tail-calls
+# crypto_sign_ed25519 in a different TU, so the whole signing operation was
+# unprotected. Generated code before the fix was, verbatim:
+#
+#   crypto_sign:  msr DIT, #0x1 ; msr DIT, #0x0 ; b crypto_sign_ed25519
+#
+# There is no instruction after a tail call at which DIT could be restored (the
+# frame is gone and control never returns here), so the choice is binary: protect
+# the callee and leak DIT, or restore state and leak the secret. Taint
+# over-approximation is always the safe direction, so we leave DIT set.
+#
+# 26 is the PSTATE.DIT pstatefield encoding (op1=0b011, op2=0b010).
+
+# tail_caller: secret in $x0, tail-calls an external callee. Entry gets the
+# enable; the tail call gets NOTHING. The DIT-NOT below is the regression:
+# it fails on the pre-fix compiler, which emitted `MSRpstateImm4 26, 0` here.
+# CHECK-LABEL: name: tail_caller
+# CHECK: MSRpstateImm4 26, 1
+# CHECK-NOT: MSRpstateImm4 26, 0
+# CHECK: TCRETURNdi @secret_consumer
+
+# Positive control — a REAL return in an instrumented function must still be
+# preceded by the clear. Without this, "never clear anything" would also pass.
+# CHECK-LABEL: name: normal_caller
+# CHECK: MSRpstateImm4 26, 1
+# CHECK: BL @secret_consumer
+# CHECK-NEXT: MSRpstateImm4 26, 1
+# CHECK: MSRpstateImm4 26, 0
+# CHECK-NEXT: RET_ReallyLR
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  declare i64 @secret_consumer(i64)
+
+  define i64 @tail_caller(i64 "tainted" %a) {
+  entry:
+    %r = tail call i64 @secret_consumer(i64 %a)
+    ret i64 %r
+  }
+
+  define i64 @normal_caller(i64 "tainted" %a) {
+  entry:
+    %r = call i64 @secret_consumer(i64 %a)
+    ret i64 %r
+  }
+...
+---
+name:            tail_caller
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    TCRETURNdi @secret_consumer, 0, csr_aarch64_aapcs, implicit $sp, implicit killed $x0
+...
+---
+name:            normal_caller
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    BL @secret_consumer, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit-def $x0
+    RET_ReallyLR implicit killed $x0
+...

@@ -1791,11 +1791,22 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
 // Track B: cost-model region placement (utils/taint_dit_placement.md §5.6)
 //===----------------------------------------------------------------------===//
 
-// Whole-function granularity: MSR DIT #1 at entry, #0 before every return
-// (isReturn is tested before isCall, so a tail call is treated as a return and
-// never gets a re-assert appended after it — a terminator), #1 re-asserted after
-// every non-tail, non-DIT-preserving call. The shipped policy, and the safe
-// fallback when region placement cannot prove coverage.
+// Whole-function granularity: MSR DIT #1 at entry, #0 before every return,
+// #1 re-asserted after every non-tail, non-DIT-preserving call. The shipped
+// policy, and the safe fallback when region placement cannot prove coverage.
+//
+// A TAIL CALL gets NEITHER switch. It is both isReturn() and isCall() (on
+// AArch64, TCRETURN*), so it is the function's exit — but control transfers to
+// a callee that may consume this function's secret arguments, and the frame is
+// already gone, so there is no instruction after it at which DIT could be
+// restored. Clearing DIT here would disable protection exactly at the hand-off:
+// that was a real under-taint, reached from libsodium's `crypto_sign`, which
+// tail-calls `crypto_sign_ed25519` in another TU and so ran the whole signing
+// operation with DIT=0. Leaving DIT set is the safe direction: an in-TU
+// instrumented callee re-asserts at its own entry and clears before its own
+// return, and an uninstrumented one at least inherits protection. The residual
+// is a DIT leak past an uninstrumented tail callee — a cost, not a hole.
+// See utils/taint_dit_tailcall_gap.md.
 static void emitFunctionGranularityDIT(MachineFunction &MF,
                                        const TaintSummaryInfo *TSI) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
@@ -1805,6 +1816,9 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
                               /*Enable=*/true);
   for (MachineBasicBlock &MBB : MF)
     for (MachineInstr &MI : MBB) {
+      // Tail call: see the comment above. Emit nothing.
+      if (MI.isReturn() && MI.isCall())
+        continue;
       if (MI.isReturn()) {
         TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
                                     /*Enable=*/false);

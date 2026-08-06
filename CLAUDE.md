@@ -128,6 +128,7 @@ these). Region spacing: `utils/taint_region_distance.py OUT.hardened.mir`.
 | Firefox integration guide | `utils/taint_firefox_integration.md` |
 | **Context-insensitive mod-sets — the dominant false-positive source** (measured on libsodium: 169 of 199 FPs). Also records that P1b is a far smaller lever than assumed: only 17 of 583 secret-writing call sites resolve provenance to an argument | `utils/taint_context_insensitivity.md` |
 | Two spill soundness bugs fixed 2026-07-27 (`implicit-def` as use; narrowed reload) + what spilling *does* do correctly | `utils/taint_spill_soundness_bugs.md` |
+| **Tail-call DIT gap fixed 2026-08-05** — whole-function placement cleared DIT *before* a tail call, so the callee receiving the secret ran unprotected (found on libsodium `crypto_sign`). Also records the permanent residual: after a tail call DIT may stay set indefinitely, so **an instrumented function does not restore DIT on every exit path** | `utils/taint_dit_tailcall_gap.md` |
 | `-taint-frame-addr-args` prototype (default OFF): the `f(&local_secret)` under-taint, measured cost | `utils/taint_frame_addr_fallback.md` |
 | **libsodium/CIO head-to-head rig — SCRIPTED.** Build + seed + analyze + archives + `make check`; then the runtime A/B/D/E/C matrix. The old hand-built copies under `~/Documents/libsodium-stable/` and `~/Documents/cio/` were **lost** — do not look for them, run the scripts | `utils/taint_libsodium_eval.sh`, `utils/taint_libsodium_bench.sh` (work dir `~/Documents/libsodium-1.0.21/`; benchmark drivers `~/Documents/crypto-dit-benchmarks/`, untracked, `BENCH_DIR=` overridable) |
 | **End-to-end runtime, MEASURED 2026-08-03 — a negative on libsodium.** Blanket DIT is free (1.00–1.02x); taint-driven placement costs +46%..+94% at the *shipped defaults*, ~half that when tuned for serializing switches. The defaults (`-taint-dit-switch-cyc=0`) assert toggles are free; on M4 they are ~30 cyc. No measured workload yet justifies fine-grained placement | `utils/taint_dit_cost_model.md` (table + caveats) |
@@ -187,6 +188,15 @@ hardened MIR text; (3) legacy PM `start-after=prologepilog` → object.
   a tainted register looks like it *read* one and re-taints its own defs, so taint
   can never leave a register (fixed 2026-07-27, was inflating tainted-instruction
   counts by ~33%; test `taint-analysis-implicit-def.mir`).
+- **A tail call is BOTH `isReturn()` and `isCall()`.** On AArch64 `TCRETURN*`
+  satisfies both, so any "before every return" walk that tests `isReturn()` first
+  will also fire on a tail call — which is where the caller hands its secret
+  arguments to the callee. That is exactly how whole-function placement came to
+  clear `MSR DIT, #0` immediately before `b crypto_sign_ed25519`, running the
+  whole signing operation unprotected (fixed 2026-08-05, test
+  `taint-analysis-tailcall.mir`). A tail call has no instruction after it at which
+  state could be restored, so it needs its own case, not the return case.
+  `utils/taint_dit_tailcall_gap.md`.
 - **Memory cells are keyed `(FI/GV, offset, size)`; the READ path must test
   OVERLAP, not equality.** Spilling 8 secret bytes and reloading the low 4 from the
   same slot used to miss the cell entirely and return the secret as public — an
@@ -247,7 +257,14 @@ output — file paths themselves often contain "isb"/"dit" and inflate naive cou
 performance benchmark for placement**: it is DIT-insensitive (whole-program DIT =
 0.968x), so it cannot show a placement win. See `utils/taint_dit_cost_model.md`.
 
-All 24 tests pass as of 2026-07-27. Recently added:
+All 25 tests pass as of 2026-08-05. Recently added:
+- `taint-analysis-tailcall.mir` (2026-08-05) — the tail-call DIT gap in the
+  gotchas above. Verified to FAIL against the pre-fix `llc` (`CHECK-NOT:
+  MSRpstateImm4 26, 0` matched, i.e. the clear was being emitted before
+  `TCRETURNdi`) and to pass after. `taint-analysis-dit-region.mir` gained the
+  matching `FUNC` checks: it already had a `tailcall_secret` case, but only
+  `REGION` checked it, which is why the suite never saw the bug. See
+  `utils/taint_dit_tailcall_gap.md`.
 - `taint-analysis-implicit-def.mir`, `taint-analysis-stack-partial-reload.mir`
   (2026-07-27) — the two spill soundness bugs in the gotchas above. Each was
   verified to FAIL against the pre-fix code, not just to pass after it. See
