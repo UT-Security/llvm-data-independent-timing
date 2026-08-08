@@ -10,6 +10,34 @@ This file addresses the question every DIT placement decision was blocked on
 It answers the *toggle* half. It does **not** answer the *dwell* half — see the
 warning immediately below.
 
+## The READ is free - `MRS DIT` is 1 cycle (measured 2026-08-08, M5)
+
+`MSR DIT` (write) costs ~30 cycles. **`MRS DIT` (read) costs 1.00 cycle**, and
+still 1.00 with a data dependency forced on the result, so it is not merely being
+hidden by out-of-order execution. The write is **30x** the read.
+
+That asymmetry is what makes the DIT *ownership rule* pay. A callee can read its
+entry state, and skip clearing when it was entered with DIT already set, instead
+of the caller blindly re-asserting afterwards:
+
+| per call | cycles |
+|---|---|
+| today: callee sets, callee clears, caller re-asserts (3x `MSR`) | **90.67** |
+| ownership, entry state kept in a frame slot (`mrs`/`str`/`ldr`/`tbnz`) | **2.01** |
+| ownership, entry state kept in a register (`mrs`/`tbnz`) | **1.03** |
+
+**45x cheaper per call, and it works through an indirect call** - the caller never
+has to know who it called, which is the case `PreservesDIT` provably cannot reach
+(libtomcrypt dispatches AES through a table `register_cipher()` writes at run
+time). Benchmark: `playground/dit_bench/dit_own_bench.c`.
+
+⚠️ **Measurement trap.** The guarded `msr DIT, #0` only disappears when DIT is
+genuinely ON, so the loop must run with DIT set. A first attempt measured the
+sequence with DIT off, the `tbnz` fell through, the 30-cycle write executed, and
+the ownership path read as **52 cycles** - i.e. barely better than today, the
+opposite conclusion. The benchmark now asserts DIT=1 during those runs and prints
+it. Gate any future variant on that line.
+
 ## The two numbers
 
 | Term | Status |
