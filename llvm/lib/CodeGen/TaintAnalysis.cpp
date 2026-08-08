@@ -141,6 +141,15 @@ cl::opt<std::string> llvm::TaintDITPrecisionReportFile(
              "maximize (see utils/taint_dit_precision.md)"),
     cl::value_desc("file"));
 
+cl::opt<std::string> llvm::TaintDITReassertReportFile(
+    "taint-dit-reassert-report",
+    cl::desc("Output file listing every call site where the callee could not be "
+             "proven to leave PSTATE.DIT alone, so DIT was re-asserted after the "
+             "call. These sites are sound (the re-assert restores protection "
+             "unconditionally); they are the per-call toggle cost, and the list "
+             "of sites -taint-dit-preserve-abi would eliminate"),
+    cl::value_desc("file"));
+
 cl::opt<std::string> llvm::TaintUncoveredReportFile(
     "taint-uncovered-report",
     cl::desc("Output file for tainted instructions PSTATE.DIT does not protect "
@@ -1828,13 +1837,43 @@ static bool calleeLeavesDITSet(const Function *Callee,
   return S.PreservesDIT || S.AlwaysEnteredWithDIT;
 }
 
+// Record a call site whose callee could not be proven to leave PSTATE.DIT alone,
+// so a re-assert follows the call. SOUND, not a hazard: the re-assert restores
+// protection whatever the callee did. It is reported because it is the cost - at
+// ~30 cycles, un-hoistable out of a loop, a call inside a hot secret loop pays it
+// every iteration. Reasons, in the order they are checked:
+//
+//   indirect      no callee symbol at all (a function-pointer call). The case
+//                 that cannot be fixed by any per-callee analysis, and the one
+//                 -taint-dit-preserve-abi exists for.
+//   external      callee is a declaration - another TU, so no summary. Taint is
+//                 TU-scoped, which makes a cross-TU direct call behave exactly
+//                 like an indirect one here.
+//   clears-on-exit  an in-TU instrumented callee that owns DIT and clears it
+//                 before returning.
+static void reportDITReassert(raw_ostream *OS, const MachineFunction &MF,
+                              const MachineInstr &MI, const Function *Callee) {
+  if (!OS)
+    return;
+  const char *Reason = !Callee                ? "indirect"
+                       : Callee->isDeclaration() ? "external"
+                                                 : "clears-on-exit";
+  *OS << "REASSERT " << Reason
+      << " callee=" << (Callee ? Callee->getName() : "<indirect>")
+      << " caller=" << MF.getName() << " bb=" << MI.getParent()->getNumber();
+  if (const DebugLoc &DL = MI.getDebugLoc())
+    *OS << " line=" << DL.getLine();
+  *OS << " (sound: DIT re-asserted after the call)\n";
+}
+
 // `OwnsDIT` is false for a function entered with DIT already set. Such a
 // function did not turn DIT on, so it must not turn it off: it keeps the
 // (redundant) entry enable but emits no disable before its returns. Eliding the
 // ENABLE too would be the unsafe direction - see FunctionTaintSummary.
 static void emitFunctionGranularityDIT(MachineFunction &MF,
                                        const TaintSummaryInfo *TSI,
-                                       bool OwnsDIT) {
+                                       bool OwnsDIT,
+                                       raw_ostream *ReassertOS = nullptr) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   Module *M = const_cast<Module *>(MF.getFunction().getParent());
   MachineBasicBlock &Entry = MF.front();
@@ -1851,8 +1890,10 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
         TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
                                     /*Enable=*/false);
       } else if (MI.isCall()) {
-        if (calleeLeavesDITSet(findCalledFunction(*M, MI), TSI))
+        const Function *Callee = findCalledFunction(*M, MI);
+        if (calleeLeavesDITSet(Callee, TSI))
           continue;
+        reportDITReassert(ReassertOS, MF, MI, Callee);
         TII->insertTimingModeSwitch(MBB, std::next(MI.getIterator()),
                                     MI.getDebugLoc(), /*Enable=*/true);
       }
@@ -2082,7 +2123,8 @@ static bool blockInCycle(const MachineBasicBlock *MBB) {
 // TU. Shared by the no-hoist and verifier-failure paths.
 static void fallbackToFunctionGranularity(MachineFunction &MF,
                                           const TaintSummaryInfo *TSI,
-                                          StringRef Reason) {
+                                          StringRef Reason,
+                                          raw_ostream *ReassertOS = nullptr) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   for (MachineBasicBlock &MBB : MF) {
     SmallVector<MachineInstr *, 8> ToErase;
@@ -2100,7 +2142,8 @@ static void fallbackToFunctionGranularity(MachineFunction &MF,
   emitFunctionGranularityDIT(
       MF, TSI,
       /*OwnsDIT=*/
-      !(TSI && TSI->getSummary(MF.getFunction()).AlwaysEnteredWithDIT));
+      !(TSI && TSI->getSummary(MF.getFunction()).AlwaysEnteredWithDIT),
+      ReassertOS);
 }
 
 // Increment (c): the admission test (utils/taint_dit_placement.md §5.6). Given the
@@ -2243,7 +2286,8 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
 static unsigned insertTaintDITRegions(MachineFunction &MF,
                                       const TaintResult &TR,
                                       const TaintSummaryInfo *TSI,
-                                      AAResults *AA) {
+                                      AAResults *AA,
+                                      raw_ostream *ReassertOS = nullptr) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   Module &M = *const_cast<Module *>(MF.getFunction().getParent());
 
@@ -2362,6 +2406,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
         if (clobbersDIT(MI, TSI, M) && !MI.isTerminator())
           Clobbers.push_back(&MI);
       for (MachineInstr *C : Clobbers) {
+        reportDITReassert(ReassertOS, MF, *C, findCalledFunction(M, *C));
         TII->insertTimingModeSwitch(MBB, std::next(C->getIterator()),
                                     C->getDebugLoc(), /*Enable=*/true);
         ++Toggles;
@@ -2395,7 +2440,8 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   }
 
   if (NeedFallback) {
-    fallbackToFunctionGranularity(MF, TSI, "irreducible need-loop, cannot hoist");
+    fallbackToFunctionGranularity(MF, TSI, "irreducible need-loop, cannot hoist",
+                                  ReassertOS);
     return NeedCount;
   }
   LLVM_DEBUG(dbgs() << "  DIT region placement in " << MF.getName() << ": "
@@ -2437,7 +2483,8 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
               });
 
   if (!Sound)
-    fallbackToFunctionGranularity(MF, TSI, "verifier: uncovered need");
+    fallbackToFunctionGranularity(MF, TSI, "verifier: uncovered need",
+                                  ReassertOS);
   return NeedCount;
 }
 
@@ -2469,11 +2516,18 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   const bool OwnsDIT =
       !(TSI && TSI->getSummary(MF.getFunction()).AlwaysEnteredWithDIT);
 
+  // Default mode's audit trail: every call site we could not prove leaves DIT
+  // alone, and therefore re-asserted after. Sound but not free, so the list is
+  // the cost, not a hazard. Append, because this runs once per function.
+  auto ReassertOSPtr = openTaintReport(TaintDITReassertReportFile,
+                                       "DIT re-assert report", /*Append=*/true);
+  raw_ostream *ReassertOS = ReassertOSPtr.get();
+
   // Track B: cost-model region placement (WIP). Opt-in; default stays
   // function-granularity below, so shipped codegen is untouched. Both modes
   // report the same tainted-instruction count.
   if (TaintDITPlacement == DITPlacementMode::Region && OwnsDIT) {
-    insertTaintDITRegions(MF, TR, TSI, AA);
+    insertTaintDITRegions(MF, TR, TSI, AA, ReassertOS);
     emitDITPrecisionReport(MF, TR, TSI, AA);
     return TaintedInstrCount;
   }
@@ -2482,7 +2536,7 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   // mode when it contains any tainted instruction. Per-region toggles would
   // clear an enclosing region's DIT when a tainted callee's exit switch runs
   // inside a caller's still-open region.
-  emitFunctionGranularityDIT(MF, TSI, OwnsDIT);
+  emitFunctionGranularityDIT(MF, TSI, OwnsDIT, ReassertOS);
   emitDITPrecisionReport(MF, TR, TSI, AA);
 
   return TaintedInstrCount;

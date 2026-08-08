@@ -78,6 +78,20 @@ extern cl::opt<std::string> TaintUncoveredReportFile;
 /// with PSTATE.DIT set versus how many actually do.
 extern cl::opt<std::string> TaintDITPrecisionReportFile;
 
+/// Command-line option for the DIT re-assert report: every call site where the
+/// pass could not prove the callee leaves PSTATE.DIT alone and therefore
+/// re-asserted `MSR DIT, #1` after the call.
+///
+/// These sites are SOUND, not hazards - the re-assert restores protection
+/// unconditionally, whatever the callee did. They are reported because they are
+/// the cost: a re-assert is ~30 cycles and cannot be hoisted out of a loop, so a
+/// call in a hot secret loop pays it per iteration (measured on SQLCipher:
+/// libtomcrypt drives AES one 16-byte block per call through a function-pointer
+/// table, 256 calls per 4 KB page). The report is the list of places
+/// -taint-dit-preserve-abi would help, and the audit trail for why a hardened
+/// build toggles as often as it does.
+extern cl::opt<std::string> TaintDITReassertReportFile;
+
 /// Fallback for the register<->stack-cell link lost at the MIR stage: treat a
 /// stack/frame address passed as a call argument as pointee-tainted when the
 /// frame may hold a secret. Without it the analysis reports a confident "clean"
