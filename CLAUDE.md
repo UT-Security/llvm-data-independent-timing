@@ -131,6 +131,7 @@ switches per function; reachable from clang as `-mllvm -taint-dit-precision-repo
 | Two spill soundness bugs fixed 2026-07-27 (`implicit-def` as use; narrowed reload) + what spilling *does* do correctly | `utils/taint_spill_soundness_bugs.md` |
 | **DIT precision metric** (`-taint-dit-precision-report`): per function, how many instructions MUST run with DIT vs how many DO. `precision = need/underdit` is the number placement should maximize — but only against a switch budget, and always read the loop-weighted variant (unweighted, convolve's region placement looks 13 points better while being 7.16x slower) | `utils/taint_dit_precision.md`, `utils/taint_dit_precision.py` |
 | **Tail-call DIT gap fixed 2026-08-05** — whole-function placement cleared DIT *before* a tail call, so the callee receiving the secret ran unprotected (found on libsodium `crypto_sign`). Also records the permanent residual: after a tail call DIT may stay set indefinitely, so **an instrumented function does not restore DIT on every exit path** | `utils/taint_dit_tailcall_gap.md` |
+| **DIT callee-ownership rule, 2026-08-08.** "Only the frame that turned DIT on may turn it off." An instrumented callee used to clear DIT on exit, so callers re-asserted after *every* call and the switch count scaled with the CALL count. Shipped: `AlwaysEnteredWithDIT` fixes resolvable in-TU calls, and `-taint-dit-reassert-report=<file>` audits the rest. **Deferred (out of scope, for advisor discussion): the runtime `MRS` mode**, the only thing that fixes indirect *and* cross-TU calls. Measured: `MRS DIT` = 1.00 cyc vs `MSR DIT` = 30.34, so per call 90.67 -> 2.01 | `utils/taint_dit_callee_ownership.md` |
 | `-taint-frame-addr-args` prototype (default OFF): the `f(&local_secret)` under-taint, measured cost | `utils/taint_frame_addr_fallback.md` |
 | **libsodium/CIO head-to-head rig — SCRIPTED.** Build + seed + analyze + archives + `make check`; then the runtime A/B/D/E/C matrix. The old hand-built copies under `~/Documents/libsodium-stable/` and `~/Documents/cio/` were **lost** — do not look for them, run the scripts | `utils/taint_libsodium_eval.sh`, `utils/taint_libsodium_bench.sh` (work dir `~/Documents/libsodium-1.0.21/`; benchmark drivers `~/Documents/crypto-dit-benchmarks/`, untracked, `BENCH_DIR=` overridable) |
 | **End-to-end runtime, MEASURED 2026-08-03 — a negative on libsodium.** Blanket DIT is free (1.00–1.02x); taint-driven placement costs +46%..+94% at the *shipped defaults*, ~half that when tuned for serializing switches. The defaults (`-taint-dit-switch-cyc=0`) assert toggles are free; on M4 they are ~30 cyc. No measured workload yet justifies fine-grained placement | `utils/taint_dit_cost_model.md` (table + caveats) |
@@ -259,7 +260,17 @@ output — file paths themselves often contain "isb"/"dit" and inflate naive cou
 performance benchmark for placement**: it is DIT-insensitive (whole-program DIT =
 0.968x), so it cannot show a placement win. See `utils/taint_dit_cost_model.md`.
 
-All 26 tests pass as of 2026-08-06. Recently added:
+All 28 tests pass as of 2026-08-08 (and the whole `llvm/test/CodeGen/AArch64`
+suite: 3894 discovered, 3890 pass, 4 pre-existing XFAIL, 0 failures). Recently
+added:
+- `taint-analysis-dit-caller-preserve.mir`, `taint-analysis-dit-reassert-report.mir`
+  (2026-08-08) - the DIT callee-ownership rule and the re-assert audit report.
+  The first was committed XFAIL and verified to fail against the pre-fix compiler
+  on exactly its two intended checks before the fix landed. Both carry positive
+  controls, because the obvious wrong implementations ("never clear anything",
+  "report every call site") would otherwise pass. See
+  `utils/taint_dit_callee_ownership.md`, which also records the deferred `MRS`
+  mode for indirect and cross-TU calls.
 - `taint-analysis-dit-precision.mir` (2026-08-06) — the DIT accounting numbers.
   Pins a non-obvious one: under whole-function placement `coverage` is NOT 100%,
   because `MSR DIT, #0` precedes the return so the return runs with DIT off.
