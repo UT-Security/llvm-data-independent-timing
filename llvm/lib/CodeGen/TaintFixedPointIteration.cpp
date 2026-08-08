@@ -23,6 +23,7 @@
 
 #include "llvm/CodeGen/TaintFixedPointIteration.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/MachineFunctionAnalysis.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -441,6 +442,89 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
         if (!F.isDeclaration())
           dbgs() << "  PreservesDIT(" << F.getName()
                  << ") = " << TSI.getSummary(F).PreservesDIT << "\n";
+    });
+  }
+
+  // Step 3b-2: Compute AlwaysEnteredWithDIT - the DIT ownership bit.
+  //
+  // THE RULE: only the frame that turned PSTATE.DIT on may turn it off. Today
+  // every instrumented function clears DIT before returning, so a callee reached
+  // from an enclosing DIT-on region destroys its caller's state; the caller
+  // repairs it with an after-call re-assert. That makes the switch count scale
+  // with the CALL count instead of the number of secret regions - measured at
+  // 1,792-4,352 switches per 4 KB page on SQLCipher, the same order as the
+  // encryption itself. It is also a soundness gap under region placement, where
+  // a callee's INTERNAL region ends clear DIT while the caller's secret is still
+  // live and nothing repairs it until after the call returns.
+  //
+  // A function is entered with DIT already on when it cannot be reached except
+  // through a secret-passing call. We require, conservatively:
+  //   * local linkage        - no caller outside this TU,
+  //   * address never taken  - no indirect call can reach it,
+  //   * >= 1 in-TU call site - otherwise it is dead or an entry point,
+  //   * EVERY in-TU call site passes a secret.
+  //
+  // The last condition is what ties this to DIT actually being on, and it is not
+  // an assumption: step 3c below verifies the Scenario-B invariant that a
+  // secret-passing call executes with DIT=1 (asserting if it ever does not), for
+  // BOTH placement policies. So "every call site passes a secret" implies "every
+  // entry has DIT on" without this analysis needing to know where switches land.
+  //
+  // Retraction-shaped, like PreservesDIT above: seed the candidates optimistically
+  // and disqualify on evidence. A call site we fail to observe therefore cannot
+  // silently qualify a function - only observed secret-passing sites keep it.
+  if (TaintInsertDIT) {
+    SmallPtrSet<const Function *, 16> Candidates;
+    forEachAnalyzed(M, FAM, Results,
+                    [&](Function &F, MachineFunction &MF, const TaintResult &TR,
+                        AAResults *AA) {
+                      // An uninstrumented function emits no switches, so the bit
+                      // would be moot; requiring instrumentation also keeps the
+                      // consumer in TaintAnalysis.cpp simple.
+                      if (F.hasLocalLinkage() && !F.hasAddressTaken() &&
+                          functionHasTaintedRuns(MF, TR, &TSI, AA))
+                        Candidates.insert(&F);
+                    });
+
+    SmallPtrSet<const Function *, 16> Seen;
+    forEachAnalyzed(
+        M, FAM, Results,
+        [&](Function &, MachineFunction &MF, const TaintResult &TR,
+            AAResults *AA) {
+          if (Candidates.empty())
+            return;
+          const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
+          replayTaint(MF, TR, &TSI, AA, /*Post=*/{},
+                      /*Pre=*/[&](MachineInstr &MI, const TaintState &State) {
+                        if (!MI.isCall())
+                          return true;
+                        const Function *Callee = findCalledFunction(M, MI);
+                        if (!Callee || !Candidates.contains(Callee))
+                          return true;
+                        // Pre-state, for the same reason step 3c uses it: the
+                        // arguments are set up before the call, so the leaving
+                        // state would misread a tainted RETURN value as a
+                        // passed argument.
+                        if (taintedCallArguments(MI, State, TRI).any())
+                          Seen.insert(Callee);
+                        else
+                          Candidates.erase(Callee); // reached with DIT possibly off
+                        return true;
+                      });
+        });
+
+    for (Function &F : M) {
+      if (F.isDeclaration() || !Candidates.contains(&F) || !Seen.contains(&F))
+        continue;
+      FunctionTaintSummary S = TSI.getSummary(F);
+      S.AlwaysEnteredWithDIT = true;
+      TSI.storeSummary(F, S);
+    }
+    LLVM_DEBUG({
+      for (Function &F : M)
+        if (!F.isDeclaration())
+          dbgs() << "  AlwaysEnteredWithDIT(" << F.getName()
+                 << ") = " << TSI.getSummary(F).AlwaysEnteredWithDIT << "\n";
     });
   }
 

@@ -1,21 +1,15 @@
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=function %s -o - | FileCheck %s
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s
 
-# XFAIL: *
+# Verified to FAIL against the pre-fix compiler for exactly two reasons and no
+# others - the callee's clear and the caller's re-assert - with both positive
+# controls already passing, which is what makes those two failures meaningful
+# rather than incidental. It was committed XFAIL first, then the XFAIL removed
+# together with the implementation.
 #
-# PENDING FIX — this test describes behavior the compiler does not yet have, and
-# is marked XFAIL so the suite stays green until it does. Deleting the XFAIL line
-# is part of landing the fix: once the ownership rule is implemented the test
-# XPASSes, which lit reports as a failure, so it cannot be forgotten.
-#
-# Verified 2026-08-08 to fail against the current build for exactly two reasons
-# and no others — the callee's clear (line ~50) and the caller's re-assert
-# (line ~66). Both positive controls already pass, which is what makes those two
-# failures meaningful rather than incidental.
-#
-# Both run lines are the same checks: region placement degenerates to whole-
-# function coverage on bodies this small, and both policies exhibit the defect
-# identically, so the fix has to handle both.
+# Both run lines share one set of checks: for a function that does not own DIT
+# the region emitter is bypassed (narrowing would mean clearing DIT it did not
+# set), so both policies must produce the same code here.
 
 # An instrumented callee entered with DIT ALREADY ON must not clear it.
 #
@@ -30,7 +24,7 @@
 #
 # Measured on SQLCipher (2026-08-08): libtomcrypt's cbc_encrypt drives AES one
 # 16-byte block at a time through cipher_descriptor[].ecb_encrypt, a
-# function-pointer table that register_cipher() writes at run time — so the
+# function-pointer table that register_cipher() writes at run time - so the
 # callee is not statically resolvable and PreservesDIT can never be proven.
 # The result is 3+ mode switches per block, 1,792-4,352 per 4 KB page, which at
 # ~30 cyc/switch is the same order as the encryption itself. The toggles land
@@ -42,9 +36,9 @@
 # returns, so the exposure window sits mid-callee and nothing closes it. The
 # ownership rule removes the window: a callee entered with DIT on never clears.
 #
-# DIRECTION OF FAILURE MATTERS. Skipping the CLEAR is fail-safe — if the callee
+# DIRECTION OF FAILURE MATTERS. Skipping the CLEAR is fail-safe - if the callee
 # was in fact entered with DIT off, it merely leaves DIT set and costs dwell.
-# Skipping the SET would be fail-dangerous — a callee wrongly assumed to be
+# Skipping the SET would be fail-dangerous - a callee wrongly assumed to be
 # entered DIT-on would run its secret work unprotected. So this test pins the
 # clear and deliberately does NOT pin the set: @secret_worker keeps its entry
 # `MSR DIT, #1` even though it is provably redundant here. Eliding that is a
@@ -52,7 +46,7 @@
 #
 # 26 is the PSTATE.DIT pstatefield encoding (op1=0b011, op2=0b010).
 
-# @secret_worker — internal linkage, single call site, and that call site is
+# @secret_worker - internal linkage, single call site, and that call site is
 # inside @secret_caller's DIT-on region. It is therefore ALWAYS entered with DIT
 # set. It must not clear on the way out. This CHECK-NOT is the regression: the
 # current compiler emits `MSRpstateImm4 26, 0` immediately before RET_ReallyLR.
@@ -61,12 +55,12 @@
 # CHECK-NOT: MSRpstateImm4 26, 0
 # CHECK: RET_ReallyLR
 
-# @secret_caller — the owner. It is externally visible, so it may be entered
+# @secret_caller - the owner. It is externally visible, so it may be entered
 # from public code with DIT off; it sets DIT and is responsible for clearing it
 # before returning. Two things to pin:
 #
 #   (a) no re-assert after the call. The callee no longer clobbers DIT, so the
-#       repair is dead code. This CHECK-NOT is the second regression — today a
+#       repair is dead code. This CHECK-NOT is the second regression - today a
 #       `MSRpstateImm4 26, 1` follows the BL.
 #   (b) it MUST still clear before its own return. This is the positive control:
 #       without it, a compiler that simply never emitted `MSR DIT, #0` anywhere
@@ -78,7 +72,7 @@
 # CHECK: MSRpstateImm4 26, 0
 # CHECK-NEXT: RET_ReallyLR
 
-# @exported_worker — the safety control for the ownership rule itself. Same
+# @exported_worker - the safety control for the ownership rule itself. Same
 # shape as @secret_worker but EXTERNALLY VISIBLE, so an out-of-TU caller may
 # reach it with DIT off. It does not know it is entered DIT-on, so it owns DIT
 # and must still set AND clear. This is what stops "never clear" from being

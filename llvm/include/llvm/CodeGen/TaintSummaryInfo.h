@@ -94,13 +94,31 @@ struct FunctionTaintSummary {
   /// taint fixed point converges; used to elide after-call DIT re-asserts.
   bool PreservesDIT = false;
 
+  /// Whether EVERY entry to this function already has PSTATE.DIT set, so the
+  /// function did not turn DIT on and must not turn it off ("only the frame
+  /// that set DIT may clear it"). True only when the function cannot be reached
+  /// except through a secret-passing call: local linkage, address never taken,
+  /// at least one in-TU call site, and every such call site passes a secret -
+  /// which the Scenario-B coverage invariant (step 3c) already verifies runs
+  /// with DIT=1. Default false = conservative (the function owns DIT and clears
+  /// it on exit, today's behavior).
+  ///
+  /// Consumers: such a function keeps its redundant entry enable but emits no
+  /// disable, and its callers skip the after-call re-assert. Note the direction
+  /// of failure - a function wrongly marked true merely leaves DIT set (a dwell
+  /// cost); wrongly marked false costs only the switches we have today. Eliding
+  /// the entry ENABLE would be the unsafe direction and is deliberately not done
+  /// here; that needs a must-analysis.
+  bool AlwaysEnteredWithDIT = false;
+
   bool operator==(const FunctionTaintSummary &Other) const {
     return TaintedArgIndices == Other.TaintedArgIndices &&
            PointeeTaintedArgIndices == Other.PointeeTaintedArgIndices &&
            ReturnsTainted == Other.ReturnsTainted &&
            MemEffects == Other.MemEffects &&
            IsConservative == Other.IsConservative &&
-           PreservesDIT == Other.PreservesDIT;
+           PreservesDIT == Other.PreservesDIT &&
+           AlwaysEnteredWithDIT == Other.AlwaysEnteredWithDIT;
   }
 
   bool operator!=(const FunctionTaintSummary &Other) const {
