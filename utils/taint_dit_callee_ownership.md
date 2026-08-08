@@ -195,6 +195,46 @@ Alternatives considered and rejected:
   dead-object elimination, which puts a store in *every* function of a hardened
   build.
 
+### Does LTO solve the cross-TU half?
+
+**For cross-TU, yes in principle. For indirect, no. And on SQLCipher that split
+means LTO would fix exactly the two sites that cost nothing.**
+
+| report site | reason | LTO helps? | cost |
+|---|---|---|---|
+| `cipher_is_valid` from `cbc_encrypt` / `cbc_decrypt` | external | **yes** | cold, once per operation |
+| `cbc_encrypt` bb=34, `cbc_decrypt` bb=17 | indirect | **no** | 256x per 4 KB page |
+
+Two independent reasons LTO does not reach the hot sites:
+
+1. `cipher_descriptor[].ecb_encrypt` is written at run time by
+   `register_cipher()`. That is genuine dynamic dispatch, not a visibility
+   problem, so merging modules changes nothing. LTO can speculatively
+   devirtualize behind a runtime guard, but that is a transform with a fallback
+   path, not a proof, and the fallback still needs the re-assert.
+2. Even fully merged and internalized, `AlwaysEnteredWithDIT` requires
+   `!hasAddressTaken()`, and `rijndael_ecb_encrypt`'s address *is* taken - that
+   is how it reaches the table. **Linkage is what LTO fixes; address-taken is
+   what actually blocks this one.**
+
+Where LTO genuinely would help: a hardened library whose crypto is reached by
+direct cross-TU calls. There, LTO plus internalization makes callers enumerable
+and `AlwaysEnteredWithDIT` begins qualifying functions it currently cannot.
+
+Two practical caveats before treating it as the answer:
+
+- **`-ftaint-harden` is incompatible with LTO today** (it lowers to an object
+  eagerly). Fixing that is not a flag flip: `TaintInterprocPass` needs every
+  `MachineFunction` of the module resident at once, and the design serializes to
+  MIR text and reparses. At whole-program scale that is a memory and time
+  problem. Full LTO backends also partition for parallel codegen, which
+  reintroduces a TU boundary, just a larger one.
+- **ThinLTO is the better fit than monolithic LTO.** It does not merge modules,
+  it propagates a summary index, which is exactly the shape `PreservesDIT` and
+  `AlwaysEnteredWithDIT` already have. Extending the ThinLTO summary with those
+  bits is far more natural for this pass than running it over one merged module,
+  and it is how ThinLTO already propagates function attributes.
+
 ### The cheaper alternative, if Mode 2 stays out of scope
 
 **Function cloning.** For a resolvable callee, emit a `foo.dit` variant with no
@@ -228,6 +268,11 @@ speedup for Mode 2 without running one.**
    model**, not buried in the pass.
 4. Before building Mode 2, is it worth measuring the end-to-end SQLCipher win
    first, so the effort is justified by a number rather than by arithmetic?
+5. Is extending the **ThinLTO summary** with the DIT bits a better use of effort
+   than Mode 2? It closes the cross-TU half without target-code changes, but it
+   closes none of the indirect half, so on SQLCipher specifically it buys the two
+   cold sites and neither hot one. The answer likely depends on whether the
+   target workload's crypto is reached directly or through a dispatch table.
 
 See also `taint_dit_placement.md` (placement state and gaps),
 `taint_dit_cost_model.md` (the toggle/dwell terms and the `MRS` measurement),
