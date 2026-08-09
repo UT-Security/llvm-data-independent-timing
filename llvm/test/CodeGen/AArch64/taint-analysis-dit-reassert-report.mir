@@ -1,6 +1,6 @@
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
 # RUN:   -taint-dit-placement=function -taint-dit-reassert-report=%t %s -o /dev/null
-# RUN: FileCheck %s --input-file=%t
+# RUN: FileCheck %s --input-file=%t --implicit-check-not=caller=calls_preserving
 
 # The default mode's audit trail: every call site where the callee could not be
 # proven to leave PSTATE.DIT alone, so `MSR DIT, #1` was re-asserted after it.
@@ -30,15 +30,18 @@
 #                  returning. Fixable statically, and @preserving below shows it
 #                  already is.
 
+# @calls_preserving must NOT appear anywhere. Its callee is internal,
+# address-never-taken, and reached only through a secret-passing call, so it is
+# AlwaysEnteredWithDIT: it never clears, and the re-assert was already elided.
+# Without this the report could list every call site and still pass the DAGs.
+#
+# --implicit-check-not, NOT a trailing CHECK-NOT. Report lines are written in
+# module order, so calls_preserving's line would come FIRST, and a CHECK-NOT
+# placed after the CHECK-DAG block only scans from the end of the DAG match
+# region to EOF -- it would never see it, and the guard would be vacuous.
 # CHECK-DAG: REASSERT indirect callee=<indirect> caller=calls_indirect bb=0
 # CHECK-DAG: REASSERT external callee=ext_sink caller=calls_external bb=0
 # CHECK-DAG: REASSERT clears-on-exit callee=exported_worker caller=calls_owner bb=0
-
-# @calls_preserving must NOT appear. Its callee is internal, address-never-taken,
-# and reached only through a secret-passing call, so it is AlwaysEnteredWithDIT:
-# it never clears, and the re-assert was already elided. Without this negative
-# check the report could list every call site and still pass the checks above.
-# CHECK-NOT: caller=calls_preserving
 
 --- |
   target triple = "aarch64-unknown-linux-gnu"

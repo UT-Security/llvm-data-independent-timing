@@ -111,6 +111,13 @@ struct FunctionTaintSummary {
   /// here; that needs a must-analysis.
   bool AlwaysEnteredWithDIT = false;
 
+  /// Whether this function is itself DIT-instrumented (it has a tainted run, so
+  /// placement emits mode switches into it). Distinct from `!PreservesDIT`: an
+  /// uninstrumented function that merely CALLS a non-preserving callee is also
+  /// non-preserving, but it emits no `MSR DIT` of its own. Only used to label
+  /// the re-assert report accurately.
+  bool InstrumentedForDIT = false;
+
   bool operator==(const FunctionTaintSummary &Other) const {
     return TaintedArgIndices == Other.TaintedArgIndices &&
            PointeeTaintedArgIndices == Other.PointeeTaintedArgIndices &&

@@ -147,7 +147,8 @@ cl::opt<std::string> llvm::TaintDITReassertReportFile(
              "proven to leave PSTATE.DIT alone, so DIT was re-asserted after the "
              "call. These sites are sound (the re-assert restores protection "
              "unconditionally); they are the per-call toggle cost, and the list "
-             "of sites -taint-dit-preserve-abi would eliminate"),
+             "of sites the proposed (not yet implemented) runtime-MRS mode would "
+             "eliminate -- see utils/taint_dit_callee_ownership.md"),
     cl::value_desc("file"));
 
 cl::opt<std::string> llvm::TaintUncoveredReportFile(
@@ -1852,12 +1853,25 @@ static bool calleeLeavesDITSet(const Function *Callee,
 //   clears-on-exit  an in-TU instrumented callee that owns DIT and clears it
 //                 before returning.
 static void reportDITReassert(raw_ostream *OS, const MachineFunction &MF,
-                              const MachineInstr &MI, const Function *Callee) {
+                              const MachineInstr &MI, const Function *Callee,
+                              const TaintSummaryInfo *TSI) {
   if (!OS)
     return;
-  const char *Reason = !Callee                ? "indirect"
-                       : Callee->isDeclaration() ? "external"
-                                                 : "clears-on-exit";
+  // An in-TU callee is only "clears-on-exit" if it is actually instrumented.
+  // One that emits no DIT at all can still be non-preserving, because step 3b
+  // retracts PreservesDIT through ITS callees -- `static void h(void){ ext(); }`
+  // is the canonical shape. Calling that clears-on-exit sends an auditor looking
+  // for a clear that does not exist and hides the real cause, which is the
+  // cross-TU call inside it.
+  const char *Reason;
+  if (!Callee)
+    Reason = "indirect";
+  else if (Callee->isDeclaration())
+    Reason = "external";
+  else if (TSI && TSI->getSummary(*Callee).InstrumentedForDIT)
+    Reason = "clears-on-exit";
+  else
+    Reason = "propagates-unresolvable"; // in-TU, emits no DIT of its own
   *OS << "REASSERT " << Reason
       << " callee=" << (Callee ? Callee->getName() : "<indirect>")
       << " caller=" << MF.getName() << " bb=" << MI.getParent()->getNumber();
@@ -1893,7 +1907,7 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
         const Function *Callee = findCalledFunction(*M, MI);
         if (calleeLeavesDITSet(Callee, TSI))
           continue;
-        reportDITReassert(ReassertOS, MF, MI, Callee);
+        reportDITReassert(ReassertOS, MF, MI, Callee, TSI);
         TII->insertTimingModeSwitch(MBB, std::next(MI.getIterator()),
                                     MI.getDebugLoc(), /*Enable=*/true);
       }
@@ -2291,6 +2305,13 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   Module &M = *const_cast<Module *>(MF.getFunction().getParent());
 
+  // Re-assert sites are BUFFERED, not written as they are emitted: a later
+  // fallback erases every switch this function placed and re-runs whole-function
+  // placement, which reports again. Writing eagerly would leave lines for
+  // switches that never reach the object and double-count the calls that
+  // reappear, inflating the toggle cost the report exists to measure.
+  SmallVector<const MachineInstr *, 8> PendingReassertSites;
+
   // Local facts: which instructions are Needs, and which blocks contain one.
   DenseMap<const MachineBasicBlock *, bool> HasNeed;
   DenseSet<const MachineInstr *> NeedSet;
@@ -2406,7 +2427,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
         if (clobbersDIT(MI, TSI, M) && !MI.isTerminator())
           Clobbers.push_back(&MI);
       for (MachineInstr *C : Clobbers) {
-        reportDITReassert(ReassertOS, MF, *C, findCalledFunction(M, *C));
+        PendingReassertSites.push_back(C);
         TII->insertTimingModeSwitch(MBB, std::next(C->getIterator()),
                                     C->getDebugLoc(), /*Enable=*/true);
         ++Toggles;
@@ -2482,9 +2503,16 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                 return true;
               });
 
-  if (!Sound)
+  if (!Sound) {
+    // The fallback erases these switches and reports its own sites.
     fallbackToFunctionGranularity(MF, TSI, "verifier: uncovered need",
                                   ReassertOS);
+    return NeedCount;
+  }
+
+  // Placement stuck: the buffered sites are the ones actually emitted.
+  for (const MachineInstr *C : PendingReassertSites)
+    reportDITReassert(ReassertOS, MF, *C, findCalledFunction(M, *C), TSI);
   return NeedCount;
 }
 
@@ -2531,6 +2559,14 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
     emitDITPrecisionReport(MF, TR, TSI, AA);
     return TaintedInstrCount;
   }
+  // Make the routing visible: under the default `region` policy a non-owning
+  // function silently lands on whole-function coverage, which is correct but
+  // changes what an objdump of a hardened build looks like.
+  LLVM_DEBUG(if (TaintDITPlacement == DITPlacementMode::Region && !OwnsDIT)
+                 dbgs()
+             << "  " << MF.getName()
+             << ": AlwaysEnteredWithDIT, using whole-function coverage "
+                "(region placement would clear DIT it does not own)\n");
 
   // Function granularity: run the whole function in data-independent-timing
   // mode when it contains any tainted instruction. Per-region toggles would

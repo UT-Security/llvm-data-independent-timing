@@ -87,9 +87,17 @@ extern cl::opt<std::string> TaintDITPrecisionReportFile;
 /// the cost: a re-assert is ~30 cycles and cannot be hoisted out of a loop, so a
 /// call in a hot secret loop pays it per iteration (measured on SQLCipher:
 /// libtomcrypt drives AES one 16-byte block per call through a function-pointer
-/// table, 256 calls per 4 KB page). The report is the list of places
-/// -taint-dit-preserve-abi would help, and the audit trail for why a hardened
-/// build toggles as often as it does.
+/// table, 256 calls per 4 KB page). The report is the audit trail for why a
+/// hardened build toggles as often as it does, and the list of places the
+/// proposed runtime-MRS mode would help. That mode is DESIGNED BUT NOT
+/// IMPLEMENTED -- there is no flag for it yet; see
+/// utils/taint_dit_callee_ownership.md.
+///
+/// TRUNCATED per compiler invocation, like the other taint reports. A multi-TU
+/// build pointing every TU at one path therefore keeps only the LAST TU's sites;
+/// give each TU its own file and concatenate. The alternative, appending, silently
+/// multiplies every site by the number of builds into that path and inflates the
+/// toggle cost the report exists to measure.
 extern cl::opt<std::string> TaintDITReassertReportFile;
 
 /// Fallback for the register<->stack-cell link lost at the MIR stage: treat a

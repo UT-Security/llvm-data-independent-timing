@@ -248,10 +248,23 @@ build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/
 ```
 End-to-end reference: harden `playground/firefox_convolve_int.c` and compare
 per-symbol DIT placement between the clang flag and the wrapper — they must match
-exactly. Under the **default `region` placement** each tainted function's clean
+exactly. Under the **default `region` placement** a tainted function's clean
 preamble is DIT-off and the `msr DIT, #0x1` sits at the loop preheader, not the entry
 (add `-mllvm -taint-dit-placement=function` for the old whole-function reference: one
-`msr DIT, #0x1` at entry, one `msr DIT, #0x0` before each return). **No `isb`/`dsb`
+`msr DIT, #0x1` at entry, one `msr DIT, #0x0` before each return).
+
+**Exception since 2026-08-08 — a function that is `AlwaysEnteredWithDIT` gets
+whole-function coverage even under `region`, and that is correct, not a
+regression.** It was entered with DIT already on, so it does not own DIT and may
+not clear it; region placement narrows *by clearing*, so narrowing there would
+strip the caller's protection. Nothing is actually lost: the caller's region
+already covered the callee, so those "narrowed" stretches were running DIT-on
+regardless. In `firefox_convolve_int.c` this applies to `convolve_pixel_int`
+(internal, address-never-taken, sole call site passes the pointee-tainted
+`source`), so expect **one entry enable and no preheader enable** there;
+`run_kernel_int` is unaffected and still shows the preheader form. `-debug-only=
+taint-interproc` prints which functions took this path. See
+`utils/taint_dit_callee_ownership.md`. **No `isb`/`dsb`
 anywhere** in either mode (the ISB/DSB mode was removed 2026-07-14 — its old
 expectation was 14 ISB + 14 DSB). Count mnemonics, not `grep` hits on the objdump
 output — file paths themselves often contain "isb"/"dit" and inflate naive counts.
