@@ -1,0 +1,188 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN:   -taint-dit-placement=function -taint-dit-reassert-report=%t %s -o /dev/null
+# RUN: FileCheck %s --input-file=%t --implicit-check-not=caller=calls_preserving
+
+# The default mode's audit trail: every call site where the callee could not be
+# proven to leave PSTATE.DIT alone, so `MSR DIT, #1` was re-asserted after it.
+#
+# These sites are SOUND, not hazards. The re-assert restores protection
+# unconditionally, whatever the callee did, which is why it is the default. They
+# are reported because they are the COST: a re-assert is ~30 cycles on M5 (and
+# there is no same-value discount there - a redundant `msr DIT, #1` when DIT is
+# already 1 still measures 30.36 cyc), and it cannot be hoisted out of a loop
+# because the callee re-clears every iteration. A call inside a hot secret loop
+# therefore pays it per iteration. On SQLCipher that is 256 calls per 4 KB page,
+# because libtomcrypt drives AES one 16-byte block at a time through
+# cipher_descriptor[].ecb_encrypt.
+#
+# The report is exactly the list of sites -taint-dit-preserve-abi (the MRS mode)
+# would eliminate, so it doubles as the estimate of what that mode is worth on a
+# given program.
+#
+# Three reasons, and the order they are checked matters:
+#
+#   indirect       no callee symbol at all. No per-callee analysis can ever fix
+#                  this one - it is the case the MRS mode exists for.
+#   external       a declaration, i.e. another TU. Taint is TU-scoped, so a
+#                  cross-TU DIRECT call is just as unresolvable as an indirect
+#                  one, which is easy to forget.
+#   clears-on-exit an in-TU instrumented callee that owns DIT and clears before
+#                  returning. Fixable statically, and @preserving below shows it
+#                  already is.
+
+# @calls_preserving must NOT appear anywhere. Its callee is internal,
+# address-never-taken, and reached only through a secret-passing call, so it is
+# AlwaysEnteredWithDIT: it never clears, and the re-assert was already elided.
+# Without this the report could list every call site and still pass the DAGs.
+#
+# --implicit-check-not, NOT a trailing CHECK-NOT. Report lines are written in
+# module order, so calls_preserving's line would come FIRST, and a CHECK-NOT
+# placed after the CHECK-DAG block only scans from the end of the DAG match
+# region to EOF -- it would never see it, and the guard would be vacuous.
+# CHECK-DAG: REASSERT indirect callee=<indirect> caller=calls_indirect bb=0
+# CHECK-DAG: REASSERT external callee=ext_sink caller=calls_external bb=0
+# CHECK-DAG: REASSERT clears-on-exit callee=exported_worker caller=calls_owner bb=0
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  declare void @ext_sink(i64)
+
+  define internal i64 @preserving_worker(i64 "tainted" %k) {
+  entry:
+    %r = mul i64 %k, 3
+    ret i64 %r
+  }
+
+  define i64 @exported_worker(i64 "tainted" %k) {
+  entry:
+    %r = mul i64 %k, 3
+    ret i64 %r
+  }
+
+  define i64 @calls_preserving(i64 "tainted" %k) {
+  entry:
+    %r = call i64 @preserving_worker(i64 %k)
+    ret i64 %r
+  }
+
+  define i64 @calls_owner(i64 "tainted" %k) {
+  entry:
+    %r = call i64 @exported_worker(i64 %k)
+    ret i64 %r
+  }
+
+  define i64 @calls_external(i64 "tainted" %k) {
+  entry:
+    call void @ext_sink(i64 %k)
+    ret i64 %k
+  }
+
+  define i64 @calls_indirect(i64 "tainted" %k, ptr %fp) {
+  entry:
+    %f = bitcast ptr %fp to ptr
+    %r = call i64 %f(i64 %k)
+    ret i64 %r
+  }
+...
+---
+name:            preserving_worker
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    $x1 = MOVi64imm 3
+    $x0 = MADDXrrr $x0, $x1, $xzr
+    RET_ReallyLR implicit killed $x0
+...
+---
+name:            exported_worker
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    $x1 = MOVi64imm 3
+    $x0 = MADDXrrr $x0, $x1, $xzr
+    RET_ReallyLR implicit killed $x0
+...
+---
+name:            calls_preserving
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    $x1 = MOVi64imm 5
+    $x0 = MADDXrrr $x0, $x1, $xzr
+    BL @preserving_worker, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit-def $x0
+    $x2 = MOVi64imm 7
+    $x0 = MADDXrrr $x0, $x2, $xzr
+    RET_ReallyLR implicit killed $x0
+...
+---
+name:            calls_owner
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    $x1 = MOVi64imm 5
+    $x0 = MADDXrrr $x0, $x1, $xzr
+    BL @exported_worker, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit-def $x0
+    $x2 = MOVi64imm 7
+    $x0 = MADDXrrr $x0, $x2, $xzr
+    RET_ReallyLR implicit killed $x0
+...
+---
+name:            calls_external
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    $x1 = MOVi64imm 5
+    $x0 = MADDXrrr $x0, $x1, $xzr
+    BL @ext_sink, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit-def $x0
+    $x2 = MOVi64imm 7
+    $x0 = MADDXrrr $x0, $x2, $xzr
+    RET_ReallyLR implicit killed $x0
+...
+---
+# The SQLCipher shape: the callee is a runtime value, so no per-callee analysis
+# can resolve it. libtomcrypt reaches AES exactly this way, through a
+# cipher_descriptor[] entry that register_cipher() writes at run time.
+name:            calls_indirect
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$x1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1
+
+    $x8 = COPY $x1
+    $x2 = MOVi64imm 5
+    $x0 = MADDXrrr $x0, $x2, $xzr
+    BLR $x8, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit-def $x0
+    $x3 = MOVi64imm 7
+    $x0 = MADDXrrr $x0, $x3, $xzr
+    RET_ReallyLR implicit killed $x0
+...

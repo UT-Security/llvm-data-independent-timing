@@ -23,6 +23,7 @@
 
 #include "llvm/CodeGen/TaintFixedPointIteration.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/MachineFunctionAnalysis.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -403,9 +404,10 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
                     [&](Function &F, MachineFunction &MF, const TaintResult &TR,
                         AAResults *AA) {
                       FunctionTaintSummary S = TSI.getSummary(F);
-                      S.PreservesDIT =
-                          TR.Merged.empty() ||
-                          !functionHasTaintedRuns(MF, TR, &TSI, AA);
+                      S.InstrumentedForDIT =
+                          !TR.Merged.empty() &&
+                          functionHasTaintedRuns(MF, TR, &TSI, AA);
+                      S.PreservesDIT = !S.InstrumentedForDIT;
                       TSI.storeSummary(F, S);
                     });
 
@@ -441,6 +443,142 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
         if (!F.isDeclaration())
           dbgs() << "  PreservesDIT(" << F.getName()
                  << ") = " << TSI.getSummary(F).PreservesDIT << "\n";
+    });
+  }
+
+  // Step 3b-2: Compute AlwaysEnteredWithDIT - the DIT ownership bit.
+  //
+  // THE RULE: only the frame that turned PSTATE.DIT on may turn it off. Today
+  // every instrumented function clears DIT before returning, so a callee reached
+  // from an enclosing DIT-on region destroys its caller's state; the caller
+  // repairs it with an after-call re-assert. That makes the switch count scale
+  // with the CALL count instead of the number of secret regions - measured at
+  // 1,792-4,352 switches per 4 KB page on SQLCipher, the same order as the
+  // encryption itself. It is also a soundness gap under region placement, where
+  // a callee's INTERNAL region ends clear DIT while the caller's secret is still
+  // live and nothing repairs it until after the call returns.
+  //
+  // A function is entered with DIT already on when it cannot be reached except
+  // through a secret-passing call. We require, conservatively:
+  //   * local linkage        - no caller outside this TU,
+  //   * address never taken  - no indirect call can reach it,
+  //   * >= 1 in-TU call site - otherwise it is dead or an entry point,
+  //   * EVERY in-TU call site passes a secret.
+  //
+  // The last condition is what ties this to DIT actually being on. What actually
+  // enforces it is the `|| MI.isCall()` term in needsDIT (TaintAnalysis.cpp),
+  // which makes a secret-passing call a Need, plus the region-placement
+  // soundness verifier, which falls back to whole-function coverage rather than
+  // leave a Need uncovered. Whole-function placement gets it trivially. Step 3c
+  // is a weaker check than it looks -- it only asserts the ENCLOSING function is
+  // instrumented, and it runs before any switch is placed, so it knows nothing
+  // about region boundaries. If needsDIT ever stops treating a secret-passing
+  // call as a Need, THIS BIT BECOMES UNSOUND; that term is load-bearing here.
+  //
+  // Retraction-shaped, like PreservesDIT above: seed the candidates optimistically
+  // and disqualify on evidence. A call site we fail to observe therefore cannot
+  // silently qualify a function - only observed secret-passing sites keep it.
+  if (TaintInsertDIT) {
+    // The retraction below can only disqualify a callee from call sites it
+    // actually walks, and forEachAnalyzed silently skips any function without a
+    // cached MachineFunction or taint result. A skipped caller could hold the
+    // one non-secret-passing call site that should have disqualified a callee,
+    // and marking it anyway means it stops clearing DIT and leaks the mode into
+    // ordinary public code. Cheaper to verify coverage once and stand down
+    // entirely than to reason about which callee a gap could have affected.
+    unsigned Defined = 0, Analyzed = 0;
+    for (const Function &F : M)
+      if (!F.isDeclaration())
+        ++Defined;
+    forEachAnalyzed(M, FAM, Results,
+                    [&](Function &, MachineFunction &, const TaintResult &,
+                        AAResults *) { ++Analyzed; });
+    const bool CoverageComplete = (Analyzed == Defined);
+    LLVM_DEBUG(if (!CoverageComplete) dbgs()
+               << "  AlwaysEnteredWithDIT disabled: " << Analyzed << "/"
+               << Defined << " defined functions analyzed\n");
+
+    SmallPtrSet<const Function *, 16> Candidates;
+    forEachAnalyzed(
+        M, FAM, Results,
+        [&](Function &F, MachineFunction &MF, const TaintResult &TR,
+            AAResults *AA) {
+          // An uninstrumented function emits no switches, so the bit would be
+          // moot; requiring instrumentation also keeps the consumer in
+          // TaintAnalysis.cpp simple.
+          if (!F.hasLocalLinkage() || F.hasAddressTaken() ||
+              !functionHasTaintedRuns(MF, TR, &TSI, AA))
+            return;
+
+          // RETRACT THROUGH TAIL CALLS. The bit records an ENTRY property ("DIT
+          // was already on when I was called"), but its consumer,
+          // calleeLeavesDITSet, needs an EXIT property ("I return with DIT
+          // still on") in order to drop the caller's re-assert. Those coincide
+          // only because a marked function emits no clear -- and a TAIL CALL
+          // breaks that, because it IS this function's exit and there is no
+          // instruction after it at which state could be restored. Control
+          // reaches the tail callee's own `MSR DIT, #0`, whose `ret` returns
+          // straight to OUR caller, which has already elided its re-assert. The
+          // caller then runs its secret code with DIT=0.
+          //
+          // Requiring PreservesDIT of the tail callee (i.e. it does not touch
+          // DIT at all) is deliberately stronger than necessary -- a tail callee
+          // that is itself marked also refrains from clearing -- but that is
+          // mutual recursion between the two bits, and this is the direction
+          // where being wrong costs the secret rather than a few cycles.
+          // Test: taint-analysis-dit-tailcall-ownership.mir.
+          for (const MachineBasicBlock &MBB : MF)
+            for (const MachineInstr &MI : MBB) {
+              if (!MI.isCall() || !MI.isReturn())
+                continue; // not a tail call
+              const Function *TailCallee = findCalledFunction(M, MI);
+              if (!TailCallee || !TSI.getSummary(*TailCallee).PreservesDIT)
+                return; // cannot guarantee we return with DIT still set
+            }
+
+          Candidates.insert(&F);
+        });
+
+    SmallPtrSet<const Function *, 16> Seen;
+    forEachAnalyzed(
+        M, FAM, Results,
+        [&](Function &, MachineFunction &MF, const TaintResult &TR,
+            AAResults *AA) {
+          if (Candidates.empty())
+            return;
+          const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
+          replayTaint(MF, TR, &TSI, AA, /*Post=*/{},
+                      /*Pre=*/[&](MachineInstr &MI, const TaintState &State) {
+                        if (!MI.isCall())
+                          return true;
+                        const Function *Callee = findCalledFunction(M, MI);
+                        if (!Callee || !Candidates.contains(Callee))
+                          return true;
+                        // Pre-state, for the same reason step 3c uses it: the
+                        // arguments are set up before the call, so the leaving
+                        // state would misread a tainted RETURN value as a
+                        // passed argument.
+                        if (taintedCallArguments(MI, State, TRI).any())
+                          Seen.insert(Callee);
+                        else
+                          Candidates.erase(Callee); // reached with DIT possibly off
+                        return true;
+                      });
+        });
+
+    for (Function &F : M) {
+      if (!CoverageComplete || F.isDeclaration() ||
+          !Candidates.contains(&F) || !Seen.contains(&F))
+        continue;
+      FunctionTaintSummary S = TSI.getSummary(F);
+      S.AlwaysEnteredWithDIT = true;
+      TSI.storeSummary(F, S);
+    }
+    LLVM_DEBUG({
+      for (Function &F : M)
+        if (!F.isDeclaration())
+          dbgs() << "  AlwaysEnteredWithDIT(" << F.getName()
+                 << ") = " << TSI.getSummary(F).AlwaysEnteredWithDIT << "\n";
     });
   }
 
@@ -618,6 +756,13 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
               });
         });
   }
+
+  // Truncate the DIT re-assert report before the per-function passes append to
+  // it, matching TaintOutputFile below. Without this a second compilation into
+  // the same path, or a multi-file build, lists every call site N times and the
+  // toggle cost reads N-fold inflated.
+  if (TaintInsertDIT)
+    openTaintReport(TaintDITReassertReportFile, "DIT re-assert report");
 
   // Step 4: Export tainted instructions to file
   if (!TaintOutputFile.empty()) {
