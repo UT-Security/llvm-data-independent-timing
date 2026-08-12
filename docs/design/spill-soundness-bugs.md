@@ -76,7 +76,7 @@ After a call that sets `ExternalMemClobbered`, **every** stack reload in that fu
 treated as secret regardless of cell — including reloads of public spilled values. Sound,
 but coarse, and it is what makes the whole-frame `frameMayHoldSecret()` test in the
 frame-address fallback so blunt. Making it per-object requires P1b (precise application
-of `WritesSecretThroughArgPointee`); see `taint_frame_addr_fallback.md`.
+of `WritesSecretThroughArgPointee`); see `docs/design/frame-addr-fallback.md`.
 
 ## Method note
 

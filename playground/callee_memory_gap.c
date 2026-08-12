@@ -46,5 +46,5 @@ int via_indirect(int secret, fp_t f) {
  * secret through a pointer arg gets a WritesSecretToUnknown mod-set) -- see the
  * intu_copy case in llvm/test/CodeGen/AArch64/taint-analysis-callee-memory.mir.
  * P0 is blunt (whole-object, no arg-i precision); design + P1 refinements:
- * utils/taint_memory_summary_research.md
+ * docs/research/memory-summaries.md
  * ------------------------------------------------------------------------- */

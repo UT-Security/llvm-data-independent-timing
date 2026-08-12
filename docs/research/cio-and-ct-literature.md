@@ -1,7 +1,7 @@
 # CIO and the constant-time / speculative-execution literature: what they do at calls
 
 **Date:** 2026-07-14  
-**Companion to:** `utils/taint_memory_summary_research.md` (general taint literature)  
+**Companion to:** `docs/research/memory-summaries.md` (general taint literature)  
 **Status:** research complete; design NOT yet implemented.
 
 Seeded on the paper the project lead identified as the closest prior work ("CIO", Kohlbrenner),

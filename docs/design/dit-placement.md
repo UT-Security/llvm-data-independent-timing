@@ -100,7 +100,7 @@ project (speculation is out of scope; the ISB/DSB placeholder for it was removed
 a `-taint-uncovered-report=<file>` report that emits an `UNCOVERED
 <not-dit-covered|secret-address|secret-branch>` line per tainted-but-unprotected
 instruction, instead of silently counting them protected. The hook is a
-**membership list** against the Arm DIT covered set (`utils/taint_dit_spec.md`):
+**membership list** against the Arm DIT covered set (`docs/reference/dit-spec.md`):
 it returns true only for the enumerated covered integer data-processing, for
 loads/stores (data value, by class), and for FP/SIMD data-processing (by class,
 minus the explicitly-excluded divide/sqrt), and **defaults to uncovered** so an
@@ -141,7 +141,7 @@ mode; (b) **this ambient coverage is automatic ONLY under function granularity.*
 See the "Scenario B invariant" box below.
 
 > **DESIGN DECISIONS (2026-07-15) — memory-effects soundness fix.** Discussed and
-> locked; see `taint_memory_summary_research.md` for the domain design.
+> locked; see `docs/research/memory-summaries.md` for the domain design.
 >
 > - **Unknown callees (external decl / indirect `BLR`) get blunt TOP in P0.** Any
 >   tainted argument at such a call ⇒ assume it wrote a secret to every escaped
@@ -190,7 +190,7 @@ This section used to hypothesize that dwell is near-free pending measurement on
 FEAT_DIT hardware. **The hypothesis was wrong.** With DIT fully on, **some SPEC
 2026 benchmarks lose ~15%** (measured by the project owner). Dwell is real,
 workload-dependent, and is exactly the cost that narrowing placement to the
-tainted region buys back. Data and caveats: `utils/taint_dit_cost_model.md`.
+tainted region buys back. Data and caveats: `docs/results/dit-cost-model.md`.
 
 Consequences for this document:
 - The objective has **two competing terms**, and §5's design must optimize both:
@@ -270,7 +270,7 @@ framework.
 
 ### 5.1 Instruction classifier — **BUILT (Track C, 2026-07-16); it gates placement**
 The classifier is the already-shipped `TargetInstrInfo::isDITProtected(MI)`
-membership hook (`utils/taint_dit_spec.md`, `classifyDITUncovered`,
+membership hook (`docs/reference/dit-spec.md`, `classifyDITUncovered`,
 `-taint-uncovered-report`). §5 does **not** re-implement it — it *consumes* it.
 
 **Coverability gates region creation — the load-bearing rule for §5.** A tainted

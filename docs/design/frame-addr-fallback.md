@@ -1,7 +1,7 @@
 # The frame-address fallback (`-taint-frame-addr-args`)
 
 > Numbers below are the **re-measurement of 2026-07-27, after** the two soundness bugs
-> in `taint_spill_soundness_bugs.md` were fixed. (The pre-fix run gave 49% -> 84% recall
+> in `docs/design/spill-soundness-bugs.md` were fixed. (The pre-fix run gave 49% -> 84% recall
 > at 112 -> 287 functions — qualitatively identical, so those bugs did not drive this
 > result. The only table still holding pre-fix numbers is the alloca one, labelled.)
 
@@ -211,5 +211,5 @@ frame.
 The static cost is modest (+3.88% code size, still far under CIO's +62%/+208%/+266%).
 The **dwell** cost is not readable from these numbers: 2,411 toggles × ~30 cyc plus
 substantially more time under DIT. That needs the runtime harness
-(`utils/taint_dit_cost_model.md`), and it is the number that should decide whether this
+(`docs/results/dit-cost-model.md`), and it is the number that should decide whether this
 ships on by default, ships with option-2 precision, or stays opt-in.

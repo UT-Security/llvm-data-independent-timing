@@ -28,7 +28,7 @@ namespace llvm {
 /// it returns. This is the callee->caller-through-memory transfer the register
 /// summary cannot express; without it a callee that writes a secret into
 /// caller-visible memory leaves the caller's reload untainted (the open
-/// unsoundness fixed by this component). See utils/taint_memory_summary_research.md.
+/// unsoundness fixed by this component). See docs/research/memory-summaries.md.
 ///
 /// The design is deliberately blunt in P0 (2026-07-15): no per-argument or
 /// per-offset precision, weak updates only. Every truncation over-approximates
@@ -40,7 +40,7 @@ struct FunctionMemEffects {
   SmallPtrSet<const GlobalVariable *, 4> WritesSecretToGlobal;
 
   /// Indices of pointer arguments through whose pointee the function may write a
-  /// secret (P1 argument-provenance mod-set, utils/taint_memory_summary_research.md
+  /// secret (P1 argument-provenance mod-set, docs/research/memory-summaries.md
   /// §11/P1). Precise alternative to WritesSecretToUnknown for the canonical
   /// callee->caller-through-memory write (a store through a pointer parameter).
   /// Populated for DIRECT stores whose destination resolves (via the MMO's

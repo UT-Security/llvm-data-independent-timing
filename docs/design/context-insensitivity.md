@@ -64,7 +64,7 @@ Context-sensitivity is the real answer, but the cheap 80% is **P1b**: apply
 `WritesSecretThroughArgPointee{i}` to the *object the caller actually passed for argument
 i*, instead of collapsing it to a whole-function `ExternalMemClobbered`. A caller that
 passed only public buffers then absorbs nothing. That also makes the frame-address
-fallback per-object rather than whole-frame (`taint_frame_addr_fallback.md`), which is
+fallback per-object rather than whole-frame (`docs/design/frame-addr-fallback.md`), which is
 what its 9.1× instruction-volume cost is paying for.
 
 A cheaper stopgap worth measuring first: gate mod-set application on whether **this** call

@@ -2,7 +2,7 @@
 
 # Function-granularity PSTATE.DIT mode — the project's only protection
 # mechanism (the per-region ISB/DSB speculation-barrier mode was a placeholder
-# for this toggle and was removed on 2026-07-14; see utils/taint_handoff.md).
+# for this toggle and was removed on 2026-07-14; see docs/handoff.md).
 # A function containing any tainted instruction gets MSR DIT, #1 as its first
 # instruction and MSR DIT, #0 immediately before every return. An untainted
 # function is untouched. No ISB/DSB is ever emitted.
@@ -11,7 +11,7 @@
 # immediately after it: the callee may have cleared DIT on its own exit
 # (PSTATE.DIT has no callee-saved convention), which would leave the caller's
 # remaining tainted instructions unprotected (gap G1 in
-# utils/taint_dit_placement.md).
+# docs/design/dit-placement.md).
 #
 # The re-assert is elided when the callee provably preserves DIT
 # (PreservesDIT summary bit): in-TU, not instrumented itself, and only makes

@@ -1,7 +1,7 @@
 # REQUIRES: asserts
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -debug-only=taint-analysis %s -o /dev/null 2>&1 | FileCheck %s
 
-# P1a (argument-provenance memory effects, utils/taint_memory_summary_research.md
+# P1a (argument-provenance memory effects, docs/research/memory-summaries.md
 # P1). A store of a secret through a POINTER ARGUMENT is the canonical
 # callee->caller-through-memory write. Before P1a it was summarized as blunt TOP
 # (WritesSecretToUnknown) because the mod-set had no way to name the argument; now

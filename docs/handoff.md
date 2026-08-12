@@ -1,11 +1,11 @@
 # Session handoff — taint analysis / DIT hardening
 
-> ⚠️ **STALE (2026-07-14). The current entry point is `utils/taint_OVERVIEW.md`.**
+> ⚠️ **STALE (2026-07-14). The current entry point is `docs/overview.md`.**
 > Much below is out of date: the callee→caller memory bug is FIXED, region
 > placement is now the default (not function granularity), tests are 22 (not 12),
 > and the flood attribution here/elsewhere was corrected (it was the `$lr` seeding
 > bug, not the memory model). Kept only for historical context — the M4 rationale
-> and the prior-art reading order are still useful. **Read `taint_OVERVIEW.md` first.**
+> and the prior-art reading order are still useful. **Read `docs/overview.md` first.**
 
 **Written:** 2026-07-14, on the Linux dev box (Neoverse N1, **no FEAT_DIT**).
 **For:** a fresh Claude Code session on an **Apple M4 Mac mini** after cloning this repo.
@@ -33,7 +33,7 @@ kernel / BoringSSL do by hand) is expensive. The project's entire value is enabl
 research report's "is secret-awareness paying for itself?" question in the affirmative:
 yes, because the secret-agnostic baseline (DIT always on) is the expensive thing we avoid.
 
-**Both halves are now backed by numbers** (`utils/taint_dit_cost_model.md`):
+**Both halves are now backed by numbers** (`docs/results/dit-cost-model.md`):
 - **Toggle:** ~30 cycles, fully serializing, ~30× a `bl`+`ret` (measured, M4).
 - **Dwell:** **up to ~15% on some SPEC 2026 benchmarks** with DIT fully on (measured by
   the project owner). This is the cost secret-aware placement exists to avoid.
@@ -75,18 +75,18 @@ silicon retire the premise.
 
 ## The three research reports (committed, read in this order)
 
-1. `utils/taint_memory_summary_research.md` — general interprocedural-taint-through-memory
+1. `docs/research/memory-summaries.md` — general interprocedural-taint-through-memory
    literature. Recommends a coarse **mod-set summary**: `{writes-secret-through-arg i}` +
    `{writes-secret-to-global g}` + `{writes-secret-to-unknown-memory}`, TOP default for
    external decls and unresolved indirect calls, refined by a libc model table and LLVM's
    `memory(...)`/`writeonly`/`argmemonly` attributes. This is the fix for the open bug.
-2. `utils/taint_cio_and_ct_literature.md` — the CIO paper (Flanders/Kohlbrenner ASPLOS'24)
+2. `docs/research/cio-and-ct-literature.md` — the CIO paper (Flanders/Kohlbrenner ASPLOS'24)
    dissected. **Same threat model as ours.** Closest prior work on level (post-regalloc
    MIR, chosen for spills — endorses our level choice verbatim). But CIO analyzes the whole
    *binary* in BAP (no per-function summary needed), rejected DIT on hardware-availability
    grounds, and paid **27.84× worst-case** for software instruction substitution instead.
    With FEAT_DIT available we solve CIO's problem far more cheaply — that is the story.
-3. `utils/taint_ct_call_handling.md` — what the CT/Spectre tools do at a call. **Jasmin
+3. `docs/research/ct-call-handling.md` — what the CT/Spectre tools do at a call. **Jasmin
    selSLH independently re-derived our exact mod-set summary** (per-function effect + TOP
    for the one opaque callee); FaCT confirms the arg-indexed half; **DECLASSIFLOW (CCS'23)
    published both the summary idea AND our exact "does not model memory contents"
@@ -96,7 +96,7 @@ silicon retire the premise.
 ## Next actions, in priority order
 
 1. **MEASURE — toggle half DONE (2026-07-14, M4), dwell half OWNED BY SPEC 2026.**
-   `toggle ≈ 30 cyc, fully serializing` → `utils/taint_dit_cost_model.md`, benchmarks in
+   `toggle ≈ 30 cyc, fully serializing` → `docs/results/dit-cost-model.md`, benchmarks in
    `playground/dit_bench/`. Dwell is **not** ~0 (the microkernels' ~0 is a benchmark blind
    spot — read the doc's "History" section before trusting any dwell microbenchmark).
 2. **Fix the soundness hole** (mod-set memory-effects summary, report #1). Independent of the

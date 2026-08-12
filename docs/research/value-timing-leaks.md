@@ -13,8 +13,8 @@ integer arithmetic.
 
 This is the literature backing for **why this project exists** — the taint+DIT
 work is the mitigation for exactly this class of leak. Complements
-`taint_cio_and_ct_literature.md` (CIO, the closest prior tool) and
-`taint_dit_cost_model.md` (why we don't just DIT-everywhere).
+`docs/research/cio-and-ct-literature.md` (CIO, the closest prior tool) and
+`docs/results/dit-cost-model.md` (why we don't just DIT-everywhere).
 
 ---
 
@@ -305,7 +305,7 @@ No verified source addressed the kernel domain at all.
   different filter — state which one you mean.
 - LVP ships in **no** commercial CPU; all IPC numbers assume idealized µarch.
   "Emerging threat" is forward-looking (which is the whole point — this project
-  is 5+ year forward-looking; see `taint_handoff.md`).
+  is 5+ year forward-looking; see `docs/handoff.md`).
 
 ---
 
@@ -320,7 +320,7 @@ No verified source addressed the kernel domain at all.
    hypothesis to demonstrated for one unit (AMX zero-skip). Re-running that
    methodology against the *software* int8/int-multiply kernels (not just the
    accelerator) is the concrete next study.
-3. **A good DIT-sensitive benchmark** (the `taint_dit_cost_model.md` gap) likely
+3. **A good DIT-sensitive benchmark** (the `docs/results/dit-cost-model.md` gap) likely
    lives in exactly these domains — ML int8 MAC, codec convolution — where the
    secret-bearing arithmetic is hot and, on zero-skipping/value-predicting
    hardware, genuinely value-dependent. Finding one closes both the "price the

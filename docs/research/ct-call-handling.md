@@ -1,8 +1,8 @@
 # What the Spectre / constant-time hardening tools do AT A CALL — and where our design sits
 
 **Date:** 2026-07-14
-**Companion to:** `utils/taint_memory_summary_research.md` (general taint literature),
-`utils/taint_cio_and_ct_literature.md` (CIO anchor)
+**Companion to:** `docs/research/memory-summaries.md` (general taint literature),
+`docs/research/cio-and-ct-literature.md` (CIO anchor)
 **Status:** research complete; design NOT yet implemented.
 
 Targeted primary-source dissection (47 agents; each system's paper/source FETCHED and quoted,

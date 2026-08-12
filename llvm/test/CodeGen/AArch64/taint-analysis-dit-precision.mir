@@ -17,7 +17,7 @@
 # finer placement raises precision and costs more toggles. Measured on libsodium's
 # chacha20_encrypt_bytes_ref, region placement buys 5.4 points of precision for 11x
 # the toggles — which is why it loses on serializing-DIT hardware.
-# See utils/taint_dit_precision.md.
+# See docs/design/dit-precision.md.
 
 # `mixed` has one tainted ADD among four public instructions.
 #
