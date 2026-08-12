@@ -12,7 +12,7 @@
 # function granularity (the per-region ISB/DSB mode was removed on 2026-07-14),
 # so this checks the regions report, which is what -taint-region-merge-gap still
 # feeds and what cost-model-driven region placement will consume. See
-# utils/taint_dit_cost_model.md and utils/taint_dit_placement.md.
+# docs/results/dit-cost-model.md and docs/design/dit-placement.md.
 
 # Gap 0: four separate single-instruction regions, one per tainted instruction.
 # GAP0: # Region 1 (bundle_gap)

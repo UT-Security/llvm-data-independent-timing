@@ -14,7 +14,7 @@
 # THE THESIS UNDER TEST: a taint-driven policy (B/D/E) should cost less than blanket
 # DIT (C) while protecting the same secrets. That holds only where dwell > 0. On a
 # DIT-INSENSITIVE workload C is free and every toggle we add is pure loss --
-# see utils/taint_dit_cost_model.md before interpreting any result here.
+# see docs/results/dit-cost-model.md before interpreting any result here.
 #
 # USAGE
 #   utils/taint_libsodium_bench.sh
@@ -167,7 +167,7 @@ done
 cat <<EOF
 
 MEDIAN of $REPS reported (not min -- min latches onto cold-start outliers; see the
-argon2id note in utils/taint_dit_cost_model.md). Runs are interleaved round-robin so
+argon2id note in docs/results/dit-cost-model.md). Runs are interleaved round-robin so
 thermal drift hits every configuration equally.
 Units = cntvct_el0 ticks/op = NANOSECONDS here (cntfrq_el0 is 1 GHz on M4, though the
 counter advances in 41 ns steps). It measures TIME, not cycles: it is DVFS-independent,
@@ -177,5 +177,5 @@ Raw per-rep samples: $OUT/*.raw
 Reading the result: if C/A ~ 1.00 the workload is DIT-INSENSITIVE, blanket DIT is
 free, and every taint-driven policy is pure overhead -- that is a property of the
 workload, not a refutation of the approach. Fine-grained placement only pays where
-dwell is real (LVP-heavy code, some SPEC 2026). See utils/taint_dit_cost_model.md.
+dwell is real (LVP-heavy code, some SPEC 2026). See docs/results/dit-cost-model.md.
 EOF

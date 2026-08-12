@@ -7120,7 +7120,7 @@ static bool usesOrDefsFPReg(const MachineInstr &MI) {
 }
 
 bool AArch64InstrInfo::isDITProtected(const MachineInstr &MI) const {
-  // Membership list against the Arm DIT covered set (utils/taint_dit_spec.md):
+  // Membership list against the Arm DIT covered set (docs/reference/dit-spec.md):
   // return true ONLY for instructions the spec guarantees are timing-independent
   // of non-address register data values, and DEFAULT FALSE so an instruction we
   // cannot place in the covered set is flagged for audit rather than silently

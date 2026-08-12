@@ -274,6 +274,6 @@ speedup for Mode 2 without running one.**
    cold sites and neither hot one. The answer likely depends on whether the
    target workload's crypto is reached directly or through a dispatch table.
 
-See also `taint_dit_placement.md` (placement state and gaps),
-`taint_dit_cost_model.md` (the toggle/dwell terms and the `MRS` measurement),
-`taint_dit_tailcall_gap.md` (the other DIT state-management bug).
+See also `docs/design/dit-placement.md` (placement state and gaps),
+`docs/results/dit-cost-model.md` (the toggle/dwell terms and the `MRS` measurement),
+`docs/design/dit-tailcall-gap.md` (the other DIT state-management bug).

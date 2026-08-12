@@ -81,7 +81,7 @@ This is a *cost*, not a hole, which is why it is accepted. But it means:
 - **The leak is currently silent.** It should be surfaced in
   `-taint-callsite-report` as an ESCAPE-class line. Not yet implemented.
 - On serializing-DIT hardware (Apple M4, where `MSR DIT` is ~30 cyc — see
-  `taint_dit_cost_model.md`) the leak is nearly free, since the cost there is the
+  `docs/results/dit-cost-model.md`) the leak is nearly free, since the cost there is the
   toggle, not the dwell. On hardware where DIT disables value prediction, the
   dwell is what costs, and a leak past a hot uninstrumented callee could be
   expensive. No workload has been measured where this dominates.

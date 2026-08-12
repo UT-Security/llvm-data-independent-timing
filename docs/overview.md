@@ -1,7 +1,7 @@
 # Interprocedural Taint Analysis + PSTATE.DIT Hardening — Consolidated Overview
 
 **This is the single entry-point document.** Read it first. It supersedes the stale
-`taint_handoff.md` (2026-07-14). Last updated **2026-08-05**.
+`docs/handoff.md` (2026-07-14). Last updated **2026-08-05**.
 Branch: `interproc_taint` (**all work goes here** — `main` is the upstream LLVM mirror and
 has never carried taint work). Target arch: **AArch64 only**.
 
@@ -47,7 +47,7 @@ DOIT are built to suppress.
   (LVP)**; DIT disables it (FLOP, USENIX Sec'25). A constant-trained load leaks via timing
   even for a pure copy of secret pixels. Firefox's SVG-filter pixel-stealing (subnormal-FP →
   "fixed" with integer arithmetic) is reopened by the LVP on the integer code. See
-  `utils/taint_value_timing_leaks_research.md`.
+  `docs/research/value-timing-leaks.md`.
 
 ## 3. How to run it
 
@@ -91,7 +91,7 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
 | `-taint-dit-switch-cyc` (default 0), `-taint-dit-dwell-per-instr` (default 1.0) | cost-model knobs for region merging admission. |
 | `-taint-annotation-driven` | **default false (= sound mode).** Opt-in: trust annotations, suppress cross-function memory poison at consumption. See §6. |
 | `-taint-call-arg-precise` (default true, hidden) | A/B toggle for "fix B"; `=0` restores the blunt any-live-register call trigger. |
-| `-taint-frame-addr-args` (**default false**, hidden) | **Prototype.** Treat a stack/frame address passed as a call argument as pointee-tainted when the frame may hold a secret — closes the `f(&local_secret)` under-taint. Recall vs CIO 48%→84%, but 9.1× taint volume. See `utils/taint_frame_addr_fallback.md`. |
+| `-taint-frame-addr-args` (**default false**, hidden) | **Prototype.** Treat a stack/frame address passed as a call argument as pointee-tainted when the frame may hold a secret — closes the `f(&local_secret)` under-taint. Recall vs CIO 48%→84%, but 9.1× taint volume. See `docs/design/frame-addr-fallback.md`. |
 | `-taint-callsite-report=F` | ESCAPE report: secrets passed to callees we can't instrument. |
 | `-taint-uncovered-report=F` | tainted instrs DIT can't protect (divide/sqrt, secret-address, secret-branch). |
 | `-taint-clobber-report=F` | call sites that make the caller treat memory as secret (taint-explosion sources). |
@@ -187,9 +187,9 @@ the TUs measured, so annotation-driven is opt-in insurance rather than load-bear
   dominates ours on both cost *and* coverage. This is what the model predicts when
   `dwell ≈ 0` — not a refutation — but it means **the shipped defaults are mistuned for
   real serializing hardware**, and no measured workload yet justifies fine placement.
-  Full table + caveats: `utils/taint_dit_cost_model.md`.
+  Full table + caveats: `docs/results/dit-cost-model.md`.
 
-Full detail: `utils/taint_dit_cost_model.md`, `utils/taint_dit_placement.md`.
+Full detail: `docs/results/dit-cost-model.md`, `docs/design/dit-placement.md`.
 
 ## 8. Key mechanisms & the most recent fixes (this session, 2026-07-24→26)
 
@@ -295,7 +295,7 @@ could never leave a register. **−33% tainted instructions** once fixed.
 **Bug B — narrowed reload of a spilled secret (UNDER-taint = leaked secret).** Cell lookup
 required an exact `(FI,offset,size)` match, so spill-8/reload-low-4 returned the secret as
 public. Read path now tests overlap; clear path stays exact-match.
-Both in `utils/taint_spill_soundness_bugs.md`, both regression-tested, each test verified to
+Both in `docs/design/spill-soundness-bugs.md`, both regression-tested, each test verified to
 **fail against the pre-fix code**. That doc also records what spilling *does* do correctly,
 and a method note (rematerialization defeated the first repro).
 
@@ -342,7 +342,7 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
    Measured on libsodium: **48 of 63** (fallback off) and **169 of 199** (fallback on) of
    the functions we instrument but CIO does not are outside the seed call-graph closure
    entirely. Bigger than every other over-taint source measured. See
-   `utils/taint_context_insensitivity.md`.
+   `docs/design/context-insensitivity.md`.
 7. **P1 memory precision deferred:** the mod-set is blunt (whole-object, weak updates, every
    truncation → TOP). Precise arg-i / per-offset provenance + a libc model table are P1;
    note that at the MIR stage, `getUnderlyingObject` often can't reach the `Argument` through
@@ -367,7 +367,7 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 
 ### Next actions, in priority order
 
-1. ~~**Measure RUNTIME.**~~ **DONE 2026-08-03 — see §7 and `taint_dit_cost_model.md`.**
+1. ~~**Measure RUNTIME.**~~ **DONE 2026-08-03 — see §7 and `docs/results/dit-cost-model.md`.**
    Result was a negative on libsodium: coarse DIT is free (0.998–1.003x), taint-driven
    placement costs +45%..+94% at the shipped defaults. Run it yourself with
    `utils/taint_libsodium_bench.sh`. **Two follow-ups this created:**
@@ -382,7 +382,7 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
    executed toggles relative to runtime, so short operations pay and long ones do not.
    ⚠️ Getting this number required fixing two harness bugs (variant-outer loop confounded
    config with thermal drift; `min`-of-N latched onto a cold-start outlier) — both
-   documented in `taint_dit_cost_model.md`, both fixed in the script.
+   documented in `docs/results/dit-cost-model.md`, both fixed in the script.
    No `sudo` ⇒ no kperf cycles; re-run with `sudo -E` for real cycle counts.
 2. **Attack the context-insensitivity FP source (§9.6)** — the largest measured over-taint
    source. Cheap probe first: gate mod-set application on whether *this* call site passes a
@@ -391,7 +391,7 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
    behind a flag next to `-taint-annotation-driven` and treat the delta as an upper bound on
    what precise application could buy.
 3. **Provenance recovery, THEN P1b.** Note the correction in
-   `utils/taint_context_insensitivity.md`: only **17 of 583** secret-writing call sites
+   `docs/design/context-insensitivity.md`: only **17 of 583** secret-writing call sites
    resolve provenance to an argument at all (566 are TOP). So P1b — precise application of
    `WritesSecretThroughArgPointee` — currently has almost nothing to act on; it is worth
    doing only after more stores resolve to arg-*i*, which likely means analyzing at IR and
@@ -399,7 +399,7 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 4. **A DIT-sensitive real workload is now THE blocking gap — promote it.** Three
    workloads have come back insensitive: `firefox_convolve_int` 0.968x, the int8 MAC
    gate **1.000x** (run 2026-08-03, previously never run — results now in
-   `taint_dit_cost_model.md`), and libsodium **0.998–1.003x**. Until one is found,
+   `docs/results/dit-cost-model.md`), and libsodium **0.998–1.003x**. Until one is found,
    fine-grained placement cannot be shown to win on *anything*, and the honest position
    is that coarse DIT is the better engineering choice on every workload measured. The
    LVP pointer-chase (**4.00x**) is the one confirmed sensitive pattern — find a real
@@ -425,21 +425,21 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 
 ## 12. Deeper reference docs (this doc is the map; these are the territory)
 
-- `utils/taint_dit_spec.md` — what PSTATE.DIT actually guarantees (covered set; excludes
+- `docs/reference/dit-spec.md` — what PSTATE.DIT actually guarantees (covered set; excludes
   divide/sqrt; address-timing not covered). `isDITProtected` is transcribed from this.
-- `utils/taint_dit_placement.md` — placement state, gaps (G1/G2/G3), optimal-placement design.
-- `utils/taint_dit_cost_model.md` — toggle (~30 cyc) + dwell (~15% SPEC), the measured numbers.
-- `utils/taint_value_timing_leaks_research.md` — motivation: LVP, Firefox, THOR/AMX.
-- `utils/taint_memory_summary_research.md` — mod-set summary design + P1 refinements.
-- `utils/taint_context_insensitivity.md` — **the dominant false-positive source**, measured,
+- `docs/design/dit-placement.md` — placement state, gaps (G1/G2/G3), optimal-placement design.
+- `docs/results/dit-cost-model.md` — toggle (~30 cyc) + dwell (~15% SPEC), the measured numbers.
+- `docs/research/value-timing-leaks.md` — motivation: LVP, Firefox, THOR/AMX.
+- `docs/research/memory-summaries.md` — mod-set summary design + P1 refinements.
+- `docs/design/context-insensitivity.md` — **the dominant false-positive source**, measured,
   with the correction that P1b is a much smaller lever than assumed (17 of 583 sites).
-- `utils/taint_spill_soundness_bugs.md` — the two 2026-07-27 bugs, what spilling *does* do
+- `docs/design/spill-soundness-bugs.md` — the two 2026-07-27 bugs, what spilling *does* do
   correctly, and how to force a real spill (rematerialization defeats the naive attempt).
-- `utils/taint_frame_addr_fallback.md` — the `-taint-frame-addr-args` prototype: the
+- `docs/design/frame-addr-fallback.md` — the `-taint-frame-addr-args` prototype: the
   `f(&local_secret)` gap, why the frame is more trackable than assumed, measured cost.
-- `utils/taint_ct_call_handling.md`, `utils/taint_cio_and_ct_literature.md` — prior art
+- `docs/research/ct-call-handling.md`, `docs/research/cio-and-ct-literature.md` — prior art
   (CIO/Jasmin/FaCT/DECLASSIFLOW); read before any novelty claim.
-- `utils/taint_firefox_integration.md` — Firefox integration guide.
+- `docs/reference/firefox-integration.md` — Firefox integration guide.
 
 ## 13. Working preferences (carry these forward)
 

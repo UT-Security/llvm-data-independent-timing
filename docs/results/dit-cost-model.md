@@ -6,7 +6,7 @@
 Frequency calibrated per run against a dependent `add` chain (3.94 GHz observed).
 
 This file addresses the question every DIT placement decision was blocked on
-(`taint_dit_placement.md` §4 P2, handoff next-action #1): **what does DIT cost?**
+(`docs/design/dit-placement.md` §4 P2, handoff next-action #1): **what does DIT cost?**
 It answers the *toggle* half. It does **not** answer the *dwell* half — see the
 warning immediately below.
 
@@ -84,7 +84,7 @@ are not free either.
 
 **The cleanest DIT-sensitive workload is LVP-predictable pointer chasing** (measured
 2026-07-15 on M4; `playground/dit_bench/lvp_dit.c`, reproduced). The M4 has a Load
-Value Predictor (FLOP, USENIX Sec'25; see `taint_value_timing_leaks_research.md`),
+Value Predictor (FLOP, USENIX Sec'25; see `docs/research/value-timing-leaks.md`),
 and **DIT disables it**. On a self-dependent load chase over a constant-valued
 L1-resident array, DIT-on vs DIT-off is **0.999 → 3.999 cyc/hop = 4.00× dwell
 cost** — identical code/data/cache, so unambiguously the LVP. This is the largest
@@ -212,7 +212,7 @@ seconds, so there is no room for thermal drift.
 `cost = toggles×30cyc + dwell×time` predicts when `dwell ≈ 0`, and the value
 proposition was always conditional on dwell being real. What it establishes is that
 **libsodium-on-M4 cannot justify fine-grained placement**, and it puts a number behind
-`taint_ct_call_handling.md` §5.2's warning: *"it is worth approximately nothing on DIT
+`docs/research/ct-call-handling.md` §5.2's warning: *"it is worth approximately nothing on DIT
 unless DIT-everywhere is measurably expensive."* On DIT-insensitive workloads the
 analysis's value is the **audit** output (ESCAPE / UNCOVERED / CLOBBER), not speed.
 
@@ -343,7 +343,7 @@ real optimization problem rather than a "just coarsen it" problem:
    only worth creating if it removes more than ~60 cycles' worth of dwell from
    the covered code. That is the concrete admission test the current hand-tuned
    `-taint-region-merge-gap` knob is a proxy for — and now it can be derived
-   instead of guessed. `taint_dit_placement.md` §5's lazy-code-motion design
+   instead of guessed. `docs/design/dit-placement.md` §5's lazy-code-motion design
    still applies; its objective just gains the dwell term rather than minimizing
    toggles alone.
 2. **Coarsening is still right *within* the call graph, where it is free.**
@@ -360,7 +360,7 @@ real optimization problem rather than a "just coarsen it" problem:
    of secret-aware placement trends up with it. No measurement on today's silicon
    — favourable or not — should be read as a statement about that trajectory.
 4. **Beyond performance, the taint analysis is load-bearing for correctness:** the
-   `ESCAPE` call-site report, and `taint_dit_placement.md` §3 G2 — a tainted
+   `ESCAPE` call-site report, and `docs/design/dit-placement.md` §3 G2 — a tainted
    `SDIV`/`UDIV` is **not** covered by DIT, so DIT-everywhere is *silent false
    assurance*, while the analysis can point at the uncovered instruction.
 

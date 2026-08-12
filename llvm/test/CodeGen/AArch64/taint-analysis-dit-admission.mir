@@ -1,7 +1,7 @@
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=region -taint-dit-switch-cyc=30 -taint-dit-dwell-per-instr=0 %s -o - | FileCheck %s --check-prefix=MERGE
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=region -taint-dit-switch-cyc=30 -taint-dit-dwell-per-instr=1000 %s -o - | FileCheck %s --check-prefix=SPLIT
 
-# Track B increment (c): the admission test (utils/taint_dit_placement.md §5.6).
+# Track B increment (c): the admission test (docs/design/dit-placement.md §5.6).
 # @corridor has two DIT Needs — a tainted ADD in bb.0 and another in bb.2 —
 # separated by a clean public corridor (bb.1). Whether bb.1 is merged into the DIT
 # region is a cost decision driven by -taint-dit-dwell-per-instr: the toggle PAIR

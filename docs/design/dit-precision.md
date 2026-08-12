@@ -37,7 +37,7 @@ utils/taint_dit_precision.py region=r.txt function=f.txt
 ## Precision alone is a trap — it trades against switch count
 
 The two terms pull in opposite directions, and that tension *is* the placement
-problem (`taint_dit_cost_model.md`). Whole libsodium, both policies:
+problem (`docs/results/dit-cost-model.md`). Whole libsodium, both policies:
 
 | | region | function |
 |---|---|---|

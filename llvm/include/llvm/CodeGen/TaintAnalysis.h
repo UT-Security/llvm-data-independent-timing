@@ -57,7 +57,7 @@ extern cl::opt<std::string> TaintSourceRegionsOutputFile;
 /// DIT (data-independent timing) is the project's only protection mechanism.
 /// The ISB/DSB speculation-barrier mode that used to sit behind
 /// -taint-barrier-mode was a placeholder for this toggle and was removed on
-/// 2026-07-14; speculation defense is not in scope (see utils/taint_handoff.md).
+/// 2026-07-14; speculation defense is not in scope (see docs/handoff.md).
 /// Without this flag, codegen is unchanged and only the report files are
 /// produced.
 extern cl::opt<bool> TaintInsertDIT;
@@ -91,7 +91,7 @@ extern cl::opt<std::string> TaintDITPrecisionReportFile;
 /// hardened build toggles as often as it does, and the list of places the
 /// proposed runtime-MRS mode would help. That mode is DESIGNED BUT NOT
 /// IMPLEMENTED -- there is no flag for it yet; see
-/// utils/taint_dit_callee_ownership.md.
+/// docs/design/dit-callee-ownership.md.
 ///
 /// TRUNCATED per compiler invocation, like the other taint reports. A multi-TU
 /// build pointing every TU at one path therefore keeps only the LAST TU's sites;
@@ -106,7 +106,7 @@ extern cl::opt<std::string> TaintDITReassertReportFile;
 /// for a call it has no information about — an under-taint, i.e. a leaked
 /// secret (the ed25519 nonce -> ge25519_scalarmult_base case). Off by default
 /// while the over-taint cost is being measured; -taint-frame-addr-args=1
-/// enables it. See utils/taint_frame_addr_fallback.md.
+/// enables it. See docs/design/frame-addr-fallback.md.
 extern cl::opt<bool> TaintFrameAddrArgs;
 
 /// Command-line option for the memory-clobber report: every call site that
@@ -593,7 +593,7 @@ unsigned exportTaintSourceRegions(MachineFunction &MF, const TaintResult &TR,
 /// Instrument MF with PSTATE.DIT mode switches if it contains any tainted
 /// instruction: MSR DIT, #1 at entry, MSR DIT, #0 before every return, and a
 /// re-assert after each non-tail call whose callee is not proven DIT-preserving.
-/// Placement is function-granularity — see utils/taint_dit_placement.md.
+/// Placement is function-granularity — see docs/design/dit-placement.md.
 /// If RegionsOS is non-null, also prints the coalesced tainted regions (which
 /// are reported but do not currently drive placement).
 /// Returns the number of tainted instructions protected.

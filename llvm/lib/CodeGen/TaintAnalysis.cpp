@@ -138,7 +138,7 @@ cl::opt<std::string> llvm::TaintDITPrecisionReportFile(
              "instructions must run with DIT set vs how many actually do. "
              "collateral = public code paying DIT's cost for nothing; "
              "precision = need/underdit is the number placement should "
-             "maximize (see utils/taint_dit_precision.md)"),
+             "maximize (see docs/design/dit-precision.md)"),
     cl::value_desc("file"));
 
 cl::opt<std::string> llvm::TaintDITReassertReportFile(
@@ -148,7 +148,7 @@ cl::opt<std::string> llvm::TaintDITReassertReportFile(
              "call. These sites are sound (the re-assert restores protection "
              "unconditionally); they are the per-call toggle cost, and the list "
              "of sites the proposed (not yet implemented) runtime-MRS mode would "
-             "eliminate -- see utils/taint_dit_callee_ownership.md"),
+             "eliminate -- see docs/design/dit-callee-ownership.md"),
     cl::value_desc("file"));
 
 cl::opt<std::string> llvm::TaintUncoveredReportFile(
@@ -174,7 +174,7 @@ static cl::opt<unsigned> TaintRegionMergeGap(
 
 // Track B: PSTATE.DIT placement granularity. `region` (the DEFAULT) is fine-grain
 // cost-model placement — DIT covers only the secret-dependent regions, leaving clean
-// preambles off and hoisting enables out of loops (utils/taint_dit_placement.md §5.6;
+// preambles off and hoisting enables out of loops (docs/design/dit-placement.md §5.6;
 // tuned by -taint-dit-switch-cyc / -taint-dit-dwell-per-instr / -taint-dit-loop-hoist).
 // `function` is the coarse whole-function policy (DIT on entry-to-return for any
 // tainted function). Region placement carries a soundness verifier and falls back to
@@ -191,7 +191,7 @@ static cl::opt<DITPlacementMode> TaintDITPlacement(
                clEnumValN(DITPlacementMode::Region, "region",
                           "fine-grain cost-model region placement (default)")));
 
-// Track B increment (c): the admission test (utils/taint_dit_placement.md §5.6).
+// Track B increment (c): the admission test (docs/design/dit-placement.md §5.6).
 // A DIT mode switch (MSR DIT) costs `switch-cyc` cycles; DIT dwell costs
 // `dwell-per-instr` cycles per covered instruction. An interior Off corridor
 // between two On regions is merged (kept DIT-on straight through) when the toggle
@@ -992,7 +992,7 @@ bool llvm::isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F) {
   bool LoadsSecretPointee = MI.mayLoad() && F.UsesPointee;
   bool AddressSensitive = IsMemAccess && (F.UsesAddress || F.UsesData);
   // A call that hands a secret to its callee must run with DIT enabled so the
-  // callee inherits it (Scenario B, taint_dit_placement.md G3). A data-carrying
+  // callee inherits it (Scenario B, docs/design/dit-placement.md G3). A data-carrying
   // call is already covered by F.UsesData; a call that passes only a *pointer to
   // secret memory* (e.g. memcpy(dst, secret_src, n), where the pointer value is
   // public but its pointee is secret) is not, and would otherwise leave the
@@ -1047,7 +1047,7 @@ const char *llvm::classifyDITUncovered(const MachineInstr &MI,
     return nullptr;
 
   // The instruction's own data-value timing: is it in the Arm DIT covered set?
-  // isDITProtected is a membership list (utils/taint_dit_spec.md) — false covers
+  // isDITProtected is a membership list (docs/reference/dit-spec.md) — false covers
   // the documented divide/sqrt exclusions AND anything not provably covered. The
   // printed opcode identifies which (e.g. SDIVXr).
   if (!TII.isDITProtected(MI))
@@ -1807,7 +1807,7 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
 }
 
 //===----------------------------------------------------------------------===//
-// Track B: cost-model region placement (utils/taint_dit_placement.md §5.6)
+// Track B: cost-model region placement (docs/design/dit-placement.md §5.6)
 //===----------------------------------------------------------------------===//
 
 // Whole-function granularity: MSR DIT #1 at entry, #0 before every return,
@@ -1825,7 +1825,7 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
 // instrumented callee re-asserts at its own entry and clears before its own
 // return, and an uninstrumented one at least inherits protection. The residual
 // is a DIT leak past an uninstrumented tail callee — a cost, not a hole.
-// See utils/taint_dit_tailcall_gap.md.
+// See docs/design/dit-tailcall-gap.md.
 // Will this callee hand PSTATE.DIT back the way it received it? Two ways:
 // it never touches DIT at all (PreservesDIT), or it is entered with DIT already
 // on and therefore never clears it (AlwaysEnteredWithDIT - the ownership rule).
@@ -2160,7 +2160,7 @@ static void fallbackToFunctionGranularity(MachineFunction &MF,
       ReassertOS);
 }
 
-// Increment (c): the admission test (utils/taint_dit_placement.md §5.6). Given the
+// Increment (c): the admission test (docs/design/dit-placement.md §5.6). Given the
 // increment-(b) On/Off block partition, look at each interior Off *corridor* — a
 // maximal CFG-connected group of Off blocks flanked by On on both sides — and
 // decide whether keeping it DIT-off is worth the toggle pair that bounds it, or
@@ -2207,7 +2207,7 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
 
   // Cost of one MSR DIT switch. Tunable via -taint-dit-switch-cyc; defaults to 0
   // (free toggles ⇒ never merge ⇒ finest-grain groups). The measured cost on the
-  // M4 is ~30 cyc/switch (utils/taint_dit_cost_model.md).
+  // M4 is ~30 cyc/switch (docs/results/dit-cost-model.md).
   const double SwitchCyc = TaintDitSwitchCyc;
 
   // Partition the Off blocks into maximal CFG-connected components. Two Off blocks
@@ -2328,7 +2328,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   if (NeedCount == 0)
     return 0;
 
-  // Increment (b): loop-aware DIT-on block set (utils/taint_dit_placement.md
+  // Increment (b): loop-aware DIT-on block set (docs/design/dit-placement.md
   // §5.6). On(b) = HasNeed(b) OR b is in a loop that (transitively) contains a
   // Need. This excludes a clean preamble (Off) and makes the WHOLE outermost
   // need-loop On, so the Off→On boundary is the loop preheader (enable executed
@@ -2526,7 +2526,7 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
 
   // The runs no longer drive placement (DIT is function-granularity), but they
   // still drive the region reports — and they are the input the cost-model-
-  // driven region placement will consume. See utils/taint_dit_cost_model.md.
+  // driven region placement will consume. See docs/results/dit-cost-model.md.
   if (RegionsOS)
     printTaintedRuns(MF, TaintedRuns, *RegionsOS);
 

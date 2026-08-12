@@ -59,7 +59,7 @@
 # the tail call took the return path and got MSR DIT #0 emitted before it,
 # handing the secret to the callee with DIT=0. The case was already here, but
 # only REGION checked it, so the suite never saw the bug.
-# utils/taint_dit_tailcall_gap.md
+# docs/design/dit-tailcall-gap.md
 # FUNC-LABEL: name: tailcall_secret
 # FUNC: MSRpstateImm4 26, 1
 # FUNC-NEXT: TCRETURNdi @ext

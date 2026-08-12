@@ -589,7 +589,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
   //  (A) ESCAPE audit — the secret is passed to a callee the analysis cannot
   //      instrument (external declaration or indirect target). Unlike the old
   //      ISB/DSB model, this is NOT an unprotected hazard: PSTATE.DIT is
-  //      inherited, so the callee runs with DIT=1 (see taint_dit_placement.md
+  //      inherited, so the callee runs with DIT=1 (see docs/design/dit-placement.md
   //      G3). The line is an audit record of where secrets leave the TU, not a
   //      list of unprotected sites.
   //

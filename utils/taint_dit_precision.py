@@ -81,7 +81,7 @@ def main():
         print()
         print("precision is what to maximize; switches is what it costs. A policy that")
         print("wins on precision while multiplying switches loses on serializing-DIT")
-        print("hardware -- see utils/taint_dit_cost_model.md.")
+        print("hardware -- see docs/results/dit-cost-model.md.")
 
     # Worst offenders: the functions dragging the total down.
     print()

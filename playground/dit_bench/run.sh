@@ -5,7 +5,7 @@
 #     sysctl hw.optional.arm.FEAT_DIT     # macOS
 #     grep -o dit /proc/cpuinfo | head -1 # Linux
 #
-# Results recorded in utils/taint_dit_cost_model.md.
+# Results recorded in docs/results/dit-cost-model.md.
 set -e
 cd "$(dirname "$0")"
 CC=${CC:-cc}
