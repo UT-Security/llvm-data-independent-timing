@@ -236,7 +236,7 @@ Score the workloads we have:
 | Workload | (a) small secret | (b) secret DIT-insensitive | (c) few toggles | (d) public has headroom | Result |
 |---|---|---|---|---|---|
 | libsodium primitives | no - secret is ~everything | yes (+0.1%) | n/a | n/a | no win, measured |
-| SQLCipher | no - key taints the page cache | yes | no - per-page crypto | yes (+4.4% on public SQLite) | no win, measured |
+| SQLCipher | **yes** - key reaches only 2 functions | yes | no - ~256 DIT regions/page | **NO - headroom is +0.89% (software crypto) and ZERO on the shipping hardware-AES build** | no win, measured: there is no prize to collect - see `docs/results/sqlcipher.md` |
 | `firefox_convolve_int` | no | yes | no - 19 `MSR DIT`/pixel | **no** (0.968x whole-program) | no win, measured |
 | **Browser + `:visited` / password field** | **yes** - one bit per link, one field | **yes** - paint is parallel, so DIT there is free | **yes** - a repaint, not an inner loop | **yes - FLOP measured 4.5% on Speedometer 3.0** | **untested, and the shape is right** |
 

@@ -75,3 +75,56 @@ every example above. Needs care: a callee can write a secret it obtained from a 
 a previous call rather than from this caller's arguments, so this is NOT sound in general
 — measure the delta, then decide whether it belongs behind a flag next to
 `-taint-annotation-driven`.
+
+---
+
+## SQLCipher, measured 2026-08-12: the key does NOT spread
+
+The libsodium numbers above are the false-positive case. SQLCipher is the
+opposite, and worth recording so the two are not conflated.
+
+Built `sqlite3.c` (262,970 lines) with the repo's own seed set
+(`gem5-DIT/benchmarks/sqlcipher/sqlcipher_secret.txt`), region placement:
+
+| | |
+|---|---|
+| functions instrumented in `sqlite3.c` | **2** (`sqlcipher_ltc_kdf`, `sqlcipher_ltc_cipher`) |
+| `MSR DIT` in the whole TU | **11** |
+| clobber sites | 2, both `external-arg` into libtomcrypt (`pkcs_5_alg2`, `cbc_start`) |
+| escapes | the same 2, both "covered by inherited DIT" |
+| compile overhead | 2.3x (4m45s vs 2m06s) |
+
+**No context-insensitive explosion.** Unlike libsodium, nothing in SQLite's core
+gets instrumented. The reason is structural: the key crosses into libtomcrypt
+almost immediately, and the only in-TU functions touching it are the two provider
+shims.
+
+**The decrypted plaintext is not tracked**, and that is deliberate rather than a
+gap. `sqlcipher_ltc_cipher` passes SQLite's pager buffer as `out` to
+`cbc_decrypt`, which fills it with plaintext - but the seed set declares the
+*key* secret (`cbc_decrypt,3` is the CBC state holding the key schedule), not the
+data. DIT is defending against key extraction; the plaintext is what the
+authenticated user is entitled to read. State this explicitly when reporting, or
+it looks like an under-taint.
+
+**One real gap the report surfaces:** `UNCOVERED secret-branch
+func=sqlcipher_ltc_cipher bb=2 : CBZW` - a secret-dependent branch, which DIT
+does not cover (control-flow timing is outside its guarantee).
+
+### Where SQLCipher actually fails: granularity, not precision
+
+libtomcrypt carries 53 switches, concentrated in `cbc_encrypt` (17),
+`cbc_decrypt` (12), `rijndael_setup` (10), `cbc_start` (10). `cbc_encrypt`'s loop
+dispatches `cipher_descriptor[...].ecb_encrypt` through a function pointer **once
+per 16-byte block**, so a 4 KB page is ~256 DIT regions wrapping ~300-500 cycles
+of AES each.
+
+The granularity crossover measured independently on QuickJS
+(`docs/results/quickjs.md`) is **~1300 cycles of work per region**. SQLCipher sits
+3-4x below it, so fine-grained placement is predicted to lose - which matches
+every SQLCipher result the project has. At the measured 62-74 ns/region, 256
+regions/page is ~18 us of toggling against ~25 us of AES, i.e. a ~70% tax on the
+crypto, consistent with the +46%..+94% in `docs/results/dit-cost-model.md`.
+
+**This is the first time a threshold measured on one workload has predicted
+another workload's outcome.**

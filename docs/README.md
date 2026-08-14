@@ -18,7 +18,8 @@ defense is out of scope. Operating instructions (build, flags, gotchas) live in
 | 2 | [reference/dit-spec.md](reference/dit-spec.md) | What the hardware actually guarantees. Everything else assumes this. |
 | 3 | [results/dit-cost-model.md](results/dit-cost-model.md) | What DIT costs. Read before any placement work. |
 | 4 | [results/quickjs.md](results/quickjs.md) | The first positive result, and the method rule that makes it trustworthy. |
-| 5 | [design/dit-placement.md](design/dit-placement.md) | Where switches go, which gaps remain, and the optimal-placement design. |
+| 5 | [results/sqlcipher.md](results/sqlcipher.md) | The definitive negative, and the gem5 study that bounds the whole thesis at ~1.4%. |
+| 6 | [design/dit-placement.md](design/dit-placement.md) | Where switches go, which gaps remain, and the optimal-placement design. |
 
 ## Overview
 
@@ -123,6 +124,37 @@ Measured numbers. These are the claims the project stands on, with their caveats
     Crossover is ~40k regions/sec = **~1 us of work per region**. **Two axes: secret
     fraction sets the size of the prize (~1% here), granularity decides whether you
     can collect it.**
+
+- **[results/sqlcipher.md](results/sqlcipher.md)** - **the definitive negative, and
+  the study that bounds the thesis.** With a correct oracle (all three provider entry
+  points, `cipher` + `kdf` + **`hmac`**) the recoverable headroom on M5 is **+0.89%**
+  on the deprecated libtomcrypt provider and **-0.08%, i.e. ZERO**, on the DEFAULT
+  shipping OpenSSL/hardware-AES build. Almost all of always-on's +8.6% is DIT *on the
+  crypto*, which any correct placement must also pay. A **"+8.15% first positive
+  result" was reported and RETRACTED the same day** - the oracle had wrapped 2 of 3
+  entry points, so it was protecting *less*, not costing less. **Audit a manual
+  placement for coverage before believing its performance.** Two findings that stand:
+  the pass **structurally cannot instrument prebuilt `libcrypto.dylib`** (25 sites,
+  none on a cipher instruction), and software AES is DIT-expensive only because of
+  **T-table data-dependent loads**, whose real leak - cache timing - DIT does not
+  cover, so **AES is a bad motivating workload**.
+  - **gem5 corroboration, 2026-08-13** (full study:
+    `gem5-DIT/docs/dit/studies/sqlcipher-dit-placement-2026-08-13.md`). Running the
+    identical binary under serializing vs renamed `MSR DIT` isolates **toggle cost
+    with dwell held constant**, which silicon cannot do: **+0.08% / +12.8% / +19.1%**
+    for **6 / 54 / 63** switch sites. It reproduces the M5 ordering and the
+    region:hoist ratio (1.49x vs 1.52x) at about a third the magnitude, so the
+    granularity result no longer rests on one machine.
+  - **The prize is ~1.4%**, all of it value prediction; DMP, SIP and comp-simp are
+    inert or net-negative on this ROI. **The shipped placement spends 19% to protect
+    something worth 1.4%.** No placement policy can recover more than the gated
+    optimizations are worth - and **microbenchmarks overstate that value ~200x**
+    (`lvp_chase` 4.0x vs 1-2% on real code).
+  - **The round-trip control is necessary but NOT sufficient.** Under gem5 the
+    zero-`MSR DIT` `nodit` binary is the **slowest in the entire matrix** (+2.65% vs
+    plain), exceeding the whole dwell effect. The artifact is a per-binary codegen
+    lottery (+0.58% QuickJS, +0.06% native, +2.65% gem5), so at ~1% effect sizes only
+    a **same-binary, two-configuration** comparison is trustworthy.
 
 ## Research
 
