@@ -928,23 +928,26 @@ void GenericTaintRule::process(const GenericTaintChecker &Checker,
   };
 
   /// Check for taint sinks.
-  ForEachCallArg([this, &Checker, &C, &State](ArgIdxTy I, const Expr *E, SVal) {
+  ForEachCallArg([this, &Checker, &C, &State](ArgIdxTy I, const Expr *E,
+                                              SVal S) {
     // Add taintedness to stdin parameters
-    if (isStdin(C.getSVal(E), C.getASTContext())) {
-      State = addTaint(State, C.getSVal(E));
-    }
-    if (SinkArgs.contains(I) && isTaintedOrPointsToTainted(State, C.getSVal(E)))
+    if (isStdin(S, C.getASTContext()))
+      State = addTaint(State, S);
+    if (SinkArgs.contains(I) && isTaintedOrPointsToTainted(State, S))
       Checker.generateReportIfTainted(E, SinkMsg.value_or(MsgCustomSink), C);
   });
 
-  /// Check for taint filters.
-  ForEachCallArg([this, &State](ArgIdxTy I, const Expr *E, SVal S) {
-    if (FilterArgs.contains(I)) {
-      State = removeTaint(State, S);
-      if (auto P = getPointeeOf(State, S))
-        State = removeTaint(State, *P);
-    }
-  });
+  /// Check for taint filters. None of the built-in rules have filter
+  /// arguments, so skip the whole pass rather than walking the arguments to
+  /// ask `contains()` a question whose answer is already known.
+  if (!FilterArgs.isEmpty())
+    ForEachCallArg([this, &State](ArgIdxTy I, const Expr *, SVal S) {
+      if (FilterArgs.contains(I)) {
+        State = removeTaint(State, S);
+        if (auto P = getPointeeOf(State, S))
+          State = removeTaint(State, *P);
+      }
+    });
 
   /// Check for taint propagation sources.
   /// A rule will make the destination variables tainted if PropSrcArgs
@@ -954,10 +957,16 @@ void GenericTaintRule::process(const GenericTaintChecker &Checker,
   bool IsMatching = PropSrcArgs.isEmpty();
   std::vector<SymbolRef> TaintedSymbols;
   std::vector<ArgIdxTy> TaintedIndexes;
+  // `getTaintedPointeeOrPointer()` dereferences pointer arguments, which is a
+  // store load. `State` does not change between here and the propagation loop
+  // below, so remember the answer per argument and reuse it there instead of
+  // asking a second time. Indexed by `I - ReturnValueIndex`.
+  llvm::SmallVector<bool, 8> IsArgTainted(CallNumArgs + 1, false);
   ForEachCallArg([this, &C, &IsMatching, &State, &TaintedSymbols,
-                  &TaintedIndexes](ArgIdxTy I, const Expr *E, SVal) {
-    std::optional<SVal> TaintedSVal =
-        getTaintedPointeeOrPointer(State, C.getSVal(E));
+                  &TaintedIndexes,
+                  &IsArgTainted](ArgIdxTy I, const Expr *, SVal S) {
+    std::optional<SVal> TaintedSVal = getTaintedPointeeOrPointer(State, S);
+    IsArgTainted[I - ReturnValueIndex] = TaintedSVal.has_value();
     IsMatching =
         IsMatching || (PropSrcArgs.contains(I) && TaintedSVal.has_value());
 
@@ -1006,7 +1015,8 @@ void GenericTaintRule::process(const GenericTaintChecker &Checker,
         // TODO: We should traverse all reachable memory regions via the
         // escaping parameter. Instead of doing that we simply mark only the
         // referred memory region as tainted.
-        if (WouldEscape(V, E->getType()) && getTaintedPointeeOrPointer(State, V)) {
+        if (WouldEscape(V, E->getType()) &&
+            IsArgTainted[I - ReturnValueIndex]) {
           LLVM_DEBUG(if (!Result.contains(I)) {
             llvm::dbgs() << "PreCall<";
             Call.dump(llvm::dbgs());
