@@ -14,6 +14,7 @@
 #include "llvm/CodeGen/TaintAnalysis.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -1492,19 +1493,45 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
   }
 
   IN[&MF.front()] = Seed;
-  SmallVector<const MachineBasicBlock *, 32> WorkQ;
-  SmallPtrSet<const MachineBasicBlock *, 32> InQ;
+
+  // Visit blocks in reverse post-order. This is a forward analysis, so RPO
+  // reaches every predecessor before its successor wherever the CFG allows,
+  // which collapses the number of times a block has to be re-evaluated. A LIFO
+  // worklist is catastrophic on a bytecode dispatch loop: QuickJS's
+  // JS_CallInternal has 1890 blocks and a computed-goto hub with 209
+  // predecessors, and re-joining all of them on every visit made the TU
+  // uncompilable. See docs/design/scalability.md.
+  //
+  // RPOT only enumerates reachable blocks. That matches the old behaviour,
+  // which likewise only ever pushed successors reachable from entry; IN/OUT for
+  // unreachable blocks stay bottom either way.
+  SmallVector<const MachineBasicBlock *, 32> RPOBlocks;
+  DenseMap<const MachineBasicBlock *, unsigned> RPONum;
+  {
+    ReversePostOrderTraversal<const MachineFunction *> RPOT(&MF);
+    for (const MachineBasicBlock *B : RPOT) {
+      RPONum[B] = RPOBlocks.size();
+      RPOBlocks.push_back(B);
+    }
+  }
+
+  // Ordered by RPO index, so pop always yields the earliest pending block.
+  std::set<unsigned> WorkQ;
+  // Blocks whose OUT has been computed at least once.
+  SmallPtrSet<const MachineBasicBlock *, 32> Visited;
 
   auto push = [&](const MachineBasicBlock *B) {
-    if (InQ.insert(B).second)
-      WorkQ.push_back(B);
+    auto It = RPONum.find(B);
+    if (It != RPONum.end())
+      WorkQ.insert(It->second);
   };
 
   push(&MF.front());
 
   while (!WorkQ.empty()) {
-    const MachineBasicBlock *B = WorkQ.pop_back_val();
-    InQ.erase(B);
+    auto It = WorkQ.begin();
+    const MachineBasicBlock *B = RPOBlocks[*It];
+    WorkQ.erase(It);
 
     LLVM_DEBUG(dbgs() << "    " << printMBBReference(*B) << "\n");
 
@@ -1529,13 +1556,29 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
     if (InChanged)
       IN[B] = std::move(NewIn);
 
+    // The block transfer function is a pure function of IN and the block's
+    // instructions, so an unchanged IN cannot produce a different OUT. Skipping
+    // the recompute matters enormously on a dispatch loop: the computed-goto hub
+    // in QuickJS's JS_CallInternal has 209 predecessors and gets re-popped
+    // constantly, and re-running the transfer over thousands of instructions to
+    // arrive at the same OUT was the dominant cost. First visit still has to run
+    // it, because OUT has not been computed yet even though IN matches the
+    // zero-initialised entry. See docs/design/scalability.md.
+    bool FirstVisit = Visited.insert(B).second;
+    if (!InChanged && !FirstVisit)
+      continue;
+
     TaintState NewOut = propagateTaintMBB(*B, IN[B], TRI, TSI, M, AA);
 
     if (NewOut != OUT[B]) {
       OUT[B] = std::move(NewOut);
       for (const MachineBasicBlock *Succ : B->successors())
         push(Succ);
-    } else if (InChanged) {
+    } else if (FirstVisit) {
+      // OUT is unchanged, so successors' INs are unchanged and would normally
+      // not need revisiting - but on the first visit they have never been
+      // evaluated at all, and a CFG whose state is bottom everywhere would
+      // otherwise never propagate past the entry block.
       for (const MachineBasicBlock *Succ : B->successors())
         push(Succ);
     }

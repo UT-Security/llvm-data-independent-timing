@@ -169,7 +169,31 @@ struct TaintState {
   /// call-induced poison does not perturb the existing heap-store behavior.
   bool ExternalMemClobbered = false;
 
+private:
+  /// Merge Src into Dst in one shot. Reserving up front matters: join is the
+  /// hot path of the intraprocedural fixed point, and inserting element by
+  /// element into a growing DenseSet rehashes repeatedly. See
+  /// docs/design/scalability.md.
+  template <typename SetT> static void mergeSet(SetT &Dst, const SetT &Src) {
+    if (Src.empty())
+      return;
+    Dst.reserve(Dst.size() + Src.size());
+    for (const auto &E : Src)
+      Dst.insert(E);
+  }
+
 public:
+  /// True if this state carries no taint at all - the dataflow lattice bottom.
+  /// Every component check is O(1), so this is a cheap guard on join.
+  bool isBottom() const {
+    return TaintedRegs.empty() && PointeeTaintedRegs.empty() &&
+           AddressTaintedRegs.empty() && FrameAddrRegs.empty() &&
+           TaintedStackCells.empty() && PointeeTaintedStackCells.empty() &&
+           TaintedGlobalCells.empty() && TaintedUnknownMemValues.empty() &&
+           PointeeTaintedUnknownMemValues.empty() && !UnknownMemTainted &&
+           TaintedWholeGlobals.empty() && !ExternalMemClobbered;
+  }
+
   bool operator==(const TaintState &O) const {
     return TaintedRegs == O.TaintedRegs &&
            PointeeTaintedRegs == O.PointeeTaintedRegs &&
@@ -188,23 +212,21 @@ public:
   bool operator!=(const TaintState &O) const { return !(*this == O); }
 
   void join(const TaintState &O) {
+    // Joining bottom cannot change anything. Worth the check because a forward
+    // taint analysis over a large CFG spends most joins merging empty state.
+    if (O.isBottom())
+      return;
     TaintedRegs |= O.TaintedRegs;
     PointeeTaintedRegs |= O.PointeeTaintedRegs;
     AddressTaintedRegs |= O.AddressTaintedRegs;
     FrameAddrRegs |= O.FrameAddrRegs;
-    for (const auto &C : O.TaintedStackCells)
-      TaintedStackCells.insert(C);
-    for (const auto &C : O.PointeeTaintedStackCells)
-      PointeeTaintedStackCells.insert(C);
-    for (const auto &C : O.TaintedGlobalCells)
-      TaintedGlobalCells.insert(C);
-    for (const Value *V : O.TaintedUnknownMemValues)
-      TaintedUnknownMemValues.insert(V);
-    for (const Value *V : O.PointeeTaintedUnknownMemValues)
-      PointeeTaintedUnknownMemValues.insert(V);
+    mergeSet(TaintedStackCells, O.TaintedStackCells);
+    mergeSet(PointeeTaintedStackCells, O.PointeeTaintedStackCells);
+    mergeSet(TaintedGlobalCells, O.TaintedGlobalCells);
+    mergeSet(TaintedUnknownMemValues, O.TaintedUnknownMemValues);
+    mergeSet(PointeeTaintedUnknownMemValues, O.PointeeTaintedUnknownMemValues);
     UnknownMemTainted |= O.UnknownMemTainted;
-    for (const GlobalVariable *GV : O.TaintedWholeGlobals)
-      TaintedWholeGlobals.insert(GV);
+    mergeSet(TaintedWholeGlobals, O.TaintedWholeGlobals);
     ExternalMemClobbered |= O.ExternalMemClobbered;
   }
 
