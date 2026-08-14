@@ -98,25 +98,6 @@ std::vector<SymbolRef> getTaintedSymbols(ProgramStateRef State,
                                          const MemRegion *Reg,
                                          TaintTagType Kind = TaintTagGeneric);
 
-std::vector<SymbolRef> getTaintedSymbolsImpl(ProgramStateRef State,
-                                             const Stmt *S,
-                                             const LocationContext *LCtx,
-                                             TaintTagType Kind,
-                                             bool returnFirstOnly);
-
-std::vector<SymbolRef> getTaintedSymbolsImpl(ProgramStateRef State, SVal V,
-                                             TaintTagType Kind,
-                                             bool returnFirstOnly);
-
-std::vector<SymbolRef> getTaintedSymbolsImpl(ProgramStateRef State,
-                                             SymbolRef Sym, TaintTagType Kind,
-                                             bool returnFirstOnly);
-
-std::vector<SymbolRef> getTaintedSymbolsImpl(ProgramStateRef State,
-                                             const MemRegion *Reg,
-                                             TaintTagType Kind,
-                                             bool returnFirstOnly);
-
 void printTaint(ProgramStateRef State, raw_ostream &Out, const char *nl = "\n",
                 const char *sep = "");
 
