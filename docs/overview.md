@@ -15,7 +15,7 @@ has never carried taint work). Target arch: **AArch64 only**.
 > finding a DIT-sensitive one is now the blocking gap. The dominant *precision* problem
 > remains context-insensitive mod-sets (§9.6).
 
-The deeper reference docs (`utils/taint_*.md`) are still valid for detail; this doc is the
+The deeper reference docs (`docs/design/`, `docs/reference/`) are still valid for detail; this doc is the
 map. `CLAUDE.md` at the repo root holds the authoritative operating instructions and is kept
 in sync with the code.
 
@@ -445,7 +445,7 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 
 - **Never** add `Co-Authored-By` / session-link trailers to commit messages in this repo.
 - Builds are allowed (`ninja -C build llc` / `clang` / `opt`); ~1–2 min each.
-- Keep `CLAUDE.md` and the `utils/taint_*.md` docs in sync with code changes in the same turn.
+- Keep `CLAUDE.md` and the `docs/` tree in sync with code changes in the same turn.
 - Over-approximation is always the safe direction: a spurious barrier costs performance, a
   missing one costs the secret. Any "can't classify" path must fall back to treating every
   register use as secret.

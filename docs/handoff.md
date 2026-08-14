@@ -134,7 +134,7 @@ here, a large fragile chunk of `BackendUtil.cpp` and the `<mcsymbol>` strip coul
 - **Never** add `Co-Authored-By: Claude` / session-link trailers to commit messages.
 - **Never** run builds (`ninja`/`cmake --build`) yourself — long; give the exact command and
   let the human run it and paste output. Build dir `build/`, e.g. `ninja -C build clang llc opt`.
-- Keep `CLAUDE.md` and the `utils/taint_*.md` docs in sync with code changes in the same turn.
+- Keep `CLAUDE.md` and the `docs/` tree in sync with code changes in the same turn.
 - Verification recipe used this session: harden `playground/firefox_convolve_int.c` and
   diff the `.text` section vs a saved baseline in both modes; run the
   `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` lit suite (currently 12/12).
