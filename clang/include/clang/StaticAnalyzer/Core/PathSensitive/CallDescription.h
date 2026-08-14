@@ -115,6 +115,32 @@ public:
   /// `getenv`. It's true for `std::swap`, or `my::detail::container::data`.
   bool hasQualifiedNameParts() const { return QualifiedName.size() > 1; }
 
+  /// The facts about a callee that matching needs. None of them depend on the
+  /// CallDescription being matched, so a CallDescriptionMap builds one of these
+  /// per lookup and reuses it across its whole scan rather than re-deriving
+  /// them from the AST once per entry.
+  class MatchTarget {
+  public:
+    explicit MatchTarget(const CallEvent &Call);
+    explicit MatchTarget(const CallExpr &CE);
+
+    /// Null when the callee is unknown or is not a plain function, in which
+    /// case no CallDescription can match it.
+    const FunctionDecl *getDecl() const { return FD; }
+
+  private:
+    friend class CallDescription;
+
+    /// The name-independent half of CheckerContext::isCLibraryFunction().
+    /// Computed on demand because only C-library-mode descriptions need it.
+    bool isCLibraryFunction() const;
+
+    const FunctionDecl *FD = nullptr;
+    size_t ArgCount = 0;
+    size_t ParamCount = 0;
+    mutable std::optional<bool> IsCLibraryFunction;
+  };
+
   /// @name Matching CallDescriptions against a CallEvent
   /// @{
 
@@ -124,6 +150,11 @@ public:
   /// \note This function is not intended to be used to match Obj-C method
   /// calls.
   bool matches(const CallEvent &Call) const;
+
+  /// Returns true if the already-inspected callee matches the
+  /// CallDescription. Prefer this when matching many descriptions against one
+  /// call, so that the callee is only inspected once.
+  bool matches(const MatchTarget &Target) const;
 
   /// Returns true whether the CallEvent matches on any of the CallDescriptions
   /// supplied.
@@ -182,9 +213,6 @@ public:
   /// @}
 
 private:
-  bool matchesImpl(const FunctionDecl *Callee, size_t ArgCount,
-                   size_t ParamCount) const;
-
   bool matchNameOnly(const NamedDecl *ND) const;
   bool matchQualifiedNameParts(const Decl *D) const;
 };
@@ -220,10 +248,15 @@ public:
   CallDescriptionMap &operator=(CallDescriptionMap &&) = default;
 
   [[nodiscard]] const T *lookup(const CallEvent &Call) const {
-    // Slow path: linear lookup.
+    // Slow path: linear lookup. Inspecting the callee is hoisted out of the
+    // scan, so the per-entry work is just the name and arity comparison.
     // TODO: Implement some sort of fast path.
+    CallDescription::MatchTarget Target(Call);
+    if (!Target.getDecl())
+      return nullptr;
+
     for (const std::pair<CallDescription, T> &I : LinearMap)
-      if (I.first.matches(Call))
+      if (I.first.matches(Target))
         return &I.second;
 
     return nullptr;
@@ -244,8 +277,12 @@ public:
   [[nodiscard]] const T *lookupAsWritten(const CallExpr &Call) const {
     // Slow path: linear lookup.
     // TODO: Implement some sort of fast path.
+    CallDescription::MatchTarget Target(Call);
+    if (!Target.getDecl())
+      return nullptr;
+
     for (const std::pair<CallDescription, T> &I : LinearMap)
-      if (I.first.matchesAsWritten(Call))
+      if (I.first.matches(Target))
         return &I.second;
 
     return nullptr;
