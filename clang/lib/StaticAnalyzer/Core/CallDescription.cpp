@@ -47,24 +47,40 @@ ento::CallDescription::CallDescription(Mode MatchAs,
                   [](StringRef From) { return From.str(); });
 }
 
-bool ento::CallDescription::matches(const CallEvent &Call) const {
+ento::CallDescription::MatchTarget::MatchTarget(const CallEvent &Call) {
   // FIXME: Add ObjC Message support.
   if (Call.getKind() == CE_ObjCMessage)
-    return false;
+    return;
 
-  const auto *FD = dyn_cast_or_null<FunctionDecl>(Call.getDecl());
+  FD = dyn_cast_or_null<FunctionDecl>(Call.getDecl());
   if (!FD)
-    return false;
+    return;
 
-  return matchesImpl(FD, Call.getNumArgs(), Call.parameters().size());
+  ArgCount = Call.getNumArgs();
+  ParamCount = Call.parameters().size();
+}
+
+ento::CallDescription::MatchTarget::MatchTarget(const CallExpr &CE) {
+  FD = dyn_cast_or_null<FunctionDecl>(CE.getCalleeDecl());
+  if (!FD)
+    return;
+
+  ArgCount = CE.getNumArgs();
+  ParamCount = FD->param_size();
+}
+
+bool ento::CallDescription::MatchTarget::isCLibraryFunction() const {
+  if (!IsCLibraryFunction)
+    IsCLibraryFunction = CheckerContext::isCLibraryFunction(FD);
+  return *IsCLibraryFunction;
+}
+
+bool ento::CallDescription::matches(const CallEvent &Call) const {
+  return matches(MatchTarget(Call));
 }
 
 bool ento::CallDescription::matchesAsWritten(const CallExpr &CE) const {
-  const auto *FD = dyn_cast_or_null<FunctionDecl>(CE.getCalleeDecl());
-  if (!FD)
-    return false;
-
-  return matchesImpl(FD, CE.getNumArgs(), FD->param_size());
+  return matches(MatchTarget(CE));
 }
 
 bool ento::CallDescription::matchNameOnly(const NamedDecl *ND) const {
@@ -109,11 +125,13 @@ bool ento::CallDescription::matchQualifiedNameParts(const Decl *D) const {
   return QualifierPartsIt == QualifierPartsEndIt;
 }
 
-bool ento::CallDescription::matchesImpl(const FunctionDecl *FD, size_t ArgCount,
-                                        size_t ParamCount) const {
+bool ento::CallDescription::matches(const MatchTarget &Target) const {
+  const FunctionDecl *FD = Target.FD;
   if (!FD)
     return false;
 
+  const size_t ArgCount = Target.ArgCount;
+  const size_t ParamCount = Target.ParamCount;
   const bool isMethod = isa<CXXMethodDecl>(FD);
 
   if (MatchAs == Mode::SimpleFunc && isMethod)
@@ -125,7 +143,7 @@ bool ento::CallDescription::matchesImpl(const FunctionDecl *FD, size_t ArgCount,
   if (MatchAs == Mode::CLibraryMaybeHardened) {
     // In addition to accepting FOO() with CLibrary rules, we also want to
     // accept calls to __FOO_chk() and __builtin___FOO_chk().
-    if (CheckerContext::isCLibraryFunction(FD) &&
+    if (Target.isCLibraryFunction() &&
         CheckerContext::isHardenedVariantOf(FD, getFunctionName())) {
       // Check that the actual argument/parameter counts are greater or equal
       // to the required counts. (Setting a requirement to std::nullopt matches
@@ -140,8 +158,13 @@ bool ento::CallDescription::matchesImpl(const FunctionDecl *FD, size_t ArgCount,
       RequiredParams.value_or(ParamCount) != ParamCount)
     return false;
 
+  // A callee that fails the name-independent half of isCLibraryFunction()
+  // fails it for every name, so this rejects the whole C-library part of a
+  // CallDescriptionMap in one test when the callee is an ordinary function
+  // defined in the analysed translation unit.
   if (MatchAs == Mode::CLibrary || MatchAs == Mode::CLibraryMaybeHardened)
-    return CheckerContext::isCLibraryFunction(FD, getFunctionName());
+    return Target.isCLibraryFunction() &&
+           CheckerContext::isCLibraryFunction(FD, getFunctionName());
 
   if (!matchNameOnly(FD))
     return false;

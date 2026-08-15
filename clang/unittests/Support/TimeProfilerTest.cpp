@@ -342,7 +342,11 @@ Frontend (test.cc)
             buildTraceGraph(Json));
 }
 
-TEST(TimeProfilerTest, ConstantEvaluationC99) {
+// FIXME: Flaky test, in the same way as DISABLED_ConstantEvaluationCxx20 above:
+// buildTraceGraph() has to infer nesting from -ftime-trace timestamps, and two
+// sibling events that both round to the same microsecond are indistinguishable
+// from a nested pair. See https://github.com/llvm/llvm-project/pull/138613
+TEST(TimeProfilerTest, DISABLED_ConstantEvaluationC99) {
   std::string Code = R"(
 struct {
   short quantval[4]; // 3rd line
