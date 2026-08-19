@@ -470,8 +470,9 @@ current **blunt-TOP P0** to the real Firefox SVG-filter TU (`gfx/2d/FilterNodeSo
 floods DIT into **77-78 of 490 functions from `ConvolvePixel` alone** - of which only
 **~43 genuinely load/store secret pixel values** (real LVP leaks, correct to cover) and
 **~32 are spurious** (rect math, destructors, refcount/container plumbing), plus **74
-more** flagged via address/branch taint DIT can't even cover. See
-`memory/firefox-filter-dit-flood.md`.
+more** flagged via address/branch taint DIT can't even cover. **Attribution correction:**
+the flood was later traced to the `$lr` seeding artifact, not to this memory model -
+see `docs/overview.md` §8, fix #1.
 
 **The problem, precisely.** `ConvolvePixel` writes a secret through its pointer
 argument `aTargetData` (`FilterNodeSoftware.cpp:2407`). `computeFunctionMemEffects`

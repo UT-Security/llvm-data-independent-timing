@@ -67,6 +67,16 @@ passed only public buffers then absorbs nothing. That also makes the frame-addre
 fallback per-object rather than whole-frame (`docs/design/frame-addr-fallback.md`), which is
 what its 9.1× instruction-volume cost is paying for.
 
+**Correction: P1b is a much smaller lever than that makes it sound.** Measured on the
+same libsodium run, only **17 of 583** secret-writing call sites resolve provenance to an
+argument at all; the other 566 are TOP. So precise application of
+`WritesSecretThroughArgPointee{i}` has almost nothing to act on until provenance itself
+improves, which likely means analyzing at IR and carrying the facts down to MIR
+(`getUnderlyingObject` usually cannot reach the `Argument` through optimized post-PEI
+code). Recover provenance first, then do P1b. (Figure recorded 2026-07-29 in commit
+`49c4d74`; this doc is the citation target for it in `docs/README.md` and
+`docs/overview.md`.)
+
 A cheaper stopgap worth measuring first: gate mod-set application on whether **this** call
 site passes a secret (`taintedCallArguments(...).any()`), matching how the
 external/indirect path already gates on `HasTaintedArg`. That is still context-insensitive

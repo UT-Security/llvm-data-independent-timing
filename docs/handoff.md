@@ -1,15 +1,18 @@
 # Session handoff — taint analysis / DIT hardening
 
-> ⚠️ **STALE (2026-07-14). The current entry point is `docs/overview.md`.**
-> Much below is out of date: the callee→caller memory bug is FIXED, region
-> placement is now the default (not function granularity), tests are 22 (not 12),
-> and the flood attribution here/elsewhere was corrected (it was the `$lr` seeding
-> bug, not the memory model). Kept only for historical context — the M4 rationale
-> and the prior-art reading order are still useful. **Read `docs/overview.md` first.**
+> ⚠️ **HISTORICAL (written 2026-07-14). Do not use this as guidance.**
+> The current entry points are [`README.md`](README.md) and [`overview.md`](overview.md).
+> Most of what follows has been overtaken: the branch is now `dit-tainter`, the
+> callee→caller memory bug is FIXED, region placement is the default (not function
+> granularity), the lit suite is 29 tests (not 12), the flood attribution here and
+> elsewhere was corrected (it was the `$lr` seeding bug, not the memory model), and
+> end-to-end runtime has since been measured on four real workloads - one win and three
+> negatives (`docs/results/`). Kept for the parts that still hold: the M4 rationale, the
+> corrected threat model, and the prior-art reading order.
 
 **Written:** 2026-07-14, on the Linux dev box (Neoverse N1, **no FEAT_DIT**).
 **For:** a fresh Claude Code session on an **Apple M4 Mac mini** after cloning this repo.
-**Branch:** `interproc_taint`.
+**Branch:** `interproc_taint` (the work now lives on `dit-tainter`).
 
 ## Why the M4 matters — the one thing this machine could not do
 
@@ -132,8 +135,9 @@ here, a large fragile chunk of `BackendUtil.cpp` and the `<mcsymbol>` strip coul
 ## Working-preferences that live in ~/.claude on the Linux box (recreate on the Mac if wanted)
 
 - **Never** add `Co-Authored-By: Claude` / session-link trailers to commit messages.
-- **Never** run builds (`ninja`/`cmake --build`) yourself — long; give the exact command and
-  let the human run it and paste output. Build dir `build/`, e.g. `ninja -C build clang llc opt`.
+- ~~**Never** run builds yourself~~ **superseded**: `CLAUDE.md` now says running builds is
+  fine, just start them in the background. Build dir `build/`, e.g.
+  `ninja -C build clang llc opt`.
 - Keep `CLAUDE.md` and the `docs/` tree in sync with code changes in the same turn.
 - Verification recipe used this session: harden `playground/firefox_convolve_int.c` and
   diff the `.text` section vs a saved baseline in both modes; run the

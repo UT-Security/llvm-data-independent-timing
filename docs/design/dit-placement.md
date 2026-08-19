@@ -549,8 +549,9 @@ non-convergence (mitigate: VSETVLI worklist pattern); the Need-gate must match
 
 **Update (2026-07-23): `-taint-dit-loop-hoist=0` (block-minimal) is now the DEFAULT** (finest placement — public loop scaffolding peeled off, per-iteration toggles; set `=1` for serializing-switch hardware). dit-region.mir REGION and dit-loop-hoist.mir HOIST run lines pinned to `-taint-dit-loop-hoist=1`.
 
-**Current impl state (2026-07-21):** all of the above through B(c) are committed and
-pushed on `interproc_taint`. **Region placement is now the DEFAULT**
+**Impl state as of 2026-07-21** (historical snapshot; the lit suite is 29 tests
+today): all of the above through B(c) are committed and pushed (on
+`interproc_taint`, the branch that became `dit-tainter`). **Region placement is now the DEFAULT**
 (`-taint-dit-placement=region`, `cl::init(Region)`); `-taint-dit-placement=function`
 is the opt-in coarse policy. The soundness verifier + graceful per-function fallback
 to whole-function coverage make the default safe. All 19 lit tests pass

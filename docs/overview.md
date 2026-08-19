@@ -1,23 +1,27 @@
-# Interprocedural Taint Analysis + PSTATE.DIT Hardening — Consolidated Overview
+# Interprocedural Taint Analysis + PSTATE.DIT Hardening - Consolidated Overview
 
-**This is the single entry-point document.** Read it first. It supersedes the stale
-`docs/handoff.md` (2026-07-14). Last updated **2026-08-05**.
-Branch: `interproc_taint` (**all work goes here** — `main` is the upstream LLVM mirror and
+**Start here, then follow the reading order in [`README.md`](README.md)**, the annotated
+index of every design doc, measured result, and research note. This doc is the map: what
+the project is, how to run it, how the analysis works, and what is measured.
+Last updated **2026-08-18**.
+Branch: `dit-tainter` (**all work goes here** - `main` is the upstream LLVM mirror and
 has never carried taint work). Target arch: **AArch64 only**.
 
-> **Picking this up fresh? Read §7 and §10 first.** The short version: the libsodium/CIO
-> rig is now **scripted and reproducible** (`utils/taint_libsodium_eval.sh` — the old
-> hand-built copies were lost), `make check` passes 86/86 on the hardened library, and
-> **end-to-end runtime is finally measured — as a NEGATIVE.** On libsodium, blanket DIT
-> is free (0.998–1.003x) while taint-driven placement costs +45%..+94% at the shipped
-> defaults. That is what `cost = toggles + dwell` predicts when dwell ≈ 0, so it is not a
-> refutation — but **no measured workload yet justifies fine-grained placement**, and
-> finding a DIT-sensitive one is now the blocking gap. The dominant *precision* problem
-> remains context-insensitive mod-sets (§9.6).
+> **Picking this up fresh? Read §7 and §10 first.** The short version: the pipeline
+> works and the taint precision is good, but **the performance case is mostly negative.**
+> End-to-end runtime is now measured on four real workloads. Fine-grained placement wins
+> on exactly one - QuickJS + Octane, where it recovers ~1.07%, essentially the whole
+> always-on cost, and only with `-taint-dit-loop-hoist=1`. It loses badly on libsodium
+> (+46%..+94%) and SQLCipher (6.4x worse than simply setting the bit process-wide), and
+> on SQLCipher's shipping OpenSSL build **there is no prize to recover at all** (headroom
+> -0.08%). A gem5 study bounds the total value of every DIT-gated optimization on that
+> workload at **~1.4%**. Two method rules now govern every number: baseline against a
+> **round-trip control**, and prefer **same-binary, two-configuration** comparisons
+> (§7). The dominant *precision* problem remains context-insensitive mod-sets (§9.6).
 
-The deeper reference docs (`docs/design/`, `docs/reference/`) are still valid for detail; this doc is the
-map. `CLAUDE.md` at the repo root holds the authoritative operating instructions and is kept
-in sync with the code.
+`CLAUDE.md` at the repo root holds the authoritative operating instructions and is kept
+in sync with the code; this doc and the rest of `docs/` hold the reasoning behind them.
+It supersedes `handoff.md` (2026-07-14), which is kept only as history.
 
 ---
 
@@ -95,6 +99,8 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
 | `-taint-callsite-report=F` | ESCAPE report: secrets passed to callees we can't instrument. |
 | `-taint-uncovered-report=F` | tainted instrs DIT can't protect (divide/sqrt, secret-address, secret-branch). |
 | `-taint-clobber-report=F` | call sites that make the caller treat memory as secret (taint-explosion sources). |
+| `-taint-dit-precision-report=F` | per-function DIT accounting (need / underdit / collateral / switches). Reachable from clang as `-mllvm -taint-dit-precision-report=`. **Always read the loop-weighted variant** - see `docs/design/dit-precision.md`. |
+| `-taint-dit-reassert-report=F` | the post-call `MSR DIT, #1` re-assert sites the analysis cannot prove away. See `docs/design/dit-callee-ownership.md`. |
 | `-taint-output=F`, `-debug-only=taint-interproc` | per-instruction taint dump; interproc propagation trace ("caller → callee: arg now tainted"). |
 
 ## 4. How the taint analysis works
@@ -121,6 +127,22 @@ secret-dependent regions (clean preambles / public index math stay DIT-off), car
 **soundness verifier** (forward AND-meet), and falls back per-function to whole-function
 coverage if it cannot prove coverage — so it is always safe. Requires FEAT_DIT (Armv8.4+,
 Apple M-series has it; Neoverse N1 does not → SIGILL there).
+
+**DIT ownership (2026-08-08): only the frame that turned DIT on may turn it off.** A
+function proven `AlwaysEnteredWithDIT` keeps whole-function coverage even under `region`
+and never clears the bit - narrowing there would strip the *caller's* protection, and
+nothing is lost because the caller's region already covered the callee.
+`-debug-only=taint-interproc` prints which functions took that path. Callers still
+re-assert `MSR DIT, #1` after every non-tail call unless the callee's `PreservesDIT`
+summary bit proves it redundant; `-taint-dit-reassert-report` audits the rest. See
+`docs/design/dit-callee-ownership.md`.
+
+**A tail call is BOTH `isReturn()` and `isCall()`** on AArch64, so it needs its own case
+in any "before every return" walk. Whole-function placement used to clear DIT
+immediately before `b crypto_sign_ed25519`, running the callee that receives the secret
+completely unprotected (fixed 2026-08-05; `docs/design/dit-tailcall-gap.md`). The
+permanent residual: after a tail call DIT may stay set indefinitely, so an instrumented
+function does not restore DIT on every exit path.
 
 ## 5. Why the 3-phase serialize/reparse design (load-bearing)
 
@@ -174,22 +196,81 @@ the TUs measured, so annotation-driven is opt-in insurance rather than load-bear
 - **Toggle ≈ 30 cyc, fully serializing** (measured, M4). Floor: a region costs ~60 cyc to
   enter+leave, so only create one if it removes more dwell than that.
 - **Dwell up to ~15%** on sensitive SPEC 2026 benchmarks with DIT fully on (measured).
+- **The READ is free: `MRS DIT` = 1.00 cyc vs `MSR DIT` = 30.34** (measured, M5). That
+  30x asymmetry is what makes the ownership rule pay (90.67 → 2.01 cyc per call) and is
+  the basis of the deferred runtime `MRS` mode, the only mechanism that fixes indirect
+  and cross-TU calls.
 - ⚠️ **Do NOT conclude "DIT is free" from microkernels.** `playground/dit_bench/` and
   `firefox_convolve_int` (0.968x) are DIT-*insensitive* — they measure the benchmark's blind
-  spot, not DIT. Bad workloads for evaluating a placement *win*.
+  spot, not DIT. Bad workloads for evaluating a placement *win*. Do not size the *prize*
+  from them either: `lvp_chase` measures 4.0x where real workloads measure 1-2%, so
+  microbenchmarks **overstate the prize ~200x** (gem5, 2026-08-13).
 - The project owner implemented a **non-serializing DIT switch in GEM5** (via register
   renaming) — so on that model set `-taint-dit-switch-cyc` low and prefer the finest groups.
-- ⚠️ **END-TO-END RUNTIME IS NOW MEASURED, and on libsodium it is a NEGATIVE
-  (2026-08-03).** Blanket DIT costs **0.998–1.003x** there (free); taint-driven placement
-  at the **shipped defaults** costs **+46% (ed25519 sign) to +94% (AEAD encrypt)**.
-  Tuning for serializing switches (`-taint-dit-switch-cyc=30 -taint-dit-loop-hoist=1`)
-  recovers about half. Whole-function ≈ tuned region. On a dwell≈0 workload coarse DIT
-  dominates ours on both cost *and* coverage. This is what the model predicts when
-  `dwell ≈ 0` — not a refutation — but it means **the shipped defaults are mistuned for
-  real serializing hardware**, and no measured workload yet justifies fine placement.
-  Full table + caveats: `docs/results/dit-cost-model.md`.
 
-Full detail: `docs/results/dit-cost-model.md`, `docs/design/dit-placement.md`.
+### End-to-end runtime on real workloads - the record
+
+| workload | always-on DIT | taint-driven placement | verdict |
+|---|---|---|---|
+| libsodium, M4 (2026-08-03) | 0.998-1.003x, i.e. free | +46% (ed25519 sign) .. +94% (AEAD) | negative |
+| **QuickJS + Octane**, M5 (2026-08-10/11) | +1.05% | **-1.07% vs always-on**, with `loop-hoist=1` | **the one win** |
+| SQLCipher / libtomcrypt, M5 (2026-08-12) | +8.81% | +37.8% (hoist) .. +57.0% (region) | negative |
+| SQLCipher / OpenSSL, M5 - the shipping default | +1.76% | recoverable headroom **-0.08% = zero** | no prize exists |
+| Firefox / Chromium, Speedometer 3.1, M5 (2026-08-09/10) | +2.61% / +1.80% | not yet placed | prize measured, uncollected |
+
+**Overhead is amortized by operation length**, because cost tracks *executed toggles*
+relative to runtime: on libsodium the same build costs +94% on a 1.28 us AEAD encrypt,
++46% on a 9.64 us ed25519 sign, and **<1% on a 271.6 ms argon2id KDF** - where CIO pays
+**27.84x** on that same primitive, the project's strongest head-to-head number
+(`docs/results/dit-cost-model.md`).
+
+**Two axes decide everything** (`docs/results/quickjs.md`): the **secret fraction** sets
+the size of the prize, and **granularity** decides whether you can collect it. Measured
+crossover, with dwell held constant and only region count varied: a region must hold
+**~1300 cycles (~0.34 us)** of work to be worth creating. The shipped
+`-taint-dit-switch-cyc=0` asserts toggles are free, which is wrong by ~30 cyc, so the
+default is far too fine for serializing hardware; likewise `-taint-dit-loop-hoist=0`
+(on QuickJS, without `=1` there is no win at all).
+
+**Why SQLCipher loses is the lesson worth internalizing.** Precision is excellent - the
+key reaches 2 functions and 11 `MSR DIT` in a 263k-line file, with no context-insensitive
+spread. But `cbc_encrypt` dispatches AES through the `cipher_descriptor[]` function-pointer
+table once per 16-byte block, so a 4 KB page becomes ~256 regions of ~300-500 cycles each,
+3-4x below the crossover. `-taint-dit-loop-hoist=1` cannot fix it: it hoists *within* a
+function, and these toggles sit at a callee boundary reached *indirectly*. And with the
+oracle corrected to wrap all three provider entry points, protecting only the secret costs
+what protecting everything costs, because almost all of always-on's cost is DIT **on the
+crypto**, which any correct placement must also pay. **AES is close to the worst possible
+motivating workload:** software AES is DIT-expensive only for its T-table data-dependent
+loads, whose real leak is *cache* timing, which DIT does not cover; hardware `AESE` is
+already constant-time. The value is where secrets flow through general-purpose code never
+designed to be constant-time.
+
+**gem5 corroboration (2026-08-13)** runs the identical binary under serializing vs renamed
+`MSR DIT`, isolating toggle cost with dwell held constant - something silicon cannot do:
+**+0.08% / +12.8% / +19.1%** for **6 / 54 / 63** switch sites, reproducing the M5 ordering
+and region:hoist ratio (1.49x vs 1.52x) at about a third the magnitude. It also measures
+the prize: **~1.4%**, carried entirely by value prediction. So the shipped placement spends
+19% to protect something worth 1.4%.
+
+### Two method rules, each learned by retracting a result
+
+1. **Baseline every placement measurement against a round-trip control**
+   (`-ftaint-harden=<empty file>`), never against the stock `-O2` build. The 3-phase MIR
+   round-trip changes codegen by itself, with zero `MSR DIT` emitted.
+2. **That control is necessary but NOT sufficient.** The artifact is a per-binary codegen
+   lottery, not a constant: **+0.58%** (QuickJS), **+0.06%** (SQLCipher native), **+2.65%**
+   (gem5, where the zero-DIT `nodit` binary is the *slowest* in the matrix, exceeding the
+   entire dwell effect). At ~1% effect sizes only a **same-binary, two-configuration**
+   comparison is trustworthy - which is exactly what the gem5 study does.
+
+Three claims have been reported and retracted on metric or oracle errors (QuickJS -6.28%,
+SQLCipher +8.15%, "the secret code is 30x more DIT-sensitive"). **Read the retraction
+banners in `docs/results/` before quoting any number**, and audit a manual placement for
+*coverage* before believing its performance.
+
+Full detail: `docs/results/dit-cost-model.md`, `docs/results/quickjs.md`,
+`docs/results/sqlcipher.md`, `docs/design/dit-placement.md`.
 
 ## 8. Key mechanisms & the most recent fixes (this session, 2026-07-24→26)
 
@@ -204,8 +285,8 @@ secret set). Test: `taint-analysis-lr-not-arg.mir`.
 > **Attribution correction:** we *originally* blamed the flood on the blunt-TOP memory model
 > (`ExternalMemClobbered`) and built annotation-driven mode to suppress it. Controlled A/B
 > (git-stash the fixes, rebuild, compare) proved that WRONG: the flood was the `$lr` artifact;
-> `ExternalMemClobbered` was only the amplification channel. `memory/firefox-filter-dit-flood.md`
-> is corrected accordingly.
+> `ExternalMemClobbered` was only the amplification channel. The flood numbers quoted in
+> `docs/research/memory-summaries.md` carry that same correction.
 
 **Fix B — passed-vs-live (commit `2d81ec4`).** A secret counts as reaching a callee only when
 genuinely *passed* in an argument register (data or pointee), read on the state *entering* the
@@ -346,66 +427,79 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 7. **P1 memory precision deferred:** the mod-set is blunt (whole-object, weak updates, every
    truncation → TOP). Precise arg-i / per-offset provenance + a libc model table are P1;
    note that at the MIR stage, `getUnderlyingObject` often can't reach the `Argument` through
-   optimized code (`memory/mir-stage-too-late-for-provenance.md`).
+   optimized code - measured, only **17 of 583** secret-writing call sites resolve to an
+   argument at all (`docs/design/context-insensitivity.md`).
 8. **Inlining flattens visible propagation** at higher opt (see §8). The analysis is correct;
    the call edges are just gone before it runs.
 9. **FEAT_DIT required at runtime** (Apple M-series yes; Neoverse N1 → SIGILL). Verify via
    objdump/lit or `qemu-aarch64 -cpu max`.
+10. **No declassification mechanism, and that decides whether any win generalizes.** A
+    function that returns a secret-derived value (a password *verify* returning a boolean)
+    taints its caller, and on QuickJS an arbitrary taint source flowing back through a
+    return value produced **13,222** `MSR DIT` - 618 of them inside the interpreter -
+    versus **6** when nothing secret re-enters the caller. Same program, same pass, 2200x
+    apart. See `docs/results/quickjs.md`.
+11. **Compile time is 10.7x on a large TU** after the 2026-08-10 fix (`quickjs.c`, 54k
+    lines / 940 functions: 733 s; a flat 1.3-1.5x up to ~100 functions). Taint *spread* on
+    such TUs is still open. See `docs/design/scalability.md`.
+12. **Measurement itself is a limitation at these effect sizes** - the MIR round-trip
+    perturbs codegen by +0.06%..+2.65% with zero `MSR DIT` emitted, which can exceed the
+    entire signal. See the two method rules in §7.
 
 ## 10. Current state
 
-- **Tests:** 24 lit tests pass — `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` +
-  `llvm/test/Transforms/TaintAnnotate`. Run:
+- **Tests:** 29 lit tests pass - 28 `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` +
+  `llvm/test/Transforms/TaintAnnotate` (as of 2026-08-11). The whole
+  `llvm/test/CodeGen/AArch64` suite was last clean on 2026-08-08 (3894 discovered, 3890
+  pass, 4 pre-existing XFAIL). Run:
   `build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate`
-- **Placement defaults:** `region` granularity, `loop-hoist=0` (block-minimal).
+- **Placement defaults:** `region` granularity, `loop-hoist=0` (block-minimal),
+  `switch-cyc=0`. **These defaults are known to be mistuned for serializing hardware** -
+  see §7 and next action 1.
 - **Sound mode is the default**; annotation-driven is opt-in. `-taint-frame-addr-args` is a
-  prototype, **default off** — turning it on is not yet justified (see next actions).
-- **Validated:** flood 78→5 on `FilterNodeSoftware`; `FilterProcessingScalar` (2nd TU) does
-  not flood (2/2, 6/7 with surface workers) — sound == annotation-driven on both. Holds at
-  `-O2` (5 genuine functions, `ColorComponentAtPoint` reached via propagation). libsodium
-  head-to-head vs CIO measured end to end (§8b).
+  prototype, **default off**.
+- **Shipped since this doc's previous revision:** the DIT ownership rule and
+  `AlwaysEnteredWithDIT` (2026-08-08), the tail-call leak fix (2026-08-05), DIT precision
+  accounting (2026-08-06), and the compile-time fix that made `quickjs.c` compilable at all
+  (2026-08-10).
+- **Validated:** flood 78→5 on `FilterNodeSoftware`; `FilterProcessingScalar` does not
+  flood (sound == annotation-driven on both, at `-O2`); libsodium head-to-head vs CIO
+  measured end to end (§8b), `make check` 86/86 on the hardened library; QuickJS, SQLCipher
+  and both browsers measured end to end (§7).
 
 ### Next actions, in priority order
 
-1. ~~**Measure RUNTIME.**~~ **DONE 2026-08-03 — see §7 and `docs/results/dit-cost-model.md`.**
-   Result was a negative on libsodium: coarse DIT is free (0.998–1.003x), taint-driven
-   placement costs +45%..+94% at the shipped defaults. Run it yourself with
-   `utils/taint_libsodium_bench.sh`. **Two follow-ups this created:**
-   (a) **Retune the shipped defaults** — `-taint-dit-switch-cyc=0` encodes "toggles are
-   free", which is false by ~30 cyc on M4 and costs ~2x the tuned overhead;
-   (b) ~~argon2id was never run~~ **run 2026-08-05 (interleaved, `REPS=5`, medians):
-   overhead is UNMEASURABLE — every config within ±0.2% of baseline, blanket DIT
-   included.** Against CIO's **27.84x** on this same primitive, that is the project's
-   strongest head-to-head number.
-   **Overhead is amortized by operation length** — **+94%** on a 1.28 µs AEAD encrypt,
-   **+46%** on a 9.64 µs ed25519 sign, **<1%** on a 271.6 ms argon2id KDF. Cost tracks
-   executed toggles relative to runtime, so short operations pay and long ones do not.
-   ⚠️ Getting this number required fixing two harness bugs (variant-outer loop confounded
-   config with thermal drift; `min`-of-N latched onto a cold-start outlier) — both
-   documented in `docs/results/dit-cost-model.md`, both fixed in the script.
-   No `sudo` ⇒ no kperf cycles; re-run with `sudo -E` for real cycle counts.
-2. **Attack the context-insensitivity FP source (§9.6)** — the largest measured over-taint
-   source. Cheap probe first: gate mod-set application on whether *this* call site passes a
-   secret (matches how the external/indirect path already gates on `HasTaintedArg`). It is
-   **not sound in general** — a callee can write a secret obtained from a global — so put it
-   behind a flag next to `-taint-annotation-driven` and treat the delta as an upper bound on
-   what precise application could buy.
-3. **Provenance recovery, THEN P1b.** Note the correction in
-   `docs/design/context-insensitivity.md`: only **17 of 583** secret-writing call sites
-   resolve provenance to an argument at all (566 are TOP). So P1b — precise application of
-   `WritesSecretThroughArgPointee` — currently has almost nothing to act on; it is worth
-   doing only after more stores resolve to arg-*i*, which likely means analyzing at IR and
-   carrying facts to MIR (`memory/mir-stage-too-late-for-provenance.md`).
-4. **A DIT-sensitive real workload is now THE blocking gap — promote it.** Three
-   workloads have come back insensitive: `firefox_convolve_int` 0.968x, the int8 MAC
-   gate **1.000x** (run 2026-08-03, previously never run — results now in
-   `docs/results/dit-cost-model.md`), and libsodium **0.998–1.003x**. Until one is found,
-   fine-grained placement cannot be shown to win on *anything*, and the honest position
-   is that coarse DIT is the better engineering choice on every workload measured. The
-   LVP pointer-chase (**4.00x**) is the one confirmed sensitive pattern — find a real
-   application shaped like it. Also still open: reduce the SPEC 2026 ~15% to code
-   patterns. Caveat on the int8 gate: its `DEP` shape never demonstrated it *can* detect
-   the LVP, so fix that probe (byte vs 4-byte load) before citing it as a general result.
+1. **Retune the shipped placement defaults from the measured crossover.**
+   `-taint-dit-switch-cyc=0` encodes "toggles are free", which is false by ~30 cyc; the
+   end-to-end data say a region needs **~1300 cycles** of work before it is worth creating,
+   and `-taint-dit-loop-hoist=0` is the wrong default on serializing hardware (on QuickJS
+   it is the difference between a 1.07% win and no win at all). This is the cheapest
+   remaining improvement and it is fully specified by existing measurements.
+2. **Interprocedural hoisting, and with it the deferred runtime `MRS` mode.** SQLCipher is
+   the motivating case: the toggles that matter sit at a callee boundary reached through
+   `cipher_descriptor[]`, so no intraprocedural transform can remove them. Placing the
+   enable in the *caller* before the block loop is the missing piece, and `MRS DIT` = 1.00
+   cyc vs `MSR DIT` = 30.34 is what makes the runtime variant cheap enough to work through
+   indirect and cross-TU calls. See `docs/design/dit-callee-ownership.md`.
+3. **Declassification.** Without it the QuickJS result does not generalize: any realistic
+   secret-consuming API returns a secret-derived value, which taints the caller and floods
+   the instrumentation (§9.10).
+4. **Attack the context-insensitivity FP source (§9.6)** - still the largest measured
+   over-taint source (169 of 199 FPs on libsodium). Cheap probe first: gate mod-set
+   application on whether *this* call site passes a secret. It is **not sound in general**
+   (a callee can write a secret obtained from a global), so put it behind a flag next to
+   `-taint-annotation-driven` and treat the delta as an upper bound.
+5. **Provenance recovery, THEN P1b.** Only **17 of 583** secret-writing call sites resolve
+   provenance to an argument (566 are TOP), so P1b has almost nothing to act on until more
+   stores resolve to arg-*i*, which likely means analyzing at IR and carrying facts to MIR.
+   See `docs/design/context-insensitivity.md`.
+6. **Find a workload where the prize is both real and collectable.** The blocking gap has
+   moved: a DIT-sensitive workload was found (QuickJS, and the browsers at +1.8-2.6%
+   always-on), but on SQLCipher the prize turned out not to exist, and the gem5 study bounds
+   it there at ~1.4%. The browsers are the strongest remaining candidate - the prize is
+   measured and placement has not been attempted. The shape to look for
+   (`docs/research/browser-history-leaks.md`): **public code with DIT headroom, secret code
+   with none**, at a granularity above ~1300 cycles per region.
 
 ## 11. Code map (where things live)
 
@@ -420,26 +514,45 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 | Store payload classification (`getNumStoredValueRegs`) | `AArch64InstrInfo.cpp` (never classify stores by mnemonic prefix) |
 | Tests | `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` |
 | Scratch experiments (not shipping) | `playground/` |
+| Browser always-on DIT rig | `utils/taint_browser_dit_bench.sh`, `utils/browser_dit/` |
+| DIT precision / region-spacing analysis | `utils/taint_dit_precision.py`, `utils/taint_region_distance.py` |
 | **libsodium/CIO rig — SCRIPTED** (the old `~/Documents/libsodium-stable/` + `~/Documents/cio/` copies were lost; do not look for them) | `utils/taint_libsodium_eval.sh` (build+analyze+archives+`make check`), `utils/taint_libsodium_bench.sh` (runtime A/B/D/E/C). Default work dir `~/Documents/libsodium-1.0.21/`. |
 | Runtime benchmark drivers (kperf cycles, P-core pinning) — **untracked, outside the repo**; vendor or pin it or this rig will be lost the same way | `~/Documents/crypto-dit-benchmarks/` (`perf.c`, `libcpupin.dylib`, per-primitive drivers); override with `BENCH_DIR=` |
 
 ## 12. Deeper reference docs (this doc is the map; these are the territory)
 
-- `docs/reference/dit-spec.md` — what PSTATE.DIT actually guarantees (covered set; excludes
-  divide/sqrt; address-timing not covered). `isDITProtected` is transcribed from this.
-- `docs/design/dit-placement.md` — placement state, gaps (G1/G2/G3), optimal-placement design.
-- `docs/results/dit-cost-model.md` — toggle (~30 cyc) + dwell (~15% SPEC), the measured numbers.
-- `docs/research/value-timing-leaks.md` — motivation: LVP, Firefox, THOR/AMX.
-- `docs/research/memory-summaries.md` — mod-set summary design + P1 refinements.
-- `docs/design/context-insensitivity.md` — **the dominant false-positive source**, measured,
+`docs/README.md` is the full annotated index with a reading order. The essentials:
+
+- `docs/reference/dit-spec.md` - what PSTATE.DIT actually guarantees (covered set; excludes
+  divide/sqrt; address-timing not covered). `isDITProtected` is transcribed from this, so
+  keep the two in sync.
+- `docs/results/dit-cost-model.md` - toggle (~30 cyc) + dwell (~15% SPEC), the measured
+  numbers, and the libsodium negative.
+- `docs/results/quickjs.md` - the one positive result, the granularity crossover, and the
+  round-trip-control method rule.
+- `docs/results/sqlcipher.md` - the definitive negative, and the gem5 study bounding the
+  prize at ~1.4%.
+- `docs/design/dit-placement.md` - placement state, gaps (G1/G2/G3), optimal-placement design.
+- `docs/design/dit-callee-ownership.md` - the ownership rule, `AlwaysEnteredWithDIT`, and the
+  deferred runtime `MRS` mode.
+- `docs/design/dit-tailcall-gap.md` - the tail-call leak and its permanent residual.
+- `docs/design/dit-precision.md` - the precision metric, and why to read the loop-weighted
+  variant.
+- `docs/design/scalability.md` - the compile-time wall and the fix that made large TUs viable.
+- `docs/design/context-insensitivity.md` - **the dominant false-positive source**, measured,
   with the correction that P1b is a much smaller lever than assumed (17 of 583 sites).
-- `docs/design/spill-soundness-bugs.md` — the two 2026-07-27 bugs, what spilling *does* do
+- `docs/design/spill-soundness-bugs.md` - the two 2026-07-27 bugs, what spilling *does* do
   correctly, and how to force a real spill (rematerialization defeats the naive attempt).
-- `docs/design/frame-addr-fallback.md` — the `-taint-frame-addr-args` prototype: the
+- `docs/design/frame-addr-fallback.md` - the `-taint-frame-addr-args` prototype: the
   `f(&local_secret)` gap, why the frame is more trackable than assumed, measured cost.
-- `docs/research/ct-call-handling.md`, `docs/research/cio-and-ct-literature.md` — prior art
+- `docs/research/value-timing-leaks.md` - motivation: LVP, Firefox, THOR/AMX.
+- `docs/research/browser-history-leaks.md` - the browser threat model, the always-on browser
+  DIT measurements, and the benchmark reframe that says where fine-grained can win.
+- `docs/research/memory-summaries.md` - mod-set summary design + P1 refinements.
+- `docs/research/ct-call-handling.md`, `docs/research/cio-and-ct-literature.md` - prior art
   (CIO/Jasmin/FaCT/DECLASSIFLOW); read before any novelty claim.
-- `docs/reference/firefox-integration.md` — Firefox integration guide.
+- `docs/reference/firefox-integration.md` - Firefox integration guide.
+- `docs/handoff.md` - **historical only** (2026-07-14); superseded by this doc.
 
 ## 13. Working preferences (carry these forward)
 

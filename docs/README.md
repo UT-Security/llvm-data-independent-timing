@@ -193,10 +193,11 @@ respect the refuted ones.
   the broader constant-time / speculative-execution literature, with explicit
   verified, refuted, and open-question sections.
 
-## Handoff
+## Historical
 
-- **[handoff.md](handoff.md)** - session handoff notes: why the M4 matters, the
-  corrected threat model, state of the work, and next actions in priority order.
+- **[handoff.md](handoff.md)** - **superseded, kept as history** (2026-07-14). Its state
+  of the work and next actions are obsolete; the M4 rationale, the corrected threat
+  model, and the prior-art reading order are the parts still worth reading.
 
 ## Where the non-doc material lives
 
