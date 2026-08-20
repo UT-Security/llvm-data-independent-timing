@@ -435,7 +435,9 @@ public:
   bool parseStandaloneVirtualRegister(VRegInfo *&Info);
   bool parseStandaloneRegister(Register &Reg);
   bool parseStandaloneStackObject(int &FI);
+  bool parseOneMDNode(MDNode *&Node);
   bool parseStandaloneMDNode(MDNode *&Node);
+  bool parseStandaloneMDNodeList(SmallVectorImpl<MDNode *> &Nodes);
   bool parseMachineMetadata();
   bool parseMDTuple(MDNode *&MD, bool IsDistinct);
   bool parseMDNodeVector(SmallVectorImpl<Metadata *> &Elts);
@@ -1285,22 +1287,40 @@ bool MIParser::parseStandaloneStackObject(int &FI) {
   return false;
 }
 
+/// Parse a single metadata node at the current token. Does not lex() first and
+/// does not check what follows the node.
+bool MIParser::parseOneMDNode(MDNode *&Node) {
+  if (Token.is(MIToken::exclaim))
+    return parseMDNode(Node);
+  if (Token.is(MIToken::md_diexpr))
+    return parseDIExpression(Node);
+  if (Token.is(MIToken::md_dilocation))
+    return parseDILocation(Node);
+  return error("expected a metadata node");
+}
+
 bool MIParser::parseStandaloneMDNode(MDNode *&Node) {
   lex();
-  if (Token.is(MIToken::exclaim)) {
-    if (parseMDNode(Node))
-      return true;
-  } else if (Token.is(MIToken::md_diexpr)) {
-    if (parseDIExpression(Node))
-      return true;
-  } else if (Token.is(MIToken::md_dilocation)) {
-    if (parseDILocation(Node))
-      return true;
-  } else
-    return error("expected a metadata node");
+  if (parseOneMDNode(Node))
+    return true;
   if (Token.isNot(MIToken::Eof))
     return error("expected end of string after the metadata node");
   return false;
+}
+
+bool MIParser::parseStandaloneMDNodeList(SmallVectorImpl<MDNode *> &Nodes) {
+  lex();
+  while (true) {
+    MDNode *Node = nullptr;
+    if (parseOneMDNode(Node))
+      return true;
+    Nodes.push_back(Node);
+    if (Token.is(MIToken::Eof))
+      return false;
+    if (Token.isNot(MIToken::comma))
+      return error("expected end of string after the metadata node");
+    lex();
+  }
 }
 
 bool MIParser::parseMachineMetadata() {
@@ -3713,6 +3733,12 @@ bool llvm::parseStackObjectReference(PerFunctionMIParsingState &PFS,
 bool llvm::parseMDNode(PerFunctionMIParsingState &PFS,
                        MDNode *&Node, StringRef Src, SMDiagnostic &Error) {
   return MIParser(PFS, Error, Src).parseStandaloneMDNode(Node);
+}
+
+bool llvm::parseMDNodeList(PerFunctionMIParsingState &PFS,
+                           SmallVectorImpl<MDNode *> &Nodes, StringRef Src,
+                           SMDiagnostic &Error) {
+  return MIParser(PFS, Error, Src).parseStandaloneMDNodeList(Nodes);
 }
 
 bool llvm::parseMachineMetadata(PerFunctionMIParsingState &PFS, StringRef Src,

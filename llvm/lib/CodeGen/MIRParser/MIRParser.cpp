@@ -147,6 +147,13 @@ public:
                                             const yaml::StringValue &VarStr,
                                             const yaml::StringValue &ExprStr,
                                             const yaml::StringValue &LocStr);
+  /// A stack object can describe several source variables at once, so each of
+  /// the debug-info-* fields may hold a comma separated list of nodes.
+  std::optional<SmallVector<VarExprLoc, 1>>
+  parseVarExprLocList(PerFunctionMIParsingState &PFS,
+                      const yaml::StringValue &VarStr,
+                      const yaml::StringValue &ExprStr,
+                      const yaml::StringValue &LocStr);
   template <typename T>
   bool parseStackObjectsDebugInfo(PerFunctionMIParsingState &PFS,
                                   const T &Object,
@@ -1047,18 +1054,72 @@ std::optional<MIRParserImpl::VarExprLoc> MIRParserImpl::parseVarExprLoc(
   return VarExprLoc{DIVar, DIExpr, DILoc};
 }
 
+/// Parse a comma separated list of metadata nodes out of \p Source. Returns
+/// true on error.
+static bool parseMDNodeListInto(MIRParserImpl &Parser,
+                                PerFunctionMIParsingState &PFS,
+                                SmallVectorImpl<MDNode *> &Nodes,
+                                const yaml::StringValue &Source) {
+  if (Source.Value.empty())
+    return false;
+  SMDiagnostic Error;
+  if (llvm::parseMDNodeList(PFS, Nodes, Source.Value, Error))
+    return Parser.error(Error, Source.SourceRange);
+  return false;
+}
+
+std::optional<SmallVector<MIRParserImpl::VarExprLoc, 1>>
+MIRParserImpl::parseVarExprLocList(PerFunctionMIParsingState &PFS,
+                                   const yaml::StringValue &VarStr,
+                                   const yaml::StringValue &ExprStr,
+                                   const yaml::StringValue &LocStr) {
+  SmallVector<MDNode *, 1> Vars, Exprs, Locs;
+  if (parseMDNodeListInto(*this, PFS, Vars, VarStr) ||
+      parseMDNodeListInto(*this, PFS, Exprs, ExprStr) ||
+      parseMDNodeListInto(*this, PFS, Locs, LocStr))
+    return std::nullopt;
+
+  size_t N = Vars.size();
+  N = Exprs.size() > N ? Exprs.size() : N;
+  N = Locs.size() > N ? Locs.size() : N;
+  if ((!Vars.empty() && Vars.size() != N) ||
+      (!Exprs.empty() && Exprs.size() != N) ||
+      (!Locs.empty() && Locs.size() != N)) {
+    error(VarStr.SourceRange.Start,
+          "mismatched number of debug-info-variable, debug-info-expression "
+          "and debug-info-location entries");
+    return std::nullopt;
+  }
+
+  SmallVector<VarExprLoc, 1> Result;
+  for (size_t I = 0; I != N; ++I) {
+    DILocalVariable *DIVar = nullptr;
+    DIExpression *DIExpr = nullptr;
+    DILocation *DILoc = nullptr;
+    if (typecheckMDNode(DIVar, I < Vars.size() ? Vars[I] : nullptr, VarStr,
+                        "DILocalVariable", *this) ||
+        typecheckMDNode(DIExpr, I < Exprs.size() ? Exprs[I] : nullptr, ExprStr,
+                        "DIExpression", *this) ||
+        typecheckMDNode(DILoc, I < Locs.size() ? Locs[I] : nullptr, LocStr,
+                        "DILocation", *this))
+      return std::nullopt;
+    Result.push_back(VarExprLoc{DIVar, DIExpr, DILoc});
+  }
+  return Result;
+}
+
 template <typename T>
 bool MIRParserImpl::parseStackObjectsDebugInfo(PerFunctionMIParsingState &PFS,
                                                const T &Object, int FrameIdx) {
-  std::optional<VarExprLoc> MaybeInfo =
-      parseVarExprLoc(PFS, Object.DebugVar, Object.DebugExpr, Object.DebugLoc);
-  if (!MaybeInfo)
+  std::optional<SmallVector<VarExprLoc, 1>> MaybeInfos = parseVarExprLocList(
+      PFS, Object.DebugVar, Object.DebugExpr, Object.DebugLoc);
+  if (!MaybeInfos)
     return true;
   // Debug information can only be attached to stack objects; Fixed stack
   // objects aren't supported.
-  if (MaybeInfo->DIVar || MaybeInfo->DIExpr || MaybeInfo->DILoc)
-    PFS.MF.setVariableDbgInfo(MaybeInfo->DIVar, MaybeInfo->DIExpr, FrameIdx,
-                              MaybeInfo->DILoc);
+  for (const VarExprLoc &Info : *MaybeInfos)
+    if (Info.DIVar || Info.DIExpr || Info.DILoc)
+      PFS.MF.setVariableDbgInfo(Info.DIVar, Info.DIExpr, FrameIdx, Info.DILoc);
   return false;
 }
 
