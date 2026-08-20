@@ -1,0 +1,51 @@
+Global frequency set at 1000000000000 ticks per second
+warn: board.cache_hierarchy.l1icaches.prefetcher adopting orphan SimObject param 'prefetchers'
+warn: No dot file generated. Please install pydot to generate the dot file and pdf.
+src/mem/dram_interface.cc:692: warn: DRAM device capacity (1024 Mbytes) does not match the address range assigned (2048 Mbytes)
+src/mem/dram_interface.cc:692: warn: DRAM device capacity (1024 Mbytes) does not match the address range assigned (2048 Mbytes)
+src/mem/dram_interface.cc:692: warn: DRAM device capacity (1024 Mbytes) does not match the address range assigned (2048 Mbytes)
+src/mem/dram_interface.cc:692: warn: DRAM device capacity (1024 Mbytes) does not match the address range assigned (2048 Mbytes)
+src/mem/dram_interface.cc:692: warn: DRAM device capacity (1024 Mbytes) does not match the address range assigned (2048 Mbytes)
+src/mem/dram_interface.cc:692: warn: DRAM device capacity (1024 Mbytes) does not match the address range assigned (2048 Mbytes)
+src/mem/dram_interface.cc:692: warn: DRAM device capacity (1024 Mbytes) does not match the address range assigned (2048 Mbytes)
+src/mem/dram_interface.cc:692: warn: DRAM device capacity (1024 Mbytes) does not match the address range assigned (2048 Mbytes)
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:281: warn: Bucket size (4) does not divide range [1:64] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:281: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:281: warn: Bucket size (4) does not divide range [1:64] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:281: warn: Bucket size (4) does not divide range [1:64] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:281: warn: Bucket size (10000) does not divide range [1:200000] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:281: warn: Bucket size (10000) does not divide range [1:200000] into equal-sized buckets. Rounding up.
+src/mem/coherent_xbar.cc:140: warn: CoherentXBar board.cache_hierarchy.mmubuses has no snooping ports attached!
+src/base/remote_gdb.cc:418: warn: Sockets disabled, not accepting gdb connections
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.0
+gem5 compiled Aug 16 2026 15:23:30
+gem5 started Aug 18 2026 22:47:31
+gem5 executing on grealish.csres.utexas.edu, pid 47970
+command line: /Users/rohan/Documents/gem5-DIT/build/ARM/gem5.fast -d outc2/ser_region /Users/rohan/Documents/gem5-DIT/configs/example/arm/fdp_neoverse_v2_binary.py --eves --dmp --comp-simp --no-speculative-dit --binary /private/tmp/claude-502/-Users-rohan--treehouse-llvm-project-388923-1-llvm-project/03985551-3e8d-4387-95fd-2373dfbb0112/scratchpad/g5comp/comp2_region --arguments '0 4000 2 1'
+
+info: Standard input is not a terminal, disabling listeners.
+Running /private/tmp/claude-502/-Users-rohan--treehouse-llvm-project-388923-1-llvm-project/03985551-3e8d-4387-95fd-2373dfbb0112/scratchpad/g5comp/comp2_region on NeoverseV2 FDP enabled VP eves CompSimp enabled DIT serializing DMP enabled
+src/cpu/o3/eves.cc:221: warn: EVES eligible instruction kind 'movz' lacks DitCC source operand; DIT gating will not apply. first_pc=0x364c84 disasm="  movz   x29, #0, #0"
+src/cpu/o3/eves.cc:221: warn: EVES eligible instruction kind 'adrp' lacks DitCC source operand; DIT gating will not apply. first_pc=0x364c9c disasm="  adrp   x0, #0"
+src/cpu/o3/eves.cc:221: warn: EVES eligible instruction kind 'adr' lacks DitCC source operand; DIT gating will not apply. first_pc=0x4c4ec8 disasm="  adr   x19, #152104"
+src/cpu/o3/eves.cc:221: warn: EVES eligible instruction kind 'movn' lacks DitCC source operand; DIT gating will not apply. first_pc=0x4699d8 disasm="  movn   x1, #31, #0"
+src/cpu/o3/eves.cc:221: warn: EVES eligible instruction kind 'udiv' lacks DitCC source operand; DIT gating will not apply. first_pc=0x4698d8 disasm="  udiv   x5, x5, x24"
+src/sim/syscall_emul.cc:86: warn: ignoring syscall set_robust_list(...)
+src/sim/syscall_emul.cc:98: warn: ignoring syscall rseq(...)
+      (further warnings will be suppressed)
+src/sim/mem_state.cc:459: info: Increasing stack size by one page.
+src/sim/syscall_emul.hh:1129: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/private/tmp/claude-502/-Users-rohan--treehouse-llvm-project-388923-1-llvm-project/03985551-3e8d-4387-95fd-2373dfbb0112/scratchpad/g5comp/comp2_region'
+src/arch/arm/insts/pseudo.cc:175: warn: 	instruction 'bti' unimplemented
+src/cpu/o3/eves.cc:221: warn: EVES eligible instruction kind 'fmov' lacks DitCC source operand; DIT gating will not apply. first_pc=0x4a6230 disasm="  fmov   f3, f0"
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+src/cpu/o3/eves.cc:221: warn: EVES eligible instruction kind 'sdiv' lacks DitCC source operand; DIT gating will not apply. first_pc=0x389108 disasm="  sdiv   x9, x9, x10"
+src/sim/mem_state.cc:459: info: Increasing stack size by one page.
+src/cpu/o3/eves.cc:221: warn: EVES eligible instruction kind 'gem5op' lacks DitCC source operand; DIT gating will not apply. first_pc=0x7ffffef560 disasm="  gem5op   "
+WORK sqlite checksum 48686496
+HOST sqlite mode=0 total_s=0.000000 secret_s=0.000000 secret_frac=nan% signs=14 toggles=0 dit_now=0
+Simulation done. Exit cause: 'exiting with last active thread context'.

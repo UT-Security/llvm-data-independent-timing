@@ -1,0 +1,169 @@
+CLOBBER modset-top callee=secp256k1_ecmult_gen_blind caller=secp256k1_context_preallocated_create bb=8
+CLOBBER modset-top callee=secp256k1_context_preallocated_create caller=secp256k1_context_create bb=6
+CLOBBER modset-top callee=secp256k1_hsort caller=secp256k1_ec_pubkey_sort bb=7
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_hsort bb=6 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_hsort bb=7 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_hsort bb=9 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_hsort bb=16 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_hsort bb=17 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_hsort bb=19 data
+CLOBBER modset-top callee=secp256k1_der_parse_integer caller=secp256k1_ecdsa_signature_parse_der bb=19
+CLOBBER modset-top callee=secp256k1_der_parse_integer caller=secp256k1_ecdsa_signature_parse_der bb=20
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_signature_parse_compact bb=4
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_signature_parse_compact bb=4
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_verify bb=6
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_ecdsa_verify bb=8 data
+CLOBBER modset-top callee=nonce_function_rfc6979_impl caller=nonce_function_rfc6979 bb=0
+CLOBBER modset-top callee=secp256k1_ecdsa_sign_inner caller=secp256k1_ecdsa_sign bb=8
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_sign_inner bb=2
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_sign_inner bb=2
+CLOBBER modset-top callee=nonce_function_rfc6979_impl caller=secp256k1_ecdsa_sign_inner bb=4
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_ecdsa_sign_inner bb=5 data pointee
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_sign_inner bb=7
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_sign_inner bb=9
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ec_seckey_verify bb=2
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ec_pubkey_create bb=6
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ec_seckey_negate bb=2
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ec_seckey_tweak_add bb=4
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ec_seckey_tweak_add bb=4
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ec_pubkey_tweak_add bb=6
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ec_seckey_tweak_mul bb=4
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ec_seckey_tweak_mul bb=4
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ec_pubkey_tweak_mul bb=4
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_ec_pubkey_tweak_mul bb=7 data
+CLOBBER modset-top callee=secp256k1_ecmult_gen_blind caller=secp256k1_context_randomize bb=2
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecmult_gen_blind bb=5
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_recoverable_signature_parse_compact bb=6
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_recoverable_signature_parse_compact bb=6
+CLOBBER modset-top callee=secp256k1_ecdsa_sign_inner caller=secp256k1_ecdsa_sign_recoverable bb=8
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ecdsa_recover bb=6
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_xonly_pubkey_tweak_add bb=8
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_xonly_pubkey_tweak_add_check bb=8
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_keypair_create bb=6
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_keypair_xonly_tweak_add bb=6
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_keypair_xonly_tweak_add bb=8 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_keypair_xonly_tweak_add bb=13
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_keypair_xonly_tweak_add bb=13
+CLOBBER modset-top callee=nonce_function_bip340_impl caller=nonce_function_bip340 bb=0
+CLOBBER modset-top callee=secp256k1_schnorrsig_sign_internal caller=secp256k1_schnorrsig_sign32 bb=0
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_schnorrsig_sign_internal bb=11
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_schnorrsig_sign_internal bb=13 data
+CLOBBER modset-top callee=nonce_function_bip340_impl caller=secp256k1_schnorrsig_sign_internal bb=20
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_schnorrsig_sign_internal bb=21 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_schnorrsig_sign_internal bb=22
+CLOBBER modset-top callee=secp256k1_schnorrsig_challenge caller=secp256k1_schnorrsig_sign_internal bb=27
+CLOBBER modset-top callee=secp256k1_schnorrsig_sign_internal caller=secp256k1_schnorrsig_sign_custom bb=8
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_schnorrsig_verify bb=11
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_schnorrsig_verify bb=14 data
+CLOBBER modset-top callee=secp256k1_schnorrsig_challenge caller=secp256k1_schnorrsig_verify bb=15
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_schnorrsig_challenge bb=4 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_schnorrsig_challenge bb=7 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_schnorrsig_challenge bb=9 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_schnorrsig_challenge bb=10
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_pubkey_agg bb=32 data
+CLOBBER modset-top callee=secp256k1_musig_keyaggcoef_internal caller=secp256k1_musig_pubkey_agg bb=33
+CLOBBER modset-top callee=secp256k1_keyagg_cache_load caller=secp256k1_musig_pubkey_get bb=4
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_keyagg_cache_load bb=5
+CLOBBER modset-top callee=secp256k1_musig_pubkey_tweak_add_internal caller=secp256k1_musig_pubkey_ec_tweak_add bb=0
+CLOBBER modset-top callee=secp256k1_keyagg_cache_load caller=secp256k1_musig_pubkey_tweak_add_internal bb=6
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_pubkey_tweak_add_internal bb=8
+CLOBBER modset-top callee=secp256k1_musig_pubkey_tweak_add_internal caller=secp256k1_musig_pubkey_xonly_tweak_add bb=0
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sig_parse bb=4
+CLOBBER modset-top callee=secp256k1_musig_nonce_gen_internal caller=secp256k1_musig_nonce_gen bb=6
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_nonce_gen_internal bb=8
+CLOBBER modset-top callee=secp256k1_keyagg_cache_load caller=secp256k1_musig_nonce_gen_internal bb=11
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_nonce_gen_internal bb=14 data
+CLOBBER modset-top callee=secp256k1_nonce_function_musig_helper caller=secp256k1_musig_nonce_gen_internal bb=18
+CLOBBER modset-top callee=secp256k1_nonce_function_musig_helper caller=secp256k1_musig_nonce_gen_internal bb=18
+CLOBBER modset-top callee=secp256k1_nonce_function_musig_helper caller=secp256k1_musig_nonce_gen_internal bb=22
+CLOBBER modset-top callee=secp256k1_nonce_function_musig_helper caller=secp256k1_musig_nonce_gen_internal bb=23
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_nonce_gen_internal bb=26
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_nonce_gen_internal bb=29
+CLOBBER modset-top callee=secp256k1_musig_nonce_gen_internal caller=secp256k1_musig_nonce_gen_counter bb=4
+CLOBBER modset-top callee=secp256k1_keyagg_cache_load caller=secp256k1_musig_nonce_process bb=8
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_nonce_process bb=26 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_nonce_process bb=37 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_nonce_process bb=39 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_nonce_process bb=44 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_nonce_process bb=46 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_nonce_process bb=47
+CLOBBER modset-top callee=secp256k1_schnorrsig_challenge caller=secp256k1_musig_nonce_process bb=53
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sign bb=9
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sign bb=9
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sign bb=11 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sign bb=13 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sign bb=15 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sign bb=17 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sign bb=20
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sign bb=23 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sign bb=26 data
+CLOBBER modset-top callee=secp256k1_keyagg_cache_load caller=secp256k1_musig_partial_sign bb=27
+CLOBBER modset-top callee=secp256k1_musig_keyaggcoef_internal caller=secp256k1_musig_partial_sign bb=31
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sign bb=35 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sign bb=36
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sign bb=36
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sign bb=36
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sig_verify bb=15
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sig_verify bb=15
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sig_verify bb=15
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sig_verify bb=18 data
+CLOBBER modset-top callee=secp256k1_keyagg_cache_load caller=secp256k1_musig_partial_sig_verify bb=19
+CLOBBER modset-top callee=secp256k1_musig_keyaggcoef_internal caller=secp256k1_musig_partial_sig_verify bb=21
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sig_verify bb=27 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sig_verify bb=28
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sig_agg bb=17
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sig_agg bb=17
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sig_agg bb=17
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_partial_sig_agg bb=22
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_musig_partial_sig_agg bb=24 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ellswift_create bb=6
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_ellswift_create bb=17 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_ellswift_create bb=19 data
+CLOBBER modset-top callee=ellswift_xdh_hash_function_prefix_impl caller=ellswift_xdh_hash_function_prefix bb=0
+CLOBBER modset-top callee=ellswift_xdh_hash_function_bip324_impl caller=ellswift_xdh_hash_function_bip324 bb=0
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_ellswift_xdh bb=10
+CLOBBER modset-top callee=ellswift_xdh_hash_function_bip324_impl caller=secp256k1_ellswift_xdh bb=11
+CLOBBER modset-top callee=ellswift_xdh_hash_function_prefix_impl caller=secp256k1_ellswift_xdh bb=13
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_ellswift_xdh bb=14 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_bip324_impl bb=0 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_bip324_impl bb=1 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_bip324_impl bb=2 data
+CLOBBER external-arg callee=__memcpy_chk caller=ellswift_xdh_hash_function_bip324_impl bb=2 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_bip324_impl bb=7 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_bip324_impl bb=9 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_prefix_impl bb=0 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_prefix_impl bb=1 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_prefix_impl bb=2 data
+CLOBBER external-arg callee=__memcpy_chk caller=ellswift_xdh_hash_function_prefix_impl bb=2 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_prefix_impl bb=4 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_prefix_impl bb=5 data
+CLOBBER external-arg callee=__memcpy_chk caller=ellswift_xdh_hash_function_prefix_impl bb=5 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_prefix_impl bb=10 data
+CLOBBER indirect-arg callee=<indirect> caller=ellswift_xdh_hash_function_prefix_impl bb=12 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_sender_create_outputs bb=44
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_sender_create_outputs bb=49
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_silentpayments_sender_create_outputs bb=52 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_sender_create_outputs bb=59
+CLOBBER modset-top callee=secp256k1_hsort caller=secp256k1_silentpayments_sender_create_outputs bb=62
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_silentpayments_sender_create_outputs bb=72 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_sender_create_outputs bb=76
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_silentpayments_sender_create_outputs bb=80 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_recipient_label_create bb=8
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_recipient_label_create bb=8
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_recipient_prevouts_summary_create bb=36
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_recipient_scan_outputs bb=30
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_recipient_scan_outputs bb=34
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_silentpayments_recipient_scan_outputs bb=36 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_silentpayments_recipient_scan_outputs bb=38
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_silentpayments_recipient_scan_outputs bb=60 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_silentpayments_recipient_scan_outputs bb=67 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_silentpayments_recipient_scan_outputs bb=72 data
+CLOBBER modset-top callee=secp256k1_ec_seckey_tweak_add caller=secp256k1_silentpayments_recipient_scan_outputs bb=82
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_der_parse_integer bb=40
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=nonce_function_rfc6979_impl bb=0
+CLOBBER indirect-arg callee=<indirect> caller=nonce_function_bip340_impl bb=28 data
+CLOBBER indirect-arg callee=<indirect> caller=nonce_function_bip340_impl bb=31 data
+CLOBBER indirect-arg callee=<indirect> caller=nonce_function_bip340_impl bb=33 data
+CLOBBER modset-argptr callee=secp256k1_scalar_set_b32 caller=secp256k1_musig_keyaggcoef_internal bb=7
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_nonce_function_musig_helper bb=15 data
+CLOBBER indirect-arg callee=<indirect> caller=secp256k1_nonce_function_musig_helper bb=17 data

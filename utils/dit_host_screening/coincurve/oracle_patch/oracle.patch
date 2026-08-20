@@ -1,0 +1,49 @@
+--- a/src/secp256k1.c
++++ b/src/secp256k1.c
+@@ -563,7 +563,23 @@
+     return ret;
+ }
+ 
++static int secp256k1_ecdsa_sign_oracle_inner(const secp256k1_context* ctx, secp256k1_ecdsa_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata);
++
++/* ORACLE DIT PLACEMENT - added for the FastDIT measurement, NOT upstream.
++ * Exactly two MSR DIT per signature: on at entry, off at exit. This is the
++ * upper bound on what any compiler placement could achieve, and the thing the
++ * taint pass is measured against. The "memory" clobber keeps the compiler from
++ * moving work across the boundary. Early returns inside the inner function are
++ * still covered, because the disable is in the wrapper. */
+ int secp256k1_ecdsa_sign(const secp256k1_context* ctx, secp256k1_ecdsa_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata) {
++    int secp256k1_oracle_ret;
++    __asm__ volatile("msr DIT, #1" ::: "memory");
++    secp256k1_oracle_ret = secp256k1_ecdsa_sign_oracle_inner(ctx, signature, msghash32, seckey, noncefp, noncedata);
++    __asm__ volatile("msr DIT, #0" ::: "memory");
++    return secp256k1_oracle_ret;
++}
++
++static int secp256k1_ecdsa_sign_oracle_inner(const secp256k1_context* ctx, secp256k1_ecdsa_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata) {
+     secp256k1_scalar r, s;
+     int ret;
+     VERIFY_CHECK(ctx != NULL);
+--- a/src/modules/recovery/main_impl.h
++++ b/src/modules/recovery/main_impl.h
+@@ -120,7 +120,20 @@
+     return !secp256k1_gej_is_infinity(&qj);
+ }
+ 
++static int secp256k1_ecdsa_sign_recoverable_oracle_inner(const secp256k1_context* ctx, secp256k1_ecdsa_recoverable_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata);
++
++/* ORACLE DIT PLACEMENT - added for the FastDIT measurement, NOT upstream.
++ * This is the entry point eth-account/eth-keys actually use: Ethereum needs
++ * the recovery id, so CoinCurveECCBackend.ecdsa_sign calls sign_recoverable. */
+ int secp256k1_ecdsa_sign_recoverable(const secp256k1_context* ctx, secp256k1_ecdsa_recoverable_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata) {
++    int secp256k1_oracle_ret;
++    __asm__ volatile("msr DIT, #1" ::: "memory");
++    secp256k1_oracle_ret = secp256k1_ecdsa_sign_recoverable_oracle_inner(ctx, signature, msghash32, seckey, noncefp, noncedata);
++    __asm__ volatile("msr DIT, #0" ::: "memory");
++    return secp256k1_oracle_ret;
++}
++
++static int secp256k1_ecdsa_sign_recoverable_oracle_inner(const secp256k1_context* ctx, secp256k1_ecdsa_recoverable_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata) {
+     secp256k1_scalar r, s;
+     int ret, recid;
+     VERIFY_CHECK(ctx != NULL);

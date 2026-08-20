@@ -1,0 +1,644 @@
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=1 : renamable $x8 = LDRXui renamable $x21, 22 :: (load (s64) from %ir.illegal_callback, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=1 : renamable $x1 = LDRXui killed renamable $x21, 23 :: (load (s64) from %ir.data.i, !tbaa !27)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=3 : renamable $x8 = LDRXui renamable $x21, 22 :: (load (s64) from %ir.illegal_callback12, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=3 : renamable $x1 = LDRXui killed renamable $x21, 23 :: (load (s64) from %ir.data.i82, !tbaa !27)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=5 : renamable $x8 = LDRXui renamable $x21, 22 :: (load (s64) from %ir.illegal_callback25, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=5 : renamable $x1 = LDRXui killed renamable $x21, 23 :: (load (s64) from %ir.data.i83, !tbaa !27)
+UNCOVERED secret-branch func=secp256k1_ec_pubkey_serialize bb=6 : CBNZX renamable $x23, %bb.8
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=7 : renamable $x8 = LDRXui renamable $x21, 22 :: (load (s64) from %ir.illegal_callback38, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=7 : renamable $x1 = LDRXui killed renamable $x21, 23 :: (load (s64) from %ir.data.i84, !tbaa !27)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=9 : renamable $x8 = LDRXui renamable $x21, 22 :: (load (s64) from %ir.illegal_callback52, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=9 : renamable $x1 = LDRXui killed renamable $x21, 23 :: (load (s64) from %ir.data.i85, !tbaa !27)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=10 : renamable $x1 = LDRXui renamable $x23, 0 :: (load (s64) from %ir.pubkey, align 1)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=10 : renamable $x8 = LDRXui renamable $x23, 1 :: (load (s64) from %ir.s.sroa.5.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=10 : renamable $x12 = LDRXui renamable $x23, 2 :: (load (s64) from %ir.s.sroa.7.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=10 : renamable $x13 = LDRXui renamable $x23, 3 :: (load (s64) from %ir.s.sroa.9.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=10 : renamable $x0 = LDRXui renamable $x23, 4 :: (load (s64) from %ir.s.sroa.11.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=10 : renamable $x14 = LDRXui renamable $x23, 5 :: (load (s64) from %ir.s.sroa.13.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=10 : renamable $x17 = LDRXui renamable $x23, 6 :: (load (s64) from %ir.s.sroa.15.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=10 : renamable $x2 = LDRXui killed renamable $x23, 7 :: (load (s64) from %ir.s.sroa.17.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=11 : renamable $x8 = LDRXui renamable $x21, 22 :: (load (s64) from %ir.illegal_callback.i, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_ec_pubkey_serialize bb=11 : renamable $x1 = LDRXui killed renamable $x21, 23 :: (load (s64) from %ir.data.i.i, !tbaa !27)
+UNCOVERED secret-branch func=secp256k1_hsort bb=0 : CBZX renamable $x25, %bb.2
+UNCOVERED secret-branch func=secp256k1_hsort bb=6 : TBNZW killed renamable $w0, 31, %bb.9
+UNCOVERED secret-address func=secp256k1_hsort bb=8 : renamable $x8 = LDRXui renamable $x23, 0 :: (load (s64) from %ir.add.ptr13.i, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=8 : renamable $x9 = LDRXui renamable $x24, 0 :: (load (s64) from %ir.add.ptr.i, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=8 : STRXui killed renamable $x9, killed renamable $x23, 0 :: (store (s64) into %ir.add.ptr13.i, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=8 : STRXui killed renamable $x8, killed renamable $x24, 0 :: (store (s64) into %ir.add.ptr.i, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=10 : renamable $x8 = LDRXui renamable $x23, 0 :: (load (s64) from %ir.add.ptr24.i, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=10 : renamable $x9 = LDRXui renamable $x24, 0 :: (load (s64) from %ir.add.ptr22.i, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=10 : STRXui killed renamable $x9, killed renamable $x23, 0 :: (store (s64) into %ir.add.ptr24.i, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=10 : STRXui killed renamable $x8, killed renamable $x24, 0 :: (store (s64) into %ir.add.ptr22.i, align 1)
+UNCOVERED secret-branch func=secp256k1_hsort bb=12 : CBZX renamable $x27, %bb.2
+UNCOVERED secret-address func=secp256k1_hsort bb=13 : renamable $x9 = LDRXroX renamable $x22, renamable $x21, 0, 1 :: (load (s64) from %ir.add.ptr2.i, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=13 : STRXroX killed renamable $x8, renamable $x22, renamable $x21, 0, 1 :: (store (s64) into %ir.add.ptr2.i, align 1)
+UNCOVERED secret-branch func=secp256k1_hsort bb=13 : CBZX renamable $x25, %bb.22
+UNCOVERED secret-branch func=secp256k1_hsort bb=16 : TBNZW killed renamable $w0, 31, %bb.19
+UNCOVERED secret-address func=secp256k1_hsort bb=18 : renamable $x8 = LDRXui renamable $x23, 0 :: (load (s64) from %ir.add.ptr13.i58, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=18 : renamable $x9 = LDRXui renamable $x24, 0 :: (load (s64) from %ir.add.ptr.i51, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=18 : STRXui killed renamable $x9, killed renamable $x23, 0 :: (store (s64) into %ir.add.ptr13.i58, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=18 : STRXui killed renamable $x8, killed renamable $x24, 0 :: (store (s64) into %ir.add.ptr.i51, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=20 : renamable $x8 = LDRXui renamable $x23, 0 :: (load (s64) from %ir.add.ptr24.i40, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=20 : renamable $x9 = LDRXui renamable $x24, 0 :: (load (s64) from %ir.add.ptr22.i38, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=20 : STRXui killed renamable $x9, killed renamable $x23, 0 :: (store (s64) into %ir.add.ptr24.i40, align 1)
+UNCOVERED secret-address func=secp256k1_hsort bb=20 : STRXui killed renamable $x8, killed renamable $x24, 0 :: (store (s64) into %ir.add.ptr22.i38, align 1)
+UNCOVERED secret-branch func=secp256k1_ecdsa_signature_parse_compact bb=4 : CBNZW killed renamable $w8, %bb.6
+UNCOVERED secret-address func=secp256k1_scalar_set_b32 bb=0 : renamable $x8 = LDRXui renamable $x1, 3 :: (load (s64) from %ir.arrayidx, align 1)
+UNCOVERED secret-address func=secp256k1_scalar_set_b32 bb=0 : renamable $x8 = LDRXui renamable $x1, 2 :: (load (s64) from %ir.arrayidx2, align 1)
+UNCOVERED secret-address func=secp256k1_scalar_set_b32 bb=0 : renamable $x8 = LDRXui renamable $x1, 1 :: (load (s64) from %ir.arrayidx6, align 1)
+UNCOVERED secret-address func=secp256k1_scalar_set_b32 bb=0 : renamable $x8 = LDRXui killed renamable $x1, 0 :: (load (s64) from %ir.b32, align 1)
+UNCOVERED secret-branch func=secp256k1_scalar_set_b32 bb=0 : CBZX renamable $x2, %bb.2
+UNCOVERED secret-address func=secp256k1_scalar_set_b32 bb=1 : STRWui renamable $w8, killed renamable $x2, 0, implicit killed $x8 :: (store (s32) into %ir.overflow, !tbaa !6)
+UNCOVERED secret-branch func=secp256k1_ecdsa_verify bb=6 : CBNZW killed renamable $w12, %bb.30
+UNCOVERED secret-branch func=secp256k1_ecdsa_verify bb=7 : CBNZX killed renamable $x12, %bb.9
+UNCOVERED secret-branch func=secp256k1_ecdsa_verify bb=9 : CBNZX killed renamable $x12, %bb.11
+UNCOVERED secret-branch func=secp256k1_ecdsa_verify bb=11 : CBNZX killed renamable $x12, %bb.13
+UNCOVERED secret-branch func=secp256k1_ecdsa_verify bb=13 : CBZW killed renamable $w8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ecdsa_verify bb=17 : CBZX killed renamable $x25, %bb.19
+UNCOVERED secret-branch func=secp256k1_ecdsa_verify bb=19 : CBZX killed renamable $x20, %bb.21
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=3 : CBZW renamable $w26, %bb.5
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=5 : CBNZW killed renamable $w0, %bb.7
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=7 : CBNZW killed renamable $w8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=8 : CBZX killed renamable $x8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=12 : CBZX killed renamable $x8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=13 : CBZX killed renamable $x8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ec_seckey_tweak_add bb=0 : CBNZX $x1, %bb.2
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=1 : renamable $x8 = LDRXui renamable $x0, 22 :: (load (s64) from %ir.illegal_callback)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=1 : renamable $x1 = LDRXui killed renamable $x0, 23 :: (load (s64) from %ir.data.i)
+UNCOVERED secret-branch func=secp256k1_ec_seckey_tweak_add bb=2 : CBNZX renamable $x20, %bb.4
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=3 : renamable $x8 = LDRXui renamable $x0, 22 :: (load (s64) from %ir.illegal_callback10)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=3 : renamable $x1 = LDRXui killed renamable $x0, 23 :: (load (s64) from %ir.data.i25)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRWui killed renamable $w13, renamable $x19, 1 :: (store (s32) into %ir.arrayidx8.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w13, renamable $x19, 3, implicit killed $x13 :: (store (s8) into %ir.arrayidx11.i.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w13, renamable $x19, 2, implicit killed $x13 :: (store (s8) into %ir.arrayidx14.i.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w13, renamable $x19, 1, implicit killed $x13 :: (store (s8) into %ir.arrayidx17.i.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w11, renamable $x19, 0, implicit killed $x11 :: (store (s8) into %ir.seckey)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w11, renamable $x19, 15 :: (store (s8) into %ir.arrayidx.i19.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w12, renamable $x19, 14, implicit killed $x12 :: (store (s8) into %ir.arrayidx2.i22.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w12, renamable $x19, 13, implicit killed $x12 :: (store (s8) into %ir.arrayidx5.i25.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w12, renamable $x19, 12, implicit killed $x12 :: (store (s8) into %ir.arrayidx8.i28.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w12, renamable $x19, 11, implicit killed $x12 :: (store (s8) into %ir.arrayidx11.i31.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w12, renamable $x19, 10, implicit killed $x12 :: (store (s8) into %ir.arrayidx14.i34.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w12, renamable $x19, 9, implicit killed $x12 :: (store (s8) into %ir.arrayidx17.i37.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w11, renamable $x19, 8, implicit killed $x11 :: (store (s8) into %ir.arrayidx2.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w9, renamable $x19, 23 :: (store (s8) into %ir.arrayidx.i41.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w11, renamable $x19, 22, implicit killed $x11 :: (store (s8) into %ir.arrayidx2.i44.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w11, renamable $x19, 21, implicit killed $x11 :: (store (s8) into %ir.arrayidx5.i47.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w11, renamable $x19, 20, implicit killed $x11 :: (store (s8) into %ir.arrayidx8.i50.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w11, renamable $x19, 19, implicit killed $x11 :: (store (s8) into %ir.arrayidx11.i53.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w11, renamable $x19, 18, implicit killed $x11 :: (store (s8) into %ir.arrayidx14.i56.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w10, renamable $x19, 17, implicit killed $x10 :: (store (s8) into %ir.arrayidx17.i59.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w9, renamable $x19, 16, implicit killed $x9 :: (store (s8) into %ir.arrayidx5.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w8, renamable $x19, 31 :: (store (s8) into %ir.arrayidx.i63.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w9, renamable $x19, 30, implicit killed $x9 :: (store (s8) into %ir.arrayidx2.i66.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w9, renamable $x19, 29, implicit killed $x9 :: (store (s8) into %ir.arrayidx5.i69.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w9, renamable $x19, 28, implicit killed $x9 :: (store (s8) into %ir.arrayidx8.i72.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w9, renamable $x19, 27, implicit killed $x9 :: (store (s8) into %ir.arrayidx11.i75.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w9, renamable $x19, 26, implicit killed $x9 :: (store (s8) into %ir.arrayidx14.i78.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w9, renamable $x19, 25, implicit killed $x9 :: (store (s8) into %ir.arrayidx17.i81.i)
+UNCOVERED secret-address func=secp256k1_ec_seckey_tweak_add bb=4 : STRBBui renamable $w8, killed renamable $x19, 24, implicit killed $x8 :: (store (s8) into %ir.arrayidx8.i32)
+UNCOVERED secret-branch func=secp256k1_ec_pubkey_tweak_add bb=6 : CBZW killed renamable $w8, %bb.8
+UNCOVERED secret-branch func=secp256k1_ec_pubkey_tweak_add bb=8 : CBZW killed renamable $w8, %bb.10
+UNCOVERED secret-branch func=secp256k1_ec_pubkey_tweak_mul bb=4 : CBZW killed renamable $w8, %bb.6
+UNCOVERED secret-branch func=secp256k1_ec_pubkey_tweak_mul bb=6 : CBNZX killed renamable $x8, %bb.8
+UNCOVERED secret-branch func=secp256k1_ec_pubkey_tweak_mul bb=8 : CBNZX killed renamable $x8, %bb.10
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x15 = LDRXui renamable $x2, 0 :: (load (s64) from %ir.b)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x14 = LDRXui renamable $x2, 1 :: (load (s64) from %ir.arrayidx1.i219)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x12 = LDRXui renamable $x2, 2 :: (load (s64) from %ir.arrayidx2.i220)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x13 = LDRXui renamable $x2, 3 :: (load (s64) from %ir.arrayidx3.i221)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x6 = LDRXui renamable $x2, 4 :: (load (s64) from %ir.arrayidx4.i222)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x11 = LDRXui renamable $x2, 5 :: (load (s64) from %ir.y2)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x0 = LDRXui renamable $x2, 6 :: (load (s64) from %ir.arrayidx1.i234)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x15 = LDRXui renamable $x2, 7 :: (load (s64) from %ir.arrayidx2.i235)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x14 = LDRXui renamable $x2, 8 :: (load (s64) from %ir.arrayidx3.i236)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x13 = LDRXui killed renamable $x2, 9 :: (load (s64) from %ir.arrayidx4.i237)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x19 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.b)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x14 = LDRXui renamable $x20, 1 :: (load (s64) from %ir.arrayidx1.i219)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x13 = LDRXui renamable $x20, 2 :: (load (s64) from %ir.arrayidx2.i220)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x12 = LDRXui renamable $x20, 3 :: (load (s64) from %ir.arrayidx3.i221)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x12 = LDRXui renamable $x20, 4 :: (load (s64) from %ir.arrayidx4.i222)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x14 = LDRXui renamable $x20, 5 :: (load (s64) from %ir.y2)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x14 = LDRXui renamable $x20, 6 :: (load (s64) from %ir.arrayidx1.i234)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x14 = LDRXui renamable $x20, 7 :: (load (s64) from %ir.arrayidx2.i235)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x14 = LDRXui renamable $x20, 8 :: (load (s64) from %ir.arrayidx3.i236)
+UNCOVERED secret-address func=secp256k1_gej_add_ge bb=0 : renamable $x13 = LDRXui killed renamable $x20, 9 :: (load (s64) from %ir.arrayidx4.i237)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=4 : renamable $x8 = LDRXui renamable $x21, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=11 : renamable $x8 = LDRXui killed renamable $x21, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 0, implicit killed $q0 :: (store (s32) into %ir.out32, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 1, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.1, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 2, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.2, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 3, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.3, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 4, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.4, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 5, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.5, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 6, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.6, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, killed renamable $x20, 7, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.7, align 1, !tbaa !16)
+UNCOVERED secret-branch func=secp256k1_ecdsa_recoverable_signature_parse_compact bb=6 : CBNZW killed renamable $w8, %bb.8
+UNCOVERED secret-branch func=secp256k1_ecdsa_recover bb=18 : CBNZW killed renamable $w8, %bb.20
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=1 : renamable $x8 = LDRXui renamable $x0, 22 :: (load (s64) from %ir.illegal_callback, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=1 : renamable $x1 = LDRXui killed renamable $x0, 23 :: (load (s64) from %ir.data.i, !tbaa !27)
+UNCOVERED secret-branch func=secp256k1_xonly_pubkey_serialize bb=2 : CBNZX renamable $x2, %bb.4
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=3 : renamable $x8 = LDRXui renamable $x0, 22 :: (load (s64) from %ir.illegal_callback10, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=3 : renamable $x1 = LDRXui killed renamable $x0, 23 :: (load (s64) from %ir.data.i24, !tbaa !27)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=4 : renamable $x9 = LDRXui renamable $x2, 1 :: (load (s64) from %ir.s.sroa.5.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=4 : renamable $x15 = LDRXui renamable $x2, 0 :: (load (s64) from %ir.pubkey, align 1)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=4 : renamable $x10 = LDRXui renamable $x2, 2 :: (load (s64) from %ir.s.sroa.7.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=4 : renamable $x12 = LDRXui renamable $x2, 3 :: (load (s64) from %ir.s.sroa.9.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=5 : renamable $x8 = LDRXui renamable $x0, 22 :: (load (s64) from %ir.illegal_callback.i, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=5 : renamable $x1 = LDRXui killed renamable $x0, 23 :: (load (s64) from %ir.data.i.i, !tbaa !27)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_serialize bb=6 : renamable $q0 = LDRQui killed renamable $x2, 0 :: (load (s128) from %ir.pubkey, align 1)
+UNCOVERED secret-branch func=secp256k1_xonly_pubkey_tweak_add bb=8 : CBZW killed renamable $w8, %bb.10
+UNCOVERED secret-branch func=secp256k1_xonly_pubkey_tweak_add bb=10 : CBZW killed renamable $w8, %bb.12
+UNCOVERED secret-branch func=secp256k1_xonly_pubkey_tweak_add_check bb=8 : CBZW killed renamable $w8, %bb.10
+UNCOVERED secret-branch func=secp256k1_xonly_pubkey_tweak_add_check bb=10 : CBZW killed renamable $w8, %bb.12
+UNCOVERED secret-branch func=secp256k1_xonly_pubkey_tweak_add_check bb=12 : CBNZX killed renamable $x11, %bb.14
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_tweak_add_check bb=16 : renamable $w8 = LDRBBroX renamable $x21, renamable $x11, 0, 0 :: (load (s8) from %ir.arrayidx.i)
+UNCOVERED secret-address func=secp256k1_xonly_pubkey_tweak_add_check bb=16 : renamable $w9 = LDRBBroX renamable $x20, renamable $x11, 0, 0 :: (load (s8) from %ir.arrayidx1.i105)
+UNCOVERED secret-branch func=secp256k1_keypair_xonly_tweak_add bb=6 : CBNZW killed renamable $w8, %bb.8
+UNCOVERED secret-branch func=secp256k1_keypair_xonly_tweak_add bb=7 : CBNZX killed renamable $x8, %bb.10
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=8 : renamable $x8 = LDRXui renamable $x9, 22 :: (load (s64) from %ir.illegal_callback.i.i)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=8 : renamable $x1 = LDRXui killed renamable $x9, 23 :: (load (s64) from %ir.data.i.i.i)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=9 : STRQui renamable $q0, renamable $x9, 0 :: (store (s128) into %ir.keypair, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=9 : STRQui renamable $q0, renamable $x9, 1 :: (store (s128) into %ir.keypair + 16, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=9 : STRQui renamable $q0, renamable $x9, 2 :: (store (s128) into %ir.keypair + 32, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=9 : STRQui renamable $q0, renamable $x9, 3 :: (store (s128) into %ir.keypair + 48, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=9 : STRQui renamable $q0, $x9, 4 :: (store (s128) into %ir.keypair + 64, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=9 : STRQui killed renamable $q0, $x9, 5 :: (store (s128) into %ir.keypair + 80, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=10 : STRQui renamable $q0, renamable $x8, 5 :: (store (s128) into %ir.keypair + 80, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=10 : STRQui renamable $q0, renamable $x8, 4 :: (store (s128) into %ir.keypair + 64, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=10 : STRQui renamable $q0, renamable $x8, 3 :: (store (s128) into %ir.keypair + 48, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=10 : STRQui renamable $q0, renamable $x8, 2 :: (store (s128) into %ir.keypair + 32, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=10 : STRQui renamable $q0, renamable $x8, 1 :: (store (s128) into %ir.keypair + 16, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=10 : STRQui killed renamable $q0, killed renamable $x8, 0 :: (store (s128) into %ir.keypair, align 1)
+UNCOVERED secret-branch func=secp256k1_keypair_xonly_tweak_add bb=13 : CBZW killed renamable $w8, %bb.15
+UNCOVERED secret-branch func=secp256k1_keypair_xonly_tweak_add bb=15 : CBZW killed renamable $w8, %bb.17
+UNCOVERED secret-branch func=secp256k1_keypair_xonly_tweak_add bb=17 : TBZW killed renamable $w8, 0, %bb.19
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=19 : STRDui killed renamable $d4, renamable $x4, 0 :: (store (s64) into %ir.keypair, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=19 : STURQi killed renamable $q4, renamable $x4, 8 :: (store (s128) into %ir.arrayidx2.i.i48, align 1)
+UNCOVERED secret-address func=secp256k1_keypair_xonly_tweak_add bb=19 : STRDui killed renamable $d0, killed renamable $x4, 3 :: (store (s64) into %ir.arrayidx8.i.i, align 1)
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=9 : CBNZX killed renamable $x8, %bb.11
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=11 : CBNZW killed renamable $w8, %bb.13
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=12 : CBNZX killed renamable $x12, %bb.15
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=15 : TBNZW renamable $w27, 0, %bb.17, implicit killed $x27
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=24 : CBNZX killed renamable $x13, %bb.26
+UNCOVERED secret-branch func=secp256k1_schnorrsig_verify bb=11 : CBZW killed renamable $w8, %bb.13
+UNCOVERED secret-branch func=secp256k1_schnorrsig_verify bb=13 : CBNZX killed renamable $x10, %bb.15
+UNCOVERED secret-branch func=secp256k1_schnorrsig_verify bb=15 : CBZW killed renamable $w8, %bb.17
+UNCOVERED secret-branch func=secp256k1_schnorrsig_challenge bb=8 : CBZX renamable $x23, %bb.10
+UNCOVERED secret-branch func=secp256k1_ecmult bb=6 : CBNZX renamable $x3, %bb.8
+UNCOVERED secret-address func=secp256k1_ecmult bb=8 : renamable $q0 = LDRQui renamable $x3, 0 :: (load (s128) from %ir.ng, align 8)
+UNCOVERED secret-address func=secp256k1_ecmult bb=8 : renamable $q1 = LDRQui killed renamable $x3, 1 :: (load (s128) from %ir.arrayidx12.i.i, align 8)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : early-clobber renamable $x22, renamable $x8 = LDRXpost killed renamable $x22(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv146)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : renamable $x9 = LDRXui renamable $x8, 0 :: (load (s64) from %ir.26, align 1)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : renamable $x10 = LDRXui renamable $x8, 1 :: (load (s64) from %ir.s.sroa.5.0.buf.sroa_idx.i.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : renamable $x11 = LDRXui renamable $x8, 2 :: (load (s64) from %ir.s.sroa.7.0.buf.sroa_idx.i.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : renamable $x12 = LDRXui renamable $x8, 3 :: (load (s64) from %ir.s.sroa.9.0.buf.sroa_idx.i.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : renamable $x14 = LDRXui renamable $x8, 4 :: (load (s64) from %ir.s.sroa.11.0.buf.sroa_idx.i.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : renamable $q0 = LDRQui renamable $x8, 2 :: (load (s128) from %ir.s.sroa.11.0.buf.sroa_idx.i.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : renamable $x15 = LDRXui renamable $x8, 7 :: (load (s64) from %ir.s.sroa.17.0.buf.sroa_idx.i.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : renamable $x16 = LDRXui renamable $x8, 6 :: (load (s64) from %ir.s.sroa.15.0.buf.sroa_idx.i.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_pubkey_agg bb=31 : renamable $q1 = LDURQi killed renamable $x8, 40 :: (load (s128) from %ir.s.sroa.13.0.buf.sroa_idx.i.i.i.i, align 1)
+UNCOVERED secret-branch func=secp256k1_musig_pubkey_agg bb=31 : CBNZX killed renamable $x8, %bb.33
+UNCOVERED secret-branch func=secp256k1_musig_pubkey_agg bb=34 : CBZX renamable $x0, %bb.36
+UNCOVERED secret-branch func=secp256k1_musig_pubkey_agg bb=36 : CBNZX renamable $x0, %bb.38
+UNCOVERED secret-branch func=secp256k1_musig_pubkey_agg bb=38 : TBZW renamable $w23, 0, %bb.40
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=0 : early-clobber renamable $x21 = STRWpost killed renamable $w8, killed renamable $x21(tied-def 0), 68 :: (store (s32) into %ir.cache, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=1 : STRQui renamable $q0, renamable $x21, 3 :: (store (s128) into %ir.add.ptr1 + 48, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=1 : STRQui renamable $q0, renamable $x21, 2 :: (store (s128) into %ir.add.ptr1 + 32, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=1 : STRQui renamable $q0, renamable $x21, 1 :: (store (s128) into %ir.add.ptr1 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=1 : STRQui killed renamable $q0, killed renamable $x21, 0 :: (store (s128) into %ir.add.ptr1, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=3 : STURQi killed renamable $q1, renamable $x19, 148 :: (store (s128) into %ir.add.ptr2 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=3 : STURQi killed renamable $q0, renamable $x19, 132 :: (store (s128) into %ir.add.ptr2, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=3 : STRBBui killed renamable $w8, renamable $x19, 164 :: (store (s8) into %ir.add.ptr5, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=3 : STURDi killed renamable $d0, renamable $x19, 165 :: (store (s64) into %ir.add.ptr6, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=3 : STURDi killed renamable $d0, renamable $x19, 173 :: (store (s64) into %ir.arrayidx2.i, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=3 : STURDi killed renamable $d0, renamable $x19, 181 :: (store (s64) into %ir.arrayidx5.i, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_save bb=3 : STURDi killed renamable $d0, killed renamable $x19, 189 :: (store (s64) into %ir.arrayidx8.i, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=0 : renamable $w8 = LDRBBui renamable $x2, 0 :: (load (s8) from %ir.cache, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=1 : renamable $w8 = LDRBBui renamable $x2, 1 :: (load (s8) from %ir.arrayidx.i.1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=2 : renamable $w8 = LDRBBui renamable $x2, 2 :: (load (s8) from %ir.arrayidx.i.2, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=3 : renamable $w8 = LDRBBui renamable $x2, 3 :: (load (s8) from %ir.arrayidx.i.3, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=4 : renamable $x8 = LDRXui renamable $x0, 22 :: (load (s64) from %ir.illegal_callback, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=4 : renamable $x1 = LDRXui killed renamable $x0, 23 :: (load (s64) from %ir.data.i, !tbaa !27)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $x8 = LDURXi renamable $x2, 28 :: (load (s64) from %ir.s.sroa.9.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $x9 = LDURXi renamable $x2, 60 :: (load (s64) from %ir.s.sroa.17.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $x10 = LDURXi renamable $x2, 4 :: (load (s64) from %ir.add.ptr, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $q0 = LDURQi renamable $x2, 4 :: (load (s128) from %ir.add.ptr, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $x11 = LDURXi renamable $x2, 20 :: (load (s64) from %ir.s.sroa.7.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $q1 = LDURQi renamable $x2, 12 :: (load (s128) from %ir.s.sroa.5.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $x12 = LDURXi renamable $x2, 36 :: (load (s64) from %ir.s.sroa.11.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $q1 = LDURQi renamable $x2, 36 :: (load (s128) from %ir.s.sroa.11.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $x13 = LDURXi renamable $x2, 52 :: (load (s64) from %ir.s.sroa.15.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $q5 = LDURQi renamable $x2, 44 :: (load (s128) from %ir.s.sroa.13.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $q0 = LDURQi renamable $x20, 132 :: (load (s128) from %ir.add.ptr2, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $q1 = LDURQi renamable $x20, 148 :: (load (s128) from %ir.add.ptr2 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_keyagg_cache_load bb=5 : renamable $w8 = LDRBBui renamable $x20, 164 :: (load (s8) from %ir.add.ptr7, !tbaa !16)
+UNCOVERED secret-branch func=secp256k1_musig_pubkey_tweak_add_internal bb=8 : CBZW killed renamable $w8, %bb.10
+UNCOVERED secret-branch func=secp256k1_musig_pubkey_tweak_add_internal bb=11 : TBZW renamable $w9, 0, %bb.13
+UNCOVERED secret-branch func=secp256k1_musig_pubkey_tweak_add_internal bb=13 : CBZW killed renamable $w8, %bb.15
+UNCOVERED secret-branch func=secp256k1_musig_partial_sig_parse bb=4 : CBNZW killed renamable $w8, %bb.6
+UNCOVERED secret-branch func=secp256k1_musig_nonce_gen_internal bb=13 : CBNZX killed renamable $x8, %bb.15
+UNCOVERED secret-address func=secp256k1_musig_nonce_gen_internal bb=20 : STRBBroX killed renamable $w8, killed renamable $x25, killed renamable $x9, 0, 0 :: (store (s8) into %ir.add.ptr22.i94.i)
+UNCOVERED secret-address func=secp256k1_musig_nonce_gen_internal bb=25 : STRBBroX $wzr, renamable $x23, killed renamable $x8, 0, 0 :: (store (s8) into %ir.add.ptr22.i120.i)
+UNCOVERED secret-address func=secp256k1_musig_nonce_gen_internal bb=28 : STRBBroX killed renamable $w9, killed renamable $x23, killed renamable $x8, 0, 0 :: (store (s8) into %ir.add.ptr22.i120.1.i)
+UNCOVERED secret-address func=secp256k1_musig_nonce_gen_internal bb=29 : early-clobber renamable $x21 = STRWpost killed renamable $w8, killed renamable $x21(tied-def 0), 68 :: (store (s32) into %ir.pubnonce, align 1)
+UNCOVERED secret-branch func=secp256k1_ge_set_all_gej_var bb=0 : CBZX $x2, %bb.20
+UNCOVERED secret-address func=secp256k1_musig_nonce_process bb=15 : renamable $w8 = LDRBBroX renamable $x10, renamable $x9, 0, 0 :: (load (s8) from %ir.arrayidx.i.i146)
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=15 : CBNZW renamable $w8, %bb.17
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=17 : CBNZW renamable $w8, %bb.19
+UNCOVERED secret-address func=secp256k1_musig_nonce_process bb=21 : renamable $w14 = LDRBBroX renamable $x12, renamable $x13, 0, 0 :: (load (s8) from %ir.arrayidx.i.i134)
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=21 : CBNZW renamable $w14, %bb.23
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=23 : CBNZW killed renamable $w14, %bb.25
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=27 : CBNZW killed renamable $w8, %bb.29
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=30 : CBZW killed renamable $w12, %bb.32
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=33 : CBNZX renamable $x8, %bb.35
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=37 : CBZX $x25, %bb.40
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=40 : CBNZX renamable $x8, %bb.42
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=44 : CBZX renamable $x2, %bb.47
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=47 : CBNZW killed renamable $w8, %bb.49
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=50 : CBNZX killed renamable $x17, %bb.52
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=53 : CBZX killed renamable $x8, %bb.57
+UNCOVERED secret-branch func=secp256k1_musig_nonce_process bb=54 : TBZW killed renamable $w8, 0, %bb.56
+UNCOVERED secret-address func=secp256k1_scalar_mul bb=0 : STRXui killed renamable $x8, renamable $x19, 0 :: (store (s64) into %ir.r, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul bb=0 : STRXui killed renamable $x9, renamable $x19, 1 :: (store (s64) into %ir.arrayidx315.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul bb=0 : STRXui killed renamable $x8, renamable $x19, 2 :: (store (s64) into %ir.arrayidx319.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul bb=0 : STRXui killed renamable $x9, killed renamable $x19, 3 :: (store (s64) into %ir.arrayidx322.i, !tbaa !45)
+UNCOVERED secret-branch func=secp256k1_musig_partial_sign bb=9 : CBZX killed renamable $x8, %bb.11
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=11 : renamable $x9 = LDRXui renamable $x8, 22 :: (load (s64) from %ir.illegal_callback14)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=11 : renamable $x1 = LDRXui killed renamable $x8, 23 :: (load (s64) from %ir.data.i136)
+UNCOVERED secret-branch func=secp256k1_musig_partial_sign bb=12 : CBNZX renamable $x1, %bb.14
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=13 : renamable $x9 = LDRXui renamable $x8, 22 :: (load (s64) from %ir.illegal_callback27)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=13 : renamable $x1 = LDRXui killed renamable $x8, 23 :: (load (s64) from %ir.data.i137)
+UNCOVERED secret-branch func=secp256k1_musig_partial_sign bb=14 : CBNZX killed renamable $x9, %bb.16
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=15 : renamable $x9 = LDRXui renamable $x8, 22 :: (load (s64) from %ir.illegal_callback40)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=15 : renamable $x1 = LDRXui killed renamable $x8, 23 :: (load (s64) from %ir.data.i138)
+UNCOVERED secret-branch func=secp256k1_musig_partial_sign bb=16 : CBNZX killed renamable $x8, %bb.18
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=17 : renamable $x9 = LDRXui renamable $x8, 22 :: (load (s64) from %ir.illegal_callback53)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=17 : renamable $x1 = LDRXui killed renamable $x8, 23 :: (load (s64) from %ir.data.i139)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=18 : renamable $x8 = LDRXui renamable $x1, 4 :: (load (s64) from %ir.arrayidx.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=18 : renamable $x9 = LDRXui renamable $x1, 5 :: (load (s64) from %ir.s.sroa.5.0.buf.sroa_idx.i.i366, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=18 : renamable $x10 = LDRXui renamable $x1, 6 :: (load (s64) from %ir.s.sroa.7.0.buf.sroa_idx.i.i368, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=18 : renamable $x11 = LDRXui renamable $x1, 7 :: (load (s64) from %ir.s.sroa.9.0.buf.sroa_idx.i.i370, align 1)
+UNCOVERED secret-branch func=secp256k1_musig_partial_sign bb=18 : CBNZX killed renamable $x8, %bb.20
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=20 : renamable $x19 = LDRXui renamable $x1, 8 :: (load (s64) from %ir.s.sroa.11.0.buf.sroa_idx.i.i372, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=20 : renamable $x22 = LDRXui renamable $x1, 9 :: (load (s64) from %ir.s.sroa.13.0.buf.sroa_idx.i.i374, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=20 : renamable $x27 = LDRXui renamable $x1, 10 :: (load (s64) from %ir.s.sroa.15.0.buf.sroa_idx.i.i376, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=20 : renamable $x20 = LDRXui renamable $x1, 11 :: (load (s64) from %ir.s.sroa.17.0.buf.sroa_idx.i.i378, align 1)
+UNCOVERED secret-branch func=secp256k1_musig_partial_sign bb=20 : CBZW killed renamable $w8, %bb.22
+UNCOVERED secret-branch func=secp256k1_musig_partial_sign bb=22 : CBNZX killed renamable $x9, %bb.24
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=23 : renamable $x9 = LDRXui renamable $x8, 22 :: (load (s64) from %ir.illegal_callback.i421)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=23 : renamable $x1 = LDRXui killed renamable $x8, 23 :: (load (s64) from %ir.data.i.i422)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=23 : STRQui renamable $q0, renamable $x8, 1 :: (store (s128) into %ir.arrayidx21.i + 16, align 8)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=23 : STRQui killed renamable $q0, renamable $x8, 0 :: (store (s128) into %ir.arrayidx21.i, align 8)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=26 : renamable $x9 = LDRXui renamable $x8, 22 :: (load (s64) from %ir.illegal_callback75)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=26 : renamable $x1 = LDRXui killed renamable $x8, 23 :: (load (s64) from %ir.data.i190)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=28 : STRQui renamable $q0, renamable $x8, 1 :: (store (s128) into %ir.arrayidx21.i + 16, align 8)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=28 : STRQui killed renamable $q0, renamable $x8, 0 :: (store (s128) into %ir.arrayidx21.i, align 8)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=31 : renamable $w9 = LDRBBui renamable $x8, 0 :: (load (s8) from %ir.session)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=32 : renamable $w9 = LDRBBui renamable $x8, 1 :: (load (s8) from %ir.arrayidx.i.i204.1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=33 : renamable $w9 = LDRBBui renamable $x8, 2 :: (load (s8) from %ir.arrayidx.i.i204.2)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=34 : renamable $w9 = LDRBBui renamable $x8, 3 :: (load (s8) from %ir.arrayidx.i.i204.3)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=35 : renamable $x9 = LDRXui renamable $x8, 22 :: (load (s64) from %ir.illegal_callback.i213)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=35 : renamable $x1 = LDRXui killed renamable $x8, 23 :: (load (s64) from %ir.data.i.i214)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=35 : STRQui renamable $q0, renamable $x22, 1 :: (store (s128) into %ir.arrayidx21.i + 16, align 8)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=35 : STRQui killed renamable $q0, renamable $x22, 0 :: (store (s128) into %ir.arrayidx21.i, align 8)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=36 : renamable $w9 = LDRBBui renamable $x8, 4 :: (load (s8) from %ir.add.ptr.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=36 : renamable $q0 = LDURQi renamable $x8, 5 :: (load (s128) from %ir.add.ptr2.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=36 : renamable $q0 = LDURQi renamable $x8, 21 :: (load (s128) from %ir.add.ptr2.i + 16, align 1)
+UNCOVERED secret-branch func=secp256k1_musig_partial_sign bb=36 : CBZW killed renamable $w8, %bb.38
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRWui killed renamable $w12, renamable $x9, 0 :: (store (s32) into %ir.partial_sig, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w12, renamable $x9, 11 :: (store (s8) into %ir.arrayidx.i.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w15, renamable $x9, 10, implicit killed $x15 :: (store (s8) into %ir.arrayidx2.i.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w15, renamable $x9, 9, implicit killed $x15 :: (store (s8) into %ir.arrayidx5.i.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w15, renamable $x9, 8, implicit killed $x15 :: (store (s8) into %ir.arrayidx8.i.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w15, renamable $x9, 7, implicit killed $x15 :: (store (s8) into %ir.arrayidx11.i.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w15, renamable $x9, 6, implicit killed $x15 :: (store (s8) into %ir.arrayidx14.i.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w15, renamable $x9, 5, implicit killed $x15 :: (store (s8) into %ir.arrayidx17.i.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w12, renamable $x9, 4, implicit killed $x12 :: (store (s8) into %ir.arrayidx4.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STURQi killed renamable $q0, renamable $x9, 12 :: (store (s128) into %ir.arrayidx2.i.i358, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w8, renamable $x9, 35 :: (store (s8) into %ir.arrayidx.i63.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w10, renamable $x9, 34, implicit killed $x10 :: (store (s8) into %ir.arrayidx2.i66.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w10, renamable $x9, 33, implicit killed $x10 :: (store (s8) into %ir.arrayidx5.i69.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w10, renamable $x9, 32, implicit killed $x10 :: (store (s8) into %ir.arrayidx8.i72.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w10, renamable $x9, 31, implicit killed $x10 :: (store (s8) into %ir.arrayidx11.i75.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w10, renamable $x9, 30, implicit killed $x10 :: (store (s8) into %ir.arrayidx14.i78.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w10, renamable $x9, 29, implicit killed $x10 :: (store (s8) into %ir.arrayidx17.i81.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRBBui renamable $w8, killed renamable $x9, 28, implicit killed $x8 :: (store (s8) into %ir.arrayidx8.i.i)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRQui renamable $q0, renamable $x22, 1 :: (store (s128) into %ir.arrayidx21.i + 16, align 8)
+UNCOVERED secret-address func=secp256k1_musig_partial_sign bb=38 : STRQui killed renamable $q0, renamable $x22, 0 :: (store (s128) into %ir.arrayidx21.i, align 8)
+UNCOVERED secret-branch func=secp256k1_musig_partial_sig_verify bb=17 : CBNZX killed renamable $x8, %bb.19
+UNCOVERED secret-branch func=secp256k1_musig_partial_sig_verify bb=28 : CBZW killed renamable $w8, %bb.30
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=18 : early-clobber renamable $x20, renamable $x8 = LDRXpost killed renamable $x20(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv169, !tbaa !137)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=18 : renamable $w9 = LDRBBui renamable $x8, 0 :: (load (s8) from %ir.22, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=19 : renamable $w9 = LDRBBui renamable $x8, 1 :: (load (s8) from %ir.arrayidx.i.i104.1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=20 : renamable $w9 = LDRBBui renamable $x8, 2 :: (load (s8) from %ir.arrayidx.i.i104.2, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=21 : renamable $w9 = LDRBBui renamable $x8, 3 :: (load (s8) from %ir.arrayidx.i.i104.3, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=23 : STRDui killed renamable $d4, renamable $x8, 4 :: (store (s64) into %ir.arrayidx72, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=23 : STURQi killed renamable $q5, renamable $x8, 40 :: (store (s128) into %ir.arrayidx2.i119, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=23 : STRDui killed renamable $d0, renamable $x8, 7 :: (store (s64) into %ir.arrayidx8.i120, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=23 : renamable $q0 = LDRQui renamable $x9, 0 :: (dereferenceable load (s128) from %ir.fin_nonce.i, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=23 : renamable $q1 = LDRQui killed renamable $x9, 1 :: (dereferenceable load (s128) from %ir.fin_nonce.i + 16, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=23 : STRQui killed renamable $q0, renamable $x8, 0 :: (store (s128) into %ir.sig64, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=23 : STRQui killed renamable $q1, killed renamable $x8, 1 :: (store (s128) into %ir.sig64 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=24 : renamable $x9 = LDRXui renamable $x8, 22 :: (load (s64) from %ir.illegal_callback.i113, !tbaa !25)
+UNCOVERED secret-address func=secp256k1_musig_partial_sig_agg bb=24 : renamable $x1 = LDRXui killed renamable $x8, 23 :: (load (s64) from %ir.data.i.i114, !tbaa !27)
+UNCOVERED secret-branch func=secp256k1_ellswift_create bb=6 : CBNZX killed renamable $x15, %bb.8
+UNCOVERED secret-branch func=secp256k1_ellswift_create bb=9 : CBNZX killed renamable $x8, %bb.11
+UNCOVERED secret-branch func=secp256k1_ellswift_create bb=13 : CBNZX renamable $x8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ellswift_create bb=17 : CBZX $x26, %bb.20
+UNCOVERED secret-address func=ellswift_xdh_hash_function_bip324_impl bb=0 : renamable $x8 = LDRXui $x0, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_bip324_impl bb=1 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_bip324_impl bb=2 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-branch func=ellswift_xdh_hash_function_bip324_impl bb=3 : CBNZX renamable $x8, %bb.5
+UNCOVERED secret-address func=ellswift_xdh_hash_function_bip324_impl bb=7 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-branch func=ellswift_xdh_hash_function_bip324_impl bb=7 : CBZX $x24, %bb.10
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=0 : renamable $x8 = LDRXui $x0, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=1 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=2 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=4 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=5 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-branch func=ellswift_xdh_hash_function_prefix_impl bb=6 : CBNZX renamable $x8, %bb.8
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=10 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-branch func=ellswift_xdh_hash_function_prefix_impl bb=10 : CBZX $x24, %bb.13
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=44 : early-clobber renamable $x26, renamable $x1 = LDRXpost killed renamable $x26(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv659)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=47 : early-clobber renamable $x25, renamable $x1 = LDRXpost killed renamable $x25(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv655)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=47 : renamable $q0 = LDRQui renamable $x1, 2 :: (load (s128) from %ir.arrayidx.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=47 : renamable $q1 = LDRQui renamable $x1, 3 :: (load (s128) from %ir.arrayidx.i + 16, align 1)
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=47 : CBNZX killed renamable $x8, %bb.49
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=49 : renamable $x27 = LDRXui renamable $x1, 8 :: (load (s64) from %ir.s.sroa.11.0.buf.sroa_idx.i.i526, align 1)
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=49 : CBZW killed renamable $w8, %bb.51
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=51 : CBNZX killed renamable $x12, %bb.53
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=52 : renamable $x8 = LDRXui renamable $x9, 22 :: (load (s64) from %ir.illegal_callback.i.i)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=52 : renamable $x1 = LDRXui killed renamable $x9, 23 :: (load (s64) from %ir.data.i.i.i)
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=53 : TBNZW renamable $w27, 0, %bb.55, implicit killed $x27
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=57 : CBNZX killed renamable $x8, %bb.59
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=59 : renamable $q0 = LDRQui renamable $x8, 0 :: (load (s128) from %ir.outpoint_smallest36, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=59 : renamable $q1 = LDRQui renamable $x8, 1 :: (load (s128) from %ir.outpoint_smallest36 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=59 : renamable $w8 = LDRWui killed renamable $x8, 8 :: (load (s32) from %ir.outpoint_smallest36 + 32, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=59 : early-clobber renamable $x23, renamable $x8 = LDRXpre killed renamable $x23(tied-def 0), 168 :: (load (s64) from %ir.hash_ctx.i)
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=59 : CBNZW killed renamable $w8, %bb.61
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=60 : CBNZX killed renamable $x8, %bb.62
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=62 : renamable $q0 = LDRQui renamable $x8, 0 :: (load (s128) from %ir.91, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=62 : renamable $q1 = LDRQui renamable $x8, 1 :: (load (s128) from %ir.91 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=62 : renamable $q0 = LDRQui renamable $x8, 2 :: (load (s128) from %ir.91 + 32, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=62 : renamable $q1 = LDRQui killed renamable $x8, 3 :: (load (s128) from %ir.91 + 48, align 1)
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=63 : CBZX renamable $x24, %bb.71
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=64 : renamable $x25 = LDRXroX renamable $x21, renamable $x24, 0, 1 :: (load (s64) from %ir.arrayidx261)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $x8 = LDRXroX renamable $x21, renamable $x24, 0, 1 :: (load (s64) from %ir.arrayidx267)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $x9 = LDRXui renamable $x8, 0 :: (load (s64) from %ir.97, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $x10 = LDRXui renamable $x8, 1 :: (load (s64) from %ir.s.sroa.5.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $x11 = LDRXui renamable $x8, 2 :: (load (s64) from %ir.s.sroa.7.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $x12 = LDRXui renamable $x8, 3 :: (load (s64) from %ir.s.sroa.9.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $x14 = LDRXui renamable $x8, 4 :: (load (s64) from %ir.s.sroa.11.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $q0 = LDRQui renamable $x8, 2 :: (load (s128) from %ir.s.sroa.11.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $x15 = LDRXui renamable $x8, 7 :: (load (s64) from %ir.s.sroa.17.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $x16 = LDRXui renamable $x8, 6 :: (load (s64) from %ir.s.sroa.15.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=71 : renamable $q1 = LDURQi killed renamable $x8, 40 :: (load (s128) from %ir.s.sroa.13.0.buf.sroa_idx.i.i, align 1)
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=71 : CBNZX killed renamable $x8, %bb.73
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=72 : renamable $x8 = LDRXui renamable $x22, 22 :: (load (s64) from %ir.illegal_callback.i)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=72 : renamable $x1 = LDRXui killed renamable $x22, 23 :: (load (s64) from %ir.data.i.i)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=76 : renamable $x20 = LDRXroX renamable $x21, renamable $x24, 0, 1 :: (load (s64) from %ir.arrayidx281)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=76 : renamable $x8 = LDRXui renamable $x20, 16 :: (load (s64) from %ir.index282)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=76 : renamable $x25 = LDRXroX killed renamable $x9, killed renamable $x8, 0, 1 :: (load (s64) from %ir.arrayidx283)
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=76 : CBNZW killed renamable $w8, %bb.78
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=77 : CBNZX killed renamable $x8, %bb.79
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=79 : renamable $x8 = LDRXui renamable $x20, 8 :: (load (s64) from %ir.spend_pubkey, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=79 : renamable $x9 = LDRXui renamable $x20, 9 :: (load (s64) from %ir.s.sroa.5.0.buf.sroa_idx.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=79 : renamable $x10 = LDRXui renamable $x20, 10 :: (load (s64) from %ir.s.sroa.7.0.buf.sroa_idx.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=79 : renamable $x11 = LDRXui renamable $x20, 11 :: (load (s64) from %ir.s.sroa.9.0.buf.sroa_idx.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=79 : renamable $x13 = LDRXui renamable $x20, 12 :: (load (s64) from %ir.s.sroa.11.0.buf.sroa_idx.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=79 : renamable $q0 = LDRQui renamable $x20, 6 :: (load (s128) from %ir.s.sroa.11.0.buf.sroa_idx.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=79 : renamable $x14 = LDRXui renamable $x20, 15 :: (load (s64) from %ir.s.sroa.17.0.buf.sroa_idx.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=79 : renamable $x15 = LDRXui renamable $x20, 14 :: (load (s64) from %ir.s.sroa.15.0.buf.sroa_idx.i.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=79 : renamable $q1 = LDURQi killed renamable $x20, 104 :: (load (s128) from %ir.s.sroa.13.0.buf.sroa_idx.i.i.i, align 1)
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=79 : CBNZX killed renamable $x8, %bb.81
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=80 : renamable $x8 = LDRXui renamable $x22, 22 :: (load (s64) from %ir.illegal_callback.i.i512)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=80 : renamable $x1 = LDRXui killed renamable $x22, 23 :: (load (s64) from %ir.data.i.i.i513)
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=81 : CBZW killed renamable $w8, %bb.83
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=83 : CBNZX killed renamable $x13, %bb.85
+UNCOVERED secret-branch func=secp256k1_silentpayments_sender_create_outputs bb=86 : TBZW renamable $w9, 0, %bb.89
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=89 : renamable $x8 = LDRXroX renamable $x21, renamable $x24, 0, 1 :: (load (s64) from %ir.sunkaddr767)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=89 : renamable $q0 = LDRQui renamable $x8, 0 :: (load (s128) from %ir.130, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=89 : renamable $q1 = LDRQui renamable $x8, 1 :: (load (s128) from %ir.130 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=89 : renamable $q0 = LDRQui renamable $x8, 2 :: (load (s128) from %ir.130 + 32, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_sender_create_outputs bb=89 : renamable $q1 = LDRQui killed renamable $x8, 3 :: (load (s128) from %ir.130 + 48, align 1)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STRWui killed renamable $w8, renamable $x0, 30 :: (store (s32) into %ir.infinity1.i, align 8, !tbaa !53)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STRXui killed renamable $x8, renamable $x0, 4 :: (store (s64) into %ir.r + 32)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STRQui killed renamable $q1, renamable $x0, 1 :: (store (s128) into %ir.r + 16, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STRQui killed renamable $q0, renamable $x0, 0 :: (store (s128) into %ir.r, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STURQi killed renamable $q1, renamable $x0, 56 :: (store (s128) into %ir.y.i + 16, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STURQi killed renamable $q0, renamable $x0, 40 :: (store (s128) into %ir.y.i, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STRXui killed renamable $x8, renamable $x0, 9 :: (store (s64) into %ir.y.i + 32)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STRXui killed renamable $x9, renamable $x0, 10 :: (store (s64) into %ir.z.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STURQi renamable $q0, renamable $x0, 88 :: (store (s128) into %ir.arrayidx8.i.i, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=1 : STURQi killed renamable $q0, killed renamable $x0, 104 :: (store (s128) into %ir.arrayidx8.i.i + 16, align 8)
+UNCOVERED secret-branch func=secp256k1_gej_add_ge_var bb=3 : CBZX renamable $x3, %bb.5
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=4 : STRXui killed renamable $x8, renamable $x3, 0 :: (store (s64) into %ir.rzr, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=4 : STURQi renamable $q0, renamable $x3, 8 :: (store (s128) into %ir.arrayidx8.i, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=4 : STURQi killed renamable $q0, killed renamable $x3, 24 :: (store (s128) into %ir.arrayidx8.i + 16, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=5 : STRQui killed renamable $q3, renamable $x0, 3 :: (store (s128) into %ir.r + 48, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=5 : STRQui killed renamable $q2, renamable $x0, 2 :: (store (s128) into %ir.r + 32, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=5 : STRQui killed renamable $q1, renamable $x0, 1 :: (store (s128) into %ir.r + 16, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=5 : STRQui killed renamable $q0, renamable $x0, 0 :: (store (s128) into %ir.r, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=5 : STRQui killed renamable $q3, renamable $x0, 7 :: (store (s128) into %ir.r + 112, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=5 : STRQui killed renamable $q2, renamable $x0, 6 :: (store (s128) into %ir.r + 96, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=5 : STRQui killed renamable $q1, renamable $x0, 5 :: (store (s128) into %ir.r + 80, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=5 : STRQui killed renamable $q0, killed renamable $x0, 4 :: (store (s128) into %ir.r + 64, align 8)
+UNCOVERED secret-branch func=secp256k1_gej_add_ge_var bb=14 : CBZX renamable $x14, %bb.16
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : STRQui killed renamable $q1, renamable $x14, 0 :: (store (s128) into %ir.rzr, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : STRQui killed renamable $q0, renamable $x14, 1 :: (store (s128) into %ir.rzr + 16, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : renamable $x9 = LDRXui renamable $x14, 0 :: (load (s64) from %ir.rzr, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : renamable $x10 = LDRXui renamable $x14, 1 :: (load (s64) from %ir.arrayidx2.i.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : renamable $x11 = LDRXui renamable $x14, 2 :: (load (s64) from %ir.arrayidx4.i.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : renamable $x12 = LDRXui renamable $x14, 3 :: (load (s64) from %ir.arrayidx6.i.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : STRXui killed renamable $x9, renamable $x14, 0 :: (store (s64) into %ir.rzr, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : STRXui killed renamable $x10, renamable $x14, 1 :: (store (s64) into %ir.arrayidx2.i.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : STRXui killed renamable $x11, renamable $x14, 2 :: (store (s64) into %ir.arrayidx4.i.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : STRXui killed renamable $x12, renamable $x14, 3 :: (store (s64) into %ir.arrayidx6.i.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=15 : STRXui killed renamable $x8, killed renamable $x14, 4 :: (store (s64) into %ir.arrayidx8.i15.i, !tbaa !45)
+UNCOVERED secret-branch func=secp256k1_gej_add_ge_var bb=17 : CBZX renamable $x8, %bb.19
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=18 : STRXui $xzr, renamable $x8, 4 :: (store (s64) into %ir.rzr + 32)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=18 : STRQui renamable $q0, renamable $x8, 1 :: (store (s128) into %ir.rzr + 16, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=18 : STRQui killed renamable $q0, killed renamable $x8, 0 :: (store (s128) into %ir.rzr, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=19 : STRWui killed renamable $w8, renamable $x0, 30 :: (store (s32) into %ir.infinity.i1055, align 8, !tbaa !53)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=19 : STRQui renamable $q0, renamable $x0, 0 :: (store (s128) into %ir.r, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=19 : STRQui renamable $q0, renamable $x0, 1 :: (store (s128) into %ir.r + 16, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=19 : STRQui renamable $q0, renamable $x0, 2 :: (store (s128) into %ir.r + 32, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=19 : STRQui renamable $q0, renamable $x0, 3 :: (store (s128) into %ir.r + 48, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=19 : STRQui renamable $q0, renamable $x0, 4 :: (store (s128) into %ir.r + 64, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=19 : STRQui renamable $q0, renamable $x0, 5 :: (store (s128) into %ir.r + 80, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=19 : STRQui killed renamable $q0, renamable $x0, 6 :: (store (s128) into %ir.r + 96, align 8)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=19 : STRXui $xzr, killed renamable $x0, 14 :: (store (s64) into %ir.r + 112)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=20 : STRWui $wzr, renamable $x0, 30 :: (store (s32) into %ir.infinity23, align 8, !tbaa !53)
+UNCOVERED secret-branch func=secp256k1_gej_add_ge_var bb=20 : CBZX renamable $x8, %bb.22
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=21 : STRXui renamable $x21, renamable $x8, 0 :: (store (s64) into %ir.rzr)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=21 : STRXui renamable $x22, renamable $x8, 1 :: (store (s64) into %ir.h.sroa.18.0.rzr.sroa_idx)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=21 : STRXui renamable $x23, renamable $x8, 2 :: (store (s64) into %ir.h.sroa.33.0.rzr.sroa_idx)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=21 : STRXui renamable $x24, renamable $x8, 3 :: (store (s64) into %ir.h.sroa.48.0.rzr.sroa_idx)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=21 : STRXui renamable $x25, killed renamable $x8, 4 :: (store (s64) into %ir.h.sroa.63.0.rzr.sroa_idx, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x12, renamable $x0, 10 :: (store (s64) into %ir.z27, !tbaa !45, !noalias !185)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x1, renamable $x0, 11 :: (store (s64) into %ir.arrayidx39.i287, !tbaa !45, !noalias !185)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x14, renamable $x0, 12 :: (store (s64) into %ir.arrayidx48.i291, !tbaa !45, !noalias !185)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x10, renamable $x0, 13 :: (store (s64) into %ir.arrayidx52.i295, !tbaa !45, !noalias !185)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x8, renamable $x0, 14 :: (store (s64) into %ir.arrayidx54.i298, !tbaa !45, !noalias !185)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui renamable $x10, renamable $x0, 0 :: (store (s64) into %ir.r, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x8, renamable $x0, 1 :: (store (s64) into %ir.arrayidx24.i152, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x8, renamable $x0, 2 :: (store (s64) into %ir.arrayidx28.i156, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x8, renamable $x0, 3 :: (store (s64) into %ir.arrayidx32.i160, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x9, renamable $x0, 4 :: (store (s64) into %ir.arrayidx34.i163, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x8, renamable $x0, 5 :: (store (s64) into %ir.y37, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x8, renamable $x0, 6 :: (store (s64) into %ir.arrayidx39.i407, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x9, renamable $x0, 7 :: (store (s64) into %ir.arrayidx48.i411, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x8, renamable $x0, 8 :: (store (s64) into %ir.arrayidx52.i415, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_add_ge_var bb=22 : STRXui killed renamable $x9, killed renamable $x0, 9 :: (store (s64) into %ir.arrayidx54.i418, !tbaa !45)
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_prevouts_summary_create bb=36 : CBZW killed renamable $w8, %bb.38
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_prevouts_summary_create bb=38 : CBZX killed renamable $x8, %bb.40
+UNCOVERED secret-address func=secp256k1_ge_to_bytes bb=0 : STRXui killed renamable $x8, renamable $x0, 0 :: (store (s64) into %ir.buf, align 1)
+UNCOVERED secret-address func=secp256k1_ge_to_bytes bb=0 : STRXui killed renamable $x11, renamable $x0, 1 :: (store (s64) into %ir.s.sroa.4.0.buf.sroa_idx, align 1)
+UNCOVERED secret-address func=secp256k1_ge_to_bytes bb=0 : STRXui killed renamable $x10, renamable $x0, 2 :: (store (s64) into %ir.s.sroa.5.0.buf.sroa_idx, align 1)
+UNCOVERED secret-address func=secp256k1_ge_to_bytes bb=0 : STRXui killed renamable $x14, renamable $x0, 3 :: (store (s64) into %ir.s.sroa.6.0.buf.sroa_idx, align 1)
+UNCOVERED secret-address func=secp256k1_ge_to_bytes bb=0 : STRXui killed renamable $x9, renamable $x0, 4 :: (store (s64) into %ir.s.sroa.7.0.buf.sroa_idx, align 1)
+UNCOVERED secret-address func=secp256k1_ge_to_bytes bb=0 : STRXui killed renamable $x8, renamable $x0, 5 :: (store (s64) into %ir.s.sroa.8.0.buf.sroa_idx, align 1)
+UNCOVERED secret-address func=secp256k1_ge_to_bytes bb=0 : STRXui killed renamable $x11, renamable $x0, 6 :: (store (s64) into %ir.s.sroa.9.0.buf.sroa_idx, align 1)
+UNCOVERED secret-address func=secp256k1_ge_to_bytes bb=0 : STRXui killed renamable $x10, killed renamable $x0, 7 :: (store (s64) into %ir.s.sroa.10.0.buf.sroa_idx, align 1)
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=30 : CBNZW killed renamable $w8, %bb.32
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=31 : CBNZX killed renamable $x8, %bb.33
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=33 : CBNZW killed renamable $w9, %bb.35
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=35 : CBNZX killed renamable $x8, %bb.37
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=38 : STRQui killed renamable $q0, renamable $x12, 0 :: (store (s128) into %ir.buf20.i.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=38 : STRQui killed renamable $q1, renamable $x12, 1 :: (store (s128) into %ir.buf20.i.i + 16, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=38 : STRBBui killed renamable $w8, killed renamable $x12, 32 :: (store (s8) into %ir.buf20.i.i + 32)
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=38 : CBNZW killed renamable $w8, %bb.40
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=39 : CBNZX killed renamable $x8, %bb.41
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=41 : CBZW killed renamable $w8, %bb.43
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=43 : CBNZX killed renamable $x13, %bb.45
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=46 : TBZW renamable $w9, 0, %bb.48
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=49 : renamable $x25 = LDRXroX renamable $x22, renamable $x23, 0, 1 :: (load (s64) from %ir.arrayidx183)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=52 : STRQui renamable $q0, renamable $x8, 1 :: (store (s128) into %ir.arrayidx2.1.i + 16, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=52 : STRQui renamable $q0, killed renamable $x8, 0 :: (store (s128) into %ir.arrayidx2.1.i, align 1)
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=56 : CBNZX renamable $x26, %bb.58
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=58 : CBZX renamable $x25, %bb.62
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=60 : CBNZX $x0, %bb.63
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=64 : CBNZX renamable $x28, %bb.66
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : renamable $x8 = LDRXroX killed renamable $x22, renamable $x23, 0, 1 :: (load (s64) from %ir.sunkaddr865)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : renamable $x9 = LDRXui renamable $x8, 0 :: (load (s64) from %ir.91, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : renamable $x10 = LDRXui renamable $x8, 1 :: (load (s64) from %ir.s.sroa.5.0.buf.sroa_idx.i.i593, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : renamable $x11 = LDRXui renamable $x8, 2 :: (load (s64) from %ir.s.sroa.7.0.buf.sroa_idx.i.i595, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : renamable $x12 = LDRXui renamable $x8, 3 :: (load (s64) from %ir.s.sroa.9.0.buf.sroa_idx.i.i597, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : renamable $x22 = LDRXui renamable $x8, 4 :: (load (s64) from %ir.s.sroa.11.0.buf.sroa_idx.i.i599, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : renamable $x19 = LDRXui renamable $x8, 5 :: (load (s64) from %ir.s.sroa.13.0.buf.sroa_idx.i.i601, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : renamable $x24 = LDRXui renamable $x8, 6 :: (load (s64) from %ir.s.sroa.15.0.buf.sroa_idx.i.i603, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : renamable $x13 = LDRXui killed renamable $x8, 7 :: (load (s64) from %ir.s.sroa.17.0.buf.sroa_idx.i.i605, align 1)
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=66 : CBNZX killed renamable $x8, %bb.68
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=67 : renamable $x8 = LDRXui renamable $x9, 22 :: (load (s64) from %ir.sunkaddr866)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=67 : renamable $x1 = LDRXui killed renamable $x9, 23 :: (load (s64) from %ir.sunkaddr867)
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=70 : CBZX renamable $x25, %bb.74
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=72 : CBNZX $x0, %bb.75
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : renamable $x10 = LDRXroX renamable $x8, renamable $x11, 0, 1 :: (load (s64) from %ir.arrayidx233)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : renamable $x9 = LDRXroW renamable $x22, renamable $w9, 1, 1, implicit killed $x9 :: (load (s64) from %ir.arrayidx235)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : renamable $q0 = LDRQui renamable $x9, 0 :: (load (s128) from %ir.95, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : renamable $q1 = LDRQui renamable $x9, 1 :: (load (s128) from %ir.95 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : renamable $q2 = LDRQui renamable $x9, 2 :: (load (s128) from %ir.95 + 32, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : renamable $q3 = LDRQui killed renamable $x9, 3 :: (load (s128) from %ir.95 + 48, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : STRQui killed renamable $q3, renamable $x10, 3 :: (store (s128) into %ir.94 + 48, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : STRQui killed renamable $q2, renamable $x10, 2 :: (store (s128) into %ir.94 + 32, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : STRQui killed renamable $q1, renamable $x10, 1 :: (store (s128) into %ir.94 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : STRQui killed renamable $q0, killed renamable $x10, 0 :: (store (s128) into %ir.94, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : renamable $x9 = LDRXroX renamable $x8, renamable $x11, 0, 1 :: (load (s64) from %ir.arrayidx233)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : STRQui killed renamable $q0, renamable $x9, 4 :: (store (s128) into %ir.tweak, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : STRQui killed renamable $q1, killed renamable $x9, 5 :: (store (s128) into %ir.arrayidx5.i, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : renamable $x8 = LDRXroX killed renamable $x8, renamable $x11, 0, 1 :: (load (s64) from %ir.arrayidx233)
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=81 : CBZX renamable $x2, %bb.85
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=82 : STRWui renamable $w9, renamable $x8, 24, implicit killed $x9 :: (store (s32) into %ir.sunkaddr880)
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=82 : CBNZW killed renamable $w0, %bb.84
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=83 : renamable $x9 = LDRXroX renamable $x8, renamable $x10, 0, 1 :: (load (s64) from %ir.sunkaddr882)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=83 : STRQui renamable $q0, renamable $x9, 5 :: (store (s128) into %ir.tweak253 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=83 : STRQui killed renamable $q0, killed renamable $x9, 4 :: (store (s128) into %ir.tweak253, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=84 : renamable $x8 = LDRXroX killed renamable $x8, killed renamable $x10, 0, 1 :: (load (s64) from %ir.sunkaddr884)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=84 : STRWui killed renamable $w9, renamable $x8, 25 :: (store (s32) into %ir.label, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=85 : STRWui $wzr, renamable $x8, 24 :: (store (s32) into %ir.sunkaddr885)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=85 : STURQi renamable $q0, renamable $x8, 100 :: (store (s128) into %ir.label268, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=85 : STURQi renamable $q0, renamable $x8, 116 :: (store (s128) into %ir.label268 + 16, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=85 : STURQi renamable $q0, renamable $x8, 132 :: (store (s128) into %ir.label268 + 32, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=85 : STURQi killed renamable $q0, renamable $x8, 148 :: (store (s128) into %ir.label268 + 48, align 1)
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=85 : STRWui $wzr, killed renamable $x8, 41 :: (store (s32) into %ir.label268 + 64, align 1)
+UNCOVERED not-dit-covered func=secp256k1_silentpayments_recipient_scan_outputs bb=89 : renamable $w9 = KILL renamable $w9, implicit killed $x9, implicit-def $x9
+UNCOVERED secret-address func=secp256k1_silentpayments_recipient_scan_outputs bb=90 : STRWui renamable $w9, killed renamable $x8, 0, implicit killed $x9 :: (store (s32) into %ir.n_found_outputs)
+UNCOVERED secret-branch func=secp256k1_der_parse_integer bb=40 : CBZW killed renamable $w8, %bb.42
+UNCOVERED secret-branch func=nonce_function_rfc6979_impl bb=3 : CBNZX renamable $x22, %bb.5
+UNCOVERED secret-address func=nonce_function_rfc6979_impl bb=5 : renamable $q0 = LDRQui killed renamable $x22, 0 :: (load (s128) from %ir.algo16, align 1)
+UNCOVERED secret-branch func=nonce_function_bip340_impl bb=32 : CBZX renamable $x22, %bb.34
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x10 = LDRXui renamable $x1, 0 :: (load (s64) from %ir.s, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x11 = LDRXui renamable $x1, 1 :: (load (s64) from %ir.arrayidx1.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x14 = LDRXui renamable $x1, 2 :: (load (s64) from %ir.arrayidx2.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x12 = LDRXui renamable $x1, 3 :: (load (s64) from %ir.arrayidx3.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x16 = LDRXui renamable $x1, 4 :: (load (s64) from %ir.arrayidx4.i, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x14 = LDRXui renamable $x1, 3 :: (load (s64) from %ir.arrayidx3.i, !tbaa !45, !alias.scope !215)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x16 = LDRXui renamable $x1, 2 :: (load (s64) from %ir.arrayidx2.i, !tbaa !45, !alias.scope !215)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x3 = LDRXui renamable $x1, 1 :: (load (s64) from %ir.arrayidx1.i, !tbaa !45, !alias.scope !215)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x4 = LDRXui renamable $x1, 0 :: (load (s64) from %ir.s, !tbaa !45, !alias.scope !215)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x5 = LDRXui renamable $x1, 4 :: (load (s64) from %ir.arrayidx4.i, !tbaa !45, !alias.scope !215)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x3 = LDRXui renamable $x1, 3 :: (load (s64) from %ir.arrayidx3.i, !tbaa !45, !alias.scope !218)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x14 = LDRXui renamable $x1, 2 :: (load (s64) from %ir.arrayidx2.i, !tbaa !45, !alias.scope !218)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x16 = LDRXui renamable $x1, 1 :: (load (s64) from %ir.arrayidx1.i, !tbaa !45, !alias.scope !218)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x2 = LDRXui renamable $x1, 0 :: (load (s64) from %ir.s, !tbaa !45, !alias.scope !218)
+UNCOVERED secret-address func=secp256k1_gej_rescale bb=0 : renamable $x5 = LDRXui killed renamable $x1, 4 :: (load (s64) from %ir.arrayidx4.i, !tbaa !45, !alias.scope !218)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x9 = LDRXui renamable $x2, 0 :: (load (s64) from %ir.b, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x11 = LDRXui renamable $x2, 1 :: (load (s64) from %ir.arrayidx14, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x12 = LDRXui renamable $x2, 0 :: (load (s64) from %ir.b, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x8 = LDRXui renamable $x2, 2 :: (load (s64) from %ir.arrayidx52, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x11 = LDRXui renamable $x2, 1 :: (load (s64) from %ir.arrayidx14, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x12 = LDRXui renamable $x2, 0 :: (load (s64) from %ir.b, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x12 = LDRXui renamable $x2, 3 :: (load (s64) from %ir.arrayidx108, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x13 = LDRXui renamable $x2, 2 :: (load (s64) from %ir.arrayidx52, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x13 = LDRXui renamable $x2, 1 :: (load (s64) from %ir.arrayidx14, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x14 = LDRXui renamable $x2, 0 :: (load (s64) from %ir.b, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x8 = LDRXui renamable $x2, 3 :: (load (s64) from %ir.arrayidx108, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x11 = LDRXui renamable $x2, 2 :: (load (s64) from %ir.arrayidx52, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x13 = LDRXui renamable $x2, 1 :: (load (s64) from %ir.arrayidx14, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x12 = LDRXui renamable $x2, 3 :: (load (s64) from %ir.arrayidx108, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x13 = LDRXui renamable $x2, 2 :: (load (s64) from %ir.arrayidx52, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_scalar_mul_512 bb=0 : renamable $x10 = LDRXui killed renamable $x2, 3 :: (load (s64) from %ir.arrayidx108, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x21 = LDRXui renamable $x1, 0 :: (load (s64) from %ir.a, !tbaa !45, !noalias !251)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x20 = LDRXui renamable $x1, 1 :: (load (s64) from %ir.arrayidx1.i29, !tbaa !45, !noalias !251)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x19 = LDRXui renamable $x1, 2 :: (load (s64) from %ir.arrayidx2.i30, !tbaa !45, !noalias !251)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x7 = LDRXui renamable $x1, 3 :: (load (s64) from %ir.arrayidx3.i31, !tbaa !45, !noalias !251)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x6 = LDRXui renamable $x1, 4 :: (load (s64) from %ir.arrayidx4.i32, !tbaa !45, !noalias !251)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x12 = LDRXui renamable $x1, 5 :: (load (s64) from %ir.y2, !tbaa !45, !noalias !254)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x13 = LDRXui renamable $x1, 6 :: (load (s64) from %ir.arrayidx1.i69, !tbaa !45, !noalias !254)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x14 = LDRXui renamable $x1, 7 :: (load (s64) from %ir.arrayidx2.i70, !tbaa !45, !noalias !254)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x6 = LDRXui renamable $x1, 8 :: (load (s64) from %ir.arrayidx3.i71, !tbaa !45, !noalias !254)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $x5 = LDRXui renamable $x1, 9 :: (load (s64) from %ir.arrayidx4.i72, !tbaa !45, !noalias !254)
+UNCOVERED secret-address func=secp256k1_ge_set_gej_zinv bb=0 : renamable $w8 = LDRWui killed renamable $x1, 30 :: (load (s32) from %ir.infinity, align 8, !tbaa !53)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x21, renamable $x0, 10 :: (store (s64) into %ir.z, !tbaa !45, !noalias !257)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x10, renamable $x0, 11 :: (store (s64) into %ir.arrayidx39.i, !tbaa !45, !noalias !257)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x12, renamable $x0, 12 :: (store (s64) into %ir.arrayidx48.i, !tbaa !45, !noalias !257)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x11, renamable $x0, 13 :: (store (s64) into %ir.arrayidx52.i, !tbaa !45, !noalias !257)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x8, killed renamable $x0, 14 :: (store (s64) into %ir.arrayidx54.i, !tbaa !45, !noalias !257)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRWui killed renamable $w11, renamable $x17, 30 :: (store (s32) into %ir.infinity1, align 8, !tbaa !53)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x22, renamable $x17, 0 :: (store (s64) into %ir.r, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x2, renamable $x17, 1 :: (store (s64) into %ir.arrayidx24.i103, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x5, renamable $x17, 2 :: (store (s64) into %ir.arrayidx28.i107, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x19, renamable $x17, 3 :: (store (s64) into %ir.arrayidx32.i111, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x20, renamable $x17, 4 :: (store (s64) into %ir.arrayidx34.i114, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x10, renamable $x17, 5 :: (store (s64) into %ir.y12, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x11, renamable $x17, 6 :: (store (s64) into %ir.arrayidx39.i238, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x8, renamable $x17, 7 :: (store (s64) into %ir.arrayidx48.i242, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x10, renamable $x17, 8 :: (store (s64) into %ir.arrayidx52.i246, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_gej_double bb=0 : STRXui killed renamable $x8, killed renamable $x17, 9 :: (store (s64) into %ir.arrayidx54.i249, !tbaa !45)
+UNCOVERED secret-address func=secp256k1_musig_keyaggcoef_internal bb=7 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=1 : renamable $w8 = LDRBBroX renamable $x1, renamable $x9, 0, 0 :: (load (s8) from %ir.arrayidx.i, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $x9 = LDRXui renamable $x1, 0 :: (load (s64) from %ir.data, align 1)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $q0 = LDRQui renamable $x1, 0 :: (load (s128) from %ir.data, align 1)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $x10 = LDRXui renamable $x1, 3 :: (load (s64) from %ir.s.sroa.9.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $x11 = LDRXui renamable $x1, 2 :: (load (s64) from %ir.s.sroa.7.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $q1 = LDURQi renamable $x1, 8 :: (load (s128) from %ir.s.sroa.5.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $x12 = LDRXui renamable $x1, 4 :: (load (s64) from %ir.s.sroa.11.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $q1 = LDRQui renamable $x1, 2 :: (load (s128) from %ir.s.sroa.11.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $q5 = LDURQi renamable $x1, 40 :: (load (s128) from %ir.s.sroa.13.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $x13 = LDRXui renamable $x1, 7 :: (load (s64) from %ir.s.sroa.17.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_ge_from_bytes_ext bb=5 : renamable $x14 = LDRXui killed renamable $x1, 6 :: (load (s64) from %ir.s.sroa.15.0.buf.sroa_idx.i, align 1)
+UNCOVERED secret-address func=secp256k1_ecmult_gen_gej bb=0 : renamable $x9 = LDRXui renamable $x0, 1 :: (load (s64) from %ir.scalar_offset)
+UNCOVERED secret-address func=secp256k1_ecmult_gen_gej bb=0 : renamable $x10 = LDRXui renamable $x0, 2 :: (load (s64) from %ir.arrayidx6.i)
+UNCOVERED secret-address func=secp256k1_ecmult_gen_gej bb=0 : renamable $x12 = LDRXui renamable $x0, 3 :: (load (s64) from %ir.arrayidx13.i)
+UNCOVERED secret-address func=secp256k1_ecmult_gen_gej bb=0 : renamable $x13 = LDRXui killed renamable $x0, 4 :: (load (s64) from %ir.arrayidx20.i)
+UNCOVERED secret-branch func=secp256k1_nonce_function_musig_helper bb=7 : CBZX renamable $x20, %bb.18

@@ -1,0 +1,4 @@
+secp256k1_ecdsa_sign,3,pointee
+secp256k1_ecdsa_sign_recoverable,3,pointee
+secp256k1_ec_pubkey_create,2,pointee
+secp256k1_keypair_create,2,pointee
