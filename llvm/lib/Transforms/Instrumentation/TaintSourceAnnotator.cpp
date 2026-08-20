@@ -10,6 +10,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Instrumentation/TaintSourceAnnotator.h"
+#include "llvm/ADT/StringSet.h"
+#include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
+#include "llvm/IR/ValueMap.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/IR/Module.h"
@@ -25,6 +29,29 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "taint-annotate"
+
+// DIT clone list (docs/design/dit-callee-ownership.md §5, "function cloning").
+//
+// A helper shared between secret and public call sites can never qualify for
+// AlwaysEnteredWithDIT, so it sets DIT at entry and (without relaxed ownership)
+// clears it at exit, on EVERY call. Cloning gives the secret-context callers
+// their own copy that assumes DIT is already on and therefore emits no switches
+// at all -- the only way to remove the entry enable without the fail-dangerous
+// static assumption, and the only way to reach oracle parity on a direct-call
+// library like libsecp256k1.
+//
+// The list is a file of function names, one per line; the callee column of
+// -taint-dit-reassert-report is exactly the right input. Taking a list rather
+// than cloning everything keeps dead clones (and their code-size cost) out of
+// the binary. A production version would compute this set internally instead of
+// requiring the two-phase build.
+static cl::opt<std::string> TaintDitCloneList(
+    "taint-dit-clone-list",
+    cl::desc("File of function names to clone for DIT-on call sites. Each gets "
+             "a <name>.dit copy that assumes DIT is already set and emits no "
+             "mode switches; the MIR pass redirects calls made from inside a "
+             "DIT-on region to it."),
+    cl::value_desc("file"), cl::Hidden);
 
 static cl::opt<std::string> TaintSourcesFile("taint-src", cl::desc("A file specifying taint sources"), cl::value_desc("file"));
 
@@ -141,6 +168,59 @@ PreservedAnalyses TaintSourceAnnotatorPass::run(Module &M,
           Changed = true;
         }
       }
+  }
+
+  // ---- DIT cloning -------------------------------------------------------
+  // Create a <name>.dit copy of each listed function. The copy is marked with
+  // the "taint-dit-clone" attribute; the MIR pass reads that and (a) emits NO
+  // mode switches inside it -- it is entered with DIT already on, by
+  // construction of the call-site rewriting -- and (b) redirects calls made
+  // from inside a DIT-on region to it.
+  //
+  // Only local-linkage, address-not-taken functions are eligible. Local linkage
+  // means every caller is in this TU and therefore visible to the MIR pass;
+  // address-not-taken means no call can reach the original through a pointer
+  // and bypass the rewrite. Both are the same conditions AlwaysEnteredWithDIT
+  // uses, for the same reason.
+  //
+  // appendToUsed keeps the clone alive: it has no callers until the MIR pass
+  // creates them, and any intervening DCE would otherwise delete it.
+  if (!TaintDitCloneList.empty()) {
+    auto Buf = MemoryBuffer::getFile(TaintDitCloneList);
+    if (!Buf) {
+      errs() << "taint: cannot read DIT clone list " << TaintDitCloneList
+             << ": " << Buf.getError().message() << "\n";
+      report_fatal_error("Failed to read DIT clone list");
+    }
+    StringSet<> Wanted;
+    for (line_iterator LI(*Buf->get(), /*SkipBlanks=*/true, '#'); !LI.is_at_eof();
+         ++LI)
+      Wanted.insert(LI->trim());
+
+    SmallVector<GlobalValue *, 8> KeepAlive;
+    SmallVector<Function *, 8> ToClone;
+    for (Function &F : M) {
+      if (F.isDeclaration() || !Wanted.contains(F.getName()))
+        continue;
+      if (!F.hasLocalLinkage() || F.hasAddressTaken()) {
+        errs() << "taint: skipping DIT clone of " << F.getName() << " ("
+               << (F.hasLocalLinkage() ? "address taken" : "not local linkage")
+               << ")\n";
+        continue;
+      }
+      ToClone.push_back(&F);
+    }
+    for (Function *F : ToClone) {
+      ValueToValueMapTy VMap;
+      Function *Clone = CloneFunction(F, VMap);
+      Clone->setName(F->getName() + ".dit");
+      Clone->setLinkage(GlobalValue::InternalLinkage);
+      Clone->addFnAttr("taint-dit-clone");
+      KeepAlive.push_back(Clone);
+      Changed = true;
+    }
+    if (!KeepAlive.empty())
+      appendToUsed(M, KeepAlive);
   }
 
   return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();

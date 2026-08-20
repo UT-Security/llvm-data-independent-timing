@@ -3071,8 +3071,37 @@ void AArch64AsmPrinter::EmitToStreamer(MCStreamer &S, const MCInst &Inst) {
 #endif
 }
 
+// Measurement control for the DIT placement work, NOT a codegen option. Emits
+// `HINT #0` (NOP) in place of every `MSR DIT` the taint pass inserted: same 4
+// bytes, same address for every following instruction, same dynamic instruction
+// count — but no mode switching at all.
+//
+// It answers the standard objection to any "we removed unnecessary hardening and
+// got faster" result: that the delta is code ALIGNMENT rather than the hardening.
+// Marinaro et al. (AsiaCCS 2024) found exactly that on ARM — substituting NOPs for
+// removed hardening recovered the performance, so the hardening was never the cost.
+// If a measured cost survives this substitution, it was layout, not DIT.
+//
+// Substituting at EMISSION rather than at insertion is deliberate: the MI stream is
+// left untouched, so region placement, the whole-function fallback (which finds
+// switches by opcode) and the coverage verifier all still see real switches and make
+// exactly the decisions they make in the arm being controlled for. Substituting at
+// insertion perturbs all three and produced a 400-instruction drift.
+static cl::opt<bool> TaintDitNopSwitches(
+    "taint-dit-nop-switches",
+    cl::desc("Measurement control: emit NOP in place of each inserted MSR DIT, "
+             "preserving code layout and instruction count exactly while removing "
+             "the mode switch. Isolates alignment effects from DIT cost."),
+    cl::init(false), cl::Hidden);
+
 void AArch64AsmPrinter::emitInstruction(const MachineInstr *MI) {
   AArch64_MC::verifyInstructionPredicates(MI->getOpcode(), STI->getFeatureBits());
+
+  if (TaintDitNopSwitches &&
+      STI->getInstrInfo()->getTimingModeSwitch(*MI).has_value()) {
+    EmitToStreamer(*OutStreamer, MCInstBuilder(AArch64::HINT).addImm(0));
+    return;
+  }
 
 #ifndef NDEBUG
   InstsEmitted = 0;
