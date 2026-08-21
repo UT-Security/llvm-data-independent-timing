@@ -17,6 +17,19 @@
  * figure by patching "the DIT bit in the rendering process" specifically, so
  * reproducing that methodology means renderer-only, not every process.
  *
+ * DIT_ONLY_THREAD=<substr>[,<substr>...] restricts DIT further, to threads whose
+ * name matches. This attributes the renderer's DIT cost between thread classes -
+ * the point being to find out how much of it sits in code an AOT compiler pass
+ * could actually reach. It is implemented by interposing pthread_setname_np,
+ * because a thread's name is set by the thread itself, after it starts: at
+ * pthread_create time the name does not exist yet. Consequences, both reported:
+ *   - work a thread does BEFORE naming itself runs without DIT. Gecko names its
+ *     threads at the top of the start routine, so this window is startup-only,
+ *     but it makes every DIT_ONLY_THREAD number a slight LOWER bound.
+ *   - threads that never call pthread_setname_np never get DIT at all.
+ * In thread mode the main thread is also left clear at load and picked up when
+ * it names itself (Gecko names it "GeckoMain").
+ *
  * Diagnostics go to stderr, one line per process at load and one at exit:
  *   [dit] load pid=... prog=... enable=1 main_dit=1 applies=1
  *   [dit] exit pid=... prog=... threads_started=N threads_total=M
@@ -48,6 +61,11 @@ static atomic_uint g_threads_started;
  * number came from patching "the DIT bit in the rendering process", not every
  * process, so matching that methodology means renderer-only. */
 static int g_applies = 1;
+/* Thread-class mode: non-NULL when DIT_ONLY_THREAD is set. In this mode DIT is
+ * NOT set at thread start or at load; it is set only when a thread names itself
+ * and the name matches. */
+static const char *g_thread_filter;
+static atomic_uint g_threads_matched;
 /* Per-thread logging is useful during `verify` but is pointless noise inside a
  * timed run, so it is opt-in. The exit-time summary is not enough on its own:
  * the harness kills Firefox, and destructors do not run on SIGKILL. */
@@ -55,19 +73,31 @@ static int g_verbose;
 
 static inline void dit_set(void) {
 #if DIT_ENABLE
-    if (g_applies)
+    /* In thread-class mode DIT is granted only by name, in dit_apply_for_name;
+     * the unconditional grants at load and at thread start are suppressed. */
+    if (g_applies && !g_thread_filter)
         __asm__ volatile("msr DIT, #1" ::: "memory");
 #endif
 }
 
-/* True if DIT_ONLY_PROG is unset, or this process's name contains one of its
- * comma-separated substrings. */
-static int prog_selected(void) {
-    const char *filter = getenv("DIT_ONLY_PROG");
+static inline void dit_force_set(void) {
+#if DIT_ENABLE
+    __asm__ volatile("msr DIT, #1" ::: "memory");
+#endif
+}
+
+static inline void dit_force_clear(void) {
+#if DIT_ENABLE
+    __asm__ volatile("msr DIT, #0" ::: "memory");
+#endif
+}
+
+/* True if `filter` is unset/empty, or `name` contains one of its comma-separated
+ * substrings. Shared by the process filter and the thread filter. */
+static int name_matches(const char *filter, const char *name) {
     if (!filter || !*filter)
         return 1;
-    const char *prog = getprogname();
-    if (!prog)
+    if (!name)
         return 0;
     for (const char *p = filter; *p;) {
         const char *comma = strchr(p, ',');
@@ -76,12 +106,17 @@ static int prog_selected(void) {
         if (n && n < sizeof needle) {
             memcpy(needle, p, n);
             needle[n] = '\0';
-            if (strstr(prog, needle))
+            if (strstr(name, needle))
                 return 1;
         }
         p = comma ? comma + 1 : p + n;
     }
     return 0;
+}
+
+/* True if DIT_ONLY_PROG is unset, or this process's name matches it. */
+static int prog_selected(void) {
+    return name_matches(getenv("DIT_ONLY_PROG"), getprogname());
 }
 
 /* PSTATE.DIT is reported in bit 24 of the DIT system register. */
@@ -119,6 +154,37 @@ static void *trampoline(void *p) {
     return a.fn(a.arg);
 }
 
+/* Thread-class mode. A thread names itself, from itself, after it has started -
+ * so pthread_setname_np is the only hook that sees both the thread and its name.
+ * Applied on every call so a rename is followed, in both directions. */
+static void dit_apply_for_name(const char *name) {
+    if (!g_applies || !g_thread_filter)
+        return;
+    int match = name_matches(g_thread_filter, name);
+    if (match) {
+        dit_force_set();
+        atomic_fetch_add_explicit(&g_threads_matched, 1u, memory_order_relaxed);
+    } else {
+        dit_force_clear();
+    }
+    if (g_verbose)
+        fprintf(stderr, "[dit] tname pid=%d prog=%s name=%s match=%d dit=%lu\n",
+                (int)getpid(), getprogname(), name ? name : "(null)", match,
+                dit_get());
+}
+
+static int dit_pthread_setname_np(const char *name) {
+    int rc = pthread_setname_np(name);
+    dit_apply_for_name(name);
+    return rc;
+}
+
+__attribute__((used, section("__DATA,__interpose"))) static struct {
+    const void *replacement;
+    const void *replacee;
+} interpose_pthread_setname_np = {(const void *)dit_pthread_setname_np,
+                                  (const void *)pthread_setname_np};
+
 /* Call pthread_create directly by name. dyld does not rebind references inside
  * the image that carries the __interpose section, so this reaches libSystem's
  * implementation rather than recursing.
@@ -150,16 +216,25 @@ __attribute__((used, section("__DATA,__interpose"))) static struct {
                               (const void *)pthread_create};
 
 __attribute__((constructor)) static void dit_load(void) {
+    const char *tf = getenv("DIT_ONLY_THREAD");
+    g_thread_filter = (tf && *tf) ? tf : NULL;
     g_applies = prog_selected();
-    dit_set(); /* the main thread predates any interposed pthread_create */
     g_verbose = getenv("DIT_VERBOSE") != NULL;
-    fprintf(stderr, "[dit] load pid=%d prog=%s enable=%d main_dit=%lu applies=%d\n",
-            (int)getpid(), getprogname(), DIT_ENABLE, dit_get(), g_applies);
+    /* Must follow g_thread_filter: in thread-class mode the main thread starts
+     * clear and is picked up when it names itself. */
+    dit_set(); /* the main thread predates any interposed pthread_create */
+    fprintf(stderr,
+            "[dit] load pid=%d prog=%s enable=%d main_dit=%lu applies=%d tfilter=%s\n",
+            (int)getpid(), getprogname(), DIT_ENABLE, dit_get(), g_applies,
+            g_thread_filter ? g_thread_filter : "-");
 }
 
 __attribute__((destructor)) static void dit_unload(void) {
-    fprintf(stderr, "[dit] exit pid=%d prog=%s threads_started=%u threads_total=%u\n",
+    fprintf(stderr,
+            "[dit] exit pid=%d prog=%s threads_started=%u threads_total=%u "
+            "threads_matched=%u\n",
             (int)getpid(), getprogname(),
             atomic_load_explicit(&g_threads_started, memory_order_relaxed),
-            thread_count());
+            thread_count(),
+            atomic_load_explicit(&g_threads_matched, memory_order_relaxed));
 }
