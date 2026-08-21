@@ -86,6 +86,18 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
         // index via hardware encoding (not livein list order, which may differ).
         FunctionTaintSummary CalleeSummary = TSI.getSummary(*Callee);
         bool SummaryChanged = false;
+
+        // A secret handed over in the outgoing argument area. No livein register
+        // carries it, so the loop below cannot see it and the callee would be
+        // analysed as clean — the leak documented in
+        // docs/design/stack-arguments.md.
+        if (S.isOutgoingArgSecret() && !CalleeSummary.StackArgTainted) {
+          CalleeSummary.StackArgTainted = true;
+          SummaryChanged = true;
+          LLVM_DEBUG(dbgs() << "  caller " << MF.getName() << " -> callee "
+                            << Callee->getName()
+                            << ": receives a secret in a STACK argument\n");
+        }
         for (const auto &[PhysReg, VirtReg] : CalleeMF->getRegInfo().liveins()) {
           unsigned ArgIdx = TRI->getEncodingValue(PhysReg);
           // AAPCS64 passes incoming arguments only in X0-X7 / V0-V7 (encodings
@@ -99,7 +111,30 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           // taint-analysis-lr-not-arg.mir.
           if (ArgIdx > 7)
             continue;
-          if (S.isTainted(PhysReg) &&
+          // A Data-tainted register in a POINTER parameter means "pointer to a
+          // secret", not "the address is itself a secret value". Recording it as
+          // Data makes every value the callee computes from that pointer secret —
+          // including further addresses — and that is what turns one poisoned
+          // function into a poisoned subtree: on libsecp256k1 a single caller
+          // spread Data-taint through the output pointers of five shared group
+          // helpers, and those helpers are on the verification path.
+          //
+          // The callee's IR parameter type settles which reading is right, and it
+          // is available here. The residual is a genuinely secret-valued pointer
+          // (an address computed from a secret), which is secret-dependent
+          // ADDRESSING — already outside what PSTATE.DIT covers and already
+          // reported separately by -taint-uncovered-report as `secret-address`.
+          const bool PtrParam = ArgIdx < Callee->arg_size() &&
+                                Callee->getArg(ArgIdx)->getType()->isPointerTy();
+          if (S.isTainted(PhysReg) && PtrParam &&
+              CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
+            SummaryChanged = true;
+            LLVM_DEBUG(dbgs() << "  caller " << MF.getName() << " -> callee "
+                              << Callee->getName() << ": arg " << ArgIdx
+                              << " now pointee-tainted (pointer param, via "
+                              << printReg(PhysReg, TRI) << ")\n");
+          }
+          if (S.isTainted(PhysReg) && !PtrParam &&
               CalleeSummary.TaintedArgIndices.insert(ArgIdx).second) {
             SummaryChanged = true;
             LLVM_DEBUG(dbgs() << "  caller " << MF.getName() << " -> callee "
@@ -113,7 +148,8 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           // nothing and the callee is analyzed as clean — the under-taint the
           // ed25519 nonce case exposed.
           if ((S.isPointeeTainted(PhysReg) ||
-               (TaintFrameAddrArgs && S.isFrameAddrToSecret(PhysReg))) &&
+               (TaintFrameAddrArgs &&
+                S.isFrameAddrToSecretPrecise(PhysReg))) &&
               CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
             SummaryChanged = true;
             LLVM_DEBUG(dbgs() << "  caller " << MF.getName() << " -> callee "
@@ -348,16 +384,24 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       FunctionMemEffects MemEffects =
           computeFunctionMemEffects(*MF, TR, &TSI, AA);
 
-      // Build new summary
+      // Build new summary.
+      //
+      // NB every monotone field set ELSEWHERE in this loop must be carried
+      // forward here. NewSummary is default-constructed, so a field that
+      // propagateArgTaintToCallees sets on F (rather than F setting on itself)
+      // is wiped on the next visit, re-set on the one after, and the fixed point
+      // never converges. Read OldSummary first so the carry sees the freshest
+      // value, including anything a caller stored since CurrentSummary was taken.
+      FunctionTaintSummary OldSummary = TSI.getSummary(F);
       FunctionTaintSummary NewSummary;
       NewSummary.TaintedArgIndices = CurrentSummary.TaintedArgIndices;
       NewSummary.PointeeTaintedArgIndices =
           CurrentSummary.PointeeTaintedArgIndices;
       NewSummary.ReturnsTainted = ReturnsTainted;
       NewSummary.MemEffects = MemEffects;
+      NewSummary.StackArgTainted =
+          CurrentSummary.StackArgTainted || OldSummary.StackArgTainted;
 
-      // Check if return-taint status changed
-      FunctionTaintSummary OldSummary = TSI.getSummary(F);
       if (NewSummary != OldSummary) {
         TSI.storeSummary(F, NewSummary);
         Changed = true;

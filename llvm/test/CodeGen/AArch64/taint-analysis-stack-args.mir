@@ -1,0 +1,91 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s
+
+# A secret passed in a STACK argument, not a register.
+#
+# AAPCS64 passes arguments past the eighth (and large aggregates) in the outgoing
+# argument area: the caller stores them to `$sp + imm` and then overwrites the
+# argument registers before the call. So at the call NO register holds the secret,
+# and a register-only test concludes the call passes nothing secret — leaving the
+# callee analysed as clean and emitting no DIT at all. That was a real leak in the
+# shipped default, not merely imprecision: the identical code receiving the secret
+# in x0 was fully covered.
+#
+# The transfer runs on three pieces, all of which this test exercises:
+#   1. the store into the outgoing area arms TaintState::OutgoingArgSecret
+#      (its MMO is `into stack` — a PseudoSourceValue::Stack, NOT a
+#      FixedStackPseudoSourceValue, which is why it used to fall through to the
+#      opaque-clobber path),
+#   2. taintedCallArguments reports the call as secret-passing, which sets
+#      FunctionTaintSummary::StackArgTainted on the callee,
+#   3. the callee seeds its incoming FIXED frame objects, so the reload of the
+#      argument is tainted and the multiply that consumes it is covered.
+#
+# 26 is the PSTATE.DIT pstatefield encoding.
+
+# CHECK-LABEL: name: callee
+# CHECK: MSRpstateImm4 26, 1
+# CHECK: MADDXrrr
+# CHECK: MSRpstateImm4 26, 0
+
+# The caller needs nothing itself: it only stores the secret and calls. A store is
+# not a DIT-relevant operation, so there is no Need to cover here — the point of
+# the test is entirely that the taint REACHED the callee.
+# CHECK-LABEL: name: caller
+# CHECK-NOT: MSRpstateImm4
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  @sinkv = internal global i64 0
+
+  define void @callee(i64 %s8, i64 %a9) {
+  entry:
+    %m = mul i64 %s8, 31
+    %t = add i64 %m, %a9
+    store volatile i64 %t, ptr @sinkv, align 8
+    ret void
+  }
+
+  define void @caller(i64 "tainted" %s) {
+  entry:
+    call void @callee(i64 %s, i64 9)
+    ret void
+  }
+
+...
+---
+name:            callee
+tracksRegLiveness: true
+isSSA:           false
+fixedStack:
+  - { id: 0, type: default, offset: 0, size: 8, alignment: 16, isImmutable: true }
+  - { id: 1, type: default, offset: 8, size: 8, alignment: 8, isImmutable: true }
+body:             |
+  bb.0.entry:
+    renamable $x8 = LDRXui %fixed-stack.0, 0 :: (load (s64) from %fixed-stack.0)
+    renamable $x9 = LDRXui %fixed-stack.1, 0 :: (load (s64) from %fixed-stack.1)
+    renamable $x10 = MOVi64imm 31
+    renamable $x8 = MADDXrrr killed renamable $x8, killed renamable $x10, killed renamable $x9
+    renamable $x9 = ADRP target-flags(aarch64-page) @sinkv
+    STRXui killed renamable $x8, killed renamable $x9, 0 :: (volatile store (s64) into @sinkv)
+    RET_ReallyLR
+
+...
+---
+name:            caller
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    renamable $x8 = MOVi64imm 9
+    STRXui killed renamable $x8, $sp, 1 :: (store (s64) into stack + 8)
+    STRXui killed renamable $x0, $sp, 0 :: (store (s64) into stack)
+    $x0 = MOVi64imm 0
+    BL @callee, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0
+    RET_ReallyLR
+
+...

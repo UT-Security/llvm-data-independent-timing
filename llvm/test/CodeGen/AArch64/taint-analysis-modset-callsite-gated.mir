@@ -1,0 +1,130 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=DEFAULT
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-modset-callsite-gated %s -o - | FileCheck %s --check-prefix=GATED
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-modset-callsite-gated -taint-modset-gate-strict=0 %s -o - | FileCheck %s --check-prefix=STRICT
+
+# The context-insensitive mod-set false positive, and the -taint-modset-callsite-gated
+# stopgap (docs/design/context-insensitivity.md).
+#
+# `shared_copy` is a helper called from two places. `secret_caller` passes a secret
+# into it, so the fixed point marks its argument tainted and its mod-set records a
+# secret write into caller-visible memory. That mod-set is per FUNCTION, so it is
+# replayed at EVERY call site of `shared_copy` — including `public_caller`, which
+# passes nothing secret. `public_caller`'s reload is clobbered and the function gets
+# DIT switches it has no reason to carry. This is the shape that puts 17 MSR DIT in
+# secp256k1_ecdsa_verify.
+#
+# With -taint-modset-callsite-gated the clobber is applied only where the call site
+# actually passes a secret, so `public_caller` comes out clean while `secret_caller`
+# is unchanged.
+#
+# 26 is the PSTATE.DIT pstatefield encoding.
+
+# secret_caller: instrumented in BOTH modes. The gate must not cost coverage where
+# the secret really flows — if this stops being instrumented the flag is unsafe, not
+# merely imprecise.
+# DEFAULT-LABEL: name: secret_caller
+# DEFAULT: MSRpstateImm4 26, 1
+# DEFAULT: BL @shared_copy
+# DEFAULT: LDRWui
+# DEFAULT: MSRpstateImm4 26, 0
+# GATED-LABEL: name: secret_caller
+# GATED: MSRpstateImm4 26, 1
+# GATED: BL @shared_copy
+# GATED: LDRWui
+# GATED: MSRpstateImm4 26, 0
+
+# public_caller: the false positive. Instrumented today purely because a DIFFERENT
+# caller of shared_copy passes a secret; clean once the mod-set is applied per call
+# site.
+# DEFAULT-LABEL: name: public_caller
+# DEFAULT: MSRpstateImm4 26, 1
+# GATED-LABEL: name: public_caller
+# GATED-NOT: MSRpstateImm4
+
+# The two rules agree here: shared_copy's secret arrives through its own argument 1,
+# so this caller's arguments CAN speak for it. STRICT below runs with the strict rule
+# explicitly DISABLED, confirming the permissive rule suppresses the same sites.
+# STRICT-LABEL: name: secret_caller
+# STRICT: MSRpstateImm4 26, 1
+# STRICT-LABEL: name: public_caller
+# STRICT-NOT: MSRpstateImm4
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define void @shared_copy(ptr %dst, i32 %v) {
+  entry:
+    store i32 %v, ptr %dst, align 4
+    ret void
+  }
+
+  define i32 @secret_caller(i32 "tainted" %secret) {
+  entry:
+    %buf = alloca i32, align 4
+    call void @shared_copy(ptr %buf, i32 %secret)
+    %v = load i32, ptr %buf, align 4
+    ret i32 %v
+  }
+
+  define i32 @public_caller(i32 %public) {
+  entry:
+    %buf = alloca i32, align 4
+    call void @shared_copy(ptr %buf, i32 %public)
+    %v = load i32, ptr %buf, align 4
+    ret i32 %v
+  }
+
+...
+---
+name:            shared_copy
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$w1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $w1
+
+    STRWui killed $w1, killed $x0, 0 :: (store (s32) into %ir.dst)
+    RET_ReallyLR
+
+...
+---
+name:            secret_caller
+tracksRegLiveness: true
+isSSA:           false
+stack:
+  - { id: 0, name: buf, offset: 0, size: 4, alignment: 4 }
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    $w1 = COPY $w0
+    $x0 = ADDXri %stack.0.buf, 0, 0
+    BL @shared_copy, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit killed $w1
+    renamable $w0 = LDRWui %stack.0.buf, 0 :: (load (s32) from %ir.buf)
+    RET_ReallyLR implicit killed $w0
+
+...
+---
+name:            public_caller
+tracksRegLiveness: true
+isSSA:           false
+stack:
+  - { id: 0, name: buf, offset: 0, size: 4, alignment: 4 }
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    $w1 = COPY $w0
+    $x0 = ADDXri %stack.0.buf, 0, 0
+    BL @shared_copy, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit killed $w1
+    renamable $w0 = LDRWui %stack.0.buf, 0 :: (load (s32) from %ir.buf)
+    RET_ReallyLR implicit killed $w0
+
+...

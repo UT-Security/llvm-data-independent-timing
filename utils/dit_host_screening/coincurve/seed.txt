@@ -1,0 +1,2 @@
+secp256k1_ecdsa_sign,3,pointee
+secp256k1_ecdsa_sign_recoverable,3,pointee

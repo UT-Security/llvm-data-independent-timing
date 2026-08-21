@@ -86,6 +86,44 @@ a previous call rather than from this caller's arguments, so this is NOT sound i
 — measure the delta, then decide whether it belongs behind a flag next to
 `-taint-annotation-driven`.
 
+**IMPLEMENTED AND MEASURED 2026-08-19** as `-mllvm -taint-modset-callsite-gated`
+(default off). Full write-up: `docs/results/dit-modset-callsite-gated.md`.
+
+On Bitcoin Core's libsecp256k1 it cuts 660 switches to **178** and takes signature
+verification from **+51.20% to +0.67%** on M5, with **no coverage loss**: gem5
+`ditSuppressed` on the signing path holds at **103.1% of the hand oracle** (98.8%
+of the ungated pass), and cycles land **+0.13%** from the oracle against the
+ungated **+6.80%**. Against blanket always-on DIT the pass goes from 4 wins /
+5 catastrophic losses to **5 wins / 4 small losses**.
+
+Two refinements the measurement produced:
+
+- **`WritesSecretToGlobal` should not be gated.** It is already per-global rather
+  than a flood, and it is precisely the "callee got the secret from a global"
+  case the gate is otherwise unsound for. Leaving it ungated costs nothing
+  measurable and removes the most likely unsound shape.
+- **The gate must NOT be paired with `-taint-frame-addr-args`** — measured
+  2026-08-19, correcting the opposite conclusion drawn from static switch counts.
+  The gate asks whether an argument *register* is tainted; the fallback taints
+  frame addresses on a **whole-frame** approximation, so nearly every call site
+  looks secret-passing and the gate stops firing. `ConnectBlockAllEcdsa`: gate
+  alone **+0.66%**, fallback+gate **+45.32%**, i.e. the fallback costs +44.43 points
+  (15/15 reps). gem5 agrees: verification suppression 80 ops with the gate,
+  6,042,126 with fallback+gate. Static counts do fall (404 vs 975) — they are the
+  wrong metric. `+frame-addr +gate` is also the only configuration whose signing
+  coverage lands *below* the hand oracle (99.86%).
+
+  The `&secret_local` under-taint is real, but the fallback costs more than the
+  flood it replaces. **P1b is the way to close it**: per-object precision instead
+  of whole-frame taint, which would not trip the gate's predicate.
+
+**What it does not reach.** The same context-insensitivity exists in the
+*register/argument* summary, not just the mod-set: `secp256k1_scalar_set_b32`
+carries `PointeeTaintedArgIndices` from signing's secret nonce and replays it when
+`ecdsa_verify` passes it a public message hash. That residue is 2 switches per
+verification and is now the largest remaining false-positive source. P1b or real
+context-sensitivity is what reaches it.
+
 ---
 
 ## SQLCipher, measured 2026-08-12: the key does NOT spread

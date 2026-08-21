@@ -1,0 +1,108 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=DEFAULT
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-modset-callsite-gated -taint-modset-gate-strict=0 %s -o - | FileCheck %s --check-prefix=GATED
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-modset-callsite-gated %s -o - | FileCheck %s --check-prefix=STRICT
+
+# The case that separates -taint-modset-gate-strict from the plain gate: a callee
+# whose secret does NOT arrive through its own arguments.
+#
+# `helper` is a shared routine seeded elsewhere, so its summary carries
+# ReturnsTainted. That flag is applied at EVERY call site unconditionally — by
+# design, since the callee's return taint already accounts for all its sources.
+# So `middle` receives a tainted value from `helper` while `middle` itself takes
+# no secret argument, and writing it through its pointer parameter gives `middle`
+# a secret-writing mod-set with an EMPTY tainted-argument set.
+#
+# `public_caller` passes no secret. The plain gate therefore suppresses `middle`'s
+# clobber and leaves the reload of %buf untainted — but the secret is real and it
+# came from `helper`, not from this caller. That is the unsound shape, and it is
+# the one that occurs in libsecp256k1 (9 of 26 suppressed sites, e.g.
+# secp256k1_ecmult_gen_blind <- secp256k1_context_preallocated_create).
+#
+# -taint-modset-gate-strict, which is ON whenever the gate is, declines to gate
+# `middle` precisely because it has no tainted argument for the caller's arguments
+# to speak for. The GATED run below disables it explicitly to show the difference.
+
+# Checks follow emission order: helper, middle, public_caller.
+#
+# `middle` itself is instrumented in every mode — the value it handles is tainted
+# however the clobber is applied in its callers. Only `public_caller` differs.
+# DEFAULT-LABEL: name: middle
+# DEFAULT: MSRpstateImm4 26, 1
+# GATED-LABEL: name: middle
+# GATED: MSRpstateImm4 26, 1
+# STRICT-LABEL: name: middle
+# STRICT: MSRpstateImm4 26, 1
+
+# DEFAULT-LABEL: name: public_caller
+# DEFAULT: MSRpstateImm4 26, 1
+# GATED-LABEL: name: public_caller
+# GATED-NOT: MSRpstateImm4
+# STRICT-LABEL: name: public_caller
+# STRICT: MSRpstateImm4 26, 1
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @helper(i32 "tainted" %secret) {
+  entry:
+    ret i32 %secret
+  }
+
+  define void @middle(ptr %dst) {
+  entry:
+    %v = call i32 @helper(i32 0)
+    store i32 %v, ptr %dst, align 4
+    ret void
+  }
+
+  define i32 @public_caller() {
+  entry:
+    %buf = alloca i32, align 4
+    call void @middle(ptr %buf)
+    %v = load i32, ptr %buf, align 4
+    ret i32 %v
+  }
+
+...
+---
+name:            helper
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    RET_ReallyLR implicit killed $w0
+
+...
+---
+name:            middle
+tracksRegLiveness: true
+isSSA:           false
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    $x19 = COPY $x0
+    $w0 = MOVi32imm 0
+    BL @helper, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0, implicit-def $w0
+    STRWui killed renamable $w0, killed renamable $x19, 0 :: (store (s32) into %ir.dst)
+    RET_ReallyLR
+
+...
+---
+name:            public_caller
+tracksRegLiveness: true
+isSSA:           false
+stack:
+  - { id: 0, name: buf, offset: 0, size: 4, alignment: 4 }
+body:             |
+  bb.0.entry:
+    $x0 = ADDXri %stack.0.buf, 0, 0
+    BL @middle, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0
+    renamable $w0 = LDRWui %stack.0.buf, 0 :: (load (s32) from %ir.buf)
+    RET_ReallyLR implicit killed $w0
+
+...

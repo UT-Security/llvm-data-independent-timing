@@ -640,3 +640,108 @@ correctly, but true per-sub-gap decisions would need to decompose the component.
 - **Dynamic:** needs FEAT_DIT hardware (Graviton3/Apple M/N2); `qemu-aarch64
   -cpu max` validates functional behavior only, not timing. Until then report
   static toggle metrics alongside the existing barrier-density stats.
+
+---
+
+# §7. Mixed joins, edge bundling, and what `switch-cyc` is actually worth
+
+**Measured 2026-08-19.** Prompted by a comparison with LLVM's other mode-switch
+placers: AMDGPU's `SIModeRegister` (FP rounding mode, three-phase dataflow with a
+`Status{Mask,Mode}` lattice) and AArch64's `MachineSMEABIPass` (PSTATE.ZA, one
+state per **edge bundle**). Both are worth citing — a compiler reviewer will find
+them, and GCC's `optimize_mode_switching` (lazy code motion) besides.
+
+## 7.1 The structural gap
+
+Our emitter puts the enable at the block start whenever *any* predecessor is Off:
+
+```cpp
+bool OnAtEntry = !MBB.pred_empty();
+for (auto *P : MBB.predecessors()) OnAtEntry &= On(P);
+if (!OnAtEntry) { ...enable at MBB's start... }
+```
+
+At a **mixed join** — some predecessors On, some Off — that enable then executes
+on *every* incoming path, redundantly on the already-on ones. `EdgeBundles`
+exists to avoid exactly this: all edges entering a block share one bundle, so a
+block is always entered in one state and no edge needs splitting.
+
+## 7.2 How big it is (`-taint-dit-join-report`)
+
+Bitcoin Core's `secp256k1.c`, weighted by `MachineBlockFrequencyInfo`:
+
+| config | Off→On boundaries | mixed | wt. enable execs | redundant |
+|---|---|---|---|---|
+| hoist, `switch-cyc=0` | 189 | 75 (40%) | 197.3 | 55.7 = **28.2%** |
+| hoist, `switch-cyc=12` | 127 | 47 | 138.5 | 33.8 = 24.4% |
+| gated, `switch-cyc=0` | 49 | 25 (51%) | 41.6 | 8.4 = 20.2% |
+| **gated, `switch-cyc=10`** | **28** | **10** | **27.2** | 2.8 = **10.5%** |
+
+`switch-cyc` 10, 12 and 23 give identical placement on this TU, so the two machine
+models do not need different settings here.
+
+## 7.3 Verdict: neither bundling nor splitting
+
+**Bundling is the wrong tool.** It forces a bundle to one state, i.e. promotes Off
+predecessors to On — trading switches for dwell. `admitOffCorridors` already does
+that, and does it on a measured cost model rather than a transition-count
+heuristic. SME needs bundling because ZA state is *mandatory* and it has no dwell
+to trade; DIT is optional, so a cost model strictly dominates.
+
+**Splitting is second-order.** Splitting and merging treat the same joins:
+merging removes the switch by adding dwell, splitting removes the redundant
+execution without adding dwell. Which wins is set by the ratio, and ours is
+lopsided (§7.4): ~10-23 cyc/switch against 0.0039 cyc per suppressed op. At
+`switch-cyc=10` only **10 mixed joins remain in the whole TU, every one at
+frequency 1.00**, all on seeded entry points — roughly 100 cycles per signing
+operation against a ~10.9 µs signature.
+
+Note the hot mixed joins that survive at `cyc=12` in the *hoist* build
+(`musig_pubkey_agg` freq 15.5, `ge_set_all_gej_var` 12.5) are all inside
+false-positive functions. **Fix the taint and the placement problem largely
+evaporates** — the precision fix subsumes the placement fix here.
+
+## 7.4 What one switch actually costs (derived from our own gem5 runs)
+
+Method: cycles above the `off` arm, minus the dwell its `ditSuppressed` count
+implies, over the switch instructions it executed. Use `ver_base` (20,240 switch
+instructions) — with a small denominator, cross-binary codegen noise swamps the
+result and the same arithmetic returns nonsense (670 cyc/switch on `ver_gated`'s
+80 switches).
+
+| DIT model | cyc/switch |
+|---|---|
+| speculative / renamed (`--eves --dmp --comp-simp`) | **9.7** |
+| serializing (`--no-speculative-dit`) | **22.6** |
+| dwell, same workload | **0.0039 cyc per suppressed op** |
+
+**Renaming the switch takes it from ~23 to ~10 cycles. It does not make it free**,
+so `switch-cyc=0` is wrong for both targets, not just for Apple silicon.
+
+## 7.5 …but changing the default is not worth it
+
+**Measured on Bitcoin Core, 15 paired reps, machine exclusive** (control 3.98x,
+noise floor −0.09%). `build-gated10` (133 switches) vs `build-gated` (178):
+
+| | median | reps slower | IQR |
+|---|---|---|---|
+| SignTransactionSchnorr | **−0.47%** | 1/15 | −0.79 .. −0.42 |
+| WalletAvailableCoins | **−0.94%** | 3/15 | −1.80 .. −0.01 |
+| SignTransactionECDSA | −1.43% | 5/15 | −5.42 .. +4.26 |
+| WalletCreateTxUseOnlyPresetInputs | −2.62% | 5/15 | −8.61 .. +8.87 |
+| four public-path benchmarks | +0.28% .. +0.75% | 8-11/15 | spans 0 |
+
+Only the first two are results; the next two are the high-CoV benchmarks (6.2%,
+8.2%) with IQRs spanning ±5-9 points. The small regressions are on benchmarks that
+execute essentially no switches, so switch count cannot be their cause — they are
+codegen lottery between two builds.
+
+**Conclusion: keep `switch-cyc=0` as the default.** The cost model demonstrably
+works (it moves the number the predicted way on exactly the benchmarks that
+execute switches), but 45 fewer switches buys ~0.5% where it can and nothing
+elsewhere. The scoreboard against always-on is unchanged, 5 wins / 4 either way.
+Set the knob per-target if a workload is switch-bound; do not ship a new default
+for half a percent.
+
+**The standing lesson: the gate is worth 50 points, the cost model half a point.
+Precision, not placement, is where the performance is.**

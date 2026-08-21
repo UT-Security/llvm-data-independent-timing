@@ -285,6 +285,13 @@ printStackObjectDbgInfo(const MachineFunction::VariableDbgInfo &DebugVar,
                                         DebugVar.Expr,
                                         DebugVar.Loc}};
   for (unsigned i = 0; i < 3; ++i) {
+    // A single stack object can describe more than one source variable, for
+    // example after StackColoring has merged slots whose lifetimes do not
+    // overlap. Emit the extra entries as a comma separated list so that the
+    // printed MIR can be read back in; printing them back to back would
+    // produce a field the MIR parser rejects.
+    if (!Outputs[i]->empty())
+      Outputs[i]->append(", ");
     raw_string_ostream StrOS(*Outputs[i]);
     Metas[i]->printAsOperand(StrOS, MST);
   }

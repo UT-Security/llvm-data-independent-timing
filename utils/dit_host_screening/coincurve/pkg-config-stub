@@ -1,0 +1,9 @@
+#!/bin/sh
+# Stub: satisfies find_package(PkgConfig REQUIRED) without a real pkg-config.
+# Reports "nothing installed" for every query, which is exactly what we want -
+# COINCURVE_IGNORE_SYSTEM_LIB=ON means the vendored libsecp256k1 must be built
+# from source anyway. Local to this build; nothing is installed on the system.
+case "$1" in
+  --version) echo "0.29.2"; exit 0 ;;
+  *) exit 1 ;;
+esac

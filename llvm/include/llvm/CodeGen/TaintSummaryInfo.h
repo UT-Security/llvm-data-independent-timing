@@ -55,6 +55,24 @@ struct FunctionMemEffects {
   /// memory.
   SmallSet<unsigned, 4> WritesSecretThroughArgPointee;
 
+  /// THE SOURCE CONDITION. At least one of the effects above carries a secret
+  /// that did NOT arrive through this function's parameters — it was read from a
+  /// tainted global, came from another TU, or was produced by a call this
+  /// function passed nothing secret to.
+  ///
+  /// This is what makes -taint-modset-callsite-gated sound. The gate suppresses
+  /// a callee's clobber at a call site that passes no secret, which is valid only
+  /// if the callee's secret could have come from a caller at all. When this is
+  /// true it could not have, so the clobber must be applied unconditionally.
+  ///
+  /// Conservative in two ways, both deliberate: it is one bit for the whole
+  /// mod-set rather than per effect (LLVM's ArgMem/Other split in
+  /// BasicAAResult::getModRefInfo is the precise form, and GCC's ipa-modref
+  /// parm_map the other), so a function with both sources loses gating entirely;
+  /// and a global this function itself tainted from its own parameter still
+  /// counts as non-argument-sourced. Both err toward applying the clobber.
+  bool NonArgSourced = false;
+
   /// TOP: the function may have written a secret to memory the analysis cannot
   /// pin down — to the heap, through an unresolvable pointer, or transitively via
   /// a call it makes to an unknown/unknown-writing callee. Mandatory default for
@@ -63,6 +81,7 @@ struct FunctionMemEffects {
 
   bool operator==(const FunctionMemEffects &O) const {
     return WritesSecretToUnknown == O.WritesSecretToUnknown &&
+           NonArgSourced == O.NonArgSourced &&
            WritesSecretToGlobal == O.WritesSecretToGlobal &&
            WritesSecretThroughArgPointee == O.WritesSecretThroughArgPointee;
   }
@@ -76,6 +95,15 @@ struct FunctionTaintSummary {
 
   /// Indices of pointer arguments whose pointee memory is tainted.
   SmallSet<unsigned, 8> PointeeTaintedArgIndices;
+
+  /// A caller passed this function a secret in the STACK argument area rather
+  /// than in a register — AAPCS64 puts arguments past the eighth, and large
+  /// aggregates, there. Kept as a flag rather than an index set because
+  /// recovering the argument index would require re-running ABI assignment at
+  /// the MIR level; the flag seeds every incoming fixed frame object instead,
+  /// which over-approximates within this function only (the safe direction) and
+  /// never widens its callers' view. See docs/design/stack-arguments.md.
+  bool StackArgTainted = false;
 
   /// Whether the function returns a tainted value (X0/W0).
   bool ReturnsTainted = false;
@@ -122,6 +150,7 @@ struct FunctionTaintSummary {
     return TaintedArgIndices == Other.TaintedArgIndices &&
            PointeeTaintedArgIndices == Other.PointeeTaintedArgIndices &&
            ReturnsTainted == Other.ReturnsTainted &&
+           StackArgTainted == Other.StackArgTainted &&
            MemEffects == Other.MemEffects &&
            IsConservative == Other.IsConservative &&
            PreservesDIT == Other.PreservesDIT &&

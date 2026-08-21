@@ -116,6 +116,8 @@ extern cl::opt<bool> TaintFrameAddrArgs;
 /// audited. Distinct from the escape report (which is about secrets leaving to
 /// callees we cannot instrument).
 extern cl::opt<std::string> TaintClobberReportFile;
+extern cl::opt<std::string> TaintDITJoinReportFile;
+extern cl::opt<std::string> TaintFrameRefReportFile;
 
 /// Selects which of TaintState's register bitvectors an operation applies to.
 enum class TaintKind {
@@ -149,6 +151,17 @@ struct TaintState {
   /// because it is not taint — a function holding only frame addresses is not
   /// tainted and must not become instrumented on that basis.
   SparseBitVector<> FrameAddrRegs;
+  bool OutgoingArgSecret = false;
+  bool NonArgSourcedTaint = false;
+
+  /// Register -> the frame object it points into (P1b). Distinct from
+  /// FrameAddrRegs, which only records THAT a register is a frame address; this
+  /// records WHICH object, which is what lets a callee's arg-pointee mod-set be
+  /// applied to the one object the caller passed instead of the whole frame.
+  /// Absent = unknown, and every consumer must fall back to its conservative
+  /// path on absent. Excluded from empty()/countRegs(): it is provenance, not
+  /// taint.
+  SmallDenseMap<unsigned, int, 8> FrameRefs{};
   DenseSet<StackCell> TaintedStackCells;
   DenseSet<StackCell> PointeeTaintedStackCells;
   DenseSet<GlobalCell> TaintedGlobalCells;
@@ -188,7 +201,9 @@ public:
   bool isBottom() const {
     return TaintedRegs.empty() && PointeeTaintedRegs.empty() &&
            AddressTaintedRegs.empty() && FrameAddrRegs.empty() &&
-           TaintedStackCells.empty() && PointeeTaintedStackCells.empty() &&
+           !OutgoingArgSecret && !NonArgSourcedTaint &&
+           TaintedStackCells.empty() &&
+           PointeeTaintedStackCells.empty() &&
            TaintedGlobalCells.empty() && TaintedUnknownMemValues.empty() &&
            PointeeTaintedUnknownMemValues.empty() && !UnknownMemTainted &&
            TaintedWholeGlobals.empty() && !ExternalMemClobbered;
@@ -199,6 +214,9 @@ public:
            PointeeTaintedRegs == O.PointeeTaintedRegs &&
            AddressTaintedRegs == O.AddressTaintedRegs &&
            FrameAddrRegs == O.FrameAddrRegs &&
+           OutgoingArgSecret == O.OutgoingArgSecret &&
+           NonArgSourcedTaint == O.NonArgSourcedTaint &&
+           FrameRefs == O.FrameRefs &&
            TaintedStackCells == O.TaintedStackCells &&
            PointeeTaintedStackCells == O.PointeeTaintedStackCells &&
            TaintedGlobalCells == O.TaintedGlobalCells &&
@@ -220,6 +238,22 @@ public:
     PointeeTaintedRegs |= O.PointeeTaintedRegs;
     AddressTaintedRegs |= O.AddressTaintedRegs;
     FrameAddrRegs |= O.FrameAddrRegs;
+    OutgoingArgSecret |= O.OutgoingArgSecret;
+    NonArgSourcedTaint |= O.NonArgSourcedTaint;
+    // Frame provenance INTERSECTS on merge: a register only points at a known
+    // object if every incoming path agrees which one. Disagreement, or presence
+    // on only one path, drops to unknown — the conservative direction, since
+    // unknown means "fall back to the whole-frame clobber".
+    if (!FrameRefs.empty()) {
+      SmallVector<unsigned, 8> Drop;
+      for (const auto &KV : FrameRefs) {
+        auto It = O.FrameRefs.find(KV.first);
+        if (It == O.FrameRefs.end() || It->second != KV.second)
+          Drop.push_back(KV.first);
+      }
+      for (unsigned R : Drop)
+        FrameRefs.erase(R);
+    }
     mergeSet(TaintedStackCells, O.TaintedStackCells);
     mergeSet(PointeeTaintedStackCells, O.PointeeTaintedStackCells);
     mergeSet(TaintedGlobalCells, O.TaintedGlobalCells);
@@ -247,6 +281,27 @@ public:
   void setExternalMemClobbered() { ExternalMemClobbered = true; }
   bool isExternalMemClobbered() const { return ExternalMemClobbered; }
 
+  /// A secret has been stored into the OUTGOING argument area and has not yet
+  /// been consumed by a call. AAPCS64 passes arguments beyond the eighth (and
+  /// large aggregates) in memory: the caller stores them to `$sp + imm` and the
+  /// argument registers may then be overwritten before the call, so by the time
+  /// the call is reached NO register holds the secret. Without this bit the
+  /// analysis concluded that such a call passes nothing secret, and the callee
+  /// was analysed as clean — a real leak, not merely imprecision
+  /// (docs/design/stack-arguments.md).
+  /// Some taint in this function did NOT enter through its own parameters: it
+  /// was read from a tainted global, arrived from another TU's unknown memory,
+  /// or was produced by a call this function did not hand a secret to. This is
+  /// the source condition the mod-set call-site gate needs: a caller's arguments
+  /// can only account for a callee's secret if that secret came from parameters
+  /// in the first place. Monotone — set, never cleared, merged with OR.
+  void setNonArgSourcedTaint() { NonArgSourcedTaint = true; }
+  bool hasNonArgSourcedTaint() const { return NonArgSourcedTaint; }
+
+  void setOutgoingArgSecret() { OutgoingArgSecret = true; }
+  void clearOutgoingArgSecret() { OutgoingArgSecret = false; }
+  bool isOutgoingArgSecret() const { return OutgoingArgSecret; }
+
   /// True if this frame may hold a secret, so an address into it may point at
   /// one. Deliberately coarse: any tainted stack cell, or a call-induced
   /// clobber that may have written a secret anywhere in the frame. This is the
@@ -260,6 +315,27 @@ public:
   /// True if R is a frame address that may point at a secret — the
   /// over-approximating fallback for the register<->stack-cell link the MIR
   /// stage cannot reconstruct. Consumed at call boundaries only.
+  /// The frame object R points into, if the analysis knows it (P1b).
+  std::optional<int> getFrameRef(Register R) const {
+    auto It = FrameRefs.find(R.id());
+    return It == FrameRefs.end() ? std::nullopt : std::optional<int>(It->second);
+  }
+  void setFrameRef(Register R, int FI) { FrameRefs[R.id()] = FI; }
+  void clearFrameRef(Register R) { FrameRefs.erase(R.id()); }
+
+  /// Per-object refinement of isFrameAddrToSecret. When the pointed-at object is
+  /// known, ask whether THAT object holds a secret rather than whether the frame
+  /// does. Falls back to the whole-frame test when provenance is unknown, so it
+  /// is never less conservative than the original.
+  bool isFrameAddrToSecretPrecise(Register R) const {
+    if (!test(TaintKind::FrameAddr, R))
+      return false;
+    if (auto FI = getFrameRef(R))
+      return ExternalMemClobbered || anyTaintedStackCellForFI(*FI) ||
+             anyPointeeTaintedStackCellForFI(*FI);
+    return frameMayHoldSecret();
+  }
+
   bool isFrameAddrToSecret(Register R) const {
     return test(TaintKind::FrameAddr, R) && frameMayHoldSecret();
   }

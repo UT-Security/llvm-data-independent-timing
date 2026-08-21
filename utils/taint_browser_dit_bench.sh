@@ -105,6 +105,9 @@ VARIANT=""
 [[ "${RENDERER_ONLY:-0}" == "1" ]] && VARIANT="$VARIANT-rend"
 [[ "${SINGLE:-0}" == "1" ]] && VARIANT="$VARIANT-1t"
 [[ "${ECORE:-0}" == "1" ]] && VARIANT="$VARIANT-ecore"
+# TAG appends to the variant so a new sweep gets its own results/canary/summary
+# files instead of archiving and replacing an earlier one.
+[[ -n "${TAG:-}" ]] && VARIANT="$VARIANT-$TAG"
 
 # Speedometer clone, dylibs and canary are shared; results are per browser so the
 # two engines' data can never be pooled by accident.
@@ -291,7 +294,7 @@ if covs:
 
 # --------------------------------------------------------------------------
 bench() {
-    say "bench [$BROWSER$VARIANT]: $REPS reps x 3 arms x ${ITERATIONS} Speedometer iterations"
+    say "bench [$BROWSER$VARIANT]: $REPS reps x ${ARMS:-base null dit} x ${ITERATIONS} Speedometer iterations"
     [[ -f "$SANDBOX_FLAG_FILE" ]] || die "run verify first"
     mkdir -p "$LOG_DIR"
 
@@ -308,7 +311,12 @@ bench() {
         fi
     done
     local sandbox_flag; sandbox_flag="$(cat "$SANDBOX_FLAG_FILE")"
-    local arms=(base null dit)
+    # ARMS defaults to the original three, so existing invocations are unchanged.
+    # Thread-class arms (dit-<class>) set DIT_ONLY_THREAD for that run only; they
+    # attribute the renderer's DIT cost between thread classes. Names come from a
+    # discovery run against this Firefox build, not from guesswork.
+    local arms=(${ARMS:-base null dit})
+    local narms=${#arms[@]}
 
     for ((rep = 1; rep <= REPS; rep++)); do
         echo ""
@@ -316,20 +324,28 @@ bench() {
         # Rotate arm order every rep so a monotonic drift cannot masquerade as
         # an arm effect.
         local order=()
-        for ((k = 0; k < 3; k++)); do order+=("${arms[$(((k + rep - 1) % 3))]}"); done
+        for ((k = 0; k < narms; k++)); do order+=("${arms[$(((k + rep - 1) % narms))]}"); done
 
         for arm in "${order[@]}"; do
             canary "pre-$arm-rep$rep" > /dev/null
-            local dylib=""
+            local dylib="" tfilter=""
             case "$arm" in
-                null) dylib="$WORK_DIR/dit_off.dylib" ;;
-                dit)  dylib="$WORK_DIR/dit_on.dylib" ;;
+                null)      dylib="$WORK_DIR/dit_off.dylib" ;;
+                dit)       dylib="$WORK_DIR/dit_on.dylib" ;;
+                dit-main)  dylib="$WORK_DIR/dit_on.dylib"; tfilter="MainThread" ;;
+                dit-style) dylib="$WORK_DIR/dit_on.dylib"; tfilter="StyleThread" ;;
+                dit-tc)    dylib="$WORK_DIR/dit_on.dylib"; tfilter="TaskController" ;;
             esac
+            # MUST be unset for the non-thread arms: a stale filter would silently
+            # turn the full-renderer arm into a thread-class arm.
+            if [[ -n "$tfilter" ]]; then export DIT_ONLY_THREAD="$tfilter"
+            else unset DIT_ONLY_THREAD; fi
             python3 "$SRC/run_one.py" --arm "$arm" --rep "$rep" \
                 --speedometer-dir "$SP_DIR" --browser-bin "$BROWSER_BIN" \
             --browser-kind "$BROWSER" \
                 --dylib "$dylib" --iterations "$ITERATIONS" --timeout "$TIMEOUT" \
                 --port "$PORT" --out "$RESULTS" --log-dir "$LOG_DIR" $sandbox_flag $EXTRA_RUN_ARGS || true
+            unset DIT_ONLY_THREAD
             sleep 5   # let the machine settle between arms
         done
     done

@@ -1,0 +1,52 @@
+# RUN: llc -mtriple=aarch64 -run-pass none -o - %s | FileCheck %s
+# A single stack object can describe more than one source variable, for
+# example after StackColoring has merged slots whose lifetimes do not
+# overlap. The entries are printed as a comma separated list; check that such
+# a stack object survives a print/parse round trip.
+--- |
+  define void @foo() #0 !dbg !5 {
+  entry:
+    %x = alloca [16 x i8], align 8
+      #dbg_declare(ptr %x, !4, !DIExpression(), !7)
+      #dbg_declare(ptr %x, !11, !DIExpression(), !12)
+    ret void
+  }
+
+  attributes #0 = { nounwind }
+
+  !llvm.dbg.cu = !{!0}
+  !llvm.module.flags = !{!3}
+
+  !0 = distinct !DICompileUnit(language: DW_LANG_C89, file: !1, producer: "clang", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, retainedTypes: !2)
+  !1 = !DIFile(filename: "t.c", directory: "")
+  !2 = !{}
+  !3 = !{i32 1, !"Debug Info Version", i32 3}
+  !4 = !DILocalVariable(name: "x", scope: !5, file: !1, line: 1, type: !8)
+  !5 = distinct !DISubprogram(scope: null, isLocal: false, isDefinition: true, isOptimized: false, unit: !0)
+  !6 = !DIBasicType(name: "char", size: 8, align: 8, encoding: DW_ATE_signed_char)
+  !7 = !DILocation(line: 1, scope: !5)
+  !8 = !DICompositeType(tag: DW_TAG_array_type, baseType: !6, size: 128, align: 8, elements: !9)
+  !9 = !{!10}
+  !10 = !DISubrange(count: 16)
+  !11 = !DILocalVariable(name: "y", scope: !5, file: !1, line: 2, type: !8)
+  !12 = !DILocation(line: 2, scope: !5)
+...
+---
+name:            foo
+tracksRegLiveness: true
+frameInfo:
+  maxAlignment:    8
+# CHECK-LABEL: name: foo
+# CHECK: stack:
+# CHECK:      debug-info-variable: '!5, !11',
+# CHECK-SAME: debug-info-expression: '!DIExpression(), !DIExpression()',
+# CHECK-NEXT: debug-info-location: '!10, !12' }
+stack:
+  - { id: 0, name: x, offset: 0, size: 16, alignment: 8,
+      debug-info-variable: '!4, !11',
+      debug-info-expression: '!DIExpression(), !DIExpression()',
+      debug-info-location: '!7, !12' }
+body: |
+  bb.0.entry:
+    RET_ReallyLR
+...

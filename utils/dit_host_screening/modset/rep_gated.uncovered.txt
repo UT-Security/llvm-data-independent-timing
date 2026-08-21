@@ -1,0 +1,46 @@
+UNCOVERED secret-branch func=secp256k1_scalar_set_b32 bb=0 : CBZX renamable $x2, %bb.2
+UNCOVERED secret-address func=secp256k1_scalar_set_b32 bb=1 : STRWui renamable $w8, killed renamable $x2, 0, implicit killed $x8 :: (store (s32) into %ir.overflow, !tbaa !6)
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=3 : CBZW renamable $w26, %bb.5
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=5 : CBNZW killed renamable $w0, %bb.7
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=7 : CBNZW killed renamable $w8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=8 : CBZX killed renamable $x8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=12 : CBZX killed renamable $x8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ecdsa_sign_inner bb=13 : CBZX killed renamable $x8, %bb.15
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=4 : renamable $x8 = LDRXui renamable $x21, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=11 : renamable $x8 = LDRXui killed renamable $x21, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 0, implicit killed $q0 :: (store (s32) into %ir.out32, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 1, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.1, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 2, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.2, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 3, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.3, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 4, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.4, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 5, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.5, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, renamable $x20, 6, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.6, align 1, !tbaa !16)
+UNCOVERED secret-address func=secp256k1_sha256_finalize bb=14 : STRSui renamable $s0, killed renamable $x20, 7, implicit killed $q0 :: (store (s32) into %ir.arrayidx7.7, align 1, !tbaa !16)
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=9 : CBNZX killed renamable $x8, %bb.11
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=11 : CBNZW killed renamable $w8, %bb.13
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=12 : CBNZX killed renamable $x12, %bb.15
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=15 : TBNZW renamable $w27, 0, %bb.17, implicit killed $x27
+UNCOVERED secret-branch func=secp256k1_schnorrsig_sign_internal bb=24 : CBNZX killed renamable $x13, %bb.26
+UNCOVERED secret-branch func=secp256k1_schnorrsig_challenge bb=8 : CBZX renamable $x23, %bb.10
+UNCOVERED secret-branch func=secp256k1_ellswift_create bb=6 : CBNZX killed renamable $x15, %bb.8
+UNCOVERED secret-branch func=secp256k1_ellswift_create bb=9 : CBNZX killed renamable $x8, %bb.11
+UNCOVERED secret-branch func=secp256k1_ellswift_create bb=13 : CBNZX renamable $x8, %bb.15
+UNCOVERED secret-branch func=secp256k1_ellswift_create bb=17 : CBZX $x26, %bb.20
+UNCOVERED secret-address func=ellswift_xdh_hash_function_bip324_impl bb=0 : renamable $x8 = LDRXui $x0, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_bip324_impl bb=1 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_bip324_impl bb=2 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-branch func=ellswift_xdh_hash_function_bip324_impl bb=3 : CBNZX renamable $x8, %bb.5
+UNCOVERED secret-address func=ellswift_xdh_hash_function_bip324_impl bb=7 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-branch func=ellswift_xdh_hash_function_bip324_impl bb=7 : CBZX $x24, %bb.10
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=0 : renamable $x8 = LDRXui $x0, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=1 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=2 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=4 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=5 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-branch func=ellswift_xdh_hash_function_prefix_impl bb=6 : CBNZX renamable $x8, %bb.8
+UNCOVERED secret-address func=ellswift_xdh_hash_function_prefix_impl bb=10 : renamable $x8 = LDRXui renamable $x20, 0 :: (load (s64) from %ir.hash_ctx, !tbaa !10)
+UNCOVERED secret-branch func=ellswift_xdh_hash_function_prefix_impl bb=10 : CBZX $x24, %bb.13
+UNCOVERED secret-branch func=secp256k1_silentpayments_recipient_scan_outputs bb=82 : CBNZW killed renamable $w0, %bb.84
+UNCOVERED secret-branch func=nonce_function_rfc6979_impl bb=3 : CBNZX renamable $x22, %bb.5
+UNCOVERED secret-address func=nonce_function_rfc6979_impl bb=5 : renamable $q0 = LDRQui killed renamable $x22, 0 :: (load (s128) from %ir.algo16, align 1)
+UNCOVERED secret-branch func=nonce_function_bip340_impl bb=32 : CBZX renamable $x22, %bb.34

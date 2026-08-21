@@ -14,6 +14,7 @@
 #define LLVM_CODEGEN_MIRPARSER_MIPARSER_H
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/Register.h"
@@ -240,6 +241,14 @@ bool parseStackObjectReference(PerFunctionMIParsingState &PFS, int &FI,
 
 bool parseMDNode(PerFunctionMIParsingState &PFS, MDNode *&Node, StringRef Src,
                  SMDiagnostic &Error);
+
+/// Parse a comma separated list of metadata nodes. A single stack object can
+/// carry debug info for several source variables (StackColoring merges slots
+/// with disjoint lifetimes), so the debug-info-* fields of a stack object may
+/// hold more than one node.
+bool parseMDNodeList(PerFunctionMIParsingState &PFS,
+                     SmallVectorImpl<MDNode *> &Nodes, StringRef Src,
+                     SMDiagnostic &Error);
 
 bool parseMachineMetadata(PerFunctionMIParsingState &PFS, StringRef Src,
                           SMRange SourceRange, SMDiagnostic &Error);
