@@ -120,6 +120,14 @@ def run_one(job):
 
 
 def main():
+    # Run from a directory that cannot be rewritten underneath us. gem5's
+    # Process.py calls os.getcwd() at import time, so if the launch directory is
+    # deleted mid-sweep every subsequent run dies with FileNotFoundError before
+    # simulating anything. That happened here: a `git rebase` in the checkout
+    # this script lives in removed and recreated its own directory, and 26 of 30
+    # runs failed at import while the 4 already-started ones completed fine.
+    os.chdir(pathlib.Path.home())
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--caches", default="16,1024,1792,1920,2048")
     ap.add_argument("--arms", default="plain,blanket,nodit,hoist")
