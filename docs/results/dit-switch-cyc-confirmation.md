@@ -1,0 +1,110 @@
+# The switch-cyc default, confirmed - and what it actually prices
+
+**Measured 2026-08-24**, native Apple M5, machine exclusive, 20 paired reps per
+point, both public lanes of the libsodium composite. Pre-flight passed both
+gates (DIT off const/perm = 0.2575, DIT on = 0.9984, so the rig demonstrably
+gates the predictor). Checksums identical across all nine arms at every point.
+Data `~/Documents/dit-crossover/out/native/confirm_{lua,sqlite}_deploy.jsonl`,
+rig `utils/dit_host_screening/xover/` on `dit-tainter` (`5ad90a087fd5`).
+
+## Why this run existed
+
+Every previous `swcyc30` measurement was taken with the call-site mod-set gate
+OFF, and every gated measurement was taken at `switch-cyc=0`. The shipped
+default (`47d34937f5df`) is both at once, so **it had never been built as a
+single arm** - it was an inference. The only knob varied here is
+`-taint-dit-switch-cyc`, at 0 and 30, on top of the shipped defaults.
+
+Arms: `off`/`always`/`oracle`/`batch` are runtime modes of one `nodit` binary
+(argv-selected, so no codegen differs between them); `def30` is the shipped
+default (397 switches, 81 instrumented functions); `def0` is the same build with
+`-taint-dit-switch-cyc=0` (492 switches); `nop30`/`nop0` are their alignment
+controls with identical switch counts; `off2` is `off` re-run last, as a drift
+check.
+
+## Result 1: the default is confirmed, and the 512 B verdict flips
+
+Paired against blanket DIT (median, and how many of 20 reps were slower):
+
+| msg | R (us) | lua, f≈12-25% | sqlite, f≈2-5% |
+|---|---|---|---|
+| 200 B | 0.41 | **+15.65% (20/20)** | -5.00% (0/20) |
+| 330 B | 0.56 | **+5.01% (20/20)** | -7.13% (0/20) |
+| **512 B** | 0.72 | **-1.44% (7/20)** | -8.55% (0/20) |
+| 1400 B | 1.78 | -5.02% (0/20) | -9.29% (0/20) |
+| 4 KiB | 4.90 | -7.11% (3/20) | -9.44% (0/20) |
+| 64 KiB | 78.5 | -10.33% (0/20) | -10.20% (0/20) |
+
+At 512 B `def0` is **+2.33%, slower in 20 of 20 reps** - an unambiguous loss -
+and `def30` is **-1.44%, slower in 7 of 20** - a win. The knob converts a
+unanimous loss into a win at the most decision-relevant point.
+
+`def30` vs `def0` directly: **-8.96 / -6.08 / -4.01 / -1.99 points at 200 B
+through 1400 B, slower in 0 of 20 reps at every one**; inert at 4 KiB (6/20) and
+64 KiB (7/20), where regions are large enough that the admission test has little
+left to merge. The 27-31% band from the earlier gate-off measurement reproduces.
+
+## Result 2: the parameter does not price what its name says
+
+**The NOP control tracks the real build everywhere.** With
+`-taint-dit-nop-switches` every inserted `MSR DIT` is emitted as `HINT #0` at an
+identical address, so the instruction stream is unchanged and **no DIT executes
+at all**. Across 24 paired measurements the def-minus-NOP term runs **-0.33 to
++0.97 points**, straddling zero, against machine drift (`off2` - `off`) reaching
+1.15. It is frequently NEGATIVE - the real build beating its own NOP twin -
+which is the known ~0.25% `HINT #0` penalty showing through, and which means
+this term **understates** true DIT cost rather than flattering it.
+
+The NOP arms also reproduce the switch-cyc win almost exactly:
+
+| msg | `def0`->`def30` | `nop0`->`nop30` | layout share |
+|---|---|---|---|
+| 200 B | -12.73 | -12.68 | 99.6% |
+| 512 B | -4.65 | -4.65 | 100% |
+| 1400 B | -2.36 | -1.98 | 84% |
+
+**So what `switch-cyc=30` buys is fewer INSTRUCTIONS INSERTED INTO HOT LOOPS,
+not cheaper mode switching**, and PSTATE.DIT's own execution cost is unresolvable
+at every region size measured - bounded around ±0.5 points while the pass itself
+costs up to +28%.
+
+This corroborates, on a different library and a different instrument, the
+SQLCipher finding that most of what looks like switch cost is codegen
+(`CLAUDE.md`, 2026-08-24): with all 121 HMAC/SHA switches NOPed, that build still
+cost the majority of its total under a renamed switch.
+
+### The trap this creates
+
+**Do not lower `switch-cyc` for hardware with a renamed, non-serializing `MSR
+DIT`.** Renaming makes the mode switch cheaper; the mode switch is not the term
+being paid. The 22.6 cyc serializing / 9.7 cyc renamed figures are real gem5
+measurements of the switch alone and they do not govern this default.
+
+It also weakens a forward-looking claim we have made elsewhere: "renaming the
+switch rescues placements that over-toggle" was established by varying the switch
+model under gem5. On this workload the DIT-specific term is ~0.3-0.5 points
+against a 28-point total, so renamed-switch silicon would recover the 0.3, not
+the 28. Report that limit rather than dropping it.
+
+## Result 3: the denominator, inside one sweep
+
+At **the same message size (200 B)**, `def30` LOSES to blanket by 15.65% on the
+lua lane (f = 16.7%) and WINS by 5.00% on the sqlite lane (f = 3.2%). Same
+binary, same region size; only the secret's share of runtime differs. The
+secret-fraction relationship has been measured on both sides before across
+separate experiments - this is it reproducing as a controlled contrast within a
+single run.
+
+## What this does NOT establish
+
+- **Only two lanes of one library.** The attribution (layout, not DIT) is
+  measured on libsodium at f = 2-25%. Bitcoin Core, where the gate is worth 50
+  points and the toggle count is thin, is not covered here.
+- The DIT-only term is an **upper bound**, not a measurement: it never clears
+  the drift floor cleanly, and the NOP baseline biases it downward.
+- `switch-cyc=30` remains the best measured point, **not a derived optimum**.
+  Measured switch cost is 9.7-22.6 cyc against a dwell of 0.0039 cyc/op, so the
+  true ratio is far above the 30:1 that `switch-cyc=30 / dwell=1` encodes; the
+  {30, 100, 300} sweep is still unrun. Result 2 makes that sweep more
+  interesting, not less - if the real currency is instructions-in-loops, the
+  right calibration may be well above 30.

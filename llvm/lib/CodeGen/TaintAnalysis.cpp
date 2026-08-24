@@ -204,20 +204,38 @@ static cl::opt<DITPlacementMode> TaintDITPlacement(
 //
 // WHY NOT 0. A zero switch cost makes the left side of the admission test
 // identically zero, so only an empty corridor ever merges — the default would
-// be asserting that toggles are free, which no measurement supports: one `MSR
-// DIT` is 22.6 cyc serializing and 9.7 cyc with a renamed switch (both derived
-// from our own gem5 runs), against a dwell of 0.0039 cyc per suppressed op. On
-// the libsodium composite, moving from 0 to 30 removes 27-31% of the pass's
-// overhead at every resolvable region size and flips the 512 B verdict against
-// blanket DIT from a loss to a win; it is also the ENVELOPE of the two
-// placement policies, tracking `function` where fine grain over-toggles and
-// `region` where `function` over-covers. On toggle-thin workloads it is worth
-// ~0, so this is a Pareto move rather than a trade.
+// be asserting that emitting a switch is free, which no measurement supports.
+// On the libsodium composite (native M5, 20 paired reps per point, both public
+// lanes), moving from 0 to 30 is worth -8.96/-6.08/-4.01/-1.99 points at 200 B
+// through 1400 B, slower in 0 of 20 reps at every one of them, and it converts
+// the 512 B verdict against blanket DIT from a loss slower in 20/20 reps into a
+// win. Above ~5 us of work per region it goes inert, which is expected: there is
+// little left to merge. Data `~/Documents/dit-crossover/out/native/confirm_*.jsonl`,
+// write-up docs/results/dit-switch-cyc-confirmation.md.
 //
-// The error is ASYMMETRIC, which is why 30 is safe on hardware with a cheaper
-// switch: merging a corridor keeps DIT on across it, which costs dwell (cheap,
-// and fail-SAFE — more coverage, never less), while failing to merge costs a
-// full switch pair. Err high.
+// !! WHAT THIS PARAMETER ACTUALLY PRICES, because the name misleads. It is NOT
+// the cost of the PSTATE.DIT mode switch. Against the NOP control
+// (-taint-dit-nop-switches, every `MSR DIT` emitted as `HINT #0` at an identical
+// address, so no DIT executes at all) the real builds are indistinguishable:
+// across 24 measurements the def-minus-NOP term runs -0.33 to +0.97 points
+// against machine drift of up to 1.15, and is often NEGATIVE because `HINT #0`
+// is itself ~0.25% slower than a real op. The NOP arms also reproduce the
+// switch-cyc win almost exactly (at 512 B, -4.65 real against -4.65 NOP). So
+// what 30 buys is FEWER INSTRUCTIONS INSERTED INTO HOT LOOPS, and the mode
+// switch itself is unresolvable at every region size measured.
+//
+// THE TRAP THAT FOLLOWS: do not lower this for hardware with a renamed
+// (non-serializing) `MSR DIT`. Renaming makes the mode switch cheaper, and the
+// mode switch is not the term being paid — the instruction's presence in the
+// loop is, and renaming does not remove it. The published 22.6 cyc serializing
+// / 9.7 cyc renamed figures are real but they are gem5 numbers for the switch
+// alone; they do not govern this default.
+//
+// The error is ASYMMETRIC, which is why erring high is right: merging a corridor
+// keeps DIT on across it, which costs dwell (cheap — 0.0039 cyc per suppressed
+// op — and fail-SAFE, since it widens coverage and never narrows it), while
+// failing to merge leaves a switch pair in the instruction stream, which the
+// measurements above say is the term that actually costs. Err high.
 static cl::opt<double> TaintDitSwitchCyc(
     "taint-dit-switch-cyc",
     cl::desc(
