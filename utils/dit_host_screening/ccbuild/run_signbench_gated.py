@@ -11,7 +11,11 @@ ARMS
   pass_region coincurve built with the real seed      (594 switches) no dylib
   pass_hoist  + -taint-dit-loop-hoist=1               (575 switches) no dylib
   pass_relaxed + -taint-dit-relaxed-ownership        (289 switches) no dylib
-  pass_gated  + -taint-modset-callsite-gated          (39 switches)  no dylib
+  pass_gated  + the call-site mod-set gate            (39 switches)  no dylib
+
+!! pass_relaxed CANNOT BE REBUILT: -taint-dit-relaxed-ownership was deleted on
+2026-08-24 (measured ~0 on every library). The gate is now the default, so
+pass_gated needs no flag. Kept as the record.
   pass_clonegated  clone list + the gate              (34 switches)  no dylib
 
 The gate is the point of this run. 93.6% of this library's switches were false

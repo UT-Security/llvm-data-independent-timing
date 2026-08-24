@@ -1,5 +1,7 @@
 #!/bin/bash
-# Fast A/B loop for -taint-modset-callsite-gated on Bitcoin Core's vendored
+# Fast A/B loop for the call-site mod-set gate (the compiler default since
+# 2026-08-24; pass -mllvm -taint-no-modset-gate for the ungated arm) on Bitcoin
+# Core's vendored
 # libsecp256k1. Compiles the single TU that carries every DIT switch
 # (src/secp256k1.c) with the EXACT flags Bitcoin Core's build-hoist used, so the
 # switch counts are directly comparable to the +51% ConnectBlockAllEcdsa result.

@@ -1,5 +1,11 @@
 # The source condition: making the mod-set gate sound
 
+> **STATUS 2026-08-24: unconditional.** The source condition and
+> `-taint-return-callsite-gated` are no longer flags — both are always on whenever the
+> gate is, and the gate itself is now the default. The permissive rule this document
+> A/Bs against is not reachable from the command line. `-taint-no-modset-gate` disables
+> the whole mechanism.
+
 **Built and measured 2026-08-19.** `-taint-modset-callsite-gated` suppresses a
 callee's memory clobber at call sites that pass no secret. That is valid only if
 the callee's secret could have come from a caller at all. This is the analysis

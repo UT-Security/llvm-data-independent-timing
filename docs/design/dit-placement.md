@@ -1,5 +1,13 @@
 # DIT Barrier Placement: Current State, Gaps, and an Optimal-Placement Design
 
+> **STATUS 2026-08-24: the placement defaults changed.** `-taint-dit-loop-hoist` now
+> defaults to **1** and `-taint-dit-switch-cyc` to **30**, so the shipped policy is
+> loop-hoisted region placement with the admission test live. `-taint-region-merge-gap`
+> is no longer a flag: the frequency-weighted admission test replaced it for placement,
+> and the static gap survives only as a fixed constant feeding the region REPORTS. Both
+> flips widen coverage rather than narrowing it, so neither can introduce a leak; §5.6
+> and `docs/overview.md` carry the measurements.
+
 Status of the PSTATE.DIT backend (`-taint-insert-dit`), what the Arm spec lets us rely
 on, where the current placement is unsound or wasteful, and a concrete design for
 spec-aware optimal placement of `MSR DIT` mode switches.

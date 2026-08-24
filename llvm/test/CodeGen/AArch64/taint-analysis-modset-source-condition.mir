@@ -1,6 +1,5 @@
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=DEFAULT
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-modset-callsite-gated -taint-modset-gate-strict=0 %s -o - | FileCheck %s --check-prefix=LOOSE
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-modset-callsite-gated %s -o - | FileCheck %s --check-prefix=STRICT
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-no-modset-gate %s -o - | FileCheck %s --check-prefix=NOGATE
 
 # THE SOURCE CONDITION: a callee that has a tainted parameter AND obtains a secret
 # from somewhere else. This is the case the earlier "does the callee name a tainted
@@ -12,30 +11,26 @@
 # out of @g and writes it through `dst`, which has nothing to do with its
 # parameters.
 #
-# `public_caller` passes no secret. The gate therefore suppresses helper's clobber
-# and the reload of %buf stays clean — but %buf really does receive @g's secret.
-# The proxy waved this through because helper names a tainted parameter. The source
-# condition refuses, because helper's taint reached it through a global load, which
-# no caller's arguments can account for.
+# `public_caller` passes no secret. A gate resting on the tainted-parameter proxy
+# alone would suppress helper's clobber and leave the reload of %buf clean — but
+# %buf really does receive @g's secret. The source condition refuses to gate,
+# because helper's taint reached it through a global load, which no caller's
+# arguments can account for. That refusal is unconditional: the permissive rule is
+# not reachable from the command line.
 #
 # 26 is the PSTATE.DIT pstatefield encoding.
 
-# Emission order: stash, helper, secret_caller, public_caller. Only the last differs.
+# Emission order: stash, helper, secret_caller, public_caller.
 
 # DEFAULT-LABEL: name: secret_caller
 # DEFAULT: MSRpstateImm4 26, 1
 # DEFAULT-LABEL: name: public_caller
 # DEFAULT: MSRpstateImm4 26, 1
 
-# LOOSE-LABEL: name: secret_caller
-# LOOSE: MSRpstateImm4 26, 1
-# LOOSE-LABEL: name: public_caller
-# LOOSE-NOT: MSRpstateImm4
-
-# STRICT-LABEL: name: secret_caller
-# STRICT: MSRpstateImm4 26, 1
-# STRICT-LABEL: name: public_caller
-# STRICT: MSRpstateImm4 26, 1
+# NOGATE-LABEL: name: secret_caller
+# NOGATE: MSRpstateImm4 26, 1
+# NOGATE-LABEL: name: public_caller
+# NOGATE: MSRpstateImm4 26, 1
 
 --- |
   target triple = "aarch64-unknown-linux-gnu"

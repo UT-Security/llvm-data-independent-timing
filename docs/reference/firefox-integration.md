@@ -210,7 +210,7 @@ BIN=<repo>/build/bin
 perl -0pi -e 's/<mcsymbol >//g' "$STEM.pe.mir"
 # 4. interproc taint + barrier insertion
 "$BIN/llc" -enable-new-pm -run-taint-interproc -taint-insert-dit \
-  -taint-region-merge-gap=2 "$STEM.pe.mir" -o "$STEM.hardened.mir"
+  "$STEM.pe.mir" -o "$STEM.hardened.mir"
 # 5. hardened MIR -> object
 "$BIN/llc" -start-after=prologepilog "$STEM.hardened.mir" -filetype=obj -o "$STEM.o"
 ```

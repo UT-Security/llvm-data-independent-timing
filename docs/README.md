@@ -84,8 +84,9 @@ How the analysis is built, which bugs were found in it, and what is still open.
   soundness bugs fixed 2026-07-27 (`implicit-def` counted as a use; narrowed reload of
   a spilled secret), plus what spilling *does* handle correctly.
 - **[design/frame-addr-fallback.md](design/frame-addr-fallback.md)** - the
-  `-taint-frame-addr-args` prototype (default OFF): the `f(&local_secret)` under-taint
-  it closes, and its measured cost.
+  `-taint-frame-addr-args` prototype, **deleted 2026-08-24**: the `f(&local_secret)`
+  under-taint it closed, why the whole-frame approach cost +44 points once the mod-set
+  gate existed, and why that under-taint is now an open gap.
 - **[design/scalability.md](design/scalability.md)** - the compile-time wall, found
   and fixed 2026-08-10. `-ftaint-harden` could not compile `quickjs.c` (54k lines, 940
   functions); now **733 s = 10.7x** baseline with 29/29 tests passing. Overhead is a

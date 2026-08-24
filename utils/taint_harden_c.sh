@@ -13,8 +13,6 @@ Options:
   --out-dir DIR          Directory for intermediates and default executable.
                          Default: input file directory
   --opt-level LEVEL      LLVM optimization level. Default: -O0
-  --region-merge-gap N   Merge protected taint regions separated by at most N
-                         clean MIR instructions. Default: LLVM pass default
   --clean                Delete intermediates after a successful run. With
                          linking enabled, only the executable is kept. With
                          --no-link, only the hardened object is kept.
@@ -85,12 +83,6 @@ while [[ $# -gt 0 ]]; do
   --opt-level)
     [[ $# -ge 2 ]] || die "$1 requires an optimization level"
     OPT_LEVEL="$2"
-    shift 2
-    ;;
-  --region-merge-gap)
-    [[ $# -ge 2 ]] || die "$1 requires a non-negative integer"
-    [[ "$2" =~ ^[0-9]+$ ]] || die "$1 requires a non-negative integer"
-    TAINT_LLC_ARGS+=("-taint-region-merge-gap=$2")
     shift 2
     ;;
   --clean)

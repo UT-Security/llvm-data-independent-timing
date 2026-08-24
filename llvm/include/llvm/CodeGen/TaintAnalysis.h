@@ -100,15 +100,6 @@ extern cl::opt<std::string> TaintDITPrecisionReportFile;
 /// toggle cost the report exists to measure.
 extern cl::opt<std::string> TaintDITReassertReportFile;
 
-/// Fallback for the register<->stack-cell link lost at the MIR stage: treat a
-/// stack/frame address passed as a call argument as pointee-tainted when the
-/// frame may hold a secret. Without it the analysis reports a confident "clean"
-/// for a call it has no information about — an under-taint, i.e. a leaked
-/// secret (the ed25519 nonce -> ge25519_scalarmult_base case). Off by default
-/// while the over-taint cost is being measured; -taint-frame-addr-args=1
-/// enables it. See docs/design/frame-addr-fallback.md.
-extern cl::opt<bool> TaintFrameAddrArgs;
-
 /// Command-line option for the memory-clobber report: every call site that
 /// makes the caller treat memory as secret (sets ExternalMemClobbered / a
 /// whole-global). These are the sources of cross-function memory taint — the
@@ -124,18 +115,6 @@ enum class TaintKind {
   Data,    ///< The value itself is secret.
   Pointee, ///< The value is a pointer to secret memory.
   Address, ///< The value may be used as a secret-dependent memory address.
-  /// NOT a taint kind — a provenance fact, tracked here to reuse the same
-  /// subreg/superreg-aware register machinery. The value is an address derived
-  /// from the stack/frame pointer. The analysis runs post-prologepilog, so a
-  /// local buffer's address is just `$sp + imm`: no FrameIndex, no memory
-  /// operand, and therefore no link to the tainted stack cell it points at.
-  /// Without this fact, taking the address of a secret local and passing it to
-  /// a callee transfers nothing and the callee is silently analyzed as clean
-  /// (the ed25519 `nonce` -> ge25519_scalarmult_base case). Consumed ONLY at a
-  /// call boundary, where it is converted to Pointee taint if the frame may
-  /// hold a secret; intra-function load handling is deliberately unaffected so
-  /// stack-cell precision is preserved.
-  FrameAddr,
 };
 
 /// TaintState holds the result of taint analysis for a MachineFunction.
@@ -146,18 +125,13 @@ struct TaintState {
   SparseBitVector<> TaintedRegs;
   SparseBitVector<> PointeeTaintedRegs;
   SparseBitVector<> AddressTaintedRegs;
-  /// Provenance, not taint: registers holding a stack/frame-derived address.
-  /// See TaintKind::FrameAddr. Excluded from empty()/countRegs() precisely
-  /// because it is not taint — a function holding only frame addresses is not
-  /// tainted and must not become instrumented on that basis.
-  SparseBitVector<> FrameAddrRegs;
   bool OutgoingArgSecret = false;
   bool NonArgSourcedTaint = false;
 
-  /// Register -> the frame object it points into (P1b). Distinct from
-  /// FrameAddrRegs, which only records THAT a register is a frame address; this
-  /// records WHICH object, which is what lets a callee's arg-pointee mod-set be
-  /// applied to the one object the caller passed instead of the whole frame.
+  /// Register -> the frame object it points into (P1b). Records WHICH object a
+  /// frame-derived pointer refers to, which is what lets a callee's arg-pointee
+  /// mod-set be applied to the one object the caller passed rather than to the
+  /// whole frame.
   /// Absent = unknown, and every consumer must fall back to its conservative
   /// path on absent. Excluded from empty()/countRegs(): it is provenance, not
   /// taint.
@@ -200,11 +174,10 @@ public:
   /// Every component check is O(1), so this is a cheap guard on join.
   bool isBottom() const {
     return TaintedRegs.empty() && PointeeTaintedRegs.empty() &&
-           AddressTaintedRegs.empty() && FrameAddrRegs.empty() &&
-           !OutgoingArgSecret && !NonArgSourcedTaint &&
-           TaintedStackCells.empty() &&
-           PointeeTaintedStackCells.empty() &&
-           TaintedGlobalCells.empty() && TaintedUnknownMemValues.empty() &&
+           AddressTaintedRegs.empty() && !OutgoingArgSecret &&
+           !NonArgSourcedTaint && TaintedStackCells.empty() &&
+           PointeeTaintedStackCells.empty() && TaintedGlobalCells.empty() &&
+           TaintedUnknownMemValues.empty() &&
            PointeeTaintedUnknownMemValues.empty() && !UnknownMemTainted &&
            TaintedWholeGlobals.empty() && !ExternalMemClobbered;
   }
@@ -213,7 +186,6 @@ public:
     return TaintedRegs == O.TaintedRegs &&
            PointeeTaintedRegs == O.PointeeTaintedRegs &&
            AddressTaintedRegs == O.AddressTaintedRegs &&
-           FrameAddrRegs == O.FrameAddrRegs &&
            OutgoingArgSecret == O.OutgoingArgSecret &&
            NonArgSourcedTaint == O.NonArgSourcedTaint &&
            FrameRefs == O.FrameRefs &&
@@ -237,7 +209,6 @@ public:
     TaintedRegs |= O.TaintedRegs;
     PointeeTaintedRegs |= O.PointeeTaintedRegs;
     AddressTaintedRegs |= O.AddressTaintedRegs;
-    FrameAddrRegs |= O.FrameAddrRegs;
     OutgoingArgSecret |= O.OutgoingArgSecret;
     NonArgSourcedTaint |= O.NonArgSourcedTaint;
     // Frame provenance INTERSECTS on merge: a register only points at a known
@@ -302,19 +273,6 @@ public:
   void clearOutgoingArgSecret() { OutgoingArgSecret = false; }
   bool isOutgoingArgSecret() const { return OutgoingArgSecret; }
 
-  /// True if this frame may hold a secret, so an address into it may point at
-  /// one. Deliberately coarse: any tainted stack cell, or a call-induced
-  /// clobber that may have written a secret anywhere in the frame. This is the
-  /// term that bounds the FrameAddr fallback — with a clean frame the fallback
-  /// never fires, so a function with no stack secrets pays nothing.
-  bool frameMayHoldSecret() const {
-    return ExternalMemClobbered || !TaintedStackCells.empty() ||
-           !PointeeTaintedStackCells.empty();
-  }
-
-  /// True if R is a frame address that may point at a secret — the
-  /// over-approximating fallback for the register<->stack-cell link the MIR
-  /// stage cannot reconstruct. Consumed at call boundaries only.
   /// The frame object R points into, if the analysis knows it (P1b).
   std::optional<int> getFrameRef(Register R) const {
     auto It = FrameRefs.find(R.id());
@@ -322,23 +280,6 @@ public:
   }
   void setFrameRef(Register R, int FI) { FrameRefs[R.id()] = FI; }
   void clearFrameRef(Register R) { FrameRefs.erase(R.id()); }
-
-  /// Per-object refinement of isFrameAddrToSecret. When the pointed-at object is
-  /// known, ask whether THAT object holds a secret rather than whether the frame
-  /// does. Falls back to the whole-frame test when provenance is unknown, so it
-  /// is never less conservative than the original.
-  bool isFrameAddrToSecretPrecise(Register R) const {
-    if (!test(TaintKind::FrameAddr, R))
-      return false;
-    if (auto FI = getFrameRef(R))
-      return ExternalMemClobbered || anyTaintedStackCellForFI(*FI) ||
-             anyPointeeTaintedStackCellForFI(*FI);
-    return frameMayHoldSecret();
-  }
-
-  bool isFrameAddrToSecret(Register R) const {
-    return test(TaintKind::FrameAddr, R) && frameMayHoldSecret();
-  }
 
   /// The register bitvector holding taint of kind K.
   SparseBitVector<> &regs(TaintKind K) {
@@ -349,8 +290,6 @@ public:
       return PointeeTaintedRegs;
     case TaintKind::Address:
       return AddressTaintedRegs;
-    case TaintKind::FrameAddr:
-      return FrameAddrRegs;
     }
     llvm_unreachable("unhandled TaintKind");
   }

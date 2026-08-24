@@ -5,7 +5,9 @@
   null        build-nodit + dit_off.dylib        -> harness cost
   always      build-nodit + dit_on.dylib         -> blanket DIT
   pass_hoist  build-hoist (541 switches, 9 entry points seeded), no dylib
-  pass_gated  build-gated (178 switches: same seeds + -taint-modset-callsite-gated)
+  pass_gated  build-gated (178 switches: same seeds, call-site mod-set gate.
+              The gate is the compiler default since 2026-08-24, so this arm
+              needs no flag; -taint-no-modset-gate builds the ungated one.)
   baseline2   second run of baseline             -> noise floor
 
 Both builds went through the same MIR round-trip, so the codegen lottery is

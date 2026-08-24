@@ -1,56 +1,64 @@
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=DEFAULT
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-modset-callsite-gated -taint-modset-gate-strict=0 %s -o - | FileCheck %s --check-prefix=GATED
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-modset-callsite-gated %s -o - | FileCheck %s --check-prefix=STRICT
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-no-modset-gate %s -o - | FileCheck %s --check-prefix=NOGATE
 
-# The case that separates -taint-modset-gate-strict from the plain gate: a callee
-# whose secret does NOT arrive through its own arguments.
+# SOUNDNESS PIN for the call-site mod-set gate, which is ON by default: a callee
+# whose secret does NOT arrive through its own arguments must NOT have its clobber
+# suppressed. This is the shape the source condition exists for.
 #
-# `helper` is a shared routine seeded elsewhere, so its summary carries
-# ReturnsTainted. That flag is applied at EVERY call site unconditionally — by
-# design, since the callee's return taint already accounts for all its sources.
-# So `middle` receives a tainted value from `helper` while `middle` itself takes
-# no secret argument, and writing it through its pointer parameter gives `middle`
-# a secret-writing mod-set with an EMPTY tainted-argument set.
+# `seeder` stores its parameter into the global @g, so its summary records
+# WritesSecretToGlobal(@g) — which is deliberately NEVER gated, being per-global
+# rather than a flood and the very "secret arrived through a global" case the gate
+# is unsound for. `middle` calls `seeder` (passing a CONSTANT, so nothing about
+# this depends on the caller), then LOADS @g and writes it through its own pointer
+# parameter. `middle` therefore has a secret-writing mod-set with an EMPTY
+# tainted-argument set, and its taint is non-argument-sourced: it came out of a
+# global, not out of any caller.
 #
-# `public_caller` passes no secret. The plain gate therefore suppresses `middle`'s
-# clobber and leaves the reload of %buf untainted — but the secret is real and it
-# came from `helper`, not from this caller. That is the unsound shape, and it is
-# the one that occurs in libsecp256k1 (9 of 26 suppressed sites, e.g.
-# secp256k1_ecmult_gen_blind <- secp256k1_context_preallocated_create).
+# `public_caller` passes `middle` no secret. A gate that asked only "did this call
+# site pass a secret?" would suppress `middle`'s clobber and leave the reload of
+# %buf untainted — but the secret is real, and no caller's arguments can account
+# for it. That is the unsound shape, and it occurs in libsecp256k1 (9 of 26
+# suppressed sites, e.g. secp256k1_ecmult_gen_blind <-
+# secp256k1_context_preallocated_create).
 #
-# -taint-modset-gate-strict, which is ON whenever the gate is, declines to gate
-# `middle` precisely because it has no tainted argument for the caller's arguments
-# to speak for. The GATED run below disables it explicitly to show the difference.
+# The source condition declines to gate `middle` precisely because it has no
+# tainted argument for a caller's arguments to speak for, so `public_caller` keeps
+# its protection. It is unconditional — the permissive rule that would drop this
+# secret is not reachable from the command line — and it measured byte-identical on
+# every library screened, so it costs nothing. If this test ever reports
+# `public_caller` clean, the gate has started swallowing secrets.
 
-# Checks follow emission order: helper, middle, public_caller.
-#
-# `middle` itself is instrumented in every mode — the value it handles is tainted
-# however the clobber is applied in its callers. Only `public_caller` differs.
+# Emission order: seeder, middle, public_caller.
+
+# middle handles the secret it loaded out of @g either way.
 # DEFAULT-LABEL: name: middle
 # DEFAULT: MSRpstateImm4 26, 1
-# GATED-LABEL: name: middle
-# GATED: MSRpstateImm4 26, 1
-# STRICT-LABEL: name: middle
-# STRICT: MSRpstateImm4 26, 1
+# NOGATE-LABEL: name: middle
+# NOGATE: MSRpstateImm4 26, 1
 
+# public_caller keeps DIT in BOTH configurations: by default because the source
+# condition refuses to gate a non-argument-sourced callee, and under
+# -taint-no-modset-gate because nothing is gated at all.
 # DEFAULT-LABEL: name: public_caller
 # DEFAULT: MSRpstateImm4 26, 1
-# GATED-LABEL: name: public_caller
-# GATED-NOT: MSRpstateImm4
-# STRICT-LABEL: name: public_caller
-# STRICT: MSRpstateImm4 26, 1
+# NOGATE-LABEL: name: public_caller
+# NOGATE: MSRpstateImm4 26, 1
 
 --- |
   target triple = "aarch64-unknown-linux-gnu"
 
-  define i32 @helper(i32 "tainted" %secret) {
+  @g = internal global i32 0, align 4
+
+  define void @seeder(i32 "tainted" %secret) {
   entry:
-    ret i32 %secret
+    store i32 %secret, ptr @g, align 4
+    ret void
   }
 
   define void @middle(ptr %dst) {
   entry:
-    %v = call i32 @helper(i32 0)
+    call void @seeder(i32 0)
+    %v = load i32, ptr @g, align 4
     store i32 %v, ptr %dst, align 4
     ret void
   }
@@ -65,7 +73,7 @@
 
 ...
 ---
-name:            helper
+name:            seeder
 tracksRegLiveness: true
 isSSA:           false
 liveins:
@@ -74,7 +82,9 @@ body:             |
   bb.0.entry:
     liveins: $w0
 
-    RET_ReallyLR implicit killed $w0
+    renamable $x8 = ADRP target-flags(aarch64-page) @g
+    STRWui killed renamable $w0, killed renamable $x8, target-flags(aarch64-pageoff, aarch64-nc) @g :: (store (s32) into @g)
+    RET_ReallyLR
 
 ...
 ---
@@ -87,8 +97,10 @@ body:             |
 
     $x19 = COPY $x0
     $w0 = MOVi32imm 0
-    BL @helper, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0, implicit-def $w0
-    STRWui killed renamable $w0, killed renamable $x19, 0 :: (store (s32) into %ir.dst)
+    BL @seeder, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0
+    renamable $x8 = ADRP target-flags(aarch64-page) @g
+    renamable $w9 = LDRWui killed renamable $x8, target-flags(aarch64-pageoff, aarch64-nc) @g :: (load (s32) from @g)
+    STRWui killed renamable $w9, killed renamable $x19, 0 :: (store (s32) into %ir.dst)
     RET_ReallyLR
 
 ...

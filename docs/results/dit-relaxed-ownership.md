@@ -1,5 +1,12 @@
 # Relaxed callee ownership: halves the toggle cost, still short of always-on
 
+> **STATUS 2026-08-24: THE FLAG IS GONE.** `-taint-dit-relaxed-ownership` was deleted.
+> Its precondition is a local-linkage, address-not-taken callee, which a shared library
+> structurally cannot satisfy, and the libsodium composite measured it at ~0 (1117 -> 1098
+> static switches, runtime inside noise). Corridor merging under
+> `-taint-dit-switch-cyc` reaches the same re-assert sites and works on external linkage
+> too. This document is kept as the record of what callee ownership was worth.
+
 **Implemented and measured 2026-08-17.** New flag
 `-mllvm -taint-dit-relaxed-ownership` (default **off**). Measured on the
 `eth-account` / coincurve signing workload, 50 paired reps, arm order rotated.

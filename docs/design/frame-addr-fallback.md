@@ -1,5 +1,15 @@
 # The frame-address fallback (`-taint-frame-addr-args`)
 
+> **STATUS 2026-08-24: THE FLAG IS GONE.** `-taint-frame-addr-args` was deleted. It
+> reasoned about whole frames rather than objects, so once the call-site mod-set gate
+> existed nearly every call site looked secret-passing and the gate stopped firing:
+> `ConnectBlockAllEcdsa` measured +45.32% with both against +0.66% with the gate alone,
+> 15/15 reps. P1b (`p1b-frame-provenance.md`) is the per-object replacement and does NOT
+> rescue this fallback (both got worse). The under-taint it targeted — passing
+> `&local_secret` into a callee — is REAL and now OPEN; see the KNOWN GAP comment in
+> `TaintFixedPointIteration.cpp`. This document is kept as the record of what the
+> whole-frame approach cost.
+
 > Numbers below are the **re-measurement of 2026-07-27, after** the two soundness bugs
 > in `docs/design/spill-soundness-bugs.md` were fixed. (The pre-fix run gave 49% -> 84% recall
 > at 112 -> 287 functions — qualitatively identical, so those bugs did not drive this

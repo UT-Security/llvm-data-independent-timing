@@ -68,11 +68,14 @@ analysis still runs and the report files are still produced, but codegen is unto
 **Placement granularity (`-taint-dit-placement`): DEFAULT is `region` (fine-grain).**
 Region placement covers only the secret-dependent regions - clean preambles and public
 loop scaffolding (coordinate/index math) stay DIT-off - tuned by
-`-taint-dit-switch-cyc` (default 0 = finest), `-taint-dit-dwell-per-instr`, and
-`-taint-dit-loop-hoist` (**default 0 = block-minimal**: DIT wraps only the blocks
-containing a secret op, with per-iteration toggles around a need-block in a loop; set
-`=1` to coarsen each need-loop On and hoist one enable to the preheader, the right
-choice for serializing-switch hardware where per-iteration toggling is costly). It
+`-taint-dit-switch-cyc` (**default 30** = the measured serializing switch cost),
+`-taint-dit-dwell-per-instr` (default 1.0), and `-taint-dit-loop-hoist` (**default 1**:
+each need-loop is coarsened On with one enable hoisted to the preheader; set `=0` for
+block-minimal coverage, where DIT wraps only the blocks containing a secret op and a
+need-block in a loop toggles every iteration). Both defaults were flipped on 2026-08-24
+after measurement - the old `switch-cyc=0` asserted that toggles are free, which nothing
+supports, and both flips widen coverage rather than narrowing it, so neither can
+introduce a leak. It
 carries a soundness verifier and falls back per-function to whole-function coverage if
 it cannot prove coverage, so it is always safe. See `docs/design/dit-placement.md`.
 Requires FEAT_DIT (Armv8.4+) at run time - Apple M-series has it
@@ -88,9 +91,19 @@ proves the re-assert redundant (in-TU, uninstrumented, only preserving calls). S
 passed to external/indirect callees cannot be protected by placement - audit them with
 `-taint-callsite-report=<file>` (`ESCAPE` lines).
 
-`-taint-region-merge-gap` and the coalesced "regions" in the reports **no longer drive
-placement** - they feed the report files and are the input the planned
-cost-model-driven region placement will consume.
+The coalesced "regions" in the reports **do not drive placement** - they feed the report
+files only. The gap that merges them was `-taint-region-merge-gap` until 2026-08-24 and
+is now a fixed constant (2), because placement partitions BLOCKS and prices its own
+merges with the frequency-weighted admission test.
+
+**The call-site mod-set gate is ON by default** (since 2026-08-24), together with the
+strict source condition and return-call-site gating, which are unconditional. It applies
+a callee's memory clobber only at call sites that actually pass a secret: without it
+`secp256k1_ecdsa_verify` carries 17 `MSR DIT` for public data and Bitcoin Core's
+`ConnectBlockAllEcdsa` costs +51.20%; with it, +0.67%. The soundness claim is scoped -
+*preserves coverage for argument-carried taint* - and `flowprobe` confirmed four channels
+that escape it (returned pointer into a secret buffer, global read by a sibling with no
+call edge, inline asm, NEON register tuple). `-taint-no-modset-gate` is the escape hatch.
 
 ### Taint-source file format (one per line)
 
@@ -103,13 +116,13 @@ function_name,arg_index,pointee    # pointer public, memory loaded through it se
 ### Wrapper / manual multi-tool flow (debugging, report files)
 
 ```
-utils/taint_harden_c.sh --opt-level -O2 --region-merge-gap 2 playground/firefox_convolve_int.c
+utils/taint_harden_c.sh --opt-level -O2 playground/firefox_convolve_int.c
 ```
 Taint source auto-detected as `<basename>_secret.txt`. Steps it performs: clang
 `-emit-llvm`, `opt -passes=taint-annotate -taint-src=...`,
 `llc -stop-after=prologepilog`, perl strip of `<mcsymbol >` (MIR CFI serialization
-bug), `llc -enable-new-pm -run-taint-interproc -taint-insert-dit
--taint-region-merge-gap=2`, then `llc -start-after=prologepilog -filetype=obj`. Report
+bug), `llc -enable-new-pm -run-taint-interproc -taint-insert-dit`, then
+`llc -start-after=prologepilog -filetype=obj`. Report
 files: `-taint-output`, `-taint-regions-output`, `-taint-source-regions-output`,
 `-taint-callsite-report` (secret-escape call sites; the clang flag does not emit
 these), `-taint-dit-precision-report` (DIT accounting - need/underdit/collateral/

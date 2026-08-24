@@ -108,8 +108,9 @@ silicon retire the premise.
    the dwell term (up to ~15% on sensitive SPEC 2026 benchmarks) is what it buys. The toggle
    measurement now gives the **admission test**: a region costs ~60 cyc to enter+leave, so
    only create one if it removes more than ~60 cyc of dwell. The existing
-   `-taint-region-merge-gap` knob is the hand-tuned proxy for exactly this — it can now be
-   derived. Orthogonal and free: **hoist toggles out of hot leaves** across the call graph
+   `-taint-region-merge-gap` knob was the hand-tuned proxy for exactly this; it has since
+   been derived (`-taint-dit-switch-cyc`, default 30, with `-taint-dit-dwell-per-instr`)
+   and the static knob was removed on 2026-08-24. Orthogonal and free: **hoist toggles out of hot leaves** across the call graph
    (callees inherit DIT; AAPCS64 has no callee-saved rule for it) — that removes toggles
    without extending dwell, so it wins regardless of the dwell number (`PreservesDIT`,
    placement doc §5.3). Mode-switch-minimization prior art: `AArch64/SMEPeepholeOpt.cpp`

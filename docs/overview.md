@@ -91,11 +91,9 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
 |---|---|
 | `-taint-insert-dit` | master switch; implied by `-ftaint-harden`. Without it, analysis runs + reports emit but codegen is untouched (A/B baseline). |
 | `-taint-dit-placement={region\|function}` | **default `region`** (fine-grain). `function` = coarse: DIT on at entry, off before each return. |
-| `-taint-dit-loop-hoist={0\|1}` | **default 0** = block-minimal (per-iteration toggles, fewest instrs covered). `1` coarsens a need-loop and hoists the enable to the preheader (for serializing-switch HW). |
-| `-taint-dit-switch-cyc` (default 0), `-taint-dit-dwell-per-instr` (default 1.0) | cost-model knobs for region merging admission. |
-| `-taint-annotation-driven` | **default false (= sound mode).** Opt-in: trust annotations, suppress cross-function memory poison at consumption. See §6. |
-| `-taint-call-arg-precise` (default true, hidden) | A/B toggle for "fix B"; `=0` restores the blunt any-live-register call trigger. |
-| `-taint-frame-addr-args` (**default false**, hidden) | **Prototype.** Treat a stack/frame address passed as a call argument as pointee-tainted when the frame may hold a secret — closes the `f(&local_secret)` under-taint. Recall vs CIO 48%→84%, but 9.1× taint volume. See `docs/design/frame-addr-fallback.md`. |
+| `-taint-dit-loop-hoist={0\|1}` | **default 1** = each need-loop coarsened On with the enable hoisted to the preheader (one toggle, whole loop covered). `0` selects block-minimal coverage: fewest instrs covered, per-iteration toggles. |
+| `-taint-dit-switch-cyc` (default **30**), `-taint-dit-dwell-per-instr` (default 1.0) | cost-model knobs for region merging admission. 30 cyc is the measured serializing switch cost; the error is asymmetric (merging costs cheap dwell and is fail-safe, not merging costs a full switch pair), so err high. |
+| `-taint-no-modset-gate` | **default false, i.e. the call-site mod-set gate is ON.** The safety valve: applies a callee's memory clobber at every call site of that callee rather than only where a secret is passed. Maximally conservative, much slower - the escape hatch for taint that does not travel by arguments. See §6. |
 | `-taint-callsite-report=F` | ESCAPE report: secrets passed to callees we can't instrument. |
 | `-taint-uncovered-report=F` | tainted instrs DIT can't protect (divide/sqrt, secret-address, secret-branch). |
 | `-taint-clobber-report=F` | call sites that make the caller treat memory as secret (taint-explosion sources). |
@@ -181,13 +179,28 @@ mod-set** per function:
 **persists across the call**, so an opaque callee **inherits DIT=1** (best-effort protection;
 re-asserted after non-preserving calls — gap G1).
 
-**Sound mode (default) vs annotation-driven.** Sound mode consumes the clobber at every load
-(over-approximate, never misses a leak). `-taint-annotation-driven` keeps the mod-set
-computed (for the reports) but does **not** consume the cross-function poison at loads — it
-trusts you to have annotated every function that truly receives a secret. This shifts
-soundness from automatic over-approximation to **annotation completeness** (the standard
-constant-time-tool contract, cf. FaCT). After the fixes in §8, sound == annotation-driven on
-the TUs measured, so annotation-driven is opt-in insurance rather than load-bearing.
+**A load consumes the clobber** (over-approximate, never misses a leak on this path). An
+`-taint-annotation-driven` mode once suppressed that consumption in favour of trusting
+per-function annotations — the standard constant-time-tool contract, cf. FaCT — and was
+**removed on 2026-08-24**: it was built to suppress a flood that a controlled A/B later
+attributed to the `$lr` artifact (see the attribution correction in §8), and after those
+fixes it was equivalent to sound mode on every TU measured. Reintroducing it would be a
+deliberate change of threat model, not a tuning knob.
+
+**What IS gated, by default, is the mod-set APPLICATION.** A callee's memory clobber is
+applied only at call sites that actually pass a secret, and only for a callee whose taint is
+argument-sourced (the source condition) — the same rule applying to the `ReturnsTainted`
+register summary. This is the pass's answer to context-insensitive summaries: without it
+`secp256k1_ecdsa_verify` carries 17 `MSR DIT` for public data and Bitcoin Core's
+`ConnectBlockAllEcdsa` costs **+51.20%**; with it, **+0.67%** at no measured loss of coverage
+(gem5 `ditSuppressed` 103.1% of a hand oracle). The soundness claim is scoped: *preserves
+coverage for argument-carried taint*. `flowprobe` confirmed four channels that escape it by
+reading PSTATE.DIT at the consumer — a callee returning a pointer into a secret buffer, a
+secret in a global read by a sibling with no call edge, a secret stored through a pointer by
+inline asm (`INLINEASM` is not `isCall()`, so the pass cannot see it at all), and a secret
+moved through a NEON register tuple. Closing the inline-asm and register-tuple channels is
+the next precision work; the sound end state is an origin bit in the fixed point.
+`-taint-no-modset-gate` gives up the precision for whole-memory conservatism.
 
 ## 7. Cost model (why placement granularity matters) — do not skip
 
@@ -286,7 +299,8 @@ secret set). Test: `taint-analysis-lr-not-arg.mir`.
 > (`ExternalMemClobbered`) and built annotation-driven mode to suppress it. Controlled A/B
 > (git-stash the fixes, rebuild, compare) proved that WRONG: the flood was the `$lr` artifact;
 > `ExternalMemClobbered` was only the amplification channel. The flood numbers quoted in
-> `docs/research/memory-summaries.md` carry that same correction.
+> `docs/research/memory-summaries.md` carry that same correction. Annotation-driven mode was
+> removed on 2026-08-24 as a consequence — it was the fix for a misdiagnosis.
 
 **Fix B — passed-vs-live (commit `2d81ec4`).** A secret counts as reaching a callee only when
 genuinely *passed* in an argument register (data or pointee), read on the state *entering* the
@@ -388,9 +402,14 @@ one delta not yet explained; the rest is consistent with the `--disable-asm` bui
 config, 926 vs 932 functions. **`make check` passes 86/86** on the hardened library, with
 the baseline whole-bitcode object run first as a control to prove the round-trip is
 lossless.)*
-With `-taint-frame-addr-args=1`: 286/932, +3.94%, **84% recall**, but **9.1×** tainted
-instructions. For scale, CIO's own libsodium cost is **+62%/+208%/+266%** code size and up
-to **27.84×** runtime.
+With the since-removed `-taint-frame-addr-args=1` fallback: 286/932, +3.94%, **84% recall**,
+but **9.1×** tainted instructions. For scale, CIO's own libsodium cost is
+**+62%/+208%/+266%** code size and up to **27.84×** runtime. That fallback was **deleted on
+2026-08-24**: it reasoned about whole frames rather than objects, so once the mod-set gate
+existed nearly every call site looked secret-passing and the gate stopped firing —
+`ConnectBlockAllEcdsa` measured **+45.32%** with both against **+0.66%** with the gate alone.
+P1b (`docs/design/p1b-frame-provenance.md`) is the per-object replacement and does not rescue
+it. The caller→callee half of that gap (`f(&local_secret)`) is therefore **open**.
 
 **Correctness audit (the important part).** Of the 19 CIO functions we don't instrument,
 **15 are unreachable from any seed** — artifacts of their blunt domain, not our misses; the
@@ -453,11 +472,26 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
   `llvm/test/CodeGen/AArch64` suite was last clean on 2026-08-08 (3894 discovered, 3890
   pass, 4 pre-existing XFAIL). Run:
   `build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate`
-- **Placement defaults:** `region` granularity, `loop-hoist=0` (block-minimal),
-  `switch-cyc=0`. **These defaults are known to be mistuned for serializing hardware** -
-  see §7 and next action 1.
-- **Sound mode is the default**; annotation-driven is opt-in. `-taint-frame-addr-args` is a
-  prototype, **default off**.
+- **Placement defaults (retuned 2026-08-24):** `region` granularity, `loop-hoist=1`,
+  `switch-cyc=30`. Both flips are fail-safe (each widens coverage, never narrows it) and
+  were measured: on the libsodium composite `switch-cyc=30` removes 27-31% of the pass's
+  overhead at every resolvable region size and flips the 512 B verdict against blanket DIT
+  from a loss to a win; loop hoisting is what takes CPython and SQLite from +0.91%/+0.35%
+  to indistinguishable from the hand oracle. The previous defaults asserted that toggles
+  are free, which no measurement supports.
+- **The call-site mod-set gate is ON by default**, with its two companion rules (strict
+  source condition, return-call-site gating) unconditional. It is what takes Bitcoin Core's
+  `ConnectBlockAllEcdsa` from +51.20% to +0.67%. Its soundness claim is scoped:
+  *preserves coverage for argument-carried taint*. `-taint-no-modset-gate` is the way out.
+  See §6.
+- **Removed 2026-08-24** (five knobs, ~230 lines): `-taint-frame-addr-args` (superseded by
+  P1b; measured +44 points against the gate), `-taint-annotation-driven` (built for a flood
+  that a controlled A/B later attributed to the `$lr` artifact; equivalent to sound mode on
+  every TU measured), `-taint-call-arg-precise` (A/B for a settled question),
+  `-taint-region-merge-gap` (now a report-granularity constant), and
+  `-taint-dit-relaxed-ownership` (measured ~0 on every library; its local-linkage
+  precondition cannot fire in a shared library). The negative results they carry live in
+  `docs/design/frame-addr-fallback.md`, `docs/results/dit-relaxed-ownership.md` and §8.
 - **Shipped since this doc's previous revision:** the DIT ownership rule and
   `AlwaysEnteredWithDIT` (2026-08-08), the tail-call leak fix (2026-08-05), DIT precision
   accounting (2026-08-06), and the compile-time fix that made `quickjs.c` compilable at all
@@ -484,11 +518,15 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 3. **Declassification.** Without it the QuickJS result does not generalize: any realistic
    secret-consuming API returns a secret-derived value, which taints the caller and floods
    the instrumentation (§9.10).
-4. **Attack the context-insensitivity FP source (§9.6)** - still the largest measured
-   over-taint source (169 of 199 FPs on libsodium). Cheap probe first: gate mod-set
-   application on whether *this* call site passes a secret. It is **not sound in general**
-   (a callee can write a secret obtained from a global), so put it behind a flag next to
-   `-taint-annotation-driven` and treat the delta as an upper bound.
+4. **~~Attack the context-insensitivity FP source (§9.6)~~ DONE, and it is now the
+   default.** The call-site mod-set gate plus the strict source condition and
+   return-call-site gating shipped on by default 2026-08-24 (+51.20% -> +0.67% on Bitcoin
+   Core's `ConnectBlockAllEcdsa`). **What remains** is closing the four channels
+   `flowprobe` found — start with inline asm (`INLINEASM` is not `isCall()`, so the pass
+   is blind to `asm volatile ::: "memory"`) and NEON register tuples, both contained; then
+   `ReturnsPointeeTainted` for a callee returning a pointer into a secret buffer. The
+   sound end state is an origin bit in the fixed point, which is what would let the gate
+   stop being a scoped claim.
 5. **Provenance recovery, THEN P1b.** Only **17 of 583** secret-writing call sites resolve
    provenance to an argument (566 are TOP), so P1b has almost nothing to act on until more
    stores resolve to arg-*i*, which likely means analyzing at IR and carrying facts to MIR.

@@ -1,5 +1,12 @@
 # Context-insensitive summaries are the dominant false-positive source
 
+> **STATUS 2026-08-24: the fix described here is now the DEFAULT.** The call-site
+> mod-set gate ships on, together with the strict source condition and return-call-site
+> gating, and the three separate flags that used to select them are gone. The one
+> remaining knob is `-taint-no-modset-gate`, which turns all of it off. Read
+> `source-condition.md` for the soundness argument and its four confirmed escape
+> channels.
+
 **Measured 2026-07-28** on libsodium 1.0.21 with CIO's 21 seed functions, by auditing
 *which* functions we instrument that CIO does not, and asking whether a secret can
 actually reach them.

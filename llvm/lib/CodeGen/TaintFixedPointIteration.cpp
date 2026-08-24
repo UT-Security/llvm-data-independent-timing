@@ -142,14 +142,14 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
                               << " now tainted (via " << printReg(PhysReg, TRI)
                               << ")\n");
           }
-          // The FrameAddr fallback lands here: an argument register holding an
-          // address into a frame that may hold a secret seeds the callee's
-          // pointee-tainted args. Without it, `f(&local_secret)` transfers
-          // nothing and the callee is analyzed as clean — the under-taint the
-          // ed25519 nonce case exposed.
-          if ((S.isPointeeTainted(PhysReg) ||
-               (TaintFrameAddrArgs &&
-                S.isFrameAddrToSecretPrecise(PhysReg))) &&
+          // KNOWN GAP: passing `&local_secret` in still transfers nothing when
+          // the pointer register itself was never pointee-tainted, because
+          // post-prologepilog the address is a bare `$sp + imm`. The
+          // whole-frame fallback that used to bridge this cost +44 points
+          // against the mod-set gate and has been removed; the fix is
+          // per-object provenance on the caller->callee direction (P1b covers
+          // the callee->caller half). See docs/design/p1b-frame-provenance.md.
+          if (S.isPointeeTainted(PhysReg) &&
               CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
             SummaryChanged = true;
             LLVM_DEBUG(dbgs() << "  caller " << MF.getName() << " -> callee "

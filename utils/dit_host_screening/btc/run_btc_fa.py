@@ -5,9 +5,14 @@
   null        build-nodit + dit_off.dylib        -> harness cost
   always      build-nodit + dit_on.dylib         -> blanket DIT
   pass_hoist  build-hoist (541 switches, 9 entry points seeded), no dylib
-  pass_gated  build-gated (178 switches: same seeds + -taint-modset-callsite-gated)
-  pass_fa     build-fa      (-taint-frame-addr-args: closes the &secret_local under-taint)
-  pass_fagate build-fagated (-taint-frame-addr-args + -taint-modset-callsite-gated)
+  pass_gated  build-gated (178 switches: same seeds, call-site mod-set gate -
+              the compiler default since 2026-08-24, so no flag is needed)
+  pass_fa     build-fa      (-taint-frame-addr-args)
+  pass_fagate build-fagated (-taint-frame-addr-args + the gate)
+
+!! THE frame-addr ARMS CANNOT BE REBUILT. -taint-frame-addr-args was deleted on
+2026-08-24 because pairing it with the gate cost +44 points (ConnectBlockAllEcdsa
++45.32% vs +0.66%), which is the result this rig produced. Kept as the record.
 
 The fallback pair is the point of this run: the gate tests argument REGISTERS, so
 with the fallback off it suppresses the clobber at exactly the call sites the

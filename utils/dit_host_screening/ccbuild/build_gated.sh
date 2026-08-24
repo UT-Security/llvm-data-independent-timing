@@ -1,5 +1,9 @@
 #!/bin/bash
-# Add the -taint-modset-callsite-gated arms to the coincurve rig.
+# Add the call-site-mod-set-gate arms to the coincurve rig.
+#
+# The gate became the compiler default on 2026-08-24, so these arms no longer pass
+# a flag for it. The arm NAMES are kept because the published coincurve numbers
+# refer to them; an ungated arm now needs -mllvm -taint-no-modset-gate.
 #
 # Also rebuilds `hoistchk4` with the CURRENT clang and no new flags, as a control:
 # the existing venvs were built with build/bin/clang, the new ones with
@@ -32,8 +36,8 @@ build_one() {
 }
 
 build_one hoistchk4   -mllvm -taint-dit-loop-hoist=1
-build_one gated4      -mllvm -taint-dit-loop-hoist=1 -mllvm -taint-modset-callsite-gated
-build_one clonegated4 -mllvm -taint-dit-loop-hoist=1 -mllvm -taint-modset-callsite-gated \
+build_one gated4      -mllvm -taint-dit-loop-hoist=1
+build_one clonegated4 -mllvm -taint-dit-loop-hoist=1 \
                       -mllvm -taint-dit-clone-list=$SW/ccbuild/cc_clonelist4.txt
 echo "=== CONTROL: hoistchk4 (new clang) must match hoist4 (old clang)"
 a=$(find $SW/ccbuild/venv_hoist4    -name "_libsecp256k1*.so" | head -1)
