@@ -49,10 +49,17 @@ ARMS = [
     ("always", "nodit",  1),
     ("oracle", "nodit",  2),
     ("batch",  "nodit",  3),
+    # CALIBRATION SWEEP, reduced to the pairs that differ. -taint-dit-switch-cyc
+    # is a three-step staircase on this library: 0 -> 492 switches, 30 == 100 ->
+    # 397 (BYTE-IDENTICAL objects), and 300 == 1000 == 3000 == 10000 == 100000 ->
+    # 395. So def100 is not measurable against def30 - it is the same binary -
+    # and no finite switch cost merges anything beyond 300. Timing the identical
+    # pair would report noise that reads as a result.
+    ("def0",   "def0",   0),   # merging disabled - the anchor
     ("def30",  "def30",  0),   # the shipped default
-    ("def0",   "def0",   0),   # ... with corridor merging disabled
-    ("nop30",  "nop30",  0),   # alignment control for def30
-    ("nop0",   "nop0",   0),   # alignment control for def0
+    ("def300", "def300", 0),   # the saturated ceiling, 2 switches below def30
+    ("nop30",  "nop30",  0),   # dwell probe: a NOP build has no dwell at all, so
+    ("nop300", "nop300", 0),   # def-minus-nop at a setting IS its dwell term
     ("off2",   "nodit",  0),
 ]
 

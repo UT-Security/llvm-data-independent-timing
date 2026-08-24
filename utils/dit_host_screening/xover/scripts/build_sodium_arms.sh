@@ -60,6 +60,24 @@ build_arm def0    -taint-dit-switch-cyc=0
 build_arm nop30   -taint-dit-nop-switches
 build_arm nop0    -taint-dit-switch-cyc=0 -taint-dit-nop-switches
 
+# CALIBRATION SWEEP. 30 is the best MEASURED point, not a derived optimum: the
+# measured switch cost is 9.7-22.6 cyc against a dwell of 0.0039 cyc per
+# suppressed op, so the true ratio is orders of magnitude above the 30:1 that
+# switch-cyc=30 / dwell-per-instr=1 encodes. And since the win turned out to be
+# fewer INSTRUCTIONS rather than cheaper mode switches, the right calibration may
+# sit well above 30.
+#
+# The curve should TURN: merging keeps DIT on across the corridor, so as
+# switch-cyc rises, switches fall (good) but dwell accumulates (bad) - blanket
+# coverage costs +11-12% on this workload, which is what unbounded merging tends
+# toward. Each def arm therefore gets a NOP twin: a NOP build has no dwell at all,
+# so def-minus-nop AT EACH SETTING is the dwell term, and the setting where it
+# starts to grow is where merging has gone too far.
+build_arm def100  -taint-dit-switch-cyc=100
+build_arm def300  -taint-dit-switch-cyc=300
+build_arm nop100  -taint-dit-switch-cyc=100 -taint-dit-nop-switches
+build_arm nop300  -taint-dit-switch-cyc=300 -taint-dit-nop-switches
+
 # Historical arms, kept so the published numbers stay reproducible against the
 # compiler they were taken with. THEY NO LONGER BUILD: -taint-modset-callsite-gated
 # and -taint-dit-relaxed-ownership were removed on 2026-08-24, and the flags below
@@ -70,7 +88,7 @@ build_arm nop0    -taint-dit-switch-cyc=0 -taint-dit-nop-switches
 #   build_arm func    -taint-dit-placement=function
 
 say "switch counts"
-for a in nodit def30 def0 nop30 nop0; do
+for a in nodit def0 def30 def100 def300 nop0 nop30 nop100 nop300; do
     [[ -f "$OUT/$a.o" ]] || continue
     n=$("$L/llvm-objdump" -d "$OUT/$a.o" | grep -ci 'msr.*dit')
     f=$(wc -l < "$OUT/$a.prec.txt" 2>/dev/null || echo 0)
