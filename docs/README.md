@@ -10,6 +10,13 @@ secret-dependent code runs with data-operand timing side channels suppressed.
 defense is out of scope. Operating instructions (build, flags, gotchas) live in
 `CLAUDE.md` at the repo root; this folder is the reference material behind them.
 
+> **A second, separate implementation lives in [`fences/`](fences/README.md).** That is
+> the x86-64 line: secrets declared per argument in a CSV file, taint propagated over
+> LLVM IR use lists, and mitigation by `seq_cst` fences rather than a mode bit. It was
+> developed independently on `main` and is **not** the pass documented here - different
+> target, different mitigation primitive, no shared code. Everything in *this* directory
+> is FastDIT/AArch64 unless it sits under `fences/`.
+
 ## Read in this order
 
 | # | Doc | Why |

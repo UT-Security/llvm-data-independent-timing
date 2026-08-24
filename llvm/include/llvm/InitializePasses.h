@@ -219,6 +219,7 @@ LLVM_ABI void initializeMachineOutlinerPass(PassRegistry &);
 LLVM_ABI void initializeStaticDataProfileInfoWrapperPassPass(PassRegistry &);
 LLVM_ABI void initializeStaticDataAnnotatorPass(PassRegistry &);
 LLVM_ABI void initializeMachinePipelinerPass(PassRegistry &);
+LLVM_ABI void initializeMachineTaintPruningPass(PassRegistry &);
 LLVM_ABI void initializeMachinePostDominatorTreeWrapperPassPass(PassRegistry &);
 LLVM_ABI void initializeMachineRegionInfoPassPass(PassRegistry &);
 LLVM_ABI void
@@ -328,6 +329,7 @@ LLVM_ABI void initializeStripDebugMachineModulePass(PassRegistry &);
 LLVM_ABI void initializeStructurizeCFGLegacyPassPass(PassRegistry &);
 LLVM_ABI void initializeTailCallElimPass(PassRegistry &);
 LLVM_ABI void initializeTailDuplicateLegacyPass(PassRegistry &);
+LLVM_ABI void initializeIRTaintAnalysisWrapperPassPass(PassRegistry &);
 LLVM_ABI void initializeTargetLibraryInfoWrapperPassPass(PassRegistry &);
 LLVM_ABI void initializeTargetPassConfigPass(PassRegistry &);
 LLVM_ABI void initializeTargetTransformInfoWrapperPassPass(PassRegistry &);

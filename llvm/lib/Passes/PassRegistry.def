@@ -38,6 +38,7 @@ MODULE_ANALYSIS("profile-summary", ProfileSummaryAnalysis())
 MODULE_ANALYSIS("reg-usage", PhysicalRegisterUsageAnalysis())
 MODULE_ANALYSIS("runtime-libcall-info", RuntimeLibraryAnalysis())
 MODULE_ANALYSIS("stack-safety", StackSafetyGlobalAnalysis())
+MODULE_ANALYSIS("ir-taint-analysis", IRTaintAnalysis())
 MODULE_ANALYSIS("verify", VerifierAnalysis())
 
 #ifndef MODULE_ALIAS_ANALYSIS
@@ -142,6 +143,8 @@ MODULE_PASS("print-must-be-executed-contexts",
             MustBeExecutedContextPrinterPass(errs()))
 MODULE_PASS("print-profile-summary", ProfileSummaryPrinterPass(errs()))
 MODULE_PASS("print-stack-safety", StackSafetyGlobalPrinterPass(errs()))
+MODULE_PASS("print<ir-taint-analysis>", IRTaintAnalysisPrinterPass(errs()))
+MODULE_PASS("taint-fence-insertion", TaintFenceInsertionPass())
 MODULE_PASS("print<dxil-metadata>", DXILMetadataAnalysisPrinterPass(errs()))
 MODULE_PASS("print<dxil-resources>", DXILResourcePrinterPass(errs()))
 MODULE_PASS("print<inline-advisor>", InlineAdvisorAnalysisPrinterPass(errs()))
