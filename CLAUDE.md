@@ -208,6 +208,54 @@ text; (3) legacy PM `start-after=prologepilog` to object.
   literature: `docs/research/memory-summaries.md`; repro
   `playground/callee_memory_gap.c`.
 
+- **A seed must name an entry point in EVERY TU the secret reaches, and an
+  indirect dispatch table breaks propagation outright.** SQLCipher's arms carried
+  taint on the cipher entry points only, so `sqlcipher_ltc_hmac` got zero switches
+  and the per-page HMAC ran with DIT off - coverage topped out at 94.4-95.4% of a
+  hand-placed oracle. The tell is exact: `hmac_init.o` and `sha512.o` were
+  **byte-identical between the plain and instrumented builds**, i.e. the pass had
+  nothing to do in them. Compare object hashes per TU when coverage looks short.
+  Note the HMAC could not have been reached by propagation anyway: libtomcrypt
+  calls the hash through `hash_descriptor[].process`, a function-pointer table, so
+  `hmac_*` -> `sha512_*` needs its own seed line. Fix and measurements:
+  `benchmarks/sqlcipher/ltc_hmac_seed.txt` in the gem5 tree, coverage 94.4% ->
+  98.4%.
+- **Use `-taint-dit-placement=function` on a TU whose functions are secret work
+  end to end.** On SQLCipher's `sha512.c`/`hmac_*.c` the default `region` policy
+  narrows nothing - there is no clean scaffolding inside a compression round to
+  exclude - so it only adds per-iteration toggles: 888,967 executed switches
+  against the oracle's 3,051 (291x), for +38.11% serializing. Function placement
+  on the same seed gives **better** coverage (98.4% vs 96.5%) for 224,289 switches
+  and +1.19% renamed, i.e. cheaper than the uninstrumented-HMAC build it replaces.
+  Judge a placement by how often it **leaves** a region, not by switch count.
+- **"Coverage >= 100% of oracle" is not reachable and should not be gated on.** A
+  wrapper oracle holds DIT across untainted code in the same call - `find_hash`,
+  `sha512_init`, loop bookkeeping - which a precise analysis correctly leaves
+  alone. Adding full genuine HMAC coverage moved the ratio only ~2 points of the
+  ~5 that were "missing", so the rest is oracle slack. Treat a shortfall as a
+  pointer to a suspect TU, not as a number to drive to 100.
+- **The NOP control is not neutral; substitute a real op as well.**
+  `-taint-dit-nop-switches` emits `HINT #0`, which controls for layout but not for
+  the issue slot. Against `mul xzr, xzr, xzr` at the same addresses with the same
+  instruction count, the NOP build is consistently **slower by ~0.25%** (both
+  gem5 switch models, two cache points) - so a NOP baseline overstates itself and
+  therefore *understates* DIT cost. There is no `mul` mode in the pass yet; the
+  measurements were done by rewriting the switch sites in the assembly.
+- **Most of what looks like switch cost can be codegen.** With all 121 SQLCipher
+  HMAC/SHA switches turned into NOPs and no DIT executing at all, the instrumented
+  build still cost **+17.10/+16.57 pp serializing and +4.05/+2.52 pp renamed** -
+  under a renamed switch, the majority of the total. Region placement splits
+  blocks inside a compression loop and the restructuring is expensive by itself.
+  Cheaper switches do not remove it.
+- **A gem5 ROI delimited by `m5_reset_stats` does NOT give exactly equal
+  instruction counts across machine configs.** The marker lands as a scheduled
+  event, so a ROB-scale number of in-flight instructions commit on either side.
+  Measured across a 40-run sweep the discrepancy is always exactly 0 or +400 and
+  never negative - a fixed offset that does not scale with the region (400 out of
+  85M and out of 887k alike). The identity gate therefore takes a 0.01%-of-ROI
+  tolerance; a real divergence scales with the workload. Do not read the constant
+  as contamination.
+
 ### Internal structure (post-2026-07-13 cleanup)
 
 - The three taint kinds (data / pointee / address) are parameterized by `TaintKind`,
