@@ -231,6 +231,16 @@ static cl::opt<DITPlacementMode> TaintDITPlacement(
 // / 9.7 cyc renamed figures are real but they are gem5 numbers for the switch
 // alone; they do not govern this default.
 //
+// DO NOT BOTHER RAISING IT. Measured 2026-08-24 on libsodium: this knob is a
+// three-step staircase, not a dial. switch-cyc=30 and =100 produce BYTE-IDENTICAL
+// objects (397 switches), and every value from 300 through 100,000 produces one
+// identical object (395). At a ratio of 100,000:1 the compiler emits the same
+// code as at 300:1, so everything the admission test can merge is already merged
+// at 30, and timing the one pair that differs is a null result (+0.32% pooled,
+// 68/120 reps, ~1.5 sigma). The switches that survive are not interior corridors
+// at all - they are entry enables, exit clears and post-call re-asserts, which
+// only callee ownership reaches.
+//
 // The error is ASYMMETRIC, which is why erring high is right: merging a corridor
 // keeps DIT on across it, which costs dwell (cheap — 0.0039 cyc per suppressed
 // op — and fail-SAFE, since it widens coverage and never narrows it), while

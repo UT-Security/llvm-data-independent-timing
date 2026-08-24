@@ -102,9 +102,57 @@ single run.
   points and the toggle count is thin, is not covered here.
 - The DIT-only term is an **upper bound**, not a measurement: it never clears
   the drift floor cleanly, and the NOP baseline biases it downward.
-- `switch-cyc=30` remains the best measured point, **not a derived optimum**.
-  Measured switch cost is 9.7-22.6 cyc against a dwell of 0.0039 cyc/op, so the
-  true ratio is far above the 30:1 that `switch-cyc=30 / dwell=1` encodes; the
-  {30, 100, 300} sweep is still unrun. Result 2 makes that sweep more
-  interesting, not less - if the real currency is instructions-in-loops, the
-  right calibration may be well above 30.
+- **Only two lanes of one library**, as above. The staircase in §4 is a property
+  of libsodium's corridor-length distribution, not a universal fact.
+
+## 4. Calibration: 30 is the saturation point, not a guess
+
+**Run 2026-08-24**, same rig and discipline, lua lane, 20 paired reps.
+Data `~/Documents/dit-crossover/out/native/calib_lua_deploy.jsonl`.
+
+The worry this sweep was meant to settle: measured switch cost is 9.7-22.6 cyc
+against a dwell of 0.0039 cyc per suppressed op, so the physical ratio is orders
+of magnitude above the 30:1 that `switch-cyc=30 / dwell-per-instr=1` encodes -
+and since the win turned out to be instruction count rather than switch cost, the
+right value looked like it might be far higher.
+
+**It is not, and the compiler settles it without timing.** `-taint-dit-switch-cyc`
+is a THREE-STEP STAIRCASE on this library:
+
+| switch-cyc | 0 | 30 | 100 | 300 | 1000 | 3000 | 10000 | 100000 |
+|---|---|---|---|---|---|---|---|---|
+| switches | 492 | 397 | 397 | 395 | 395 | 395 | 395 | 395 |
+| object | A | **B** | **B** | C | C | C | C | C |
+
+`def30.o` and `def100.o` are **byte-identical** (sha256
+`dc49cfa7e8cb...`), and every value from 300 through **100,000** produces one
+identical object (`9ed7cb4a4427...`). At a ratio of 100,000:1 the compiler emits
+the same code as at 300:1: everything the admission test can merge is already
+merged at 30.
+
+Timing the only pair that differs (2 switches out of 397) is a null result:
+
+| msg | `def300` vs `def30` | `def30` vs `def0` |
+|---|---|---|
+| 200 B | +0.40% (12/20) | **-8.41% (0/20)** |
+| 330 B | +0.36% (11/20) | **-5.52% (0/20)** |
+| 512 B | +0.49% (12/20) | **-3.85% (0/20)** |
+| 1400 B | +0.66% (14/20) | -1.82% (1/20) |
+| 4 KiB | +0.32% (12/20) | -1.45% (3/20) |
+| 64 KiB | -0.31% (7/20) | -0.39% (9/20) |
+
+Pooled across all six points, `def300` vs `def30` is **+0.32%, slower in 68 of 120
+reps** - 57%, about 1.5 sigma from chance, so NOT significant. Five of six points
+carry a positive sign, which hints 300 may be marginally worse (it merges two more
+corridors, buying dwell for almost no switch saving), but that is not a claim this
+data supports. **Keep 30.** The `def30`-vs-`def0` column reproduces the previous
+run (-8.96/-6.08/-4.01/-1.99) to within 0.6 points on fresh builds in a fresh
+session, which is the better use of this table.
+
+**What it hands to the next piece of work.** The 395 survivors are structurally
+out of reach of corridor merging - no finite switch cost touches them - so they
+are not interior off-corridors between two on-regions. They are entry enables,
+exit clears, and post-call re-asserts. Further switch reduction needs the
+callee-ownership mechanism (cloning, or Mode 2's runtime `mrs DIT`), not a bigger
+constant. Given §2 showed the cost is instructions in hot loops, and these are
+what remain, that is now the highest-value target.
