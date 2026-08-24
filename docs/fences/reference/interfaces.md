@@ -86,7 +86,7 @@ performed.
 ### Analysis only
 
 ```
-build/bin/clang -S -emit-llvm -g -O0 example.c -o example.ll
+build/bin/clang -S -emit-llvm -g -O2 example.c -o example.ll
 build/bin/opt -passes='print<ir-taint-analysis>' \
   -taint-sources-file=sources.csv \
   -taint-output-file=sensitive_lines.txt \
@@ -94,7 +94,9 @@ build/bin/opt -passes='print<ir-taint-analysis>' \
   -disable-output example.ll
 ```
 
-`-g` is required for line numbers and source text in the reports.
+`-g` is required for line numbers and source text in the reports. **Use `-O2`, not
+`-O0`** - at `-O0` the analysis finds almost nothing, because arguments are spilled to
+allocas and taint dies at the store (`../design/precision-and-soundness.md` §2.1).
 
 ### Fence insertion
 

@@ -21,12 +21,21 @@ mangled names, and a `static` function the optimizer renamed will not match.
 ## 2. Compile to IR with debug info
 
 ```bash
-../build/bin/clang -S -emit-llvm -g -O0 hello.c -o hello.ll
+../build/bin/clang -S -emit-llvm -g -O2 hello.c -o hello.ll
 ```
 
 `-g` is required: the reports resolve line numbers and re-read the original source file
 to print the offending line. Without it you still get the tainted instruction list, just
 with no line numbers and no source text.
+
+**Use `-O2`, not `-O0`.** This matters more than it looks. At `-O0` clang spills every
+argument to an `alloca` in the entry block, so the first user of a secret argument is a
+`store` and the taint closure stops there. Measured on this very file with
+`process_string,0`: `-O0` reports **1** tainted instruction and inserts **2** fences,
+`-O2` reports **22** and inserts **24**. `mem2reg` does not help, because `-O0` also
+marks functions `optnone`. A near-empty report on `-O0` IR is expected and means
+nothing. Note that `make ir` uses `CFLAGS`, which is `-O0`, so the committed `.ll`
+files in this directory are **not** suitable inputs for the analysis.
 
 ## 3. Run the analysis
 

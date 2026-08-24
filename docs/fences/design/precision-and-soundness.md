@@ -82,6 +82,31 @@ flow is §1.2's pointer tainting at a call site, which is why the analysis behav
 better on code that passes buffers to functions than on code that keeps secrets in
 local structures. **This is the largest soundness gap in the IR analysis.**
 
+**Measured, and it makes `-O0` unusable.** At `-O0` clang spills every incoming argument
+to an `alloca` in the entry block, so the very first user of a secret argument is a
+`store` whose taint goes nowhere. On `micro-benchmarks/hello.c` with
+`process_string,0` as the source, both configurations built from the same source with
+`-g`:
+
+| build | tainted instructions | sensitive | fences inserted |
+|---|---|---|---|
+| `-O0` | 1 | 1 | 2 |
+| `-O2` | 22 | 19 | 24 |
+
+At `-O0` the analysis reports the argument spill and nothing else: `my_strcpy` is never
+entered, so the secret's actual propagation is entirely missed. At `-O2` the argument
+stays in a register, the call to `my_strcpy` becomes a direct user of it, and the
+interprocedural rules fire.
+
+`mem2reg` does **not** rescue an `-O0` module: clang marks every function `optnone` at
+`-O0`, and new-pass-manager function passes skip `optnone` functions, so
+`opt -passes='function(mem2reg),print<ir-taint-analysis>'` returns the same 1
+instruction.
+
+**Therefore: never run this analysis on `-O0` IR.** A near-empty report is the expected
+output there and does not mean the code is clean. Any coverage or cost number must state
+its optimization level.
+
 ### 2.2 Indirect calls do not enter the callee
 
 `handleCall` propagates to formal parameters only when `getCalledFunction()` resolves.

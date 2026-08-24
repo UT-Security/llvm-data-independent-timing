@@ -136,7 +136,7 @@ anything at all about the MIR pass.
 echo 'crypto_sign,4' > sources.csv
 
 # 2. analyse
-build/bin/clang -S -emit-llvm -g -O0 file.c -o file.ll
+build/bin/clang -S -emit-llvm -g -O2 file.c -o file.ll   # -O2, NOT -O0: see note below
 build/bin/opt -passes='print<ir-taint-analysis>' -taint-sources-file=sources.csv \
   -taint-output-file=lines.txt -taint-summary-file=summaries.csv \
   -disable-output file.ll
@@ -149,6 +149,12 @@ build/bin/opt -passes='taint-fence-insertion' -taint-sources-file=sources.csv \
 build/bin/llc -enable-taint-pruning -taint-summary-file=summaries.csv \
   -taint-leaky-insts-file=leaky.csv file.ll -o file.s
 ```
+
+**Use `-O2`, never `-O0`.** At `-O0` clang spills every argument to an `alloca`, the
+use-list closure dies at that store, and the analysis reports 1 tainted instruction
+where `-O2` reports 22 on the same file. `mem2reg` cannot fix it, because `-O0` also
+sets `optnone`. Details and the measurement:
+`design/precision-and-soundness.md` §2.1.
 
 Every flag, format, and API entry point is in `reference/interfaces.md`.
 

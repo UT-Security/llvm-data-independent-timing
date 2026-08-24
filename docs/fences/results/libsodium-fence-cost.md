@@ -66,6 +66,11 @@ repository (see the caveats below).
   under `LLVM_DEBUG`) is the first thing to add before the next run.
 - Only Ed25519 has committed cycle data. The other five harnesses exist and are built,
   but no result files for them are in the tree.
+- **The libsodium bitcode was almost certainly built optimized, not at `-O0`.** The
+  analysis finds almost nothing on `-O0` IR (1 tainted instruction vs 22 on the same
+  file - `../design/precision-and-soundness.md` §2.1), so an `-O0` library would have
+  received too few fences to cost 90x. Whatever optimization level the missing build
+  scripts used, it was not `-O0`. Reproducing this number requires recovering it.
 
 ## 3. Measurement method
 
@@ -116,7 +121,8 @@ Three consequences for the design:
 
 ## 5. Workloads available but not yet measured
 
-`micro-benchmarks/` contains harnesses (and committed `-O0 -g` IR for each) for:
+`micro-benchmarks/` contains harnesses (and committed `-O0 -g` IR for each, which is
+**too unoptimized for the analysis to be meaningful on** - see above) for:
 
 | harness | operation timed | natural secret |
 |---|---|---|
