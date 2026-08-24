@@ -1,326 +1,157 @@
-# Taint Analysis Pass - Usage Guide
+# Taint analysis quick start
 
-This guide explains how to use the interprocedural taint analysis pass in LLVM to track tainted function arguments through your code.
+Hands-on walkthrough. For the design, the measured results, and the complete flag and
+format reference, see [`../docs/README.md`](../docs/README.md) - that is the
+authoritative documentation, and this file is only the tutorial path through it.
 
-## Overview
+## 1. Declare the secrets
 
-The TaintAnalysis pass performs forward dataflow analysis to track tainted values from **function arguments specified in a CSV file** across function boundaries. This is useful for:
-- Security analysis (tracking untrusted input through specific functions)
-- Data flow verification
-- Understanding how specific function arguments propagate through your program
-
-## Configuration: CSV File Format
-
-The pass reads taint sources from a CSV file with the following format:
+Taint sources are function arguments, named in a CSV file:
 
 ```csv
-FunctionName,ArgumentIndex
+# comments start with '#'; blank lines ignored
+# FunctionName,ArgumentIndex   (0-based)
+process_string,0
+crypto_sign,4
 ```
 
-- **FunctionName**: The name of the function
-- **ArgumentIndex**: Zero-based index of the argument to track (0 = first argument, 1 = second, etc.)
-- Lines starting with `#` are comments
-- Empty lines are ignored
+Names are matched **exactly** against function definitions in the module, so C++ needs
+mangled names, and a `static` function the optimizer renamed will not match.
 
-### Example CSV File (`taint_sources.csv`):
-
-```csv
-# Taint Sources Configuration
-# Format: FunctionName,ArgumentIndex
-
-# Mark argument 0 of 'process_input' as tainted
-process_input,0
-
-# Mark both arguments of 'combine_inputs' as tainted
-combine_inputs,0
-combine_inputs,1
-
-# Common input functions
-read,0
-scanf,0
-getenv,0
-```
-
-## Building
-
-After adding the taint analysis files, rebuild LLVM:
+## 2. Compile to IR with debug info
 
 ```bash
-ninja -C build
+../build/bin/clang -S -emit-llvm -g -O0 hello.c -o hello.ll
 ```
 
-Or rebuild just the Analysis library:
+`-g` is required: the reports resolve line numbers and re-read the original source file
+to print the offending line. Without it you still get the tainted instruction list, just
+with no line numbers and no source text.
+
+## 3. Run the analysis
 
 ```bash
-ninja -C build LLVMAnalysis
+../build/bin/opt -passes='print<taint-analysis>' \
+  -taint-sources-file=taint_sources.csv \
+  -taint-output-file=sensitive_lines.txt \
+  -taint-summary-file=summaries.csv \
+  -disable-output hello.ll
 ```
 
-## Basic Usage
+Three outputs:
 
-### 1. Create Your CSV File
+- **stderr/stdout report** - the taint source arguments, then every tainted instruction
+  grouped by function with its source line, then the `SensitiveInsts` list, then a
+  deduplicated list of tainted source lines.
+- **`-taint-output-file`** - one line per unique `(file, line, function)`. Opened in
+  **append** mode, so a whole-library build accumulates into one file and re-running on
+  the same module duplicates entries. Delete it between runs.
+- **`-taint-summary-file`** - `function_name,tainted_arg_indices,returns_taint`,
+  truncated each run. This is the input to the machine-level pass.
 
-First, create a CSV file specifying which function arguments should be tracked:
+`sensitive_lines.txt` in this directory is the committed output for `hello.c` with
+`taint_sources.csv` (`process_string,0`); its `#` header lines were added by hand, the
+pass emits data lines only.
+
+## 4. Insert fences
 
 ```bash
-cat > my_sources.csv << 'EOF'
-# Track first argument of process_user_input
-process_user_input,0
+../build/bin/opt -passes='taint-fence-insertion' \
+  -taint-sources-file=taint_sources.csv \
+  hello.ll -o hello.fenced.ll
 
-# Track second argument of handle_request
-handle_request,1
-EOF
+grep -c 'fence seq_cst' hello.fenced.ll
 ```
 
-### 2. Generate LLVM IR
+Two `fence seq_cst` are inserted around **every** tainted instruction (PHIs and
+terminators are skipped). This is deliberately maximal placement and it is expensive:
+see [`../docs/results/libsodium-fence-cost.md`](../docs/results/libsodium-fence-cost.md)
+for the 90x measurement on Ed25519 before using it on anything real.
 
-Compile your C/C++ code to LLVM IR:
+The fence pass writes the same two report files as the printer if you pass the flags, so
+you do not need a separate analysis run to get them.
+
+## 5. Machine-level report (optional)
+
+Needs `summaries.csv` from step 3:
 
 ```bash
-./build/bin/clang -S -emit-llvm example.c -o example.ll
+../build/bin/llc -enable-taint-pruning \
+  -taint-summary-file=summaries.csv \
+  -taint-leaky-insts-file=leaky.csv \
+  hello.ll -o hello.s
 ```
 
-### 3. Run Taint Analysis
+Output is `filename,line,function,leak_type,instruction`, written at process exit. Note
+that this pass reports **every load** in a summarized function whether or not it is
+tainted, so the row count is not a leak count. Read
+[`../docs/design/machine-taint-pruning.md`](../docs/design/machine-taint-pruning.md)
+before interpreting it.
 
-Run the analysis with the CSV file:
+## 6. Inside clang's pipeline
+
+The analysis printer can be attached to clang's default pipeline with `-mllvm` flags.
+There is no clang driver flag, and this does not run at `-O0`:
 
 ```bash
-./build/bin/opt -passes='print<taint-analysis>' \
-  -taint-sources-file=my_sources.csv \
-  -disable-output example.ll
+../build/bin/clang -O2 -g -mllvm -enable-taint-analysis \
+  -mllvm -taint-sources-file=taint_sources.csv \
+  -mllvm -taint-summary-file=summaries.csv -c hello.c -o hello.o
 ```
 
-## Example
+## 7. Benchmarks in this directory
 
-### C Code (`example.c`):
+| target | what it builds |
+|---|---|
+| `make all` | harnesses against the system libsodium (`-lsodium`) |
+| `make unfenced` | harnesses against our bitcode libsodium, pass not run |
+| `make fenced` | harnesses against our bitcode libsodium with fences inserted |
+| `make ir` | `-O0 -g` LLVM IR for every `eval_*.c` |
 
-```c
-#include <stdio.h>
-
-int process_input(int user_input) {
-    // user_input is marked as tainted in CSV
-    int result = user_input * 2;
-    return result + 10;
-}
-
-int helper(int x) {
-    return x * 3;
-}
-
-void caller() {
-    int tainted = 42;  // From process_input
-    int result = helper(tainted);  // Taint propagates here
-    printf("%d\n", result);
-}
-
-int main() {
-    int val = process_input(100);
-    printf("Result: %d\n", val);
-    return 0;
-}
-```
-
-### CSV File (`sources.csv`):
-
-```csv
-process_input,0
-```
-
-### Commands:
+Each harness times one cryptographic operation with `cpuid`/`rdtsc` ... `rdtscp`/`cpuid`
+and writes one cycle count per iteration:
 
 ```bash
-# Compile to IR
-./build/bin/clang -S -emit-llvm -g example.c -o example.ll
-
-# Run analysis
-./build/bin/opt -passes='print<taint-analysis>' \
-  -taint-sources-file=sources.csv \
-  -disable-output example.ll
+./eval_ed25519_unfenced 1000 25 "test message" unfenced_output.txt
+./eval_ed25519_fenced   1000 25 "test message" fenced_output.txt
 ```
 
-### Output:
+`LIBSODIUM_DIR` in the `Makefile` is hard-coded to a Linux absolute path and the
+bitcode-build scripts for the two libsodium archives are **not** in this repository, so
+`fenced`/`unfenced` need that flow rebuilt first.
 
-```
-===== Taint Analysis Results =====
-Taint Source Arguments: 1
-  process_input::arg0
-
-Total Tainted Instructions: 5
-
-Tainted by process_input::arg0 (5 instructions):
-  [Line 6] in process_input:   %result = mul i32 %user_input, 2
-  [Line 7] in process_input:   %add = add i32 %result, 10
-  [Line 7] in process_input:   ret i32 %add
-  [Line 15] in caller:   %result = call i32 @helper(i32 %tainted)
-  [Line 16] in caller:   call i32 (i8*, ...) @printf(i8* getelementptr(...), i32 %result)
-
-==================================
-```
-
-## Understanding the Output
-
-The analysis output includes:
-
-1. **Taint Source Arguments**: Lists all function arguments marked as taint sources from the CSV
-   ```
-   process_input::arg0  (argument 0 of function process_input)
-   ```
-
-2. **Total Tainted Instructions**: Total count of instructions affected by taint
-
-3. **Tainted Instructions**: Grouped by source argument, showing:
-   - **Line number** (if debug info available with `-g`)
-   - **Function name** where the instruction appears
-   - **The LLVM IR instruction** itself
-
-## Advanced Usage
-
-### Multiple Sources
-
-Track multiple function arguments:
-
-```csv
-read_data,0
-write_data,1
-process,0
-process,2
-```
-
-### Running with Optimization Pipeline
-
-Run taint analysis after optimizations:
+## 8. Building the compiler
 
 ```bash
-./build/bin/opt -passes='default<O2>' \
-  -passes-ep-optimizer-last='print<taint-analysis>' \
-  -taint-sources-file=sources.csv \
-  -disable-output example.ll
+ninja -C ../build                        # or: ninja -C ../build LLVMAnalysis LLVMCodeGen LLVMScalarOpts
+../build/bin/llvm-lit ../llvm/test/Analysis/TaintAnalysis/
 ```
-
-### As Part of Custom Pipeline
-
-```bash
-./build/bin/opt -passes='inline,simplifycfg,print<taint-analysis>' \
-  -taint-sources-file=sources.csv \
-  -disable-output example.ll
-```
-
-## Compilation with Debug Info
-
-To get line numbers in the output, compile with `-g`:
-
-```bash
-./build/bin/clang -S -emit-llvm -g example.c -o example.ll
-```
-
-Without `-g`, you'll still see all tainted instructions, just without line numbers.
-
-## Use Cases
-
-1. **Security Auditing**: Track how specific untrusted inputs flow through your code
-2. **API Analysis**: Understand which functions are affected by certain parameters
-3. **Refactoring**: See the impact of changing a function parameter
-4. **Compliance**: Verify sensitive data doesn't reach unintended locations
-
-## Running Tests
-
-Run the taint analysis tests:
-
-```bash
-./build/bin/llvm-lit llvm/test/Analysis/TaintAnalysis/
-```
-
-## Programmatic Usage
-
-To use TaintAnalysis in your own LLVM tool or pass:
-
-```cpp
-#include "llvm/Analysis/TaintAnalysis.h"
-#include "llvm/IR/PassManager.h"
-
-// In your pass's run method:
-TaintInfo &TI = MAM.getResult<TaintAnalysis>(M);
-
-// Query if a value is tainted
-for (Function &F : M) {
-    for (BasicBlock &BB : F) {
-        for (Instruction &I : BB) {
-            if (TI.isTainted(&I)) {
-                errs() << "Tainted instruction: " << I << "\n";
-            }
-        }
-    }
-}
-
-// Get detailed information about all tainted values
-for (const auto &Info : TI.getTaintedValuesInfo()) {
-    errs() << "Tainted by: "
-           << Info.SourceArg->getParent()->getName()
-           << "::arg" << Info.SourceArg->getArgNo() << "\n";
-    if (Info.LineNumber > 0) {
-        errs() << "  at line " << Info.LineNumber << "\n";
-    }
-}
-```
-
-## Limitations
-
-- **Conservative Analysis**: May over-approximate taint (false positives)
-- **Path-Insensitive**: Doesn't consider control flow conditions
-- **No Sanitization**: Doesn't recognize when data is validated/sanitized
-- **CSV-Only Sources**: Only function arguments specified in CSV are tracked
-- **Requires Explicit Configuration**: You must create the CSV file
 
 ## Troubleshooting
 
-**"Warning: No taint sources identified"**:
-- Make sure you specified `-taint-sources-file=your_file.csv`
-- Check that function names in CSV match actual function names in IR
-- Verify argument indices are valid (0-based)
+**"Warning: No taint sources identified"** - the CSV was not passed, a function name
+does not match the IR exactly, or the named function is only a declaration in this
+module. Check the actual names with `grep "^define" hello.ll`.
 
-**No line numbers in output**:
-- Compile with `-g` flag to include debug information
-- Use: `clang -S -emit-llvm -g source.c -o output.ll`
+**"Warning: Argument index N out of range"** - the index is 0-based and must be less
+than the function's arity.
 
-**Pass not found**:
-- Rebuild LLVM after adding files: `ninja -C build`
-- Check that all files are in correct locations
+**No line numbers** - recompile with `-g`, and make sure the source file is still at the
+path recorded in the debug info, since the report re-reads it from disk.
 
-**CSV parsing errors**:
-- Ensure format is: `FunctionName,ArgumentIndex`
-- No spaces around comma (or trim them)
-- Use `#` for comments
+**Report file keeps growing** - `-taint-output-file` is append-mode by design. Delete it
+before a fresh run.
 
-## Tips
-
-1. **Start Small**: Begin with a simple CSV file tracking 1-2 functions
-2. **Use Comments**: Document why each source is tracked in the CSV
-3. **Compile with -g**: Always use debug info for better output
-4. **Check Function Names**: Use `llvm-dis` to see actual function names in IR
-5. **Iterative Analysis**: Run analysis, refine CSV, repeat
-
-## Example Workflow
-
-```bash
-# 1. Create CSV
-cat > sources.csv << 'EOF'
-user_input_handler,0
-process_request,1
-EOF
-
-# 2. Compile with debug info
-./build/bin/clang -S -emit-llvm -g myapp.c -o myapp.ll
-
-# 3. Run analysis
-./build/bin/opt -passes='print<taint-analysis>' \
-  -taint-sources-file=sources.csv \
-  -disable-output myapp.ll 2>&1 | tee results.txt
-
-# 4. Review results
-less results.txt
-```
+**Far more tainted instructions than expected** - expected behaviour, and the mechanisms
+are enumerated in
+[`../docs/design/precision-and-soundness.md`](../docs/design/precision-and-soundness.md).
+The usual culprit is that every pointer argument at a tainted call site is tainted,
+including format strings and other constants, whose uses then taint unrelated functions.
 
 ## References
 
-- LLVM Pass Manager: https://llvm.org/docs/NewPassManager.html
-- Writing LLVM Passes: https://llvm.org/docs/WritingAnLLVMPass.html
-- LLVM IR Language Reference: https://llvm.org/docs/LangRef.html
+- [`../docs/README.md`](../docs/README.md) - documentation index
+- [`../docs/reference/interfaces.md`](../docs/reference/interfaces.md) - all flags,
+  formats, and the `TaintInfo` API
+- LLVM new pass manager: https://llvm.org/docs/NewPassManager.html
+- LLVM IR reference: https://llvm.org/docs/LangRef.html
