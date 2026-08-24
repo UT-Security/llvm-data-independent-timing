@@ -38,6 +38,9 @@ from concurrent.futures import ThreadPoolExecutor
 G = pathlib.Path.home() / "Documents/gem5-DIT"
 GEM5 = G / "build/ARM/gem5.opt"
 CONFIG = G / "configs/example/arm/fdp_neoverse_v2_binary.py"
+# Default is the SQLite-public-lane composite. --bin selects another one
+# (build/gem5lua = the Lua public lane); the arm names and the argv contract
+# are identical across composites, which is what lets one driver run both.
 BIN = pathlib.Path.home() / "Documents/dit-crossover/build/gem5"
 
 # arm -> (binary suffix, runtime DIT mode)
@@ -168,6 +171,7 @@ V_GRID = [0, 1, 2, 4, 8]                                        # the phi dial
 
 
 def main():
+    global BIN
     ap = argparse.ArgumentParser()
     ap.add_argument("--sweep", choices=["fsweep", "optsweep", "rsweep", "vsweep"],
                     default="fsweep")
@@ -179,7 +183,10 @@ def main():
     ap.add_argument("--jobs", type=int, default=9)
     ap.add_argument("--out", default=str(pathlib.Path.home() / "Documents/dit-crossover/out/gem5/fsweep"))
     ap.add_argument("--resume", action="store_true", default=True)
+    ap.add_argument("--bin", default=str(BIN),
+                    help="directory holding the xover_<arm> binaries")
     a = ap.parse_args()
+    BIN = pathlib.Path(a.bin)
 
     if a.sweep == "fsweep":
         arms = a.arms or "off,always,oracle,hoist,gated,swcyc30"

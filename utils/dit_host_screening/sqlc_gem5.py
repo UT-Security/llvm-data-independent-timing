@@ -31,8 +31,46 @@ G = pathlib.Path.home() / "Documents/gem5-DIT"
 GEM5 = G / "build/ARM/gem5.opt"
 CONFIG = G / "configs/example/arm/fdp_neoverse_v2_binary.py"
 BIN = G / "benchmarks/sqlcipher/bin"
-ARMS = {"plain": "sqlcipher_query", "blanket": "q_blanket",
-        "nodit": "q_nodit", "hoist": "q_hoist"}
+# arm -> (binary, DIT_MODE). `blanket` REUSES the nodit binary and selects the
+# mode at runtime, so blanket-vs-nodit is a same-binary comparison and cannot
+# carry a codegen difference. The previous arm set compiled a separate
+# q_blanket, and that comparison produced the impossible reading that condemned
+# the 2026-08-20 sweep: +3.49% serializing against +9.99% renamed for a single
+# `msr DIT`, when a serializing write can never be cheaper than a renamed one.
+ARMS = {"plain":   ("q_plain", 0),
+        "nodit":   ("q_nodit", 0),
+        "blanket": ("q_nodit", 1),
+        "hoist":   ("q_hoist", 0),
+        # Hand placement over the three provider entry points, on an
+        # UNINSTRUMENTED libtomcrypt. It is the coverage reference: the pass
+        # protects enough only if its ditSuppressed reaches the oracle's.
+        # Comparing the pass against `blanket` cannot answer that, because
+        # blanket withholds optimizations across the public code too.
+        "oracle":  ("q_oracle", 0),
+        # `hoist` plus the HMAC/SHA taint seed. The original seed named only the
+        # cipher entry points, so the per-page HMAC ran with DIT=0 and coverage
+        # topped out at 94.4-95.4% of the oracle - the same blind spot that
+        # produced the retracted "+8.15%" result on silicon.
+        "hmacfix": ("q_hmacfix", 0),
+        # Same HMAC seed, cheaper placement. hmacfix closes coverage but toggles
+        # 291-335x more than the oracle because region placement lands inside
+        # SHA-512's compression loop; these two ask whether the coverage can be
+        # kept without the toggle bill.
+        "hmacfn":   ("q_hmacfn", 0),
+        "hmacsw30": ("q_hmacsw30", 0),
+        # --- controls for "why is a renamed switch not free?" ---
+        # All three are hmacfix with the 121 HMAC/SHA switch sites rewritten in
+        # the ASSEMBLY, so every instruction sits at the same address and only
+        # what occupies the slot changes.
+        #   hfxnop    NOP           - layout only, no slot cost, no DIT
+        #   hfxmul    MUL XZR,XZR,XZR - a real multiplier op that cannot be
+        #                             elided, so it prices the ISSUE SLOT
+        #   hfxnoclr  enables kept, CLEARS removed - tests the model's claim
+        #                             that entry is free and all renamed cost
+        #                             is the non-speculative clear's shadow
+        "hfxnop":    ("q_hfxnop", 0),
+        "hfxmul":    ("q_hfxmul", 0),
+        "hfxnoclr":  ("q_hfxnoclr", 0)}
 CONFIGS = {
     # the fork's default: MSR DIT as a renamed CC-register write
     "spec":   ["--eves", "--dmp", "--comp-simp"],
@@ -89,7 +127,8 @@ def run_one(job):
         # cannot service those and the open fails with SQLITE_PERM ("journal
         # failed: 3"). The driver's own default has the same URI for this reason.
         "--env", f"QDB=file:{db}?vfs=unix-none",
-        "--binary", str(BIN / ARMS[arm]),
+        "--env", f"DIT_MODE={ARMS[arm][1]}",
+        "--binary", str(BIN / ARMS[arm][0]),
         "--arguments",
         f"--rows {a.rows} --queries {a.queries} --payload {a.payload} "
         f"--warmup {a.warmup} --reuse",
@@ -113,6 +152,10 @@ def run_one(job):
         rec["dec_q"] = float(m.group(1)) if m else None
         m = re.search(r"checksum=(\d+)", txt)
         rec["checksum"] = int(m.group(1)) if m else None
+        m = re.search(r"dit_now=(\d+)", txt)
+        rec["dit_now"] = int(m.group(1)) if m else None
+        m = re.search(r"misses=(\d+)", txt)
+        rec["misses"] = int(m.group(1)) if m else None
     print(f"  [{'ok ' if rc == 0 else 'FAIL'}] {arm:<8} {cfg:<7} cache={cache:<5} "
           f"cycles={rec.get('cycles')} insts={rec.get('insts')} "
           f"ditSupp={rec.get('ditSuppressed')} {rec['wall_s']}s", flush=True)
@@ -146,8 +189,8 @@ def main():
     a.db = pathlib.Path(a.db)
 
     for arm in a.arms.split(","):
-        if not (BIN / ARMS[arm]).exists():
-            sys.exit(f"missing cross binary: {BIN / ARMS[arm]}")
+        if not (BIN / ARMS[arm][0]).exists():
+            sys.exit(f"missing cross binary: {BIN / ARMS[arm][0]}")
     if not a.db.exists():
         sys.exit(f"missing database: {a.db}")
 
@@ -166,6 +209,97 @@ def main():
         for r in recs:
             fh.write(json.dumps(r) + "\n")
     print("\nwrote", res)
+
+    check_gates(recs)
+
+
+def check_gates(recs):
+    """The two gates this file's docstring has always claimed, now actually run.
+
+    They were documented here and enforced only in xover/run_gem5.py, so this
+    sweep shipped ungated - and it fails: simInsts differs by exactly 400 between
+    switch models on 10 of 16 arm/cache pairs, including `nodit`, a binary that
+    contains ZERO `msr DIT` and therefore cannot be affected by the flag at all.
+    A gate that lives in a docstring catches nothing.
+    """
+    ok = True
+
+    # GATE 1: the instruction stream cannot depend on the machine model.
+    #
+    # TOLERANCE, and why it is not zero. The ROI is delimited by m5_reset_stats,
+    # which lands as a scheduled event, so a variable number of already-in-flight
+    # instructions commit on either side of the boundary. Measured across a full
+    # 40-run sweep the discrepancy is ALWAYS exactly 0 or +400 and never negative
+    # - a fixed, ROB-scale boundary offset that does not grow with the region
+    # (400 out of 85M and out of 887k alike). Demanding exact equality here flags
+    # that artifact as contamination; the real signal is a difference that SCALES
+    # with the workload, so gate on a fraction instead.
+    TOL = 1e-4  # 0.01% of the ROI
+    bykey = {}
+    for r in recs:
+        if r.get("insts"):
+            bykey.setdefault((r["arm"], r["cache"]), {})[r["cfg"]] = r["insts"]
+    for (arm, cache), v in sorted(bykey.items()):
+        if len(set(v.values())) > 1:
+            lo, hi = min(v.values()), max(v.values())
+            if (hi - lo) > TOL * hi:
+                ok = False
+                print(f"!! GATE FAIL simInsts: {arm} cache={cache} differs by "
+                      f"{hi-lo:.0f} ({(hi-lo)/hi*100:.4f}%) across switch "
+                      f"models: {v}")
+
+    # GATE 2: an arm that never sets DIT must report no DIT activity.
+    for r in recs:
+        if r["arm"] in ("plain", "nodit") and r.get("ditSuppressed"):
+            ok = False
+            print(f"!! GATE FAIL ditSuppressed: {r['arm']} cache={r['cache']} "
+                  f"cfg={r['cfg']} reports {r['ditSuppressed']:.0f}, must be 0 - "
+                  f"the baseline is running some placement")
+
+    # Not a gate, but the symptom that exposes a broken comparison fastest: for
+    # an arm that NEVER SETS DIT, the two switch models must agree - there is no
+    # `msr DIT` to decode differently and no DIT state for gated instructions to
+    # consume, so any gap is measurement error.
+    #
+    # THIS CHECK IS ONLY VALID FOR THOSE ARMS. It was first written to fire on
+    # every arm and that was wrong: with DIT actually dwelling, the two models
+    # also differ in how gated instructions read the DIT state (renamed operand
+    # vs architectural), so `blanket` can legitimately be faster serializing.
+    # Applying the check there reports a real microarchitectural difference as a
+    # broken comparison.
+    bycyc = {}
+    for r in recs:
+        if r.get("cycles") and not r.get("dit_now") and not r.get("ditSuppressed"):
+            bycyc.setdefault((r["arm"], r["cache"]), {})[r["cfg"]] = r["cycles"]
+    for (arm, cache), v in sorted(bycyc.items()):
+        if "serdit" in v and "spec" in v and v["serdit"] < v["spec"] * 0.995:
+            ok = False
+            print(f"!! SUSPECT: {arm} cache={cache} never sets DIT yet is "
+                  f"{(1 - v['serdit']/v['spec'])*100:.2f}% FASTER serializing than "
+                  f"renamed. With no DIT anywhere the two models must agree.")
+
+    # The driver reads PSTATE.DIT back at exit, so "the mode actually took" is
+    # recorded rather than assumed - an arm that silently failed to set DIT would
+    # otherwise look like a cheap placement.
+    for r in recs:
+        want = ARMS.get(r["arm"], (None, None))[1]
+        got = r.get("dit_now")
+        if want is not None and got is not None and want != got:
+            ok = False
+            print(f"!! GATE FAIL dit_now: {r['arm']} cache={r['cache']} cfg={r['cfg']} "
+                  f"expected PSTATE.DIT={want}, driver read {got}")
+
+    # Checksums must agree at a point, or the arms are not doing the same work.
+    cks = {}
+    for r in recs:
+        if r.get("checksum") is not None:
+            cks.setdefault(r["cache"], set()).add(r["checksum"])
+    for cache, v in sorted(cks.items()):
+        if len(v) > 1:
+            ok = False
+            print(f"!! GATE FAIL checksum: cache={cache} arms disagree: {v}")
+
+    print("gates: PASS" if ok else "gates: FAILED - do not quote these numbers")
 
 
 if __name__ == "__main__":
