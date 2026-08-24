@@ -36,21 +36,23 @@ PRIM = {"auth": 0, "aead": 1, "sign": 2, "pwhash": 3, "gcm": 4}
 
 # arm -> (binary suffix, runtime DIT mode). off/always/oracle/batch share ONE
 # binary and differ only by argv, so no codegen differs between them.
+# CONFIRMATION RUN (2026-08-24). The compiler defaults moved, so `def30` IS the
+# shipped default and the only knob varied against it is -taint-dit-switch-cyc,
+# at 0 and 30. off/always/oracle/batch share ONE binary and differ only by argv,
+# so no codegen differs between them. nop0/nop30 are the alignment control (every
+# `msr DIT` emitted as `HINT #0` at the same address): nop30-vs-nop0 is the pure
+# LAYOUT delta, so def30-vs-def0 minus it is the switch delta - required, because
+# the claim under test is about switch COUNT. off2 is the same binary as off, run
+# last: off-vs-off2 is the drift check on the machine itself.
 ARMS = [
     ("off",    "nodit",  0),
     ("always", "nodit",  1),
     ("oracle", "nodit",  2),
     ("batch",  "nodit",  3),
-    ("hoist",  "hoist",  0),
-    ("gated",  "gated",  0),
-    ("hoist0", "hoist0", 0),
-    ("func",   "func",   0),
-    ("nopctl", "nopctl", 0),
-    # the two knobs under test: corridor merging (switch-cyc) vs callee
-    # ownership (relaxed). Static counts say 963 and 1098 against hoist's 1117.
-    ("swcyc30",  "swcyc30",  0),
-    ("relaxed",  "relaxed",  0),
-    ("relaxgate","relaxgate",0),
+    ("def30",  "def30",  0),   # the shipped default
+    ("def0",   "def0",   0),   # ... with corridor merging disabled
+    ("nop30",  "nop30",  0),   # alignment control for def30
+    ("nop0",   "nop0",   0),   # alignment control for def0
     ("off2",   "nodit",  0),
 ]
 
