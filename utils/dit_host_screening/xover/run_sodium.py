@@ -36,21 +36,30 @@ PRIM = {"auth": 0, "aead": 1, "sign": 2, "pwhash": 3, "gcm": 4}
 
 # arm -> (binary suffix, runtime DIT mode). off/always/oracle/batch share ONE
 # binary and differ only by argv, so no codegen differs between them.
+# CONFIRMATION RUN (2026-08-24). The compiler defaults moved, so `def30` IS the
+# shipped default and the only knob varied against it is -taint-dit-switch-cyc,
+# at 0 and 30. off/always/oracle/batch share ONE binary and differ only by argv,
+# so no codegen differs between them. nop0/nop30 are the alignment control (every
+# `msr DIT` emitted as `HINT #0` at the same address): nop30-vs-nop0 is the pure
+# LAYOUT delta, so def30-vs-def0 minus it is the switch delta - required, because
+# the claim under test is about switch COUNT. off2 is the same binary as off, run
+# last: off-vs-off2 is the drift check on the machine itself.
 ARMS = [
     ("off",    "nodit",  0),
     ("always", "nodit",  1),
     ("oracle", "nodit",  2),
     ("batch",  "nodit",  3),
-    ("hoist",  "hoist",  0),
-    ("gated",  "gated",  0),
-    ("hoist0", "hoist0", 0),
-    ("func",   "func",   0),
-    ("nopctl", "nopctl", 0),
-    # the two knobs under test: corridor merging (switch-cyc) vs callee
-    # ownership (relaxed). Static counts say 963 and 1098 against hoist's 1117.
-    ("swcyc30",  "swcyc30",  0),
-    ("relaxed",  "relaxed",  0),
-    ("relaxgate","relaxgate",0),
+    # CALIBRATION SWEEP, reduced to the pairs that differ. -taint-dit-switch-cyc
+    # is a three-step staircase on this library: 0 -> 492 switches, 30 == 100 ->
+    # 397 (BYTE-IDENTICAL objects), and 300 == 1000 == 3000 == 10000 == 100000 ->
+    # 395. So def100 is not measurable against def30 - it is the same binary -
+    # and no finite switch cost merges anything beyond 300. Timing the identical
+    # pair would report noise that reads as a result.
+    ("def0",   "def0",   0),   # merging disabled - the anchor
+    ("def30",  "def30",  0),   # the shipped default
+    ("def300", "def300", 0),   # the saturated ceiling, 2 switches below def30
+    ("nop30",  "nop30",  0),   # dwell probe: a NOP build has no dwell at all, so
+    ("nop300", "nop300", 0),   # def-minus-nop at a setting IS its dwell term
     ("off2",   "nodit",  0),
 ]
 

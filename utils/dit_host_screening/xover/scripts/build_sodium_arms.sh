@@ -43,14 +43,52 @@ build_arm() {
     rm -f "$OUT/$name.mir"
 }
 
-build_arm hoist   -taint-dit-placement=region -taint-dit-loop-hoist=1
-build_arm gated   -taint-dit-placement=region -taint-dit-loop-hoist=1 -taint-modset-callsite-gated
-build_arm hoist0  -taint-dit-placement=region -taint-dit-loop-hoist=0
-build_arm func    -taint-dit-placement=function
-build_arm nopctl  -taint-dit-placement=region -taint-dit-loop-hoist=1 -taint-modset-callsite-gated -taint-dit-nop-switches
+# THE CONFIRMATION-RUN ARMS (2026-08-24). The compiler defaults changed - region
+# placement, loop-hoist=1, switch-cyc=30, and the call-site mod-set gate all ship
+# ON - so `def30` is simply the shipped default and the ONLY knob varied against it
+# is -taint-dit-switch-cyc. That is the comparison that was never made as one arm:
+# every previous swcyc30 measurement was gate-OFF and every gated measurement was
+# switch-cyc=0.
+#
+# nop0/nop30 are the alignment control, not a knob: every inserted `msr DIT` is
+# emitted as `HINT #0` at the same address, so nop30-vs-nop0 is the pure LAYOUT
+# delta and def30-vs-def0 minus it is the switch delta. Required here because the
+# whole claim is about switch COUNT. NB the NOP is not perfectly neutral - it is
+# ~0.25% slower than a real op at the same address - so it UNDERSTATES switch cost.
+build_arm def30
+build_arm def0    -taint-dit-switch-cyc=0
+build_arm nop30   -taint-dit-nop-switches
+build_arm nop0    -taint-dit-switch-cyc=0 -taint-dit-nop-switches
+
+# CALIBRATION SWEEP. 30 is the best MEASURED point, not a derived optimum: the
+# measured switch cost is 9.7-22.6 cyc against a dwell of 0.0039 cyc per
+# suppressed op, so the true ratio is orders of magnitude above the 30:1 that
+# switch-cyc=30 / dwell-per-instr=1 encodes. And since the win turned out to be
+# fewer INSTRUCTIONS rather than cheaper mode switches, the right calibration may
+# sit well above 30.
+#
+# The curve should TURN: merging keeps DIT on across the corridor, so as
+# switch-cyc rises, switches fall (good) but dwell accumulates (bad) - blanket
+# coverage costs +11-12% on this workload, which is what unbounded merging tends
+# toward. Each def arm therefore gets a NOP twin: a NOP build has no dwell at all,
+# so def-minus-nop AT EACH SETTING is the dwell term, and the setting where it
+# starts to grow is where merging has gone too far.
+build_arm def100  -taint-dit-switch-cyc=100
+build_arm def300  -taint-dit-switch-cyc=300
+build_arm nop100  -taint-dit-switch-cyc=100 -taint-dit-nop-switches
+build_arm nop300  -taint-dit-switch-cyc=300 -taint-dit-nop-switches
+
+# Historical arms, kept so the published numbers stay reproducible against the
+# compiler they were taken with. THEY NO LONGER BUILD: -taint-modset-callsite-gated
+# and -taint-dit-relaxed-ownership were removed on 2026-08-24, and the flags below
+# that survive now mean something different because the defaults moved.
+#   build_arm hoist   -taint-dit-placement=region -taint-dit-loop-hoist=1
+#   build_arm gated   ... -taint-modset-callsite-gated      (== def0 today)
+#   build_arm hoist0  -taint-dit-placement=region -taint-dit-loop-hoist=0
+#   build_arm func    -taint-dit-placement=function
 
 say "switch counts"
-for a in nodit hoist gated hoist0 func nopctl; do
+for a in nodit def0 def30 def100 def300 nop0 nop30 nop100 nop300; do
     [[ -f "$OUT/$a.o" ]] || continue
     n=$("$L/llvm-objdump" -d "$OUT/$a.o" | grep -ci 'msr.*dit')
     f=$(wc -l < "$OUT/$a.prec.txt" 2>/dev/null || echo 0)

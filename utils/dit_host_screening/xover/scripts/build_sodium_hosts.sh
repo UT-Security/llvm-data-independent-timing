@@ -30,7 +30,7 @@ say "shared objects"
 [[ -f "$S/host_lua.o" ]] || $CC -O2 -c -I"$LUA/src" -I"$X" "$X/host_lua_sodium.c" -o "$S/host_lua.o" || exit 1
 
 say "linking arms"
-for arm in nodit hoist gated hoist0 func nopctl; do
+for arm in nodit def0 def30 def100 def300 nop0 nop30 nop100 nop300; do
     a="$SOD/libsodium-$arm.a"
     [[ -f "$a" ]] || { echo "  missing $a"; continue; }
     $CC -O2 "$S/host_sqlite.o" "$S/payload.o" "$S/sqlite3.o" "$a" \
