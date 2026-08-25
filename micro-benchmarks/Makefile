@@ -1,8 +1,40 @@
 CC = ../build/bin/clang
+
+# TIMING flags, for the benchmark harnesses. -O0 here is deliberate and should
+# NOT be raised: the committed cycle counts in {,un}fenced_output.txt were
+# produced with it, and changing it makes new numbers incomparable with them.
+# The harness is not what is being measured; the libsodium call inside the
+# rdtsc/rdtscp window is.
 CFLAGS = -fomit-frame-pointer -O0 -Werror -std=c18
+
+# ANALYSIS flags, for emitting IR to run the taint analysis over. MUST be
+# optimized. At -O0 clang spills every argument to an alloca, the taint
+# analysis's use-list closure dies at that store, and the analysis reports
+# essentially nothing (measured on hello.c: 1 tainted instruction at -O0 vs 22
+# at -O2). -O0 also implies optnone, so mem2reg cannot repair it afterwards.
+# See ../docs/fences/design/precision-and-soundness.md section 2.1.
+IRFLAGS = -fomit-frame-pointer -O2 -Werror -std=c18
+
 LDFLAGS = -lsodium
 
+# The harnesses are x86-64 ONLY: START/STOP_CYCLE_TIMER use rdtsc/rdtscp with
+# cpuid serialization and %rax/%rbx/%rcx/%rdx clobbers. They do not compile for
+# AArch64 at any optimization level. To emit IR on an arm64 host, cross-target:
+#   make ir XTARGET='--target=x86_64-apple-macos13' SYSROOT="-isysroot $(xcrun --show-sdk-path)"
+# On macOS a from-source clang also needs SYSROOT even when targeting the host
+# (see CLAUDE.md, macOS clang.cfg note). Both default to empty, so a Linux
+# x86-64 build is unaffected.
+XTARGET =
+SYSROOT =
+
 # Libsodium paths
+#
+# IMPORTANT: the fenced/unfenced archives below must ALSO be built optimized,
+# for the same reason IRFLAGS is. The fence pass acts on the taint analysis's
+# output, so an -O0 libsodium receives almost no fences. The build scripts that
+# produce these archives are NOT in this repository; whatever level they used,
+# it was not -O0 (an -O0 library could not have cost the measured 90x).
+# Recovering the exact flags is required to reproduce that number.
 LIBSODIUM_DIR = /home/rgangar/Documents/libsodium-stable
 LIBSODIUM_FENCED = $(LIBSODIUM_DIR)/bitcode/libsodium_fenced.a
 LIBSODIUM_UNFENCED = $(LIBSODIUM_DIR)/bitcode/libsodium_unfenced.a
@@ -50,11 +82,12 @@ hello: hello.c
 clean:
 	rm -f $(EVAL_BINS) $(EVAL_FENCED_BINS) $(EVAL_UNFENCED_BINS) libsodium_test hello
 
-# Generate LLVM IR for all eval files
+# Generate LLVM IR for all eval files, for the taint analysis.
+# Uses IRFLAGS (-O2), NOT CFLAGS (-O0): see the note at the top of this file.
 ir: $(EVAL_SRCS:.c=.ll)
 
 %.ll: %.c
-	$(CC) -S -emit-llvm -g $(CFLAGS) $< -o $@
+	$(CC) -S -emit-llvm -g $(IRFLAGS) $(XTARGET) $(SYSROOT) $< -o $@
 
 clean-ir:
 	rm -f *.ll

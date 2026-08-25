@@ -34,8 +34,13 @@ argument to an `alloca` in the entry block, so the first user of a secret argume
 `process_string,0`: `-O0` reports **1** tainted instruction and inserts **2** fences,
 `-O2` reports **22** and inserts **24**. `mem2reg` does not help, because `-O0` also
 marks functions `optnone`. A near-empty report on `-O0` IR is expected and means
-nothing. Note that `make ir` uses `CFLAGS`, which is `-O0`, so the committed `.ll`
-files in this directory are **not** suitable inputs for the analysis.
+nothing.
+
+`make ir` now uses a separate `IRFLAGS` (`-O2`) for exactly this reason, kept distinct
+from `CFLAGS` (`-O0`), which is the *timing* configuration for the harnesses and must
+not be raised - the committed cycle counts were produced with it. Generated `.ll` files
+are no longer committed: a checked-in copy shadowed the rule that builds it, so `make`
+saw an up-to-date file and a stale `-O0` artifact quietly beat the corrected rule.
 
 ## 3. Run the analysis
 
@@ -115,7 +120,17 @@ There is no clang driver flag, and this does not run at `-O0`:
 | `make all` | harnesses against the system libsodium (`-lsodium`) |
 | `make unfenced` | harnesses against our bitcode libsodium, pass not run |
 | `make fenced` | harnesses against our bitcode libsodium with fences inserted |
-| `make ir` | `-O0 -g` LLVM IR for every `eval_*.c` |
+| `make ir` | `-O2 -g` LLVM IR for every `eval_*.c`, for the analysis (not committed) |
+
+**The harnesses are x86-64 only.** `START_CYCLE_TIMER` / `STOP_CYCLE_TIMER` use
+`rdtsc`/`rdtscp` with `cpuid` serialization and `%rax`-`%rdx` clobbers, so they do not
+compile for AArch64 at any optimization level. To emit IR on an arm64 host, cross-target:
+
+```bash
+make ir XTARGET='--target=x86_64-apple-macos13' SYSROOT="-isysroot $(xcrun --show-sdk-path)"
+```
+
+Both variables default to empty, so a Linux x86-64 build is unaffected.
 
 Each harness times one cryptographic operation with `cpuid`/`rdtsc` ... `rdtscp`/`cpuid`
 and writes one cycle count per iteration:

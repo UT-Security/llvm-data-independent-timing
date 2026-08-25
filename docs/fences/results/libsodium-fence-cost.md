@@ -121,8 +121,14 @@ Three consequences for the design:
 
 ## 5. Workloads available but not yet measured
 
-`micro-benchmarks/` contains harnesses (and committed `-O0 -g` IR for each, which is
-**too unoptimized for the analysis to be meaningful on** - see above) for:
+`micro-benchmarks/` contains harnesses for the following. Generated `.ll` files are no
+longer committed; `make ir` emits them at `-O2` (see the `IRFLAGS` note in the
+`Makefile`). The harnesses are **x86-64 only** - the `rdtsc`/`rdtscp` + `cpuid` timer
+macros do not compile for AArch64 - so an arm64 host must cross-target to emit IR.
+
+Note also that harness IR is **not** the analysis target: the secret is `crypto_sign`'s
+`sk` argument, which lives inside libsodium, so the archive bitcode is what has to be
+analyzed and fenced.
 
 | harness | operation timed | natural secret |
 |---|---|---|
