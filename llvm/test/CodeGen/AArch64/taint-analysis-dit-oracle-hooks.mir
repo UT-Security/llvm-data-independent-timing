@@ -1,0 +1,151 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN:     -taint-dit-oracle-hooks %s -o - | FileCheck %s --check-prefix=HOOK
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN:     %s -o - | FileCheck %s --check-prefix=OFF
+
+# -taint-dit-oracle-hooks staples a call to the libditoracle re-arm trampoline
+# to every PSTATE.DIT switch, so a dynamic under-taint oracle can re-arm its
+# page protection at region boundaries. XNU masks PSTATE.SS on sigreturn and
+# refuses PROT_WRITE on a code page, so neither single-stepping nor patching a
+# breakpoint after the faulting access is available in-process; re-arming at
+# switches is what replaces them.
+#
+# The sled saves only LR, because the trampoline preserves x0-x17, NZCV and
+# v0-v31 itself. That is what makes it safe to insert here, after register
+# allocation, without knowing what is live. The LR read is `undef` because the
+# sled stores whatever LR holds and puts the same bits back — after a call LR is
+# defined-dead, and a plain read there is invalid MIR.
+
+# HOOK-LABEL: name: tainted_fn
+# HOOK: MSRpstateImm4 26, 1
+# HOOK-NEXT: early-clobber $sp = STPXpre undef $lr, $xzr, $sp, -2
+# HOOK-NEXT: BL &__dit_oracle_rearm
+# HOOK-NEXT: early-clobber $sp, $lr, $xzr = LDPXpost $sp, 2
+# HOOK: MSRpstateImm4 26, 0
+# HOOK-NEXT: early-clobber $sp = STPXpre undef $lr, $xzr, $sp, -2
+# HOOK-NEXT: BL &__dit_oracle_rearm
+# HOOK-NEXT: early-clobber $sp, $lr, $xzr = LDPXpost $sp, 2
+
+# An untainted function stays untouched: no switch, so no sled.
+# HOOK-LABEL: name: clean_fn
+# HOOK-NOT: __dit_oracle_rearm
+
+# THE LOAD-BEARING CHECK. The sled contains a BL, and a call normally clears
+# PSTATE.DIT as far as the placement pass is concerned, so clobbersDIT() exempts
+# the trampoline by name (it preserves DIT, and every volatile register). If
+# that exemption regresses, a re-assert appears after every sled and both
+# CHECK-NEXTs below fail: the one after the sled's own BL, and the one asserting
+# that a DIT-preserving callee still needs no re-assert.
+# HOOK-LABEL: name: caller_fn
+# HOOK: BL @tainted_fn
+# HOOK-NEXT: MSRpstateImm4 26, 1
+# HOOK: BL @pure_helper
+# HOOK-NOT: MSRpstateImm4 26, 1
+# HOOK: MSRpstateImm4 26, 0
+
+# Default off: not one byte of instrumentation without the flag.
+# OFF-NOT: __dit_oracle_rearm
+# OFF-NOT: STPXpre undef $lr
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i32 @tainted_fn(i32 "tainted" %a, i32 %b) {
+  entry:
+    %sum = add i32 %a, %b
+    ret i32 %sum
+  }
+
+  define i32 @clean_fn(i32 %a, i32 %b) {
+  entry:
+    %sum = add i32 %a, %b
+    ret i32 %sum
+  }
+
+  define i32 @caller_fn(i32 "tainted" %a) {
+  entry:
+    %v = call i32 @tainted_fn(i32 %a, i32 %a)
+    %u = call i32 @pure_helper()
+    %r = add i32 %v, %u
+    ret i32 %r
+  }
+
+  define i32 @pure_helper() {
+  entry:
+    ret i32 7
+  }
+
+...
+---
+name:            tainted_fn
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr32 }
+  - { id: 1, class: gpr32 }
+  - { id: 2, class: gpr32 }
+liveins:
+  - { reg: '$w0', virtual-reg: '%0' }
+  - { reg: '$w1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $w0, $w1
+
+    %0:gpr32 = COPY $w0
+    %1:gpr32 = COPY $w1
+    %2:gpr32 = ADDWrr %0, %1
+    $w0 = COPY %2
+    RET_ReallyLR implicit $w0
+
+...
+---
+name:            clean_fn
+tracksRegLiveness: true
+isSSA:           true
+registers:
+  - { id: 0, class: gpr32 }
+  - { id: 1, class: gpr32 }
+  - { id: 2, class: gpr32 }
+liveins:
+  - { reg: '$w0', virtual-reg: '%0' }
+  - { reg: '$w1', virtual-reg: '%1' }
+body:             |
+  bb.0.entry:
+    liveins: $w0, $w1
+
+    %0:gpr32 = COPY $w0
+    %1:gpr32 = COPY $w1
+    %2:gpr32 = ADDWrr %0, %1
+    $w0 = COPY %2
+    RET_ReallyLR implicit $w0
+
+...
+---
+name:            caller_fn
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$w0' }
+body:             |
+  bb.0.entry:
+    liveins: $w0
+
+    $w1 = COPY $w0
+    BL @tainted_fn, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $w0, implicit killed $w1, implicit-def $w0
+    renamable $w19 = ADDWri killed $w0, 1, 0
+    BL @pure_helper, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit-def $w0
+    renamable $w0 = ADDWrr killed renamable $w0, killed renamable $w19
+    RET_ReallyLR implicit killed $w0
+
+...
+---
+name:            pure_helper
+tracksRegLiveness: true
+isSSA:           false
+body:             |
+  bb.0.entry:
+
+    renamable $w0 = MOVZWi 7, 0
+    RET_ReallyLR implicit killed $w0
+
+...

@@ -7026,6 +7026,13 @@ void AArch64InstrInfo::insertNoop(MachineBasicBlock &MBB,
   BuildMI(MBB, MI, DL, get(AArch64::NOP));
 }
 
+static cl::opt<bool> TaintDitOracleHooks(
+    "taint-dit-oracle-hooks", cl::Hidden, cl::init(false),
+    cl::desc("Staple a call to the libditoracle re-arm trampoline to every "
+             "PSTATE.DIT switch, so a dynamic under-taint oracle can re-arm at "
+             "region boundaries. Instrumentation only: NEVER time such a "
+             "build."));
+
 void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
                                               MachineBasicBlock::iterator MI,
                                               const DebugLoc &DL,
@@ -7036,6 +7043,37 @@ void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
   BuildMI(MBB, MI, DL, get(AArch64::MSRpstateImm4))
       .addImm(DIT->Encoding)
       .addImm(Enable ? 1 : 0);
+
+  if (!TaintDitOracleHooks)
+    return;
+
+  // Oracle sled, in the shape XRay uses for its custom-event calls: the only
+  // register it disturbs is LR, which it saves inline, because the trampoline
+  // (libditoracle sled.S) preserves x0-x17, NZCV and v0-v31 itself. That makes
+  // the sled safe to insert here, after register allocation, without knowing
+  // what is live. Deliberately expensive; an oracle build is never timed.
+  //
+  //    stp x30, xzr, [sp, #-16]!
+  //    bl  __dit_oracle_rearm
+  //    ldp x30, xzr, [sp], #16
+  //
+  // The LR read is `undef`: the sled stores whatever LR holds and puts the same
+  // bits back, so it is value-neutral and genuinely does not depend on the
+  // incoming value. That matters after a call, where LR is defined-dead and a
+  // plain read is invalid MIR ("using an undefined physical register").
+  BuildMI(MBB, MI, DL, get(AArch64::STPXpre), AArch64::SP)
+      .addReg(AArch64::LR, RegState::Undef)
+      .addReg(AArch64::XZR)
+      .addReg(AArch64::SP)
+      .addImm(-2); // scaled by 8: -16 bytes, keeping SP 16-byte aligned
+  BuildMI(MBB, MI, DL, get(AArch64::BL))
+      .addExternalSymbol("__dit_oracle_rearm");
+  BuildMI(MBB, MI, DL, get(AArch64::LDPXpost))
+      .addDef(AArch64::SP)
+      .addDef(AArch64::LR)
+      .addDef(AArch64::XZR)
+      .addReg(AArch64::SP)
+      .addImm(2);
 }
 
 std::optional<bool>

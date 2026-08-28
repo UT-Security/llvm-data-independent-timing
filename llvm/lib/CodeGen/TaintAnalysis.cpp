@@ -2329,6 +2329,23 @@ static void reportDITReassert(raw_ostream *OS, const MachineFunction &MF,
   *OS << " (sound: DIT re-asserted after the call)\n";
 }
 
+// The libditoracle re-arm trampoline, stapled to every switch by
+// -taint-dit-oracle-hooks. It is hand-written assembly that preserves every
+// volatile register AND PSTATE.DIT (PSTATE is per-thread and survives calls;
+// the trampoline never writes DIT). Treating it as a clobber would make the
+// soundness verifier report a leak that does not exist, and would provoke a
+// re-assert after every switch, so it is exempt by name.
+static bool isOracleRearmCall(const MachineInstr &MI) {
+  for (const MachineOperand &MO : MI.operands()) {
+    if (MO.isSymbol() && StringRef(MO.getSymbolName()) == "__dit_oracle_rearm")
+      return true;
+    if (MO.isGlobal() && MO.getGlobal() &&
+        MO.getGlobal()->getName() == "__dit_oracle_rearm")
+      return true;
+  }
+  return false;
+}
+
 // `OwnsDIT` is false for a function entered with DIT already set. Such a
 // function did not turn DIT on, so it must not turn it off: it keeps the
 // (redundant) entry enable but emits no disable before its returns. Eliding the
@@ -2364,6 +2381,11 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
         TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
                                     /*Enable=*/false);
       } else if (MI.isCall()) {
+        // Skip our own oracle sled. It preserves DIT, and (because this loop
+        // inserts INTO the block it is iterating) treating the sled's BL as a
+        // clobber would emit a sled after the sled, without end.
+        if (isOracleRearmCall(MI))
+          continue;
         const Function *Callee = findCalledFunction(*M, MI);
         if (calleeLeavesDITSet(Callee, TSI))
           continue;
@@ -2393,6 +2415,8 @@ static bool needsDIT(const MachineInstr &MI, const TaintFacts &F,
 static bool clobbersDIT(const MachineInstr &MI, const TaintSummaryInfo *TSI,
                         Module &M) {
   if (!MI.isCall())
+    return false;
+  if (isOracleRearmCall(MI))
     return false;
   return !calleeLeavesDITSet(findCalledFunction(M, MI), TSI);
 }
