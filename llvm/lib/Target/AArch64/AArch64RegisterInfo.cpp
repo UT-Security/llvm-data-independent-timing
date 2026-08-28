@@ -423,6 +423,8 @@ AArch64RegisterInfo::getStrictlyReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
   markSuperRegs(Reserved, AArch64::WSP);
   markSuperRegs(Reserved, AArch64::WZR);
+  // Ordering-only register for PSTATE.DIT; never allocated.
+  markSuperRegs(Reserved, AArch64::DIT);
 
   if (TFI->isFPReserved(MF))
     markSuperRegs(Reserved, AArch64::W29);

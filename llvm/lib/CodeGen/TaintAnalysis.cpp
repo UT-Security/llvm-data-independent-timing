@@ -3140,6 +3140,27 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   if (TaintedRuns.empty())
     return TaintedInstrCount;
 
+  // Pin the mode before choosing a placement, so both region and
+  // function granularity get it. Every Need gains an implicit use of the
+  // target's timing-mode register; insertTimingModeSwitch gives the switch the
+  // matching implicit def. That dependence is what stops a later MIR pass
+  // reordering a switch across the instructions it governs.
+  //
+  // "Has side effects" is NOT enough, and it was already set: the machine
+  // scheduler's barrier (ScheduleDAGInstrs, isGlobalMemoryObject) chains only
+  // against loads, stores and FP exceptions, while DIT governs data
+  // processing. So a `madd` on secret operands had no edge to the disable and
+  // the PostRA scheduler hoisted the disable above it -- found by the gem5
+  // shadow-taint oracle on flowprobe's positive controls, which are supposed
+  // to be fully protected.
+  const TargetInstrInfo *PinTII = MF.getSubtarget().getInstrInfo();
+  replayTaint(MF, TR, TSI, AA,
+              [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
+                if (needsDIT(MI, F, *PinTII))
+                  PinTII->pinToTimingMode(MI);
+                return true;
+              });
+
   // The DIT ownership rule: a function entered with DIT already set did not turn
   // it on and must not turn it off. Region placement narrows coverage by
   // CLEARING DIT around clean stretches, so for such a function narrowing is not

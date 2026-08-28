@@ -1689,6 +1689,14 @@ public:
                                       MachineBasicBlock::iterator MI,
                                       const DebugLoc &DL, bool Enable) const;
 
+  /// Give \p MI a dependence on the target's data-independent-timing mode, so
+  /// that a mode switch emitted by insertTimingModeSwitch cannot be reordered
+  /// across it. Needed because "has side effects" is not enough: the machine
+  /// scheduler's barrier chains only against MEMORY operations, while the mode
+  /// governs data processing, so a disable can otherwise be hoisted above a
+  /// secret-dependent arithmetic instruction. Default: nothing.
+  virtual void pinToTimingMode(MachineInstr &MI) const {}
+
   /// If MI is a data-independent-timing mode switch (the instruction
   /// insertTimingModeSwitch emits — e.g. AArch64 `MSR DIT, #imm`), return
   /// whether it ENABLES (true) or disables (false) the mode; otherwise

@@ -171,6 +171,14 @@ def XZR   : AArch64Reg<31, "xzr", [WZR, WZR_HI]>, DwarfRegAlias<WSP> { let isCon
 // Condition code register.
 def NZCV  : AArch64Reg<0, "nzcv">;
 
+// PSTATE.DIT, modelled so that a mode switch and the instructions the mode
+// governs have a real dependence. Without it a scheduler is free to hoist
+// `MSR DIT, #0` above a secret-dependent data-processing instruction: DIT
+// already carries UnmodeledSideEffects, but that only chains against memory
+// operations, and DIT governs arithmetic. Reserved and never allocated; it
+// exists purely to carry the ordering edge. See docs/design/dit-placement.md.
+def DIT : AArch64Reg<0, "dit">;
+
 // First fault status register
 def FFR : AArch64Reg<0, "ffr">, DwarfRegNum<[47]>;
 

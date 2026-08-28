@@ -7033,6 +7033,14 @@ static cl::opt<bool> TaintDitOracleHooks(
              "region boundaries. Instrumentation only: NEVER time such a "
              "build."));
 
+void AArch64InstrInfo::pinToTimingMode(MachineInstr &MI) const {
+  if (MI.readsRegister(AArch64::DIT, /*TRI=*/nullptr))
+    return;
+  MI.addOperand(*MI.getMF(),
+                MachineOperand::CreateReg(AArch64::DIT, /*isDef=*/false,
+                                          /*isImp=*/true));
+}
+
 void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
                                               MachineBasicBlock::iterator MI,
                                               const DebugLoc &DL,
@@ -7040,9 +7048,14 @@ void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
   // MSR DIT, #Enable (PSTATE.DIT requires FEAT_DIT at run time).
   const auto *DIT = AArch64PState::lookupPStateImm0_15ByName("DIT");
   assert(DIT && "DIT PState not registered");
+  // The implicit def of $dit is what stops a later pass moving this switch
+  // across the instructions it governs; pinToTimingMode() puts the matching
+  // use on those. $dit is reserved and never allocated - it carries an
+  // ordering edge and nothing else.
   BuildMI(MBB, MI, DL, get(AArch64::MSRpstateImm4))
       .addImm(DIT->Encoding)
-      .addImm(Enable ? 1 : 0);
+      .addImm(Enable ? 1 : 0)
+      .addDef(AArch64::DIT, RegState::Implicit);
 
   if (!TaintDitOracleHooks)
     return;
