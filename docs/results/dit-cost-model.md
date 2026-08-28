@@ -26,6 +26,26 @@ of the caller blindly re-asserting afterwards:
 | ownership, entry state kept in a frame slot (`mrs`/`str`/`ldr`/`tbnz`) | **2.01** |
 | ownership, entry state kept in a register (`mrs`/`tbnz`) | **1.03** |
 
+⚠️ **These two rows assume the ENTRY ENABLE is also guarded, which is unsound.** 1.03 is
+`mrs` + `tbnz` with no `MSR` executing at all, i.e. both the entry set and the exit clear
+were skipped. Skipping the entry set on a mispredicted guard runs secret work at DIT=0 in
+the speculative window, and the gated optimizations' footprint survives the squash -
+`docs/design/dit-unconditional-design.md` §3.1. (`TaintSummaryInfo.h:137` states the
+static form of the same rule: eliding the entry enable "would be the unsafe direction".)
+With an unconditional entry enable the safe per-call ceiling is ~31.4 cyc for a guarded
+clear and ~62 for a branchless restore: **~2.9x, not 45x.** The 45x claim below is
+retained only as the measured behaviour of the benchmark as written.
+
+⚠️ **Instrument caveat: "free" is a SILICON result, not a gem5 one.** In gem5
+`MRS x, DIT` decodes to `Mrs64`, which is `IsSerializeBefore` - it drains the pipeline
+and reads committed state - and the renamed `DitCC` cannot substitute because it is a
+suppression *gate*, not a value (any `msr DIT, #imm` publishes 1 at rename, including a
+write of 0). So costing this mechanism in the gem5 **renamed** configuration measures
+the model's safety margin and will say the read is expensive. Use native M5 for the
+performance claim and gem5 serializing for coverage only. Making the read fast in gem5
+needs a second, exact renamed register; design and the writer-set trap are in
+`docs/design/dit-unconditional-design.md` §7.
+
 **45x cheaper per call, and it works through an indirect call** - the caller never
 has to know who it called, which is the case `PreservesDIT` provably cannot reach
 (libtomcrypt dispatches AES through a table `register_cipher()` writes at run

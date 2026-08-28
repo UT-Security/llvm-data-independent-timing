@@ -114,6 +114,13 @@ two `indirect` sites are the entire problem: the per-block AES dispatch through
 
 ## 5. Mode 2, deferred: the runtime `MRS` read
 
+> **Superseded 2026-08-27 by `docs/design/dit-unconditional-design.md`**, which keeps
+> this mechanism but changes the caller side: the re-assert is *deleted* rather than
+> replaced by a guarded one, justified by a one-directional invariant that holds through
+> indirect and cross-TU edges. That document also works out which DIT writes may be
+> guarded by a branch at all - guarding an enable turns out to be a speculative leak -
+> and why the renamed `DitCC` cannot serve as the read.
+
 ### Why it works where Mode 1 cannot
 
 It removes the need to know the callee. The callee reads its own entry state, so

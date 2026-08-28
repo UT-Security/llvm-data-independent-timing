@@ -65,6 +65,16 @@ How the analysis is built, which bugs were found in it, and what is still open.
   advisor discussion): the runtime `MRS` mode**, the only thing that fixes indirect
   *and* cross-TU calls. Measured: `MRS DIT` = 1.00 cyc vs `MSR DIT` = 30.34, so per
   call 90.67 -> 2.01.
+- **[design/dit-unconditional-design.md](design/dit-unconditional-design.md)** -
+  **PROPOSED, not implemented.** How to DELETE the after-call `MSR DIT` re-assert rather
+  than cheapen it. One invariant ("no instrumented function returns with DIT cleared
+  relative to entry") lets `calleeLeavesDITSet` return true for every callee, including
+  indirect and cross-TU, so call sites emit nothing. The load-bearing section is the
+  speculation analysis: **guarding an ENABLE is forbidden** (a mispredicted skip runs
+  secret work at DIT=0 and the footprint survives the squash), **guarding a CLEAR is
+  safe** (a wrong-path clear cannot un-gate, because gem5 defers the publish to
+  `commitHead`). Also: the gem5 `DitCC` register is a suppression gate, not a value, so
+  `MRS` cannot read it; the proposal is to split off an exact `DitVal`.
 - **[design/dit-tailcall-gap.md](design/dit-tailcall-gap.md)** - the tail-call gap
   fixed 2026-08-05. Whole-function placement cleared DIT *before* a tail call, so the
   callee receiving the secret ran unprotected (found on libsodium `crypto_sign`). Also
@@ -200,6 +210,25 @@ respect the refuted ones.
 - **[research/cio-and-ct-literature.md](research/cio-and-ct-literature.md)** - CIO and
   the broader constant-time / speculative-execution literature, with explicit
   verified, refuted, and open-question sections.
+- **[research/mode-bit-precedent.md](research/mode-bit-precedent.md)** - prior art for
+  saving and restoring a hardware mode bit per function. **LLVM already emits our exact
+  sequence for `PSTATE.SM`** (reproduced with this tree's `llc`), storage is a *pre-RA
+  virtual register* rather than a register claim, and AAPCS64 already specifies the
+  callee-preserves contract ("PSTATE.SM on normal return: unchanged"). GCC has had a
+  generic framework since 1998 whose `TARGET_MODE_BACKPROP` is our loop-hoist and whose
+  `TARGET_MODE_EH_HANDLER` is the lattice element our verifier lacks. Nobody has ever
+  classified a *timing* mode bit as caller- or callee-saved: 0 hits across AAPCS64, all
+  412 abi-aa records, the psABI, aadwarf64 and ACLE. Also the hazard list and two action
+  items (`isDITProtected` staleness; the post-`MSR` barrier).
+- **[research/tail-call-precedent.md](research/tail-call-precedent.md)** - what everyone
+  else does about tail calls. **Arm SME is the answer**: `PSTATE.SM`/`ZA` are PSTATE mode
+  bits with our bracketing discipline, and LLVM and GCC both *forbid tail-call
+  optimization* when a mode change must be undone after the call, with a predicate that
+  is our ownership rule. The CT literature is silent because nobody else toggles DIT from
+  the compiler; the three shipping DIT-bracketing systems (Apple corecrypto, Apple
+  `timingsafe_*`, Go) all reinvented `AlwaysEnteredWithDIT` and all suppress tail calls by
+  accident. Our accept-the-leak choice has one precedent (Go, deliberately) and it came
+  with an observability obligation. Includes a method-documented silence list.
 
 ## Historical
 
