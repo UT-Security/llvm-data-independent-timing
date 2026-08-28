@@ -3173,6 +3173,13 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
       !(TSI && TSI->getSummary(MF.getFunction()).AlwaysEnteredWithDIT) &&
       !isDITClone(&MF.getFunction());
 
+  // Record the entry assumption for the pre-emit verifier: a function the
+  // caller enters with DIT already set emits no entry enable, so a late check
+  // must not treat its entry as DIT-clear.
+  if (!OwnsDIT)
+    const_cast<Function &>(MF.getFunction()).addFnAttr("dit-entered-on");
+
+
   // Default mode's audit trail: every call site we could not prove leaves DIT
   // alone, and therefore re-asserted after. Sound but not free, so the list is
   // the cost, not a hazard. Append, because this runs once per function.

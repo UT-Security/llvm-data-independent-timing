@@ -10811,6 +10811,18 @@ AArch64InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
                                        unsigned Flags) const {
   MachineInstr &MI = *MIT;
 
+  // Don't outline anything tied to PSTATE.DIT: the mode switches themselves, or
+  // the instructions they protect (marked with an implicit $dit by
+  // pinToTimingMode). Lifting either into a shared function moves it out of the
+  // region the taint pass placed it in, and whether the result is safe then
+  // depends on the DIT state at every call site of the outlined function --
+  // which nothing checks, because the function did not exist when the analysis
+  // ran. The pre-emit verifier rejects such functions, so without this the
+  // outliner and DIT hardening simply cannot be used together.
+  if (MI.readsRegister(AArch64::DIT, /*TRI=*/nullptr) ||
+      MI.definesRegister(AArch64::DIT, /*TRI=*/nullptr))
+    return outliner::InstrType::Illegal;
+
   // Don't outline anything used for return address signing. The outlined
   // function will get signed later if needed
   switch (MI.getOpcode()) {
