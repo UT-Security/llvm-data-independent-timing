@@ -237,14 +237,49 @@ text; (3) legacy PM `start-after=prologepilog` to object.
   `hmac_*` -> `sha512_*` needs its own seed line. Fix and measurements:
   `benchmarks/sqlcipher/ltc_hmac_seed.txt` in the gem5 tree, coverage 94.4% ->
   98.4%.
-- **Use `-taint-dit-placement=function` on a TU whose functions are secret work
-  end to end.** On SQLCipher's `sha512.c`/`hmac_*.c` the default `region` policy
-  narrows nothing - there is no clean scaffolding inside a compression round to
-  exclude - so it only adds per-iteration toggles: 888,967 executed switches
-  against the oracle's 3,051 (291x), for +38.11% serializing. Function placement
-  on the same seed gives **better** coverage (98.4% vs 96.5%) for 224,289 switches
-  and +1.19% renamed, i.e. cheaper than the uninstrumented-HMAC build it replaces.
+- **`region` is the right policy even on a TU that is secret work end to end - the
+  old "use `-taint-dit-placement=function` there" advice was measured at
+  `switch-cyc=0` and is OBSOLETE.** Re-derived 2026-08-27 from the existing
+  `gem5-sqlc3` placement sweep (`~/Documents/dit-browser-bench/gem5-sqlc3/`,
+  arms defined in `utils/dit_host_screening/sqlc_gem5.py`), overhead vs the
+  `nodit` baseline at matched config and cache:
+
+  | cache | `hmacfix` region, sw=0 | **`hmacsw30` region, sw=30 (shipped)** | `hmacfn` function |
+  |---|---|---|---|
+  | 16 serializing | 38.11% | **16.10%** | 17.25% |
+  | 1024 serializing | 37.21% | **15.74%** | 16.89% |
+  | 1792 serializing | 31.85% | **13.23%** | 14.75% |
+  | 1920 serializing | 23.76% | **10.30%** | 10.42% |
+  | 16 renamed | 4.55% | **1.17%** | 1.19% |
+  | 1024 renamed | 3.17% | 1.45% | **-0.10%** |
+  | 1792 renamed | 2.24% | 1.41% | **1.01%** |
+  | 1920 renamed | 1.01% | 0.97% | **-0.02%** |
+
+  **Region with the shipped `switch-cyc=30` beats function placement at all four
+  cache points on serializing hardware**, ties at cache 16 renamed, and loses by
+  0.41-1.55 pp at the other three renamed points. Coverage is a wash: `ditSuppressed`
+  is within 0.2-0.8% of function placement's, both ~97-99% of the oracle. **The
+  +38.11% that motivated the old advice is `switch-cyc=0`**, i.e. the pre-2026-08-24
+  default asserting toggles are free. Do not quote it as region's cost.
+
+  **Why region needs no compression-round special case.** On a loop whose body is
+  secret end to end, every block is a need-block, so `admitOffCorridors` early-returns
+  at its `all_of(On)` check and region placement *degenerates to whole-function
+  coverage by construction*. Verified 2026-08-27: on a synthetic compression-round MIR
+  (hot loop, secret `MADD`, non-preserving call in the body), `region` and
+  `-taint-dit-placement=function` emit **byte-identical** code - entry enable,
+  per-iteration post-call re-assert, exit clear - and `switch-cyc` from 0 to 100,000 is
+  inert because there is no corridor to merge. The old 888,967-vs-224,289 switch gap
+  was `switch-cyc=0` splitting blocks that 30 now merges, not a policy difference.
   Judge a placement by how often it **leaves** a region, not by switch count.
+
+  **What the admission test still cannot reach**, and it is not corridors:
+  `TaintAnalysis.cpp:2826` refuses any one-sided corridor (`!HasOnPred || !HasOnSucc`)
+  at any switch cost, correctly, because a leading preamble or trailing epilogue has no
+  toggle pair to save. So the residual switches are entry enables, exit clears, and
+  post-call re-asserts, reachable only by callee ownership (cloning, or Mode 2) - which
+  is what [[dit-switch-cyc-revision]] already identified as the next highest-value
+  target.
 - **"Coverage >= 100% of oracle" is not reachable and should not be gated on.** A
   wrapper oracle holds DIT across untainted code in the same call - `find_hash`,
   `sha512_init`, loop bookkeeping - which a precise analysis correctly leaves

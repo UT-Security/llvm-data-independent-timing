@@ -186,3 +186,69 @@ Two further points that bear on every number in this doc:
   (+2.65% vs plain), exceeding the entire dwell effect. Measured at +0.58%
   (QuickJS), +0.06% (SQLCipher native), +2.65% (gem5). "Baseline against the
   round-trip control" is necessary but **not sufficient** at these effect sizes.
+
+---
+
+## Placement re-derivation, 2026-08-27: region wins, the old advice was `switch-cyc=0`
+
+**No new runs.** Re-derived from the existing `gem5-sqlc3` placement sweep
+(`~/Documents/dit-browser-bench/gem5-sqlc3/`, arms in
+`utils/dit_host_screening/sqlc_gem5.py`, log `gem5-sqlc3-placement.log`), whose own
+comment states its purpose: *"these two ask whether the coverage can be kept without
+the toggle bill."* It can.
+
+Overhead vs the `nodit` baseline, matched config and cache:
+
+| cache / switch model | `hmacfix` region sw=0 | `hmacsw30` region sw=30 | `hmacfn` function |
+|---|---|---|---|
+| 16 serializing | 38.11% | **16.10%** | 17.25% |
+| 1024 serializing | 37.21% | **15.74%** | 16.89% |
+| 1792 serializing | 31.85% | **13.23%** | 14.75% |
+| 1920 serializing | 23.76% | **10.30%** | 10.42% |
+| 16 renamed | 4.55% | **1.17%** | 1.19% |
+| 1024 renamed | 3.17% | 1.45% | **-0.10%** |
+| 1792 renamed | 2.24% | 1.41% | **1.01%** |
+| 1920 renamed | 1.01% | 0.97% | **-0.02%** |
+
+Coverage is a wash, so the comparison is apples to apples: `ditSuppressed` at cache 16
+is 67,023 (sw30 renamed) vs 67,141 (function renamed), and 66,052 vs 66,576
+serializing - within 0.2-0.8%, both 97-99% of the oracle's 67,572/67,646.
+
+**Three conclusions.**
+
+1. **Region with the shipped `switch-cyc=30` beats function placement at every
+   serializing cache point** and ties at cache 16 renamed. It loses 0.41-1.55 pp at
+   the three other renamed points. The earlier guidance to prefer
+   `-taint-dit-placement=function` on this TU was derived from `hmacfix`, which is
+   `switch-cyc=0` - the pre-2026-08-24 default that asserted toggles are free.
+   **+38.11% is not region's cost; 16.10% is.**
+
+2. **A compression round needs no special case, because region already degenerates to
+   whole-function coverage there.** Every block in a loop whose body is secret end to
+   end is a need-block, so `admitOffCorridors` returns at its `all_of(On)` guard and no
+   corridor decision is ever made. Verified on a synthetic compression-round MIR (hot
+   loop, secret `MADD`, non-preserving call in the body): `region` and
+   `-taint-dit-placement=function` emit **byte-identical** code, and `switch-cyc` from
+   0 to 100,000 changes nothing. The old 888,967-vs-224,289 switch gap was `switch-cyc=0`
+   splitting blocks that 30 now merges.
+
+3. **The admission test is the wrong lever for what remains.**
+   `TaintAnalysis.cpp:2826` refuses one-sided corridors (`!HasOnPred || !HasOnSucc`) at
+   any switch cost, and that is correct - a leading preamble or trailing epilogue has no
+   toggle pair to save, so merging it moves the switch rather than removing it. The
+   residual is therefore entry enables, exit clears, and post-call re-asserts. On this
+   workload the post-call re-assert is the per-iteration cost and **both** policies pay
+   it identically. Removing it needs callee ownership (cloning or Mode 2), not a cost-model
+   change.
+
+**Consequence for policy.** `-taint-dit-placement=function` can be dropped as a
+recommendation. It remains load-bearing as *code*: the `!OwnsDIT` route
+(`AlwaysEnteredWithDIT`, `.dit` clones) and the per-function verifier fallback both go
+through `emitFunctionGranularityDIT`.
+
+**Caveat, stated because it is the one place region loses.** On renamed hardware at
+caches 1024/1792/1920, function placement is 0.41-1.55 pp cheaper, and at two of those
+points it is slightly *negative* vs `nodit`. If renamed-switch silicon becomes the
+target, this is the case to re-examine - and per `CLAUDE.md`'s NOP-control finding the
+gap there is block-splitting codegen, not switches, so it would not be fixed by a
+cheaper switch.
