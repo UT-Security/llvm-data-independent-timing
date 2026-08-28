@@ -52,6 +52,12 @@ Stable facts that other docs and the code depend on.
 
 How the analysis is built, which bugs were found in it, and what is still open.
 
+- **[design/verification.md](design/verification.md)** - how the two instruments
+  that check the hardening work: a static verifier on the FINAL MIR (placement
+  integrity, fatal) and a dynamic oracle (analysis soundness, two tiers). Why
+  neither subsumes the other, with the two bugs each found that the other could
+  not see. **Read before trusting any "the pass is sound" claim.**
+
 - **[design/dit-placement.md](design/dit-placement.md)** - the central design doc for
   where DIT switches go: what exists today, the placement constraints the spec
   imposes, the remaining security and performance gaps, and the proposed spec-aware
