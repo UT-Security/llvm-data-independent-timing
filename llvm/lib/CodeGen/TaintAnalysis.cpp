@@ -2232,11 +2232,6 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
 // it never touches DIT at all (PreservesDIT), or it is entered with DIT already
 // on and therefore never clears it (AlwaysEnteredWithDIT - the ownership rule).
 // Either way the caller's after-call re-assert is dead code.
-// Under -taint-dit-relaxed-ownership: a local-linkage, address-not-taken,
-// instrumented function does not clear DIT before returning. Local linkage is
-// what bounds the escape - an externally-visible function keeps its clear, so
-// DIT can never leave the hardened library through this rule. Address-not-taken
-// keeps it to call edges the compiler can see.
 // A `<name>.dit` copy created by the annotator for DIT-on call sites. It is
 // entered with DIT already set BY CONSTRUCTION -- the only calls to it are the
 // ones redirectCallsToDITClones() creates, and those are all inside a DIT-on
@@ -2448,6 +2443,92 @@ computeDITOnEntry(MachineFunction &MF, const TaintSummaryInfo *TSI, Module &M,
     }
   }
   return OnIn;
+}
+
+// Exit-balance check: does this function ever LEAVE with PSTATE.DIT still set?
+//
+// The soundness verifier asks only "is every Need covered", and an enable with
+// no matching clear is what makes it pass, so this class of defect is invisible
+// to it by construction. It is also invisible to `computeDITOnEntry` itself,
+// which is an intra-function dataflow that seeds the entry boundary Off and
+// never models the state a function hands back.
+//
+// Two very different findings share the check:
+//
+//  - `tailcall`: EXPECTED and accepted. A tail call is both isReturn() and
+//    isCall(); the epilogue has already run and control never comes back, so
+//    there is no instruction at which DIT could be restored. Clearing before the
+//    branch would strip protection from the callee that is about to receive the
+//    secret (the libsodium `crypto_sign` under-taint), so placement deliberately
+//    leaves DIT set. The residual is an unbounded performance leak into the
+//    caller's continuation, and it inflates suppression-coverage numbers that
+//    placement did not earn - which is exactly why it needs to be reported
+//    rather than merely documented. See docs/design/dit-tailcall-gap.md §3.
+//
+//  - `return`: a PLACEMENT BUG. A plain return should always be reachable with
+//    DIT off, because needsDIT() is `isDITProtected(MI) || MI.isCall()` and a
+//    RET is neither, so a return is never a Need and the disable-before-return
+//    always fires for a function that owns DIT. Currently unreachable; reported
+//    on errs() as well as to the file so a regression that makes it reachable is
+//    loud instead of buried in an optional report.
+//
+// Not a gate. The tail-call case is the correct, documented outcome, so failing
+// or falling back here would reintroduce the very under-taint the tail-call fix
+// removed.
+static void reportUnbalancedDITExits(MachineFunction &MF,
+                                     const TaintSummaryInfo *TSI, Module &M,
+                                     const TargetInstrInfo *TII, bool OwnsDIT,
+                                     raw_ostream *OS) {
+  // A function entered with DIT already on (AlwaysEnteredWithDIT, or a `.dit`
+  // clone) is SUPPOSED to exit with it set: the caller owns the bit and this
+  // frame may not clear it. Not a leak, so not a finding.
+  if (!OwnsDIT)
+    return;
+
+  DenseMap<const MachineBasicBlock *, bool> OnIn =
+      computeDITOnEntry(MF, TSI, M, TII);
+
+  for (MachineBasicBlock &MBB : MF) {
+    bool Cur = OnIn.lookup(&MBB);
+    for (MachineInstr &MI : MBB) {
+      if (auto Sw = TII->getTimingModeSwitch(MI)) {
+        Cur = *Sw;
+        continue;
+      }
+      // Test isReturn() BEFORE the clobber step: a non-preserving tail call is
+      // both, and the state that matters is the one ENTERING it (what the callee
+      // inherits), not what its callee later does to the bit.
+      if (!MI.isReturn()) {
+        if (clobbersDIT(MI, TSI, M))
+          Cur = false;
+        continue;
+      }
+      if (!Cur)
+        continue; // balanced exit
+
+      const bool TailCall = MI.isCall();
+      if (OS) {
+        const Function *Callee = TailCall ? findCalledFunction(M, MI) : nullptr;
+        *OS << "DITLEAK " << (TailCall ? "tailcall" : "return");
+        if (TailCall)
+          *OS << " callee=" << (Callee ? Callee->getName() : "<indirect>");
+        *OS << " caller=" << MF.getName() << " bb=" << MBB.getNumber();
+        if (const DebugLoc &DL = MI.getDebugLoc())
+          *OS << " line=" << DL.getLine();
+        *OS << (TailCall ? " (DIT left set: a tail call has no epilogue to "
+                           "restore it)\n"
+                         : " (DIT left set at a plain return - placement "
+                           "bug)\n");
+      }
+      if (!TailCall)
+        errs() << "taint: DIT left set at a plain return in " << MF.getName()
+               << " bb=" << MBB.getNumber()
+               << " (placement bug: a return is never a Need)\n";
+      LLVM_DEBUG(dbgs() << "  DIT exit-balance: " << MF.getName() << " bb="
+                        << MBB.getNumber() << " exits with DIT set via "
+                        << (TailCall ? "tail call" : "return") << "\n");
+    }
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -2674,9 +2755,10 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
     return MBFI.getBlockFreqRelativeToEntryBlock(B);
   };
 
-  // Cost of one MSR DIT switch. Tunable via -taint-dit-switch-cyc; defaults to 0
-  // (free toggles ⇒ never merge ⇒ finest-grain groups). The measured cost on the
-  // M4 is ~30 cyc/switch (docs/results/dit-cost-model.md).
+  // Cost of one MSR DIT switch. Tunable via -taint-dit-switch-cyc; defaults to 30,
+  // the measured serializing cost on the M4 (docs/results/dit-cost-model.md).
+  // Setting it to 0 asserts that toggles are free, so the test never merges: the
+  // finest-grain placement, and measurably wrong.
   const double SwitchCyc = TaintDitSwitchCyc;
 
   // Partition the Off blocks into maximal CFG-connected components. Two Off blocks
@@ -3049,15 +3131,29 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   // Default mode's audit trail: every call site we could not prove leaves DIT
   // alone, and therefore re-asserted after. Sound but not free, so the list is
   // the cost, not a hazard. Append, because this runs once per function.
+  Module &M = *const_cast<Module *>(MF.getFunction().getParent());
+  const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+
   auto ReassertOSPtr = openTaintReport(TaintDITReassertReportFile,
                                        "DIT re-assert report", /*Append=*/true);
   raw_ostream *ReassertOS = ReassertOSPtr.get();
+
+  // Exit-balance findings join the secret-escape audit: same question ("what
+  // leaves this function that should not have"), so one file to grep. Append -
+  // the interproc pass truncates this path in its call-site audit step, which
+  // runs before placement, so the DITLEAK lines land after the ESCAPE lines.
+  auto ExitOSPtr = openTaintReport(TaintCallsiteReportFile,
+                                   "taint callsite report", /*Append=*/true);
+  raw_ostream *ExitOS = ExitOSPtr.get();
 
   // Track B: cost-model region placement (WIP). Opt-in; default stays
   // function-granularity below, so shipped codegen is untouched. Both modes
   // report the same tainted-instruction count.
   if (TaintDITPlacement == DITPlacementMode::Region && OwnsDIT) {
     insertTaintDITRegions(MF, TR, TSI, AA, ReassertOS);
+    // After the region emitter, so a function that fell back to whole-function
+    // granularity is checked in the shape it actually shipped.
+    reportUnbalancedDITExits(MF, TSI, M, TII, OwnsDIT, ExitOS);
     emitDITPrecisionReport(MF, TR, TSI, AA);
     return TaintedInstrCount;
   }
@@ -3075,6 +3171,7 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   // clear an enclosing region's DIT when a tainted callee's exit switch runs
   // inside a caller's still-open region.
   emitFunctionGranularityDIT(MF, TSI, OwnsDIT, ReassertOS);
+  reportUnbalancedDITExits(MF, TSI, M, TII, OwnsDIT, ExitOS);
   emitDITPrecisionReport(MF, TR, TSI, AA);
 
   return TaintedInstrCount;

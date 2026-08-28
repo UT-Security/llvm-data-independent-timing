@@ -1,0 +1,179 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN:     -taint-callsite-report=%t.region %s -o /dev/null
+# RUN: FileCheck --check-prefix=REPORT %s < %t.region
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN:     -taint-dit-placement=function -taint-callsite-report=%t.func %s -o /dev/null
+# RUN: FileCheck --check-prefix=REPORT %s < %t.func
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN:     %s -o - | FileCheck %s
+
+# The exit-balance check: a function that enables PSTATE.DIT and LEAVES with it
+# still set must be reported.
+#
+# The soundness verifier cannot see this class. It asks only "does every Need run
+# with DIT=1", and an enable with no matching clear is precisely what makes that
+# pass — so the defect is invisible to it by construction. computeDITOnEntry is
+# equally blind: it is an intra-function dataflow that seeds the entry boundary
+# Off and never models the state a function hands back to its caller.
+#
+# The leak itself is EXPECTED and accepted for a tail call: the epilogue has
+# already run and control never returns, so there is no instruction at which DIT
+# could be restored, and clearing before the branch would strip protection from
+# the callee that is about to receive the secret (the libsodium `crypto_sign`
+# under-taint, taint-analysis-tailcall.mir). What was missing is that it was
+# SILENT — a function that never clears shows suppression coverage that placement
+# did not earn. See docs/design/dit-tailcall-gap.md §3.
+#
+# Both placement modes must report it: region leaves DIT set because the tail
+# call is a Need, function placement because it skips both switches at every tail
+# call. Neither is a fallback, so the two RUN lines share one prefix.
+
+# Exactly two findings, both tail calls, and nothing else. The leading and
+# trailing REPORT-NOT are the controls: an implementation that reported every
+# instrumented function (i.e. never consulted the exit state) would also flag
+# @normal_caller, which clears correctly before its RET.
+#
+# The direct case also pins a subtle ordering requirement. A non-preserving tail
+# call is BOTH a return and a DIT clobber, so a check that applied the clobber
+# before testing isReturn() would read the state as Off at the branch and report
+# nothing at all. It must read the state ENTERING the tail call — what the callee
+# inherits.
+#
+# All DITLEAK lines are contiguous: the ESCAPE audit writes during the interproc
+# fixed point, this check writes during placement, which runs strictly after.
+
+# REPORT-NOT:  DITLEAK
+# REPORT:      DITLEAK tailcall callee=secret_consumer caller=tail_caller bb=0
+# REPORT-NEXT: DITLEAK tailcall callee=<indirect> caller=indirect_tail_caller bb=0
+# REPORT-NOT:  DITLEAK
+
+# A plain return must never be reported: needsDIT() is
+# `isDITProtected(MI) || MI.isCall()` and a RET is neither, so a return is never
+# a Need and the disable-before-return always fires for a function that owns DIT.
+# The class is currently unreachable, which is what makes it worth checking.
+# REPORT-NOT: DITLEAK return
+
+# @owned_worker is the OWNERSHIP EXCLUSION, and it is the false positive this
+# check would otherwise produce. It is AlwaysEnteredWithDIT (internal,
+# address-never-taken, sole call site passes a secret), so it emits an entry
+# enable and NO clear and therefore exits with DIT set - deliberately, because
+# the caller owns the bit and clearing would strip the caller's protection. Its
+# absence above is asserted by the trailing REPORT-NOT; the switch checks below
+# prove it really is the unbalanced shape rather than a function that balanced
+# and was excluded for the wrong reason.
+# CHECK-LABEL: name: owned_worker
+# CHECK:     MSRpstateImm4 26, 1
+# CHECK-NOT: MSRpstateImm4 26, 0
+# CHECK:     RET_ReallyLR
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  declare i64 @secret_consumer(i64)
+
+  ; Secret handed to an external callee via a direct tail call. DIT is left set.
+  define i64 @tail_caller(i64 "tainted" %a) {
+  entry:
+    %r = tail call i64 @secret_consumer(i64 %a)
+    ret i64 %r
+  }
+
+  ; Same, through a register. `callee=<indirect>` is the interesting part: this is
+  ; the shape libsodium's randombytes_buf has (a runtime-registered implementation
+  ; pointer), and it is the one LTO cannot resolve either.
+  define i64 @indirect_tail_caller(i64 "tainted" %a, ptr %fp) {
+  entry:
+    %r = tail call i64 %fp(i64 %a)
+    ret i64 %r
+  }
+
+  ; The control. A real BL leaves an epilogue to hang the clear on, so this
+  ; function balances and must NOT appear.
+  define i64 @normal_caller(i64 "tainted" %a) {
+  entry:
+    %r = call i64 @secret_consumer(i64 %a)
+    ret i64 %r
+  }
+
+  ; The ownership exclusion: internal, address-never-taken, its one call site
+  ; passes a secret, so it is entered with DIT already on and must not clear it.
+  define internal i64 @owned_worker(i64 "tainted" %k) {
+  entry:
+    %r = mul i64 %k, 3
+    ret i64 %r
+  }
+
+  define i64 @owner_caller(i64 "tainted" %k) {
+  entry:
+    %a = mul i64 %k, 5
+    %r = call i64 @owned_worker(i64 %a)
+    ret i64 %r
+  }
+...
+---
+name:            tail_caller
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    TCRETURNdi @secret_consumer, 0, csr_aarch64_aapcs, implicit $sp, implicit killed $x0
+...
+---
+name:            indirect_tail_caller
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$x1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1
+
+    TCRETURNri killed $x1, 0, csr_aarch64_aapcs, implicit $sp, implicit killed $x0
+...
+---
+name:            normal_caller
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    BL @secret_consumer, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit-def $x0
+    RET_ReallyLR implicit killed $x0
+...
+---
+name:            owned_worker
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    $x1 = MOVi64imm 3
+    $x0 = MADDXrrr $x0, $x1, $xzr
+    RET_ReallyLR implicit killed $x0
+...
+---
+name:            owner_caller
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    $x1 = MOVi64imm 5
+    $x0 = MADDXrrr $x0, $x1, $xzr
+    BL @owned_worker, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit killed $x0, implicit-def $x0
+    RET_ReallyLR implicit killed $x0
+...

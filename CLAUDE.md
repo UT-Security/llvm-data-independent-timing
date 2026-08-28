@@ -89,7 +89,11 @@ coverage avoids per-region toggles clearing an enclosing region's DIT across cal
 DIT on its exit - gap G1, fixed), except when the callee's `PreservesDIT` summary bit
 proves the re-assert redundant (in-TU, uninstrumented, only preserving calls). Secrets
 passed to external/indirect callees cannot be protected by placement - audit them with
-`-taint-callsite-report=<file>` (`ESCAPE` lines).
+`-taint-callsite-report=<file>` (`ESCAPE` lines). The same file carries `DITLEAK` lines:
+functions that enable DIT and exit without clearing it, which is every tail call in an
+instrumented function (a tail call is an exit with no epilogue, so there is nowhere to
+put the clear - `docs/design/dit-tailcall-gap.md`). `DITLEAK tailcall` is an accepted
+cost, not a hazard; `DITLEAK return` is a placement bug and also warns on stderr.
 
 The coalesced "regions" in the reports **do not drive placement** - they feed the report
 files only. The gap that merges them was `-taint-region-merge-gap` until 2026-08-24 and
@@ -289,8 +293,8 @@ text; (3) legacy PM `start-after=prologepilog` to object.
 build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate
 ```
 
-All 29 tests pass as of 2026-08-11. The whole `llvm/test/CodeGen/AArch64` suite was
-last run clean on 2026-08-08 (3894 discovered, 3890 pass, 4 pre-existing XFAIL, 0
+All 33 tests pass as of 2026-08-27. The whole `llvm/test/CodeGen/AArch64` suite was
+last run clean on 2026-08-27 (3898 discovered, 3894 pass, 4 pre-existing XFAIL, 0
 failures).
 
 **End-to-end reference:** harden `playground/firefox_convolve_int.c` and compare

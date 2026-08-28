@@ -78,8 +78,33 @@ This is a *cost*, not a hole, which is why it is accepted. But it means:
 - **DIT state is not a reliable invariant across a tail call.** Do not write
   analyses or verifiers that assume an instrumented function restores DIT on
   every exit path. It does on `RET`; it does not on `TCRETURN`.
-- **The leak is currently silent.** It should be surfaced in
-  `-taint-callsite-report` as an ESCAPE-class line. Not yet implemented.
+- **The leak is reported, as of 2026-08-27.** `reportUnbalancedDITExits`
+  (`TaintAnalysis.cpp`) runs after placement in *both* modes and writes a
+  `DITLEAK`-class line into `-taint-callsite-report`:
+
+  ```
+  DITLEAK tailcall callee=secret_consumer caller=tail_caller bb=0 (DIT left set: a tail call has no epilogue to restore it)
+  DITLEAK tailcall callee=<indirect> caller=indirect_tail_caller bb=0 (DIT left set: a tail call has no epilogue to restore it)
+  ```
+
+  It is a **diagnostic, not a gate** - leaving DIT set is the correct outcome
+  here, so failing or falling back would reintroduce the under-taint §1
+  removed. Functions that legitimately exit with DIT set are excluded:
+  `AlwaysEnteredWithDIT` and `.dit` clones do not own the bit and may not clear
+  it.
+
+  Why the existing verifier could not catch this: it asks only *"does every Need
+  run with DIT=1"*, and an enable with no matching clear is exactly what makes
+  that pass, so the class is invisible to it by construction. `computeDITOnEntry`
+  is equally blind - an intra-function dataflow that seeds the entry boundary Off
+  and never models the state a function hands back. Test:
+  `llvm/test/CodeGen/AArch64/taint-analysis-dit-exit-balance.mir`.
+
+  The check also reports a second class, `DITLEAK return`, on `errs()` as well as
+  to the file. That one is a placement bug, not an accepted cost: `needsDIT` is
+  `isDITProtected(MI) || MI.isCall()` and a `RET` is neither, so a plain return
+  is never a Need and the disable-before-return always fires for a function that
+  owns DIT. Currently unreachable, which is the point of checking it.
 - On serializing-DIT hardware (Apple M4, where `MSR DIT` is ~30 cyc — see
   `docs/results/dit-cost-model.md`) the leak is nearly free, since the cost there is the
   toggle, not the dwell. On hardware where DIT disables value prediction, the
@@ -101,23 +126,69 @@ cannot express this, because phase 3 resumes at `start-after=prologepilog`.
 If this is ever attempted it should be flag-gated (`-taint-dit-tailcall=`) and
 justified by a measurement showing the leak actually costs cycles.
 
-## 5. Precision left on the table
+**Both constraints above are confirmed upstream, and the fix has two implementations to
+copy.** Arm SME's `PSTATE.SM`/`ZA`/`ZT0` are PSTATE mode bits with this exact bracketing
+discipline, and both LLVM (`AArch64ISelLowering.cpp:9401`, commit `5fae000f3610`) and GCC
+(`aarch64_function_ok_for_sibcall`) refuse tail-call optimization when a mode change must
+be undone after the call - with a predicate that is our ownership rule, not a blanket ban.
+Neither compiler attempts it after ISel/expand, which confirms the two-pass cost. See
+`docs/research/tail-call-precedent.md` for the rule to copy, why the `not_tail_called`
+attribute is insufficient (it misses indirect callees, which is our worst case), and the
+literature position on accepting the leak instead.
 
-The shipped fix is coarser than the ideal rule. It skips the clear before **every**
-tail call; ideally it would clear before tail calls that do *not* pass a secret,
-restoring state in that case.
+## 5. Precision left on the table - FUNCTION MODE ONLY, and effectively unreachable
 
-The reason it doesn't: `emitFunctionGranularityDIT` has no `TaintFacts`. It is also
-the fallback path (`fallbackToFunctionGranularity`), which runs precisely when
-region placement could not prove coverage and has no facts to hand. Threading a
-replay into it is possible but was not worth an untested precision refinement in a
-security-relevant path. `needsDIT` already classifies a secret-passing call as a
-need (Scenario B), so the information exists on the region path if this is ever
-revisited.
+`emitFunctionGranularityDIT` is coarser than the ideal rule. It skips the clear before
+**every** tail call; ideally it would clear before tail calls that do *not* pass a
+secret, restoring state in that case.
+
+**Region placement already implements the ideal rule, so on the shipped default there is
+no gap here.** Its disable-before-return is guarded by `if (!NeedSet.count(&MI))`, and a
+tail call that passes no secret is not a Need, so it gets the clear. Measured 2026-08-27
+on a function whose block contains a secret `MADD` and whose exit is a tail call passing
+only a public value:
+
+```
+REGION (default)                    FUNCTION
+  msr DIT, #1                         msr DIT, #1
+  madd x2, x0, x1, xzr                madd x2, x0, x1, xzr
+  msr DIT, #0     <- restores
+  b public_sink                       b public_sink
+DITLEAK: 0                          DITLEAK: 1
+```
+
+That leaves the refinement worth having only where function granularity actually runs
+under a region-always policy, which is **the per-function fallback**
+(`fallbackToFunctionGranularity`) - measured to fire 0 times on the repro and on
+`firefox_convolve_int`. It does *not* apply to the other path that reaches
+`emitFunctionGranularityDIT`, namely a `!OwnsDIT` function (`AlwaysEnteredWithDIT` or a
+`.dit` clone): those must not clear DIT on any exit path, tail call or not, so there is
+nothing to refine.
+
+**Conclusion: do not implement.** The reason originally given still holds -
+`emitFunctionGranularityDIT` has no `TaintFacts`, and it is the fallback path, which runs
+precisely when region placement could not prove coverage - but the decisive argument is
+now that the gap is unreachable on the shipped configuration. Revisit only if a
+function-placement workload shows `DITLEAK tailcall` lines that cost measurable cycles.
+
+**What region placement is leaning on here.** Clearing DIT before a tail call is sound
+only insofar as "this call passes no secret" is sound, and `needsDIT` decides that from
+the call instruction's tainted register uses. A callee that reaches a secret another way
+(the four channels in `docs/results/` on the mod-set gate: returned pointer into a secret
+buffer, global read by a sibling with no call edge, inline asm, NEON register tuple) runs
+unprotected. That is the general Scenario-B question - it applies equally to a non-tail
+call in an Off block - not a tail-call issue.
 
 ## 6. Region placement
 
 Region placement already leaves DIT set before the tail call — the safe direction —
-so it did not have the hole. It has the same silent leak, and its coverage numbers
+so it did not have this hole. It did have its own tail-call bugs: `std::next(C)` on a
+`TCRETURN` clobber inserted an `MSR` past the block terminator and aborted the
+MachineVerifier on any ordinary `-O2` sibling call, and the disable-before-return
+fired before a secret-passing tail call (both fixed in `0ef6cce5fe2e`; the re-assert
+loop now skips terminator clobbers and the disable is skipped when the return is
+itself a Need).
+
+It has the same leak, now reported rather than silent (§3), and its coverage numbers
 on tail-calling wrappers should be read with care: on `crypto_sign` its measured
 99.6% suppression coverage came from the leak, not from precise placement.
