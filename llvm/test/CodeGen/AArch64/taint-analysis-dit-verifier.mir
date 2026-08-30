@@ -14,9 +14,22 @@
 # The verifier needs no taint analysis of its own -- it just checks that every
 # such instruction is reached with the mode on.
 
-# CHECK: PSTATE.DIT placement is unsound in 'sunk_disable'
-# CHECK-SAME: reaches bb.0 with it clear
-# CHECK: This is a leaked secret, not a missed optimisation
+# Violations are COLLECTED across the module and reported together, so one
+# build yields the whole list rather than the first entry. `correct` must not
+# appear in it.
+# CHECK: PSTATE.DIT placement is unsound: 1 instruction(s)
+# CHECK-NEXT: sunk_disable bb.0:
+# CHECK-NOT: correct
+# CHECK: Each one is a leaked secret, not a missed optimisation
+
+# -taint-dit-verify-warn-only downgrades to a warning and lets the build finish.
+# The object is unsound; it exists so a deliberately broken build (see
+# -taint-dit-assume-callees-preserve) can enumerate the sites that need the
+# invariant in a single run.
+# RUN: llc -mtriple=aarch64 -start-after=prologepilog -taint-dit-verify-warn-only \
+# RUN:     -o /dev/null %s 2>&1 | FileCheck %s --check-prefix=WARN
+# WARN: warning: PSTATE.DIT placement is unsound: 1 instruction(s)
+# WARN: sunk_disable bb.0:
 
 --- |
   target triple = "aarch64-unknown-linux-gnu"
