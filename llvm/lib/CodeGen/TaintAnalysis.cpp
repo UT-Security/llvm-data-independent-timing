@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/TaintAnalysis.h"
+#include "llvm/Support/ModRef.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/PostOrderIterator.h"
@@ -287,6 +288,58 @@ static cl::opt<bool> TaintDitLoopHoist(
         "block-minimal coverage — only need-containing blocks are DIT-on, "
         "with per-iteration toggles."),
     cl::init(true));
+
+
+/// Can a call to \p Callee make caller-visible memory secret?
+///
+/// The blunt answer for an external callee is "assume yes", because the
+/// analysis cannot see its body. That is sound, but under LTO it is ruinous:
+/// on Bitcoin Core it produced 103,684 clobber sites, of which 35,656 (34%)
+/// came from `operator delete` alone -- a function whose entire job is to give
+/// memory back. Each clobber poisons every subsequent heap and global load in
+/// the caller, so the whole program ends up secret.
+///
+/// Three cases can be answered without seeing the body:
+///
+///  1. The callee does not return. Nothing downstream observes the memory, so
+///     whatever it wrote cannot be read back. (`__clang_call_terminate`, 3,216
+///     sites.)
+///  2. The callee does not write memory at all, per its IR memory effects.
+///     Absent a `memory(...)` attribute LangRef says `memory(readwrite)`, so
+///     this only fires when something actually annotated it.
+///  3. The callee is a C++ deallocation function. LLVM already knows these --
+///     `LibFunc_ZdlPvm` and friends are in the allocation table in
+///     MemoryBuiltins.cpp -- but `BuildLibCalls` never gives them memory
+///     attributes the way it does `free` (which gets AllocFnKind::Free), and
+///     Clang stamps `nobuiltin` on every replaceable global allocation
+///     function, so nothing downstream repairs it. Matching by name is
+///     therefore the available route; these symbols are reserved by the
+///     standard, so the name is a reliable signal.
+///
+/// A deallocation cannot *create* a secret: it may scribble on the block being
+/// freed, but that block is dead, and reading it afterwards is already UB. So
+/// no live caller-visible location becomes secret because of it.
+static bool callCannotMakeMemorySecret(const Function *Callee) {
+  if (!Callee)
+    return false; // indirect: nothing is known
+
+  // (1) control does not come back
+  if (Callee->doesNotReturn())
+    return true;
+
+  // (2) it is annotated as not writing
+  MemoryEffects ME = Callee->getMemoryEffects();
+  if (ME.doesNotAccessMemory() || ME.onlyReadsMemory())
+    return true;
+
+  // (3) C++ deallocation: operator delete / delete[], all overloads
+  //     (sized, nothrow, aligned).
+  StringRef Name = Callee->getName();
+  if (Name.starts_with("_ZdlPv") || Name.starts_with("_ZdaPv"))
+    return true;
+
+  return false;
+}
 
 /// Unified cell extraction from a MachineMemOperand.
 /// Returns the base kind (Stack/Global/Unknown), offset, and optional size.
@@ -1235,6 +1288,11 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // modes. Annotation-driven mode suppresses the clobber's FLOOD at load
         // consumption (below), not here, so the mod-set stays complete.
         taintCallResultDefs(MI, S, TRI);
+        if (callCannotMakeMemorySecret(Callee)) {
+          LLVM_DEBUG(dbgs()
+                     << "        external call to " << Callee->getName()
+                     << " cannot make memory secret: clobber suppressed\n");
+        } else {
         S.setExternalMemClobbered();
         if (Callee)
           LLVM_DEBUG(dbgs() << "        conservative: external call to "
@@ -1243,6 +1301,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         else
           LLVM_DEBUG(dbgs() << "        conservative: indirect call taints "
                                "return + clobbers memory (TOP)\n");
+        }
       }
     }
   }

@@ -26,6 +26,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/MachineFunctionAnalysis.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TaintAnalysis.h"
 #include "llvm/CodeGen/TaintSummaryInfo.h"
@@ -57,8 +58,7 @@ using namespace llvm;
 static bool propagateArgTaintToCallees(MachineFunction &MF,
                                        const TaintResult &TR,
                                        TaintSummaryInfo &TSI, Module &M,
-                                       FunctionAnalysisManager &FAM,
-                                       AAResults *AA) {
+                                       TaintMFContext Ctx, AAResults *AA) {
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   bool Changed = false;
 
@@ -76,11 +76,10 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           return true;
 
         // Get the callee's MachineFunction so we can read its liveins
-        auto *CalleeMFA = FAM.getCachedResult<MachineFunctionAnalysis>(
-            *const_cast<Function *>(Callee));
-        if (!CalleeMFA)
+        MachineFunction *CalleeMF =
+            Ctx.GetMF(*const_cast<Function *>(Callee));
+        if (!CalleeMF)
           return true;
-        MachineFunction *CalleeMF = &CalleeMFA->getMF();
 
         // Walk callee's liveins and map each physical register to its argument
         // index via hardware encoding (not livein list order, which may differ).
@@ -189,7 +188,7 @@ static bool functionReturnsTainted(MachineFunction &MF, const TaintResult &TR,
 /// result — i.e. everything the post-convergence steps (DIT summaries, reports,
 /// barrier insertion) operate on.
 static void forEachAnalyzed(
-    Module &M, FunctionAnalysisManager &FAM,
+    Module &M, TaintMFContext Ctx,
     DenseMap<const Function *, TaintResult> &Results,
     function_ref<void(Function &, MachineFunction &, const TaintResult &,
                       AAResults *)>
@@ -197,23 +196,23 @@ static void forEachAnalyzed(
   for (Function &F : M) {
     if (F.isDeclaration())
       continue;
-    auto *MFA = FAM.getCachedResult<MachineFunctionAnalysis>(F);
-    if (!MFA)
+    MachineFunction *MF = Ctx.GetMF(F);
+    if (!MF)
       continue;
     auto It = Results.find(&F);
     if (It == Results.end())
       continue;
-    Fn(F, MFA->getMF(), It->second, &FAM.getResult<AAManager>(F));
+    Fn(F, *MF, It->second, &Ctx.FAM.getResult<AAManager>(F));
   }
 }
 
-PreservedAnalyses TaintInterprocPass::run(Module &M,
-                                          ModuleAnalysisManager &MAM) {
-  // Step 1: Get FunctionAnalysisManager — in the new PM, MachineFunctions
-  // are stored per-function in the FAM (via MachineFunctionAnalysis),
-  // NOT in MachineModuleInfo.
-  auto &FAM = MAM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
-
+// Step 1 used to be "get the FunctionAnalysisManager, because the new PM keeps
+// MachineFunctions there and not in MachineModuleInfo". That is still true of
+// the new PM, but it is no longer this function's business: the caller supplies
+// a lookup, so the legacy codegen pipeline -- where MachineFunctions DO live in
+// MachineModuleInfo -- can run exactly this analysis without serializing the
+// module to MIR text and back. See TaintMFContext.
+void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
   // Step 2: Create TaintSummaryInfo — shared database of per-function summaries
   TaintSummaryInfo TSI;
 
@@ -283,13 +282,12 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       if (F.isDeclaration())
         continue;
 
-      auto *MFA = FAM.getCachedResult<MachineFunctionAnalysis>(F);
-      if (!MFA) {
+      MachineFunction *MF = Ctx.GetMF(F);
+      if (!MF) {
         LLVM_DEBUG(dbgs() << "  [skip] " << F.getName()
                           << ": no MachineFunction\n");
         continue;
       }
-      MachineFunction *MF = &MFA->getMF();
       const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
 
       // Get current summary (may have tainted args from IR attrs or
@@ -337,7 +335,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       // TSI provides: (1) extra tainted-arg seeds from previous iterations,
       //               (2) callee return summaries for call handling
       TaintAnalysis TA;
-      AAResults *AA = &FAM.getResult<AAManager>(F);
+      AAResults *AA = &Ctx.FAM.getResult<AAManager>(F);
       TaintResult TR = TA.run(*MF, &TSI, AA);
       Results[&F] = TR;
 
@@ -417,7 +415,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
       // Propagate argument taint to callees.
       // If caller_simple passes a tainted X0 to identity(), this adds
       // arg 0 to identity's TaintedArgIndices in TSI.
-      if (propagateArgTaintToCallees(*MF, TR, TSI, M, FAM, AA)) {
+      if (propagateArgTaintToCallees(*MF, TR, TSI, M, Ctx, AA)) {
         Changed = true;
         if (TraceOS)
           *TraceOS << "  ** propagated arg taint to callee(s) **\n";
@@ -444,7 +442,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
   if (TaintInsertDIT) {
     // Optimistic seed: a function preserves DIT unless it is itself
     // instrumented.
-    forEachAnalyzed(M, FAM, Results,
+    forEachAnalyzed(M, Ctx, Results,
                     [&](Function &F, MachineFunction &MF, const TaintResult &TR,
                         AAResults *AA) {
                       FunctionTaintSummary S = TSI.getSummary(F);
@@ -460,8 +458,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
     bool PreservesChanged = true;
     while (PreservesChanged) {
       PreservesChanged = false;
-      forEachAnalyzed(
-          M, FAM, Results,
+      forEachAnalyzed(M, Ctx, Results,
           [&](Function &F, MachineFunction &MF, const TaintResult &,
               AAResults *) {
             FunctionTaintSummary S = TSI.getSummary(F);
@@ -534,7 +531,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
     for (const Function &F : M)
       if (!F.isDeclaration())
         ++Defined;
-    forEachAnalyzed(M, FAM, Results,
+    forEachAnalyzed(M, Ctx, Results,
                     [&](Function &, MachineFunction &, const TaintResult &,
                         AAResults *) { ++Analyzed; });
     const bool CoverageComplete = (Analyzed == Defined);
@@ -543,8 +540,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
                << Defined << " defined functions analyzed\n");
 
     SmallPtrSet<const Function *, 16> Candidates;
-    forEachAnalyzed(
-        M, FAM, Results,
+    forEachAnalyzed(M, Ctx, Results,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
           // An uninstrumented function emits no switches, so the bit would be
@@ -584,8 +580,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
         });
 
     SmallPtrSet<const Function *, 16> Seen;
-    forEachAnalyzed(
-        M, FAM, Results,
+    forEachAnalyzed(M, Ctx, Results,
         [&](Function &, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
           if (Candidates.empty())
@@ -648,8 +643,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
     auto CallsiteOSPtr =
         openTaintReport(TaintCallsiteReportFile, "taint callsite report");
     raw_fd_ostream *CallsiteOS = CallsiteOSPtr.get();
-    forEachAnalyzed(
-        M, FAM, Results,
+    forEachAnalyzed(M, Ctx, Results,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
           bool FnInstrumented = functionHasTaintedRuns(MF, TR, &TSI, AA);
@@ -719,8 +713,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
   if (auto ClobberOSPtr =
           openTaintReport(TaintClobberReportFile, "taint clobber report")) {
     raw_fd_ostream &ClobberOS = *ClobberOSPtr;
-    forEachAnalyzed(
-        M, FAM, Results,
+    forEachAnalyzed(M, Ctx, Results,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
           const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
@@ -777,8 +770,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
   if (auto UncoveredOSPtr =
           openTaintReport(TaintUncoveredReportFile, "taint uncovered report")) {
     raw_fd_ostream &UncoveredOS = *UncoveredOSPtr;
-    forEachAnalyzed(
-        M, FAM, Results,
+    forEachAnalyzed(M, Ctx, Results,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
           const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
@@ -820,8 +812,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
     // Collect per-function stats for sorting.
     SmallVector<FunctionTaintStats, 32> AllStats;
 
-    forEachAnalyzed(
-        M, FAM, Results,
+    forEachAnalyzed(M, Ctx, Results,
         [&](Function &, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
           if (TR.Merged.empty())
@@ -864,7 +855,7 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
   unsigned RegionsReported = 0;
   unsigned SourceRegionsReported = 0;
   if (TaintInsertDIT || RegionsOS || SourceRegionsOS) {
-    forEachAnalyzed(M, FAM, Results,
+    forEachAnalyzed(M, Ctx, Results,
                     [&](Function &, MachineFunction &MF, const TaintResult &TR,
                         AAResults *AA) {
                       if (TR.Merged.empty())
@@ -903,5 +894,64 @@ PreservedAnalyses TaintInterprocPass::run(Module &M,
 
   // The pass mutates cached MachineFunctions, not the IR module. Preserve the
   // analysis cache so a following MIR printer sees the modified functions.
+}
+
+PreservedAnalyses TaintInterprocPass::run(Module &M,
+                                          ModuleAnalysisManager &MAM) {
+  auto &FAM = MAM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+  // In the new PM a MachineFunction is the cached result of
+  // MachineFunctionAnalysis; absent means the function was never codegen'd.
+  auto GetMF = [&FAM](Function &F) -> MachineFunction * {
+    auto *MFA = FAM.getCachedResult<MachineFunctionAnalysis>(F);
+    return MFA ? &MFA->getMF() : nullptr;
+  };
+  runTaintInterproc(M, TaintMFContext{GetMF, FAM});
   return PreservedAnalyses::all();
+}
+
+bool llvm::moduleHasTaintSources(const Module &M) {
+  for (const Function &F : M) {
+    if (F.isDeclaration())
+      continue;
+    for (const Argument &Arg : F.args())
+      if (Arg.hasAttribute("tainted") || Arg.hasAttribute("tainted-pointee"))
+        return true;
+  }
+  return false;
+}
+
+namespace {
+/// Runs the interprocedural taint analysis inside a legacy codegen pipeline,
+/// where MachineFunctions belong to MachineModuleInfo rather than to a
+/// FunctionAnalysisManager.
+class TaintInterprocLegacyPass : public ModulePass {
+  MachineModuleInfo &MMI;
+  FunctionAnalysisManager &FAM;
+
+public:
+  static char ID;
+  TaintInterprocLegacyPass(MachineModuleInfo &MMI, FunctionAnalysisManager &FAM)
+      : ModulePass(ID), MMI(MMI), FAM(FAM) {}
+
+  bool runOnModule(Module &M) override {
+    // Non-creating lookup: null means this function was never codegen'd, which
+    // the analysis skips.
+    auto GetMF = [this](Function &F) -> MachineFunction * {
+      return MMI.getMachineFunction(F);
+    };
+    runTaintInterproc(M, TaintMFContext{GetMF, FAM});
+    return true;
+  }
+
+  StringRef getPassName() const override {
+    return "Interprocedural taint hardening";
+  }
+};
+} // namespace
+
+char TaintInterprocLegacyPass::ID = 0;
+
+ModulePass *llvm::createTaintInterprocLegacyPass(MachineModuleInfo &MMI,
+                                                 FunctionAnalysisManager &FAM) {
+  return new TaintInterprocLegacyPass(MMI, FAM);
 }

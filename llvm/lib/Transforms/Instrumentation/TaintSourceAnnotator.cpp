@@ -155,6 +155,37 @@ PreservedAnalyses TaintSourceAnnotatorPass::run(Module &M,
       const auto &TaintedArgs = It->second.TaintedArgs;
       const auto &PointeeTaintedArgs = It->second.PointeeTaintedArgs;
 
+      // A taint source must survive to codegen as a function.
+      //
+      // The seed is expressed as an attribute on a PARAMETER, so it lives
+      // exactly as long as the function does. If the inliner folds the function
+      // into its callers, the parameter -- and with it the only record that a
+      // secret enters here -- ceases to exist, and the MIR pass later finds
+      // nothing to protect. The build still succeeds and the binary is silently
+      // unhardened, which is the worst way for this to fail.
+      //
+      // Measured: a seeded `static` function at -O2 produces ZERO DIT switches
+      // without this, and 2 with it. Under LTO it is worse, because
+      // internalization makes even externally-visible seeds inlinable, so a
+      // whole-program link erases every seed in the module.
+      //
+      // Externally-visible seeds in a separately-compiled library (Bitcoin's
+      // nine secp256k1 entry points, say) happen to survive without this, which
+      // is why the hole went unnoticed -- it is luck about linkage, not a
+      // property of the mechanism.
+      if (F.hasFnAttribute(Attribute::AlwaysInline))
+        F.removeFnAttr(Attribute::AlwaysInline);
+      if (!F.hasFnAttribute(Attribute::NoInline)) {
+        F.addFnAttr(Attribute::NoInline);
+        Changed = true;
+      }
+
+      // Early run: keeping the function alive is the whole job. Argument
+      // numbering is still subject to the middle-end here, so stamping is left
+      // to the OptimizerLast run.
+      if (PreserveFunctionsOnly)
+        continue;
+
       for (Argument &Arg : F.args()) {
         if (TaintedArgs.contains(Arg.getArgNo()) &&
             !Arg.hasAttribute("tainted")) {

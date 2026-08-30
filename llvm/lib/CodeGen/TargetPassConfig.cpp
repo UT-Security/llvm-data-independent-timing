@@ -1202,6 +1202,12 @@ void TargetPassConfig::addMachinePasses() {
   if (!isPassSubstitutedOrOverridden(&PrologEpilogCodeInserterID))
       addPass(createPrologEpilogInserterPass());
 
+  // Frame layout is final here and the post-PEI optimizations have not run, so
+  // anything inserted now is still seen by them. See
+  // setPostPrologEpilogCallback.
+  if (PostPrologEpilogCallback)
+    PostPrologEpilogCallback(*PM);
+
   /// Add passes that optimize machine instructions after register allocation.
   if (getOptLevel() != CodeGenOptLevel::None)
       addMachineLateOptimization();

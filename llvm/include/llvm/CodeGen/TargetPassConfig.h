@@ -13,6 +13,7 @@
 #ifndef LLVM_CODEGEN_TARGETPASSCONFIG_H
 #define LLVM_CODEGEN_TARGETPASSCONFIG_H
 
+#include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Compiler.h"
@@ -84,6 +85,10 @@ public:
 class LLVM_ABI TargetPassConfig : public ImmutablePass {
 private:
   PassManagerBase *PM = nullptr;
+
+  /// Passes to insert immediately after PrologEpilogInserter. Only read while
+  /// the pipeline is being constructed, so a function_ref is safe here.
+  function_ref<void(PassManagerBase &)> PostPrologEpilogCallback = nullptr;
   AnalysisID StartBefore = nullptr;
   AnalysisID StartAfter = nullptr;
   AnalysisID StopBefore = nullptr;
@@ -148,6 +153,22 @@ protected:
 
 public:
   TargetPassConfig(TargetMachine &TM, PassManagerBase &PM);
+
+  /// Register passes to be added immediately after PrologEpilogInserter and
+  /// before the post-PEI machine optimizations.
+  ///
+  /// This is the point an interprocedural MachineFunction analysis wants: frame
+  /// layout is final, but the later passes have not run, so inserted code still
+  /// goes through them. Adding a *module* pass here also ends the run of
+  /// consecutive function passes, which makes every MachineFunction of the
+  /// module simultaneously resident -- the whole-module view such an analysis
+  /// needs, without serializing to MIR text and losing what MIR does not model.
+  ///
+  /// Must be called before addMachinePasses(); the callback is used only during
+  /// pipeline construction.
+  void setPostPrologEpilogCallback(function_ref<void(PassManagerBase &)> CB) {
+    PostPrologEpilogCallback = CB;
+  }
   // Dummy constructor.
   TargetPassConfig();
 

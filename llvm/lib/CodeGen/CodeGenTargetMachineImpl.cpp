@@ -115,14 +115,17 @@ CodeGenTargetMachineImpl::getTargetTransformInfo(const Function &F) const {
 
 /// addPassesToX helper drives creation and initialization of TargetPassConfig.
 static TargetPassConfig *
-addPassesToGenerateCode(CodeGenTargetMachineImpl &TM, PassManagerBase &PM,
-                        bool DisableVerify,
-                        MachineModuleInfoWrapperPass &MMIWP) {
+addPassesToGenerateCode(
+    CodeGenTargetMachineImpl &TM, PassManagerBase &PM, bool DisableVerify,
+    MachineModuleInfoWrapperPass &MMIWP,
+    function_ref<void(PassManagerBase &)> PostPrologEpilogPasses = nullptr) {
   // Targets may override createPassConfig to provide a target-specific
   // subclass.
   TargetPassConfig *PassConfig = TM.createPassConfig(PM);
   // Set PassConfig options provided by TargetMachine.
   PassConfig->setDisableVerify(DisableVerify);
+  if (PostPrologEpilogPasses)
+    PassConfig->setPostPrologEpilogCallback(PostPrologEpilogPasses);
   PM.add(PassConfig);
   PM.add(&MMIWP);
 
@@ -235,11 +238,23 @@ bool CodeGenTargetMachineImpl::addPassesToEmitFile(
     PassManagerBase &PM, raw_pwrite_stream &Out, raw_pwrite_stream *DwoOut,
     CodeGenFileType FileType, bool DisableVerify,
     MachineModuleInfoWrapperPass *MMIWP) {
+  return addPassesToEmitFileWithPostPrologEpilogModulePasses(
+      PM, Out, DwoOut, FileType, DisableVerify, MMIWP,
+      /*AddPostPrologEpilogModulePasses=*/nullptr);
+}
+
+bool CodeGenTargetMachineImpl::
+    addPassesToEmitFileWithPostPrologEpilogModulePasses(
+        PassManagerBase &PM, raw_pwrite_stream &Out, raw_pwrite_stream *DwoOut,
+        CodeGenFileType FileType, bool DisableVerify,
+        MachineModuleInfoWrapperPass *MMIWP,
+        function_ref<void(PassManagerBase &)>
+            AddPostPrologEpilogModulePasses) {
   // Add common CodeGen passes.
   if (!MMIWP)
     MMIWP = new MachineModuleInfoWrapperPass(this);
-  TargetPassConfig *PassConfig =
-      addPassesToGenerateCode(*this, PM, DisableVerify, *MMIWP);
+  TargetPassConfig *PassConfig = addPassesToGenerateCode(
+      *this, PM, DisableVerify, *MMIWP, AddPostPrologEpilogModulePasses);
   if (!PassConfig)
     return true;
 

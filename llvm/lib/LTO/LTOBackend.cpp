@@ -15,6 +15,11 @@
 
 #include "llvm/LTO/LTOBackend.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/CodeGen/TaintAnalysis.h"
+#include "llvm/CodeGen/TaintFixedPointIteration.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Analysis/ModuleSummaryAnalysis.h"
 #include "llvm/Analysis/RuntimeLibcallInfo.h"
@@ -478,9 +483,60 @@ static void codegen(const Config &Conf, TargetMachine *TM,
           createImmutableModuleSummaryIndexWrapperPass(&CombinedIndex));
     if (Conf.PreCodeGenPassesHook)
       Conf.PreCodeGenPassesHook(CodeGenPasses);
-    if (TM->addPassesToEmitFile(CodeGenPasses, *Stream->OS,
-                                DwoOut ? &DwoOut->os() : nullptr,
-                                Conf.CGFileType))
+
+    // Interprocedural taint hardening, if this module was seeded at compile
+    // time. The seeds live on the IR as argument attributes and travel in the
+    // bitcode, so nothing has to be replumbed through the linker: the module
+    // says for itself whether it wants hardening.
+    //
+    // Running it here rather than at compile time is what makes it *work*
+    // across translation units. Under LTO the whole program is one module, so a
+    // callee in another source file is an ordinary function with a body instead
+    // of an external declaration the analysis has to be conservative about.
+    //
+    // These must outlive CodeGenPasses.run(): the pass holds references.
+    bool Hardening = moduleHasTaintSources(Mod);
+    // A module carrying taint seeds is asking to be hardened; the compile-time
+    // driver turns switch insertion on the same way. An explicit
+    // -taint-insert-dit=0 still wins, so an unprotected build with otherwise
+    // identical codegen stays available for A/B benchmarking.
+    if (Hardening && TaintInsertDIT.getNumOccurrences() == 0)
+      TaintInsertDIT = true;
+    PassInstrumentationCallbacks PIC;
+    LoopAnalysisManager LAM;
+    FunctionAnalysisManager FAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+    std::unique_ptr<TargetLibraryInfoImpl> TaintTLII;
+    if (Hardening) {
+      PassBuilder PB(TM, PipelineTuningOptions(), std::nullopt, &PIC);
+      PB.registerModuleAnalyses(MAM);
+      PB.registerCGSCCAnalyses(CGAM);
+      PB.registerFunctionAnalyses(FAM);
+      PB.registerLoopAnalyses(LAM);
+      PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+      TaintTLII = std::make_unique<TargetLibraryInfoImpl>(Mod.getTargetTriple(),
+                                                          TM->Options.VecLib);
+      FAM.registerPass([&] { return TargetLibraryAnalysis(*TaintTLII); });
+    }
+
+    // The pipeline owns MMIWP; we keep the pointer only to reach its
+    // MachineFunctions from the post-PEI hook below.
+    auto *MMIWP = Hardening ? new MachineModuleInfoWrapperPass(TM) : nullptr;
+    auto *CGTM = static_cast<CodeGenTargetMachineImpl *>(TM);
+    bool Failed =
+        Hardening
+            ? CGTM->addPassesToEmitFileWithPostPrologEpilogModulePasses(
+                  CodeGenPasses, *Stream->OS,
+                  DwoOut ? &DwoOut->os() : nullptr, Conf.CGFileType,
+                  /*DisableVerify=*/true, MMIWP,
+                  [&](legacy::PassManagerBase &PM) {
+                    PM.add(createTaintInterprocLegacyPass(MMIWP->getMMI(), FAM));
+                  })
+            : TM->addPassesToEmitFile(CodeGenPasses, *Stream->OS,
+                                      DwoOut ? &DwoOut->os() : nullptr,
+                                      Conf.CGFileType);
+    if (Failed)
       report_fatal_error("Failed to setup codegen");
     CodeGenPasses.run(Mod);
 
@@ -588,6 +644,15 @@ Error lto::backend(const Config &C, AddStreamFn AddStream,
              /*ExportSummary=*/&CombinedIndex, /*ImportSummary=*/nullptr,
              /*CmdArgs*/ std::vector<uint8_t>()))
       return Error::success();
+  }
+
+  // Splitting hands each partition a *piece* of the module, which throws away
+  // the whole-program view taint hardening came to LTO for -- and would do so
+  // silently, under-protecting the result. Correctness over codegen
+  // parallelism.
+  if (ParallelCodeGenParallelismLevel != 1 && moduleHasTaintSources(Mod)) {
+    LLVM_DEBUG(dbgs() << "taint hardening: forcing single-partition codegen\n");
+    ParallelCodeGenParallelismLevel = 1;
   }
 
   if (ParallelCodeGenParallelismLevel == 1) {

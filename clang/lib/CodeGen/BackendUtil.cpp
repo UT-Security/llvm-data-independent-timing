@@ -32,6 +32,7 @@
 #include "llvm/CodeGen/MIRPrinter.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachinePassManager.h"
+#include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
 #include "llvm/CodeGen/TaintAnalysis.h"
 #include "llvm/CodeGen/TaintFixedPointIteration.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
@@ -1138,6 +1139,15 @@ void EmitAssemblyHelper::RunOptimizationPipeline(
     // later, during the codegen pipeline (see RunTaintHardenCodegen).
     if (!CodeGenOpts.TaintHarden.empty()) {
       std::string TaintSrc = CodeGenOpts.TaintHarden;
+      // Early: keep seeded functions from being inlined out of existence before
+      // there is anything to stamp. Without this a seeded `static` function is
+      // folded into its callers at -O2 and the object comes out silently
+      // unhardened; under LTO, internalization does the same to every seed.
+      PB.registerPipelineStartEPCallback(
+          [TaintSrc](ModulePassManager &MPM, OptimizationLevel) {
+            MPM.addPass(TaintSourceAnnotatorPass(TaintSrc,
+                                                 /*PreserveFunctionsOnly=*/true));
+          });
       PB.registerOptimizerLastEPCallback(
           [TaintSrc](ModulePassManager &MPM, OptimizationLevel,
                      ThinOrFullLTOPhase) {
@@ -1325,183 +1335,84 @@ void EmitAssemblyHelper::RunTaintHardenCodegen(
   const CodeGenFileType CGFT = getCodeGenFileType(Action);
   const bool DisableVerify = !CodeGenOpts.VerifyModule;
 
-  // Populate a fresh legacy PM with the codegen analyses clang normally adds.
-  auto AddCodeGenAnalyses = [&](legacy::PassManager &PM) {
-    PM.add(createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
-    std::unique_ptr<TargetLibraryInfoImpl> TLII(
-        llvm::driver::createTLII(TargetTriple, CodeGenOpts.getVecLib()));
-    PM.add(new TargetLibraryInfoWrapperPass(*TLII));
-    const llvm::TargetOptions &Options = TM->Options;
-    PM.add(new RuntimeLibraryInfoWrapper(
-        TargetTriple, Options.ExceptionModel, Options.FloatABIType,
-        Options.EABIVersion, Options.MCOptions.ABIName, Options.VecLib));
-    // TLII must outlive PM.run(); the caller keeps PM local to a scope that
-    // ends after run(), so hand ownership to a bury list tied to that scope.
-    return TLII;
-  };
-
-  // Legacy stop/start-after are settable only via process-global cl::opts read
-  // by TargetPassConfig's constructor. Save and restore them (and the taint
-  // ISB flag) so this compile does not leak state into anything else.
-  auto &RegOpts = cl::getRegisteredOptions();
-  auto *StartAfterO =
-      static_cast<cl::opt<std::string> *>(RegOpts.lookup("start-after"));
-  auto *StopAfterO =
-      static_cast<cl::opt<std::string> *>(RegOpts.lookup("stop-after"));
-  auto *StartBeforeO =
-      static_cast<cl::opt<std::string> *>(RegOpts.lookup("start-before"));
-  auto *StopBeforeO =
-      static_cast<cl::opt<std::string> *>(RegOpts.lookup("stop-before"));
-  if (!StartAfterO || !StopAfterO || !StartBeforeO || !StopBeforeO) {
-    Diags.Report(diag::err_fe_unable_to_interface_with_target);
-    return;
-  }
-  const std::string SavedStartAfter = *StartAfterO;
-  const std::string SavedStopAfter = *StopAfterO;
-  const std::string SavedStartBefore = *StartBeforeO;
-  const std::string SavedStopBefore = *StopBeforeO;
-  const bool SavedInsertDIT = llvm::TaintInsertDIT;
-  llvm::scope_exit RestoreOpts([&] {
-    *StartAfterO = SavedStartAfter;
-    *StopAfterO = SavedStopAfter;
-    *StartBeforeO = SavedStartBefore;
-    *StopBeforeO = SavedStopBefore;
-    llvm::TaintInsertDIT = SavedInsertDIT;
-  });
-  auto SetStartStop = [&](StringRef Start, StringRef Stop) {
-    *StartAfterO = Start.str();
-    *StopAfterO = Stop.str();
-    *StartBeforeO = "";
-    *StopBeforeO = "";
-  };
-
-  // ---- Phase 1: IR -> post-prologepilog MIR (legacy PM, in memory). ----
-  SmallString<0> PEIMIR;
-  {
-    SetStartStop("", "prologepilog");
-    raw_svector_ostream PEIOS(PEIMIR);
-    legacy::PassManager PM1;
-    auto TLII = AddCodeGenAnalyses(PM1);
-    if (TM->addPassesToEmitFile(PM1, PEIOS, /*DwoOut=*/nullptr,
-                                CodeGenFileType::AssemblyFile, DisableVerify)) {
-      Diags.Report(diag::err_fe_unable_to_interface_with_target);
-      return;
-    }
-    PM1.run(*TheModule);
-  }
-
-  // Work around a known MIR serialization issue for CFI offsets (empty
-  // <mcsymbol >), matching the utils/taint_harden_c.sh perl fixup, so the MIR
-  // reparses cleanly below.
-  std::string PEIText(PEIMIR.begin(), PEIMIR.end());
-  const std::string MCSymbolNeedle = "<mcsymbol >";
-  for (size_t Pos = PEIText.find(MCSymbolNeedle); Pos != std::string::npos;
-       Pos = PEIText.find(MCSymbolNeedle, Pos))
-    PEIText.erase(Pos, MCSymbolNeedle.size());
-
-  // ---- Phase 2: reparse (all MFs resident) + interproc taint pass. ----
-  SmallString<0> HardenedMIR;
-  {
-    LLVMContext Ctx2;
-    auto MIR2 = createMIRParser(
-        MemoryBuffer::getMemBufferCopy(PEIText, "taint-harden-pei.mir"), Ctx2);
-    if (!MIR2) {
-      Diags.Report(diag::err_fe_unable_to_interface_with_target);
-      return;
-    }
-    std::unique_ptr<llvm::Module> M2 = MIR2->parseIRModule();
-    if (!M2) {
-      Diags.Report(diag::err_fe_unable_to_interface_with_target);
-      return;
-    }
-    M2->setDataLayout(TM->createDataLayout());
-
-    MachineModuleInfo MMI2(TM.get());
-    PassInstrumentationCallbacks PIC2;
-    MachineFunctionAnalysisManager MFAM;
-    LoopAnalysisManager LAM;
-    FunctionAnalysisManager FAM;
-    CGSCCAnalysisManager CGAM;
-    ModuleAnalysisManager MAM;
-    PassBuilder PB2(TM.get(), PipelineTuningOptions(), std::nullopt, &PIC2);
-    PB2.registerModuleAnalyses(MAM);
-    PB2.registerCGSCCAnalyses(CGAM);
-    PB2.registerFunctionAnalyses(FAM);
-    PB2.registerLoopAnalyses(LAM);
-    PB2.registerMachineFunctionAnalyses(MFAM);
-    PB2.crossRegisterProxies(LAM, FAM, CGAM, MAM, &MFAM);
-
-    std::unique_ptr<TargetLibraryInfoImpl> TLII2(
-        llvm::driver::createTLII(TargetTriple, CodeGenOpts.getVecLib()));
-    FAM.registerPass([&] { return TargetLibraryAnalysis(*TLII2); });
-    MAM.registerPass([&] {
-      const llvm::TargetOptions &Options = TM->Options;
-      return RuntimeLibraryAnalysis(M2->getTargetTriple(), Options.ExceptionModel,
-                                    Options.FloatABIType, Options.EABIVersion,
-                                    Options.MCOptions.ABIName, Options.VecLib);
-    });
-    MAM.registerPass([&] { return LibcallLoweringModuleAnalysis(); });
-    MAM.registerPass([&] { return MachineModuleAnalysis(MMI2); });
-
-    if (MIR2->parseMachineFunctions(*M2, MAM)) {
-      Diags.Report(diag::err_fe_unable_to_interface_with_target);
-      return;
-    }
-
-    // Enable PSTATE.DIT mode-switch insertion; leave the report files unset. An
-    // explicit -mllvm -taint-insert-dit=0 wins, so an unprotected build with
-    // otherwise identical codegen can be produced for A/B benchmarking.
-    if (llvm::TaintInsertDIT.getNumOccurrences() == 0)
-      llvm::TaintInsertDIT = true;
-
-    raw_svector_ostream HardenedOS(HardenedMIR);
-    ModulePassManager MPM2;
-    MPM2.addPass(TaintInterprocPass());
-    MPM2.addPass(PrintMIRPreparePass(HardenedOS));
-    MachineFunctionPassManager MFPM;
-    MFPM.addPass(PrintMIRPass(HardenedOS));
-    FunctionPassManager FPM;
-    FPM.addPass(createFunctionToMachineFunctionPassAdaptor(std::move(MFPM)));
-    MPM2.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
-    MPM2.run(*M2, MAM);
-  }
-
-  // ---- Phase 3: hardened MIR -> object (legacy PM). ----
+  // This used to run codegen three times: IR -> post-prologepilog MIR text,
+  // reparse that text so every MachineFunction is resident at once for the
+  // interprocedural taint pass, print the hardened MIR, reparse it again and
+  // emit. The round trip was only ever a way to materialize all
+  // MachineFunctions simultaneously, and it cost more than it looked:
+  //
+  //   - MIR does not serialize exception-handling state at all. LandingPadInfo,
+  //     TypeInfos and FilterIds are dropped on the first reparse and nothing
+  //     restores them, so any C++ translation unit with a landing pad lost its
+  //     exception tables. Temporary MCSymbols also print with an empty name,
+  //     which made EH_LABEL either fail to parse or -- with the "<mcsymbol >"
+  //     text fixup this replaces -- come back with no operands at all.
+  //
+  // Adding the taint pass as a *module* pass immediately after
+  // PrologEpilogInserter gets the same all-resident view with no serialization,
+  // at the same point in the pipeline the stop-after/start-after split used, so
+  // EH, debug info and CFI simply stay as codegen built them.
   if (!CodeGenOpts.SplitDwarfOutput.empty()) {
     DwoOS = openOutputFile(CodeGenOpts.SplitDwarfOutput);
     if (!DwoOS)
       return;
   }
-  {
-    SetStartStop("prologepilog", "");
-    LLVMContext Ctx3;
-    auto MIR3 = createMIRParser(
-        MemoryBuffer::getMemBufferCopy(HardenedMIR, "taint-harden.mir"), Ctx3);
-    if (!MIR3) {
-      Diags.Report(diag::err_fe_unable_to_interface_with_target);
-      return;
-    }
-    std::unique_ptr<llvm::Module> M3 = MIR3->parseIRModule();
-    if (!M3) {
-      Diags.Report(diag::err_fe_unable_to_interface_with_target);
-      return;
-    }
-    M3->setDataLayout(TM->createDataLayout());
 
-    legacy::PassManager PM3;
-    auto TLII = AddCodeGenAnalyses(PM3);
-    auto *MMIWP = new MachineModuleInfoWrapperPass(TM.get());
-    if (TM->addPassesToEmitFile(PM3, *OS, DwoOS ? &DwoOS->os() : nullptr, CGFT,
-                                DisableVerify, MMIWP)) {
-      Diags.Report(diag::err_fe_unable_to_interface_with_target);
-      return;
-    }
-    if (MIR3->parseMachineFunctions(*M3, MMIWP->getMMI())) {
-      Diags.Report(diag::err_fe_unable_to_interface_with_target);
-      return;
-    }
-    PM3.run(*M3);
+  // Enable PSTATE.DIT mode-switch insertion; leave the report files unset. An
+  // explicit -mllvm -taint-insert-dit=0 wins, so an unprotected build with
+  // otherwise identical codegen can be produced for A/B benchmarking.
+  const bool SavedInsertDIT = llvm::TaintInsertDIT;
+  if (llvm::TaintInsertDIT.getNumOccurrences() == 0)
+    llvm::TaintInsertDIT = true;
+  llvm::scope_exit RestoreInsertDIT([&] { llvm::TaintInsertDIT = SavedInsertDIT; });
+
+  // The taint analysis wants alias analysis, exactly as it does under the new
+  // PM. These managers must outlive PM.run() below, since the module pass holds
+  // a reference to FAM.
+  llvm::PassInstrumentationCallbacks PIC;
+  llvm::LoopAnalysisManager LAM;
+  llvm::FunctionAnalysisManager FAM;
+  llvm::CGSCCAnalysisManager CGAM;
+  llvm::ModuleAnalysisManager MAM;
+  llvm::PassBuilder PB(TM.get(), PipelineTuningOptions(), std::nullopt, &PIC);
+  PB.registerModuleAnalyses(MAM);
+  PB.registerCGSCCAnalyses(CGAM);
+  PB.registerFunctionAnalyses(FAM);
+  PB.registerLoopAnalyses(LAM);
+  PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+  std::unique_ptr<TargetLibraryInfoImpl> TaintTLII(
+      llvm::driver::createTLII(TargetTriple, CodeGenOpts.getVecLib()));
+  FAM.registerPass([&] { return TargetLibraryAnalysis(*TaintTLII); });
+
+  legacy::PassManager PM;
+  PM.add(createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
+  std::unique_ptr<TargetLibraryInfoImpl> TLII(
+      llvm::driver::createTLII(TargetTriple, CodeGenOpts.getVecLib()));
+  PM.add(new TargetLibraryInfoWrapperPass(*TLII));
+  {
+    const llvm::TargetOptions &Options = TM->Options;
+    PM.add(new RuntimeLibraryInfoWrapper(
+        TargetTriple, Options.ExceptionModel, Options.FloatABIType,
+        Options.EABIVersion, Options.MCOptions.ABIName, Options.VecLib));
   }
+
+  // The pipeline owns MMIWP; we only need its MMI to reach the
+  // MachineFunctions, which is valid from the pre-emit hook onward.
+  auto *MMIWP = new MachineModuleInfoWrapperPass(TM.get());
+
+  // Only targets built on the common code generator have the pre-emit hook,
+  // which is also the only kind that can run MachineFunction passes at all.
+  auto *CGTM = static_cast<llvm::CodeGenTargetMachineImpl *>(TM.get());
+  if (CGTM->addPassesToEmitFileWithPostPrologEpilogModulePasses(
+          PM, *OS, DwoOS ? &DwoOS->os() : nullptr, CGFT, DisableVerify, MMIWP,
+          [&](legacy::PassManagerBase &PM) {
+            PM.add(llvm::createTaintInterprocLegacyPass(MMIWP->getMMI(), FAM));
+          })) {
+    Diags.Report(diag::err_fe_unable_to_interface_with_target);
+    return;
+  }
+
+  PM.run(*TheModule);
 }
 
 void EmitAssemblyHelper::emitAssembly(BackendAction Action,

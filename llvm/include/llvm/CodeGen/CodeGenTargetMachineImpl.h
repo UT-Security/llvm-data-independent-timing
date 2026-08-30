@@ -54,6 +54,32 @@ public:
                       bool DisableVerify = true,
                       MachineModuleInfoWrapperPass *MMIWP = nullptr) override;
 
+  /// As addPassesToEmitFile, but calls \p AddPostPrologEpilogModulePasses to
+  /// add passes immediately after PrologEpilogInserter.
+  ///
+  /// The legacy pass manager batches consecutive function passes into one
+  /// FPPassManager and runs the whole batch per function, so a MachineFunction
+  /// is normally created, used and freed before the next one exists. Adding a
+  /// *module* pass mid-pipeline splits that batch: everything before it runs
+  /// over all functions first, and FreeMachineFunction sits after the
+  /// AsmPrinter, so every MachineFunction of the module is simultaneously
+  /// resident when the module pass runs.
+  ///
+  /// That whole-module view is what an interprocedural MachineFunction analysis
+  /// needs. The alternative -- serializing to MIR text and reparsing to
+  /// materialize them all at once -- silently drops state MIR does not model,
+  /// notably exception-handling landing pads, which are not serialized at all.
+  ///
+  /// Post-PEI specifically, rather than pre-AsmPrinter: frame layout is final,
+  /// and code inserted there is still seen by the post-PEI optimizations, which
+  /// matches where a stop-after=prologepilog / start-after=prologepilog split
+  /// would have placed it.
+  bool addPassesToEmitFileWithPostPrologEpilogModulePasses(
+      PassManagerBase &PM, raw_pwrite_stream &Out, raw_pwrite_stream *DwoOut,
+      CodeGenFileType FileType, bool DisableVerify,
+      MachineModuleInfoWrapperPass *MMIWP,
+      function_ref<void(PassManagerBase &)> AddPostPrologEpilogModulePasses);
+
   /// Add passes to the specified pass manager to get machine code emitted with
   /// the MCJIT. This method returns true if machine code is not supported. It
   /// fills the MCContext Ctx pointer which can be used to build custom
