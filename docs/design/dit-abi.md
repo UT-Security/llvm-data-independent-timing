@@ -596,28 +596,42 @@ regmask in between.
 - **`unwind` detection is untested.** The `setjmp` and `musttail` kinds are
   covered; no test exercises an EH-pad successor yet.
 
-### 9.5.1 Region placement, and why its exit form differs
+### 9.5.1 Region placement, and the per-exit choice of restore form
 
-Region placement is supported. **Ownership is not relaxed**: a function that is
-provably always entered with DIT on still routes past the region emitter, because
-narrowing inside a region its caller deemed secret is an under-taint no exit
-restore can repair. What the ABI changes is only the two boundaries.
+Region placement is the shipped default (`switch-cyc=30`), so the ABI was inert
+without this. **Ownership is not relaxed**: a function provably always entered
+with DIT on still routes past the region emitter, because narrowing inside a
+region its caller deemed secret is an under-taint no exit restore can repair.
+What the ABI changes is the two boundaries.
 
-**The exit must be the unconditional `MSR DIT, Xt`, not the guarded clear.** A
-region body can leave DIT in *either* state: a return inside an Off block is never
-enabled, and an On block's return is cleared. A restore that can only clear would
-therefore return DIT lower than entry for a function that happened to be entered
-with it set, stripping the caller with no re-assert left to repair it. Guarding an
-ENABLE is forbidden outright (§3.1), so an unconditional write of the saved value
-is the only correct form. Being unconditional it has no predictor to mispredict,
-and `getTimingModeStateAfter` makes it visible to the dataflow consumers that
-would otherwise ignore it.
+**The choice of restore form is per EXIT, not per placement.** An earlier draft of
+this file said function granularity gets the guarded clear and region gets the
+unconditional write. That was the wrong cut. The guarded clear can only clear or
+do nothing - it can never set - so it is correct exactly when DIT is provably 1 at
+that exit:
 
-So the two placements take different exit forms for a real reason, not a
-preference: **function granularity's body provably leaves DIT on, region's does
-not.** Function granularity keeps the cheaper guarded clear.
+| entry | at exit | guarded clear does | correct? |
+|---|---|---|---|
+| 0 | 1 | falls through, clears | yes |
+| 1 | 1 | branch taken, skips | yes |
+| 0 | 0 | clears (redundant) | yes |
+| **1** | **0** | skips, leaves 0 | **no - returns lower than entry** |
 
-Three further things region placement forced:
+Only the last row breaks, and repairing it needs an ENABLE, which may never be
+guarded (§3.1). So `emitDITExitRestores` runs the existing `computeDITOnEntry`
+dataflow over the emitted code and picks per return: **guarded clear where DIT is
+provably set, unconditional `MSR DIT, Xt` otherwise.**
+
+Whole-function coverage satisfies the premise at every exit, so it always takes
+the cheap form - but so does a region-placed function whose return sits in an On
+block, which is the common case. Measured on the two-call example, region and
+function granularity emit the *same* `tbnz w9, #24` exit.
+
+Two alternatives, both rejected: forcing the premise with an unconditional
+`msr DIT, #1` before the guard costs that write PLUS the guard, strictly worse
+than just writing the saved value; and guarding the enable is the forbidden case.
+
+Four things region placement forced:
 
 - **`calleeLeavesDITSet` returns true under the ABI**, as a contract rather than an
   analysis result. Suppressing only the emission was not enough: the region
@@ -632,6 +646,11 @@ Three further things region placement forced:
 - **`afterPrologue` scans for the LAST FrameSetup**, not the first non-FrameSetup.
   The original form stopped at that pre-prologue enable and returned a point where
   the frame did not yet exist.
+- **The split point must be computed after the reload is emitted.** A return whose
+  block has no epilogue of its own has nothing before it to split at, so an
+  emptiness check placed before the reload silently emitted no restore at all -
+  observed on a function with a public early exit and a secret path, where BOTH
+  returns lost their restore. The reload itself guarantees a predecessor.
 
 ### 9.5.2 A leak the tests initially passed over: TBNZX vs TBNZW
 

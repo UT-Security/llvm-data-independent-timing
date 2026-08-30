@@ -127,15 +127,13 @@ post-PEI pass. `musttail` and `MachineOutlinerTailCall` survive the flag and sho
 
 Landed and OPT-IN: **`-mllvm -taint-dit-abi`**, the callee half - entry `MRS` into a
 pre-PEI-reserved frame slot, a restore at each return, and **nothing at any call site**.
-**Both placements are supported**, and they take DIFFERENT exit forms for a real reason:
-
-- `function`: the body provably leaves DIT on, so the exit is a **guarded clear**
-  (`tbnz w, #24` over `msr DIT, #0`), which is FREE when the function was entered with
-  DIT already on.
-- `region`: the body can leave DIT in either state (a return inside an Off block is
-  never enabled), so the exit must be the **unconditional `msr DIT, Xt`** - a restore
-  that can only clear would return DIT lower than entry, and guarding an ENABLE is
-  forbidden.
+**Both placements are supported.** The restore form is chosen **per exit**, not per
+placement: a guarded clear (`tbnz w, #24` over `msr DIT, #0`) where DIT is provably set
+at that return, which is free when the function was entered with DIT already on; the
+unconditional `msr DIT, Xt` otherwise, because a clear-only restore would return DIT
+lower than entry and guarding an ENABLE is forbidden. Whole-function coverage always
+takes the cheap form; so does a region-placed return inside an On block, which is the
+common case.
 
 Still default OFF: it is untested on a real workload. Flipping it wants the LTO and
 CoinSelection numbers re-run against a sound build, since the -16.89% / -3.51% figures

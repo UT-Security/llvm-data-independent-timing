@@ -7253,9 +7253,7 @@ bool AArch64InstrInfo::insertTimingModeRestore(
   MachineFunction &MF = *MBB.getParent();
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
 
-  // The mode switch goes after the epilogue, so it needs an instruction to sit
-  // in front of; splitting needs one to stay behind as well.
-  if (SwitchAt == MBB.begin() || SwitchAt == MBB.end())
+  if (SwitchAt == MBB.end())
     return false;
 
   Register Scratch = findTimingModeScratchAcross(MBB, LoadAt, SwitchAt, TRI);
@@ -7297,6 +7295,11 @@ bool AArch64InstrInfo::insertTimingModeRestore(
   // The unconditional register form would also be INVISIBLE to the final-MIR
   // verifier, which only recognises MSRpstateImm4; the guarded form is made of
   // instructions the verifier can see, so its coverage is actually checked.
+  // Split so the switch lands after the epilogue. std::prev(SwitchAt) is always
+  // valid here: LoadAt <= SwitchAt, so the reload just emitted sits in front of
+  // it even when the return is the first instruction of its block (a return with
+  // no epilogue of its own - which is why the emptiness check above cannot be
+  // done before the reload).
   MachineBasicBlock *Cont = MBB.splitAt(*std::prev(SwitchAt),
                                         /*UpdateLiveIns=*/true);
   if (Cont == &MBB)

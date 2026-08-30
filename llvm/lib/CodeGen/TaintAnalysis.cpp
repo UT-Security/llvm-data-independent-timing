@@ -2432,6 +2432,12 @@ static bool isOracleRearmCall(const MachineInstr &MI) {
 // function did not turn DIT on, so it must not turn it off: it keeps the
 // (redundant) entry enable but emits no disable before its returns. Eliding the
 // ENABLE too would be the unsafe direction - see FunctionTaintSummary.
+// Defined after computeDITOnEntry. Emits the callee-saved DIT restore at every
+// return, choosing the cheaper form per EXIT.
+static void emitDITExitRestores(MachineFunction &MF, const TaintSummaryInfo *TSI,
+                                Module &M, const TargetInstrInfo *TII, int Slot,
+                                raw_ostream *NonlocalOS);
+
 /// First instruction of the entry block that is NOT part of the prologue.
 ///
 /// The carrier save stores through the frame, so it cannot precede the prologue:
@@ -2523,10 +2529,6 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
   // second one would stop at the `mrs` just inserted -- which is not FrameSetup
   // -- and put the enable BEFORE the read, so the function would save the value
   // it had just written and could never restore anything but 1.
-  // Return points needing an ABI restore, collected during the walk below and
-  // emitted after it: insertTimingModeRestore splits the block.
-  SmallVector<MachineInstr *, 4> ABIReturns;
-
   MachineBasicBlock::iterator EntryAt = afterPrologue(Entry);
   const bool Carried =
       ABI && emitDITCarrierSave(MF, TII, EntryAt, EntryAt, NonlocalOS);
@@ -2547,14 +2549,10 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
       if (MI.isReturn()) {
         if (!OwnsDIT)
           continue; // not ours to clear - the caller's region still needs it
-        if (ABI) {
-          // Defer. The restore is a GUARDED clear, so emitting it splits this
-          // block, and we are currently iterating both MF's blocks and MBB's
-          // instructions. Collect the returns and emit after the walk.
-          if (Carried)
-            ABIReturns.push_back(&MI);
+        // Under the ABI the exit is a restore, not a clear, emitted by
+        // emitDITExitRestores once this walk has finished.
+        if (ABI)
           continue;
-        }
         TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
                                     /*Enable=*/false);
       } else if (MI.isCall()) {
@@ -2578,24 +2576,11 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
       }
     }
 
-  // Now that the walk is done and no iterator is live, emit the guarded
-  // restores. If one cannot be emitted (no scratch, unreachable slot), NOTHING
-  // is emitted for that exit: DIT is left set, which satisfies the §1 guarantee.
-  // Clearing unconditionally instead would strip a caller that entered with DIT
-  // on, and under this ABI no caller re-asserts to repair it.
-  for (MachineInstr *Ret : ABIReturns) {
-    MachineBasicBlock &RetMBB = *Ret->getParent();
-    // Reload before the epilogue (frame still valid), switch after it (the
-    // epilogue's CSR reloads may still carry secrets and are Needs).
-    if (!TII->insertTimingModeRestore(RetMBB, beforeEpilogue(RetMBB, *Ret),
-                                      Ret->getIterator(), Ret->getDebugLoc(),
-                                      *Slot) &&
-        NonlocalOS)
-      *NonlocalOS << "NONLOCAL noscratch caller=" << MF.getName()
-                  << " bb=" << RetMBB.getNumber()
-                  << " (DIT left set: no free scratch register at this exit, so "
-                     "the function cannot restore and must not clear)\n";
-  }
+  // Restores go through the shared per-exit emitter, after the walk: both forms
+  // split the block, and which form is correct depends on the DIT state at each
+  // exit, which is only final once every switch above has been placed.
+  if (Carried)
+    emitDITExitRestores(MF, TSI, *M, TII, *Slot, NonlocalOS);
 }
 
 // An instruction that must execute with PSTATE.DIT=1. Coverable-tainted
@@ -2670,6 +2655,73 @@ computeDITOnEntry(MachineFunction &MF, const TaintSummaryInfo *TSI, Module &M,
   }
   return OnIn;
 }
+
+// Emit the callee-saved DIT restore at every return, choosing the cheaper form
+// per EXIT rather than per placement. docs/design/dit-abi.md §9.5.1.
+//
+// The guarded clear (`tbnz` over `msr DIT, #0`) can only clear or do nothing; it
+// can never set. So it is correct exactly when DIT is provably 1 at that exit:
+//
+//   entry  at exit   guarded clear does        correct?
+//     0       1      falls through, clears     yes
+//     1       1      branch taken, skips       yes
+//     0       0      clears (redundant)        yes
+//     1       0      skips, leaves 0           NO - returns lower than entry
+//
+// Only the last row breaks, and repairing it needs an ENABLE, which may never be
+// guarded (§3.1: a mispredict would run the caller's secret work with DIT off).
+// Where DIT is not provably set we therefore fall back to the unconditional
+// `MSR DIT, Xt`, which restores in either direction and, being unconditional,
+// has no predictor to mispredict.
+//
+// Under whole-function coverage the entry enable is unconditional and nothing in
+// the body clears, so every exit takes the cheap form. Under region placement a
+// return inside an On block does too; only Off-block returns pay the
+// unconditional write. Forcing the premise instead - an unconditional
+// `msr DIT, #1` ahead of the guard - would cost that same write PLUS the guard,
+// so it is strictly worse than simply writing the saved value.
+static void emitDITExitRestores(MachineFunction &MF, const TaintSummaryInfo *TSI,
+                                Module &M, const TargetInstrInfo *TII, int Slot,
+                                raw_ostream *NonlocalOS) {
+  DenseMap<const MachineBasicBlock *, bool> OnIn =
+      computeDITOnEntry(MF, TSI, M, TII);
+
+  SmallVector<std::pair<MachineInstr *, bool>, 4> Exits;
+  for (MachineBasicBlock &MBB : MF) {
+    bool Cur = OnIn.lookup(&MBB);
+    for (MachineInstr &MI : MBB) {
+      // A tail call is both isReturn() and isCall() and has no epilogue, so
+      // there is nowhere to restore. Reported, not fixed.
+      if (MI.isReturn() && !MI.isCall())
+        Exits.emplace_back(&MI, Cur);
+      if (auto Sw = TII->getTimingModeStateAfter(MI))
+        Cur = *Sw;
+      else if (clobbersDIT(MI, TSI, M))
+        Cur = false;
+    }
+  }
+
+  // Emit only after the walk: both restore forms split the block.
+  for (auto [Ret, DITOn] : Exits) {
+    MachineBasicBlock &MBB = *Ret->getParent();
+    // Reload before the epilogue, where the frame slot is still valid; switch
+    // after it, because the epilogue's CSR reloads may still carry secrets.
+    auto LoadAt = beforeEpilogue(MBB, *Ret);
+    auto SwitchAt = Ret->getIterator();
+    const bool Ok =
+        DITOn ? TII->insertTimingModeRestore(MBB, LoadAt, SwitchAt,
+                                             Ret->getDebugLoc(), Slot)
+              : TII->insertTimingModeRestoreExact(MBB, LoadAt, SwitchAt,
+                                                  Ret->getDebugLoc(), Slot);
+    if (!Ok && NonlocalOS)
+      *NonlocalOS << "NONLOCAL noscratch caller=" << MF.getName()
+                  << " bb=" << MBB.getNumber()
+                  << " (DIT left as the body set it: no free scratch register "
+                     "at this exit, so the function cannot restore and must not "
+                     "clear)\n";
+  }
+}
+
 
 // Exit-balance check: does this function ever LEAVE with PSTATE.DIT still set?
 //
@@ -3542,25 +3594,9 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
         ABI && emitDITCarrierSave(MF, TII, MF.front().begin(),
                                   afterPrologue(MF.front()), NonlocalOS);
 
-    if (Carried) {
-      std::optional<int> Slot = TII->getTimingModeSaveSlot(MF);
-      SmallVector<MachineInstr *, 4> Returns;
-      for (MachineBasicBlock &MBB : MF)
-        for (MachineInstr &MI : MBB)
-          if (MI.isReturn() && !MI.isCall()) // a tail call has no epilogue
-            Returns.push_back(&MI);
-      for (MachineInstr *Ret : Returns) {
-        MachineBasicBlock &RetMBB = *Ret->getParent();
-        if (!TII->insertTimingModeRestoreExact(
-                RetMBB, beforeEpilogue(RetMBB, *Ret), Ret->getIterator(),
-                Ret->getDebugLoc(), *Slot) &&
-            NonlocalOS)
-          *NonlocalOS << "NONLOCAL noscratch caller=" << MF.getName()
-                      << " bb=" << RetMBB.getNumber()
-                      << " (DIT left as the region body set it: no free scratch "
-                         "register at this exit)\n";
-      }
-    }
+    if (Carried)
+      emitDITExitRestores(MF, TSI, M, TII, *TII->getTimingModeSaveSlot(MF),
+                          NonlocalOS);
 
     // After the region emitter, so a function that fell back to whole-function
     // granularity is checked in the shape it actually shipped.

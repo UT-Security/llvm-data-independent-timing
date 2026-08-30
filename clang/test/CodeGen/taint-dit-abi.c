@@ -53,13 +53,16 @@
 // REGION-NOT:  msr
 // REGION:      bl {{_?}}sink_b
 //
-// The exit is the UNCONDITIONAL `msr DIT, Xt`, not the guarded clear function
-// placement uses. A region body can leave DIT in either state - a return inside
-// an Off block is never enabled - so a restore that can only clear would return
-// DIT lower than entry for a function entered with it set. Guarding an ENABLE is
-// forbidden, so the unconditional write is the only correct form here.
+// The restore form is chosen PER EXIT, not per placement: the guarded clear is
+// correct exactly where DIT is provably set at that return, and a region-placed
+// return inside an On block qualifies - so region emits the same cheap exit that
+// whole-function coverage does. Only a return the region body left DIT-off on
+// falls back to the unconditional `msr DIT, Xt`, which is the sole form that can
+// re-enable (guarding an ENABLE is forbidden).
 // REGION:      ldr x[[C]], [sp
-// REGION:      msr {{DIT|S3_3_C4_C2_5}}, x[[C]]
+// REGION:      tbnz w{{[0-9]+}}, #24, [[RCONT:[.A-Za-z0-9_]+]]
+// REGION:      msr {{#26|DIT}}, #0
+// REGION-NEXT: [[RCONT]]:
 // REGION-NEXT: ret
 
 typedef unsigned long u64;
