@@ -248,6 +248,7 @@ LLVMInitializeAArch64Target() {
   initializeAArch64AdvSIMDScalarPass(PR);
   initializeAArch64AsmPrinterPass(PR);
   initializeAArch64BranchTargetsPass(PR);
+  initializeAArch64DITVerifierPass(PR);
   initializeAArch64CollectLOHPass(PR);
   initializeAArch64CompressJumpTablesPass(PR);
   initializeAArch64ConditionalComparesPass(PR);
@@ -912,6 +913,12 @@ void AArch64PassConfig::addPreEmitPass2() {
   // SVE bundles move prefixes with destructive operations. BLR_RVMARKER pseudo
   // instructions are lowered to bundles as well.
   addPass(createUnpackMachineBundles(nullptr));
+
+  // Last, so it sees exactly what will be emitted. The taint pass verifies its
+  // own output, but a dozen machine passes run after it; this turns any damage
+  // they do to PSTATE.DIT placement into a build failure instead of a silent
+  // leak. No-op unless something was pinned.
+  addPass(createAArch64DITVerifierPass());
 }
 
 bool AArch64PassConfig::addRegAssignAndRewriteOptimized() {
