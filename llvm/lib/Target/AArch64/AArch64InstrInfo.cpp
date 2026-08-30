@@ -7108,6 +7108,46 @@ static Register findTimingModeScratch(MachineBasicBlock &MBB,
   return Register();
 }
 
+/// Like findTimingModeScratch, but the register must also survive from \p From
+/// to \p To - the reload happens before the epilogue and the mode switch after
+/// it, so anything the epilogue DEFINES is unusable even though it is dead at
+/// the reload point. (A register the epilogue USES is already live at From and
+/// so already rejected.)
+static Register findTimingModeScratchAcross(MachineBasicBlock &MBB,
+                                            MachineBasicBlock::iterator From,
+                                            MachineBasicBlock::iterator To,
+                                            const TargetRegisterInfo &TRI) {
+  const MachineFunction &MF = *MBB.getParent();
+  LivePhysRegs LPR(TRI);
+  LPR.addLiveOuts(MBB);
+  for (MachineBasicBlock::reverse_iterator
+           It = MBB.rbegin(),
+           End = MachineBasicBlock::reverse_iterator(From);
+       It != End; ++It)
+    LPR.stepBackward(*It);
+
+  BitVector Clobbered(TRI.getNumRegs());
+  for (auto It = From; It != To; ++It) {
+    if (It->isCall())
+      return Register(); // a regmask would clobber every temporary
+    for (const MachineOperand &MO : It->operands()) {
+      if (MO.isRegMask())
+        return Register();
+      if (!MO.isReg() || !MO.isDef() || !MO.getReg())
+        continue;
+      for (MCRegAliasIterator AI(MO.getReg(), &TRI, true); AI.isValid(); ++AI)
+        Clobbered.set(*AI);
+    }
+  }
+
+  for (MCRegister Reg :
+       {AArch64::X9, AArch64::X10, AArch64::X11, AArch64::X12, AArch64::X13,
+        AArch64::X14, AArch64::X15})
+    if (LPR.available(MF.getRegInfo(), Reg) && !Clobbered.test(Reg))
+      return Reg;
+  return Register();
+}
+
 std::optional<int>
 AArch64InstrInfo::createTimingModeSaveSlot(MachineFunction &MF) const {
   auto *AFI = MF.getInfo<AArch64FunctionInfo>();
@@ -7155,13 +7195,19 @@ bool AArch64InstrInfo::insertTimingModeSave(MachineBasicBlock &MBB,
   return true;
 }
 
-bool AArch64InstrInfo::insertTimingModeRestore(MachineBasicBlock &MBB,
-                                               MachineBasicBlock::iterator MI,
-                                               const DebugLoc &DL,
-                                               int FrameIndex) const {
+bool AArch64InstrInfo::insertTimingModeRestore(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator LoadAt,
+    MachineBasicBlock::iterator SwitchAt, const DebugLoc &DL,
+    int FrameIndex) const {
   MachineFunction &MF = *MBB.getParent();
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
-  Register Scratch = findTimingModeScratch(MBB, MI, TRI);
+
+  // The mode switch goes after the epilogue, so it needs an instruction to sit
+  // in front of; splitting needs one to stay behind as well.
+  if (SwitchAt == MBB.begin() || SwitchAt == MBB.end())
+    return false;
+
+  Register Scratch = findTimingModeScratchAcross(MBB, LoadAt, SwitchAt, TRI);
   if (!Scratch)
     return false;
 
@@ -7170,29 +7216,56 @@ bool AArch64InstrInfo::insertTimingModeRestore(MachineBasicBlock &MBB,
   if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset))
     return false;
 
-  BuildMI(MBB, MI, DL, get(AArch64::LDRXui), Scratch)
+  // Reload while the frame is still up.
+  BuildMI(MBB, LoadAt, DL, get(AArch64::LDRXui), Scratch)
       .addReg(Base)
       .addImm(Offset)
-      .addMemOperand(timingModeSlotMMO(MF, FrameIndex, MachineMemOperand::MOLoad));
+      .addMemOperand(
+          timingModeSlotMMO(MF, FrameIndex, MachineMemOperand::MOLoad));
 
-  // Branchless restore: `MSR DIT, Xt` writes back bit 24, which is exactly what
-  // `MRS` read, so the exit state equals the entry state.
+  // Switch after the epilogue:
   //
-  // Structurally it cannot enable: at this point DIT is 1 (the entry enable put
-  // it there) and the saved value is 0 or 1, so the write is a no-op or a clear.
-  // The speculation hazard of docs/design/dit-unconditional-design.md §3.1
-  // therefore cannot arise for it, with no predictor to reason about.
+  //        ldr  Xs, [slot]        ; frame still valid
+  //        ...epilogue...         ; reloads secret-carrying CSRs - still Needs,
+  //                               ;   so they must run with DIT on
+  //        tbnz Xs, #24, .Cont    ; entered with DIT on -> skip
+  //        msr  DIT, #0
+  //  .Cont: ret
   //
-  // The guarded form (`TBNZ` over an `MSR DIT, #0`) is what dit-abi.md OPEN item
-  // 1 selects on cost - it is free when the function was entered with DIT
-  // already on - and is a strict improvement to make here later. It needs an MBB
-  // split at a point where the frame is already laid out, so it is staged after
-  // this correct-but-unconditional form rather than bundled with it.
-  const AArch64SysReg::SysReg *DIT = AArch64SysReg::lookupSysRegByName("DIT");
-  assert(DIT && "DIT system register not registered");
-  BuildMI(MBB, MI, DL, get(AArch64::MSR))
-      .addImm(DIT->Encoding)
-      .addReg(Scratch, RegState::Kill);
+  // Guarded rather than an unconditional `msr DIT, Xs`: free whenever the
+  // function was entered with DIT on, which is the nested case this ABI exists
+  // to serve, and never worse otherwise. Measured on M5 at 0% / 100% / ~50% of
+  // the branchless cost for always-skip / always-clear / mixed, with only ~1.2
+  // points of the mix attributable to the mispredict
+  // (playground/dit_bench/dit_exitform.{S,c}).
+  //
+  // Guarding a CLEAR is the safe direction, and Apple ships exactly this
+  // sequence in _timingsafe_restore_if_supported with no barrier on that path.
+  // Guarding an ENABLE would be a leak. See dit-unconditional-design.md §3.
+  //
+  // The unconditional register form would also be INVISIBLE to the final-MIR
+  // verifier, which only recognises MSRpstateImm4; the guarded form is made of
+  // instructions the verifier can see, so its coverage is actually checked.
+  MachineBasicBlock *Cont = MBB.splitAt(*std::prev(SwitchAt),
+                                        /*UpdateLiveIns=*/true);
+  if (Cont == &MBB)
+    return false;
+
+  MachineBasicBlock *Clear = MF.CreateMachineBasicBlock(MBB.getBasicBlock());
+  MF.insert(Cont->getIterator(), Clear);
+
+  BuildMI(&MBB, DL, get(AArch64::TBNZX))
+      .addReg(Scratch, RegState::Kill)
+      .addImm(24) // PSTATE.DIT is bit 24 of the MRS result
+      .addMBB(Cont);
+  MBB.addSuccessor(Clear);
+
+  // Reuse the normal switch emitter so the clear carries the implicit $dit def
+  // that keeps later passes from reordering across it.
+  insertTimingModeSwitch(*Clear, Clear->end(), DL, /*Enable=*/false);
+  Clear->addSuccessor(Cont);
+  for (const auto &LI : Cont->liveins())
+    Clear->addLiveIn(LI);
   return true;
 }
 

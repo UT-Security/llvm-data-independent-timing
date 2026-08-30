@@ -505,11 +505,21 @@ Emitted sequence, verified end to end:
         msr  DIT, #1              ; enable
         bl   _sink_a              ; <- no re-assert
         bl   _sink_b              ; <- no re-assert
-        ldr  x9, [sp, #8]
-        msr  DIT, x9              ; restore exactly
-        ldp  ...                  ; epilogue
-        ret
+        eor  x0, x0, x20          ; secret work, DIT on
+        ldr  x9, [sp, #8]         ; reload while the frame is still up
+        ldp  x29, x30, [sp, #32]  ; epilogue - these reloads are Needs too
+        ldp  x20, x19, [sp, #16]
+        add  sp, sp, #48
+        tbnz x9, #24, .Lcont      ; entered with DIT on -> skip the clear
+        msr  DIT, #0
+.Lcont: ret
 ```
+
+The exit is the **guarded clear** §7 item 1 selected, and its two halves sit in
+**different places**: the reload must precede the epilogue, because the frame slot
+needs the frame; the mode switch must FOLLOW it, because the epilogue reloads
+callee-saved registers that may still hold secrets and those reloads are Needs. A
+single insertion point necessarily gets one of the two wrong.
 
 ### 9.3.1 The slot reservation is gated on the ABI flag, and why that matters
 
@@ -522,6 +532,36 @@ Measured on the two-call test case: **32-byte frame with the ABI off, 48 with it
 So the cost is real (one 8-byte object, 16 after alignment, per instrumented function)
 and it must not be paid by a configuration that cannot use it. Verified both ways: with
 the flag off the output contains no `mrs` at all and the frame is unchanged.
+
+### 9.3.2 The verifier earned its keep: the switch cannot precede the epilogue
+
+The first working version put the whole restore before the epilogue, since that is
+where the frame slot is valid. The final-MIR verifier rejected the build:
+
+```
+PSTATE.DIT placement is unsound: 3 instruction(s) that must execute with DIT set
+are reachable with it clear.
+  two_calls bb.2: $fp, $lr = frame-destroy LDPXi $sp, 4, implicit $dit
+  two_calls bb.2: $x20, $x19 = frame-destroy LDPXi $sp, 2, implicit $dit
+```
+
+Those reloads restore callee-saved registers that were holding secrets, so the pass
+had pinned them as Needs. Today's unconditional clear sits immediately before the
+`ret`, i.e. AFTER the epilogue, so it never had this problem; moving the switch
+earlier silently narrowed coverage. Hence the two-insertion-point design.
+
+**The branchless form would have hidden this.** `getTimingModeSwitch` only
+recognises `MSRpstateImm4`, so an `MSR DIT, Xt` is invisible to the verifier: it
+models DIT as still on and reports nothing. The guarded form is built from
+instructions the verifier can see, so its coverage is actually checked. That is an
+argument for the guarded form independent of the cycle measurement, and it only
+became visible by building both.
+
+A consequence for the scratch register: it must now survive from the reload to the
+switch, across the epilogue. `findTimingModeScratchAcross` starts from the liveness
+at the reload point (which already rejects anything the epilogue USES) and
+additionally excludes anything the epilogue DEFINES, bailing entirely on a call or
+regmask in between.
 
 ### 9.4 Four things the implementation got wrong first, kept so they are not redone
 
@@ -559,12 +599,6 @@ the flag off the output contains no `mrs` at all and the frame is unchanged.
   DIT. Every interior clear must first be guarded on the saved value
   (`dit-unconditional-design.md` §6.1). Until then the flag stays default-off,
   because `region` is the shipped default and the flag would be inert there.
-- **The guarded exit form.** §7 item 1 chose `tbnz` over the branchless restore on
-  measured cost. The landed code emits the branchless `msr DIT, Xt`, which is
-  correct and restores exactly, but pays the write even when the function was
-  entered with DIT already on. The guarded form needs an MBB split at a point
-  where the frame is laid out; staged separately rather than bundled with a
-  correctness change.
 - **`unwind` detection is untested.** The `setjmp` and `musttail` kinds are
   covered; no test exercises an EH-pad successor yet.
 

@@ -69,12 +69,28 @@ extern u64 sink_b(u64);
 // ABI:      bl {{_?}}sink_b
 // ABI-NOT:  msr {{#26|DIT}}, #1
 //
-// The exit restores the entry value instead of clearing. `msr DIT, Xt` writes
-// back bit 24, and at this point DIT is 1, so the write is a no-op or a clear
-// and never an enable - the speculation hazard of
-// dit-unconditional-design.md 3.1 cannot arise for it by construction.
+// The exit is a GUARDED clear, and the two halves sit in DIFFERENT places. The
+// reload must happen while the frame is still up; the mode switch must happen
+// AFTER the epilogue, because the epilogue reloads callee-saved registers that
+// may still hold secrets and those reloads are Needs. Placing the switch before
+// the epilogue instead is caught by the final-MIR verifier, which is how this
+// was found.
+// The reload's exact position among the epilogue's own reloads is the
+// scheduler's business; all that matters is that it precedes the SP adjustment,
+// and the guarded switch follows it.
 // ABI:      ldr x{{[0-9]+}}, [sp
-// ABI:      msr {{DIT|S3_3_C4_C2_5}}, x{{[0-9]+}}
+// (a block-label comment for the clear block sits between the branch and the
+// write, so this is CHECK, not CHECK-NEXT)
+// ABI:      tbnz x{{[0-9]+}}, #24, [[CONT:[.A-Za-z0-9_]+]]
+// ABI:      msr {{#26|DIT}}, #0
+// ABI-NEXT: [[CONT]]:
+// ABI-NEXT: ret
+//
+// Guarding a CLEAR is safe under speculation and is the sequence Apple ships in
+// _timingsafe_restore_if_supported. Guarding an ENABLE would be a leak and is
+// never done. The unconditional `msr DIT, Xt` alternative would also be
+// invisible to the final-MIR verifier, which only recognises the immediate form.
+// ABI-NOT:  msr {{DIT|S3_3_C4_C2_5}}, x
 u64 two_calls(u64 secret) {
   u64 a = sink_a(secret);
   u64 b = sink_b(secret);

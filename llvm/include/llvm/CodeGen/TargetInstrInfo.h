@@ -1722,18 +1722,28 @@ public:
     return false;
   }
 
-  /// Emit, at \p MI, a restore of the timing mode saved in \p FrameIndex.
+  /// Restore the timing mode saved in \p FrameIndex, using TWO insertion points.
   ///
-  /// The restore must be a no-op or a DISABLE, never an enable: the write is
-  /// guarded so that a function entered with the mode already on leaves it on.
-  /// Guarding a disable is safe under speculation, guarding an ENABLE is not -
-  /// a mispredict would run secret work with the mode off. See
+  /// \p LoadAt is where the saved value is reloaded and must be inside the
+  /// frame's lifetime, i.e. before the epilogue tears it down. \p SwitchAt is
+  /// where the mode actually changes and must be AFTER the epilogue: the
+  /// epilogue reloads callee-saved registers that may still hold secrets, and
+  /// those reloads are Needs, so changing the mode before them would strip their
+  /// coverage. Splitting the two is not an optimization; a single insertion point
+  /// gets one of the requirements wrong.
+  ///
+  /// The write must be a no-op or a DISABLE, never an enable: it is guarded so
+  /// that a function entered with the mode already on leaves it on. Guarding a
+  /// disable is safe under speculation, guarding an ENABLE is not - a mispredict
+  /// would run secret work with the mode off. See
   /// docs/design/dit-unconditional-design.md §3.
   ///
-  /// Returns false if no scratch register could be proven free, in which case
-  /// the mode is left SET, which is the safe direction (dwell, not exposure).
+  /// Returns false if no scratch register could be proven free across the whole
+  /// span, in which case NOTHING is emitted and the mode is left SET, which is
+  /// the safe direction (dwell, not exposure).
   virtual bool insertTimingModeRestore(MachineBasicBlock &MBB,
-                                       MachineBasicBlock::iterator MI,
+                                       MachineBasicBlock::iterator LoadAt,
+                                       MachineBasicBlock::iterator SwitchAt,
                                        const DebugLoc &DL,
                                        int FrameIndex) const {
     return false;

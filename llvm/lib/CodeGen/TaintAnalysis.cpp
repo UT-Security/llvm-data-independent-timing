@@ -2507,6 +2507,10 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
   // second one would stop at the `mrs` just inserted -- which is not FrameSetup
   // -- and put the enable BEFORE the read, so the function would save the value
   // it had just written and could never restore anything but 1.
+  // Return points needing an ABI restore, collected during the walk below and
+  // emitted after it: insertTimingModeRestore splits the block.
+  SmallVector<MachineInstr *, 4> ABIReturns;
+
   MachineBasicBlock::iterator EntryAt = afterPrologue(Entry);
   const bool Carried = ABI && emitDITCarrierSave(MF, TII, EntryAt, NonlocalOS);
   std::optional<int> Slot =
@@ -2527,12 +2531,11 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
         if (!OwnsDIT)
           continue; // not ours to clear - the caller's region still needs it
         if (ABI) {
-          // Restore the entry value rather than clearing unconditionally. If the
-          // carrier could not be established, emit NOTHING: leaving DIT set is
-          // the safe direction, clearing is not (§1 guarantee vs obligation).
+          // Defer. The restore is a GUARDED clear, so emitting it splits this
+          // block, and we are currently iterating both MF's blocks and MBB's
+          // instructions. Collect the returns and emit after the walk.
           if (Carried)
-            TII->insertTimingModeRestore(MBB, beforeEpilogue(MBB, MI),
-                                         MI.getDebugLoc(), *Slot);
+            ABIReturns.push_back(&MI);
           continue;
         }
         TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
@@ -2557,6 +2560,25 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
                                     MI.getDebugLoc(), /*Enable=*/true);
       }
     }
+
+  // Now that the walk is done and no iterator is live, emit the guarded
+  // restores. If one cannot be emitted (no scratch, unreachable slot), NOTHING
+  // is emitted for that exit: DIT is left set, which satisfies the §1 guarantee.
+  // Clearing unconditionally instead would strip a caller that entered with DIT
+  // on, and under this ABI no caller re-asserts to repair it.
+  for (MachineInstr *Ret : ABIReturns) {
+    MachineBasicBlock &RetMBB = *Ret->getParent();
+    // Reload before the epilogue (frame still valid), switch after it (the
+    // epilogue's CSR reloads may still carry secrets and are Needs).
+    if (!TII->insertTimingModeRestore(RetMBB, beforeEpilogue(RetMBB, *Ret),
+                                      Ret->getIterator(), Ret->getDebugLoc(),
+                                      *Slot) &&
+        NonlocalOS)
+      *NonlocalOS << "NONLOCAL noscratch caller=" << MF.getName()
+                  << " bb=" << RetMBB.getNumber()
+                  << " (DIT left set: no free scratch register at this exit, so "
+                     "the function cannot restore and must not clear)\n";
+  }
 }
 
 // An instruction that must execute with PSTATE.DIT=1. Coverable-tainted

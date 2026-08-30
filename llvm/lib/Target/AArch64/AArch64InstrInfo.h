@@ -432,7 +432,8 @@ public:
                             MachineBasicBlock::iterator MI, const DebugLoc &DL,
                             int FrameIndex) const override;
   bool insertTimingModeRestore(MachineBasicBlock &MBB,
-                               MachineBasicBlock::iterator MI,
+                               MachineBasicBlock::iterator LoadAt,
+                               MachineBasicBlock::iterator SwitchAt,
                                const DebugLoc &DL,
                                int FrameIndex) const override;
 
