@@ -2,16 +2,26 @@
 //
 // REQUIRES: aarch64-registered-target
 
-// Piece 1: -ftaint-harden implies a TU-wide tail-call disable, because a tail
+// Piece 1: -ftaint-dit-abi implies a TU-wide tail-call disable, because a tail
 // call is an exit with no epilogue and the callee could not restore DIT there.
 // The per-function form is unavailable: which functions get instrumented is only
 // known after a post-PEI MIR pass, long after ISel has formed the tail calls.
-// RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -emit-llvm \
+// RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -emit-llvm -ftaint-dit-abi \
 // RUN:     -ftaint-harden=%S/Inputs/dit-abi-secret.txt %s -o - \
 // RUN:   | FileCheck %s --check-prefix=NOTAIL
 // NOTAIL: "disable-tail-calls"="true"
 
-// And it is absent without the flag, so codegen is untouched when off.
+// It must NOT be implied by -ftaint-harden alone. `disable-tail-calls` is honoured
+// by TailRecursionElimination as well as ISel, so applying it whenever hardening
+// is on turns tail RECURSION into O(n) stack frames in every function of the TU,
+// tainted or not - a stack-overflow hazard, and paid even when the ABI that needs
+// it is switched off.
+// RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -emit-llvm \
+// RUN:     -ftaint-harden=%S/Inputs/dit-abi-secret.txt %s -o - \
+// RUN:   | FileCheck %s --check-prefix=HARDENONLY
+// HARDENONLY-NOT: disable-tail-calls
+
+// And absent entirely without any flag.
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -emit-llvm %s -o - \
 // RUN:   | FileCheck %s --check-prefix=NOFLAG
 // NOFLAG-NOT: disable-tail-calls
@@ -29,13 +39,13 @@
 //
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
 // RUN:     -ftaint-harden=%S/Inputs/dit-abi-secret.txt \
-// RUN:     -mllvm -taint-dit-placement=function -mllvm -taint-dit-abi %s -o - \
+// RUN:     -mllvm -taint-dit-placement=function -ftaint-dit-abi %s -o - \
 // RUN:   | FileCheck %s --check-prefix=ABI
 
 // Region placement is the shipped default and takes a DIFFERENT exit form.
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
 // RUN:     -ftaint-harden=%S/Inputs/dit-abi-secret.txt \
-// RUN:     -mllvm -taint-dit-abi %s -o - \
+// RUN:     -ftaint-dit-abi %s -o - \
 // RUN:   | FileCheck %s --check-prefix=REGION
 
 // REGION-LABEL: _two_calls:
@@ -90,8 +100,13 @@ extern u64 sink_b(u64);
 // insertion point twice; the second call stopped at the freshly inserted `mrs`
 // (not a FrameSetup instruction) and put the enable first, so the function saved
 // the 1 it had just written and could never restore anything but 1.
-// ABI:      mrs x{{[0-9]+}}, {{DIT|S3_3_C4_C2_5}}
-// ABI-NEXT: str x{{[0-9]+}}, [sp
+// The register is CAPTURED, not just matched: a save that reads x9 and stores x10,
+// or a guard that tests a register other than the one reloaded, must fail. And the
+// prologue is anchored before the store, because a store emitted ahead of the SP
+// adjustment writes above the CALLER's stack pointer.
+// ABI:      sub sp, sp
+// ABI:      mrs x[[C:[0-9]+]], {{DIT|S3_3_C4_C2_5}}
+// ABI-NEXT: str x[[C]], [sp
 // ABI-NEXT: msr {{#26|DIT}}, #1
 //
 // Neither call site emits anything: the callee restores, so the caller has
@@ -111,7 +126,7 @@ extern u64 sink_b(u64);
 // The reload's exact position among the epilogue's own reloads is the
 // scheduler's business; all that matters is that it precedes the SP adjustment,
 // and the guarded switch follows it.
-// ABI:      ldr x{{[0-9]+}}, [sp
+// ABI:      ldr x[[C]], [sp
 // (a block-label comment for the clear block sits between the branch and the
 // write, so this is CHECK, not CHECK-NEXT)
 // TBNZ**W**, not TBNZX: the X form hard-codes b5=1, so `TBNZX ..., 24` tests bit
@@ -119,7 +134,7 @@ extern u64 sink_b(u64);
 // be taken, the clear would always run, and a function entered with DIT ON would
 // return with it OFF - stripping its caller. The asm printer shows the raw
 // operand either way, so pinning the register WIDTH here is what catches it.
-// ABI:      tbnz w{{[0-9]+}}, #24, [[CONT:[.A-Za-z0-9_]+]]
+// ABI:      tbnz w[[C]], #24, [[CONT:[.A-Za-z0-9_]+]]
 // ABI:      msr {{#26|DIT}}, #0
 // ABI-NEXT: [[CONT]]:
 // ABI-NEXT: ret

@@ -1366,6 +1366,13 @@ void EmitAssemblyHelper::RunTaintHardenCodegen(
     llvm::TaintInsertDIT = true;
   llvm::scope_exit RestoreInsertDIT([&] { llvm::TaintInsertDIT = SavedInsertDIT; });
 
+  // -ftaint-dit-abi drives the backend option, so the two can never disagree.
+  // An -mllvm override still wins, which keeps the escape hatch for A/B runs.
+  const bool SavedDITAbi = llvm::TaintDITAbi;
+  if (CodeGenOpts.TaintDITAbi && llvm::TaintDITAbi.getNumOccurrences() == 0)
+    llvm::TaintDITAbi = true;
+  llvm::scope_exit RestoreDITAbi([&] { llvm::TaintDITAbi = SavedDITAbi; });
+
   // The taint analysis wants alias analysis, exactly as it does under the new
   // PM. These managers must outlive PM.run() below, since the module pass holds
   // a reference to FAM.

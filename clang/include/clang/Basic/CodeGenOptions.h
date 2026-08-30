@@ -561,6 +561,9 @@ public:
   /// insertion). See -ftaint-harden.
   std::string TaintHarden;
 
+  /// Use the callee-saved PSTATE.DIT calling convention. See -ftaint-dit-abi
+  /// and docs/design/dit-abi.md. Only meaningful alongside TaintHarden.
+
   /// A list of functions which will be compiled for hotpatching.
   /// See -fms-secure-hotpatch-functions-list.
   std::vector<std::string> MSSecureHotPatchFunctionsList;

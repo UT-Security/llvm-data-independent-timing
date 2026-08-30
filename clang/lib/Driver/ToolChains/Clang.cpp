@@ -6808,6 +6808,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Args.hasArg(options::OPT_ftaint_harden_EQ))
     Args.AddLastArg(CmdArgs, options::OPT_ftaint_harden_EQ);
+  if (Args.hasArg(options::OPT_ftaint_dit_abi))
+    Args.AddLastArg(CmdArgs, options::OPT_ftaint_dit_abi);
 
   for (const auto &A :
        Args.getAllArgValues(options::OPT_fms_secure_hotpatch_functions_list))

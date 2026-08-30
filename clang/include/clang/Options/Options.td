@@ -4080,6 +4080,16 @@ def fms_secure_hotpatch_functions_list
       HelpText<"List of mangled symbol names of functions that should be "
                "hot-patched for Windows Secure Hot-Patching">;
 
+def ftaint_dit_abi : Flag<["-"], "ftaint-dit-abi">,
+    Group<f_Group>,
+    Visibility<[ClangOption, CC1Option]>,
+    MarshallingInfoFlag<CodeGenOpts<"TaintDITAbi">>,
+    HelpText<"Use the callee-saved PSTATE.DIT calling convention: read DIT at "
+             "entry, restore it at every return, and emit nothing at call "
+             "sites. Implies -fno-optimize-sibling-calls, because a tail call "
+             "is an exit with no epilogue at which DIT could be restored. "
+             "Requires -ftaint-harden.">;
+
 def ftaint_harden_EQ : Joined<["-"], "ftaint-harden=">,
     Group<f_Group>,
     Visibility<[ClangOption, CC1Option]>,

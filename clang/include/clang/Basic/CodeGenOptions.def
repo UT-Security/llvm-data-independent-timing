@@ -79,6 +79,7 @@ CODEGENOPT(EmitCallSiteInfo, 1, 0, Benign) ///< Emit call site info only in the 
 CODEGENOPT(IndirectTlsSegRefs, 1, 0, Benign) ///< Set when -mno-tls-direct-seg-refs
                                              ///< is specified.
 CODEGENOPT(DisableTailCalls  , 1, 0, Benign) ///< Do not emit tail calls.
+CODEGENOPT(TaintDITAbi     , 1, 0, Benign) ///< Callee-saved PSTATE.DIT ABI.
 CODEGENOPT(NoEscapingBlockTailCalls, 1, 0, Benign) ///< Do not emit tail calls from
                                                    ///< escaping blocks.
 CODEGENOPT(EmitDeclMetadata  , 1, 0, Benign) ///< Emit special metadata indicating what

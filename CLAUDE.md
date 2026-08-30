@@ -119,13 +119,18 @@ it at every exit it controls; a caller may rely on DIT never coming back lower t
 went in, so **call sites emit nothing**. That removes all four after-call re-assert
 classes by construction, with no LTO and no annotation.
 
-Landed and ON by default: **`-ftaint-harden` now implies `-fno-optimize-sibling-calls`**
-(TU-wide). A tail call is an exit with no epilogue, so the callee cannot restore there;
+Landed: **`-ftaint-dit-abi` implies `-fno-optimize-sibling-calls`** (TU-wide).
+**It is gated on the ABI flag, NOT on `-ftaint-harden`** - `disable-tail-calls` is
+honoured by TailRecursionElimination too, so applying it to every hardened build turns
+tail recursion into O(n) stack frames TU-wide, a stack-overflow hazard paid even with
+the ABI off. A tail call is an exit with no epilogue, so the callee cannot restore there;
 the per-function form is unavailable because the instrumented set is only known after a
 post-PEI pass. `musttail` and `MachineOutlinerTailCall` survive the flag and show up as
 `DITLEAK tailcall`, which is now a violation to audit rather than an accepted cost.
 
-Landed and OPT-IN: **`-mllvm -taint-dit-abi`**, the callee half - entry `MRS` into a
+Landed and OPT-IN: **`-ftaint-dit-abi`** (the `-mllvm -taint-dit-abi` cl::opt still
+exists for llc/A-B runs, but on its own it gives the ABI WITHOUT the tail-call disable,
+which is an incomplete configuration - prefer the driver flag), the callee half - entry `MRS` into a
 pre-PEI-reserved frame slot, a restore at each return, and **nothing at any call site**.
 **Both placements are supported.** The restore form is chosen **per exit**, not per
 placement: a guarded clear (`tbnz w, #24` over `msr DIT, #0`) where DIT is provably set

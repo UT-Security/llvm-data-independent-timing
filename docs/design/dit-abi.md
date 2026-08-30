@@ -101,7 +101,17 @@ fix, and it has direct precedent: both LLVM and GCC decline to tail-call out of 
 function that must restore PSTATE.SM (`mode-bit-precedent.md` §2.4).
 
 **DECIDED 2026-08-30: disable tail calls for the whole translation unit, not
-per-function.** `-ftaint-harden` implies `-fno-optimize-sibling-calls`.
+per-function** - and gate it on the ABI, not on hardening. `-ftaint-dit-abi`
+implies `-fno-optimize-sibling-calls`; `-ftaint-harden` alone must NOT.
+
+**Why the gating matters, found in review after shipping it the wrong way.**
+`disable-tail-calls` is honoured by `TailRecursionElimination.cpp` as well as by
+ISel. Applying it whenever hardening is on therefore turns tail RECURSION into
+O(n) stack frames in every function of the TU, tainted or not - a stack-overflow
+hazard, paid even when the ABI that needs it is switched off, and not overridable
+with `-foptimize-sibling-calls`. Measured: a tail-recursive function that plain
+`-O2` reduces to a closed form with no call at all emitted `bl` plus a frame under
+`-ftaint-harden`.
 
 The per-function form is the obvious design and it is not available to us. Setting
 `disable-tail-calls` on *only the instrumented functions* requires knowing which
