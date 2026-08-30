@@ -425,6 +425,17 @@ public:
   void insertNoop(MachineBasicBlock &MBB,
                   MachineBasicBlock::iterator MI) const override;
 
+  std::optional<int> createTimingModeSaveSlot(MachineFunction &MF) const override;
+  std::optional<int>
+  getTimingModeSaveSlot(const MachineFunction &MF) const override;
+  bool insertTimingModeSave(MachineBasicBlock &MBB,
+                            MachineBasicBlock::iterator MI, const DebugLoc &DL,
+                            int FrameIndex) const override;
+  bool insertTimingModeRestore(MachineBasicBlock &MBB,
+                               MachineBasicBlock::iterator MI,
+                               const DebugLoc &DL,
+                               int FrameIndex) const override;
+
   void insertTimingModeSwitch(MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator MI, const DebugLoc &DL,
                               bool Enable) const override;

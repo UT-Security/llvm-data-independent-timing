@@ -951,6 +951,50 @@ public:
 
 char TaintInterprocLegacyPass::ID = 0;
 
+namespace {
+/// Reserve the callee-saved-DIT carrier slot, before PrologEpilogInserter.
+///
+/// This runs BEFORE the taint analysis, so it cannot know which functions will
+/// be instrumented. It deliberately over-provisions: every function in a module
+/// that has taint sources gets a slot, and the ones that turn out not to need it
+/// simply never reference theirs.
+///
+/// Over-provisioning is what keeps the DIT ABI off a two-pass compile. The
+/// alternative is to learn the instrumented set first and recompile with it
+/// known, which LLVM's register-allocation maintainers have declined for this
+/// shape of problem (discourse.llvm.org/t/21516). The cost is bounded and
+/// instruction-free: an unused slot is 8 bytes of frame (16 after alignment) and
+/// no code at all, since nothing loads or stores it.
+class TaintDITSlotReserve : public MachineFunctionPass {
+public:
+  static char ID;
+  TaintDITSlotReserve() : MachineFunctionPass(ID) {}
+
+  StringRef getPassName() const override {
+    return "Reserve the PSTATE.DIT carrier frame slot";
+  }
+
+  bool runOnMachineFunction(MachineFunction &MF) override {
+    // Gate on the ABI flag as well as DIT insertion. Reserving a slot the
+    // placement code will never touch would grow every frame in a hardened build
+    // for nothing, and the default placement (region) does not use the carrier
+    // yet.
+    if (!TaintInsertDIT || !TaintDITAbi)
+      return false;
+    if (!moduleHasTaintSources(*MF.getFunction().getParent()))
+      return false;
+    const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+    return TII->createTimingModeSaveSlot(MF).has_value();
+  }
+};
+} // end anonymous namespace
+
+char TaintDITSlotReserve::ID = 0;
+
+MachineFunctionPass *llvm::createTaintDITSlotReservePass() {
+  return new TaintDITSlotReserve();
+}
+
 ModulePass *llvm::createTaintInterprocLegacyPass(MachineModuleInfo &MMI,
                                                  FunctionAnalysisManager &FAM) {
   return new TaintInterprocLegacyPass(MMI, FAM);

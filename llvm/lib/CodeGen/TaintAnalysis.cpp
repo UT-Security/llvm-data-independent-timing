@@ -112,6 +112,20 @@ cl::opt<std::string> llvm::TaintUncoveredReportFile(
              "silent false assurance otherwise (gap G2)"),
     cl::value_desc("file"));
 
+cl::opt<bool> llvm::TaintDITAbi(
+    "taint-dit-abi", cl::init(false), cl::Hidden,
+    cl::desc("Callee-saved PSTATE.DIT (docs/design/dit-abi.md): read DIT at "
+             "entry, restore it at every return, and emit nothing at call "
+             "sites. Currently implemented for -taint-dit-placement=function "
+             "only; region placement additionally needs its interior clears "
+             "guarded on the entry value (dit-unconditional-design.md 6.1)."));
+
+cl::opt<std::string> llvm::TaintNonlocalReportFile(
+    "taint-nonlocal-report", cl::init(""), cl::Hidden,
+    cl::desc("Write, to this file, every site where the DIT callee-saved "
+             "obligation degrades to the non-lowering guarantee: EH unwind, "
+             "setjmp, and musttail. All leave DIT set (dwell, not exposure)."));
+
 cl::opt<std::string> llvm::TaintClobberReportFile(
     "taint-clobber-report",
     cl::desc("Output file for call sites that make the caller treat memory as "
@@ -2409,10 +2423,68 @@ static bool isOracleRearmCall(const MachineInstr &MI) {
 // function did not turn DIT on, so it must not turn it off: it keeps the
 // (redundant) entry enable but emits no disable before its returns. Eliding the
 // ENABLE too would be the unsafe direction - see FunctionTaintSummary.
+/// First instruction of the entry block that is NOT part of the prologue.
+///
+/// The carrier save stores through the frame, so it cannot precede the prologue:
+/// SP has not been adjusted yet and the slot's address is not yet valid.
+static MachineBasicBlock::iterator afterPrologue(MachineBasicBlock &Entry) {
+  auto I = Entry.begin();
+  while (I != Entry.end() && I->getFlag(MachineInstr::FrameSetup))
+    ++I;
+  return I;
+}
+
+/// The point just before \p Ret at which the frame is still valid.
+///
+/// Symmetric to afterPrologue: the epilogue tears the frame down, so a reload
+/// placed after it would read a dead slot. Walk back over the FrameDestroy run.
+static MachineBasicBlock::iterator beforeEpilogue(MachineBasicBlock &MBB,
+                                                  MachineInstr &Ret) {
+  MachineBasicBlock::iterator I(Ret);
+  while (I != MBB.begin()) {
+    auto Prev = std::prev(I);
+    if (!Prev->getFlag(MachineInstr::FrameDestroy))
+      break;
+    I = Prev;
+  }
+  return I;
+}
+
+/// Emit the callee-saved-DIT carrier: read PSTATE.DIT at entry into the reserved
+/// frame slot, and restore it before every return. docs/design/dit-abi.md §1.
+///
+/// Returns true if the save was emitted, meaning the caller must also emit the
+/// restores and may delete its after-call re-asserts.
+///
+/// If the slot is missing or no scratch register can be proven free, this
+/// returns false and NOTHING is emitted. The caller then leaves DIT set at exit
+/// rather than clearing it: that satisfies the §1 guarantee (never return DIT
+/// lower than entry) at the cost of dwell. Clearing unconditionally would be the
+/// unsafe fallback, because a function entered with DIT on would strip its
+/// caller's protection and, under this ABI, the caller emits no re-assert to
+/// repair it.
+static bool emitDITCarrierSave(MachineFunction &MF, const TargetInstrInfo *TII,
+                               MachineBasicBlock::iterator At,
+                               raw_ostream *NonlocalOS) {
+  std::optional<int> Slot = TII->getTimingModeSaveSlot(MF);
+  MachineBasicBlock &Entry = MF.front();
+  if (Slot && TII->insertTimingModeSave(Entry, At, DebugLoc(), *Slot))
+    return true;
+
+  if (NonlocalOS)
+    *NonlocalOS << "NONLOCAL noscratch caller=" << MF.getName()
+                << " (DIT left set: "
+                << (Slot ? "no free scratch register at entry"
+                         : "no carrier slot reserved")
+                << ", so the function cannot restore and must not clear)\n";
+  return false;
+}
+
 static void emitFunctionGranularityDIT(MachineFunction &MF,
                                        const TaintSummaryInfo *TSI,
                                        bool OwnsDIT,
-                                       raw_ostream *ReassertOS = nullptr) {
+                                       raw_ostream *ReassertOS = nullptr,
+                                       raw_ostream *NonlocalOS = nullptr) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   Module *M = const_cast<Module *>(MF.getFunction().getParent());
   MachineBasicBlock &Entry = MF.front();
@@ -2422,9 +2494,26 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
   // nothing else can name `foo.dit`, and the annotator only clones
   // local-linkage, address-not-taken functions so no pointer can reach it.
   const bool Clone = isDITClone(&MF.getFunction());
+
+  // Callee-saved DIT (docs/design/dit-abi.md). A function that owns DIT reads
+  // the incoming value into its carrier slot, so that every exit can put back
+  // exactly what it found. A clone is entered with DIT already on by
+  // construction and owns nothing, so it neither saves nor restores.
+  const bool ABI = TaintDITAbi && OwnsDIT && !Clone;
+
+  // Compute the insertion point ONCE. Both the carrier save and the entry enable
+  // go here, and BuildMI inserts before the iterator, so calling them in this
+  // order yields `mrs; str; msr DIT,#1`. Recomputing afterPrologue() for the
+  // second one would stop at the `mrs` just inserted -- which is not FrameSetup
+  // -- and put the enable BEFORE the read, so the function would save the value
+  // it had just written and could never restore anything but 1.
+  MachineBasicBlock::iterator EntryAt = afterPrologue(Entry);
+  const bool Carried = ABI && emitDITCarrierSave(MF, TII, EntryAt, NonlocalOS);
+  std::optional<int> Slot =
+      Carried ? TII->getTimingModeSaveSlot(MF) : std::nullopt;
+
   if (!Clone)
-    TII->insertTimingModeSwitch(Entry, Entry.begin(), DebugLoc(),
-                                /*Enable=*/true);
+    TII->insertTimingModeSwitch(Entry, EntryAt, DebugLoc(), /*Enable=*/true);
   // Inside a clone DIT is on throughout, so its own calls can use clones too.
   if (Clone)
     redirectCallsToDITClones(MF, *M,
@@ -2437,9 +2526,24 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
       if (MI.isReturn()) {
         if (!OwnsDIT)
           continue; // not ours to clear - the caller's region still needs it
+        if (ABI) {
+          // Restore the entry value rather than clearing unconditionally. If the
+          // carrier could not be established, emit NOTHING: leaving DIT set is
+          // the safe direction, clearing is not (§1 guarantee vs obligation).
+          if (Carried)
+            TII->insertTimingModeRestore(MBB, beforeEpilogue(MBB, MI),
+                                         MI.getDebugLoc(), *Slot);
+          continue;
+        }
         TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
                                     /*Enable=*/false);
       } else if (MI.isCall()) {
+        // Under the ABI the callee restores, so the caller emits nothing at any
+        // call site - including indirect and cross-TU ones, which no per-callee
+        // analysis could ever have cleared. This is the deletion that takes
+        // full-LTO Bitcoin Core from 127,740 switches to ~15,000.
+        if (ABI)
+          continue;
         // Skip our own oracle sled. It preserves DIT, and (because this loop
         // inserts INTO the block it is iterating) treating the sled's BL as a
         // clobber would emit a sled after the sled, without end.
@@ -2558,6 +2662,89 @@ computeDITOnEntry(MachineFunction &MF, const TaintSummaryInfo *TSI, Module &M,
 // Not a gate. The tail-call case is the correct, documented outcome, so failing
 // or falling back here would reintroduce the very under-taint the tail-call fix
 // removed.
+// Report every site where the PSTATE.DIT callee-saved OBLIGATION degrades to the
+// weaker GUARANTEE (docs/design/dit-abi.md §1, §2.2).
+//
+// The obligation is `d_out == d_in` at every exit the function CONTROLS. Three
+// exits destroy the frame without running our epilogue, so the restore never
+// executes:
+//
+//  - `unwind`   -- _Unwind_Resume tears the frame down directly. The call that
+//                  can throw is identified by its block having an EH successor.
+//  - `setjmp`   -- longjmp restores no PSTATE bit (DIT is not in jmp_buf), so it
+//                  skips the epilogue of every frame it jumps over. Identified by
+//                  the `returns_twice` attribute on the callee.
+//  - `musttail` -- guaranteed TCO is a correctness requirement, so it bypasses
+//                  the TU-wide tail-call disable at SelectionDAGBuilder.cpp's
+//                  `canTailCall`. Identified as a surviving TCRETURN, the same
+//                  check that produces `DITLEAK tailcall`.
+//
+// All three leave DIT SET, which satisfies the guarantee: none can strip a
+// caller's protection, and the residual is dwell rather than exposure. The dwell
+// is bounded in practice because the next enclosing INSTRUMENTED frame restores
+// its own entry value on the way out; an unwind passing through nothing but
+// uninstrumented frames propagates further, and that is the honest limit.
+//
+// Not a gate, and deliberately not a fix. None of the three is repairable from
+// inside the function: SME's answer (mandate a value at handler entry, teach
+// libunwind to enforce it) is blocked upstream by abi-aa #394, which is still
+// open. Reporting turns an unquantified caveat in a design document into a
+// counted list an auditor can work through.
+static void reportNonlocalDITExits(MachineFunction &MF, Module &M,
+                                   bool OwnsDIT, raw_ostream *OS) {
+  if (!OS)
+    return;
+  // A function that does not own DIT never took on the obligation: it was
+  // entered with DIT already set and must not clear it, so there is no restore
+  // to skip and nothing here degrades.
+  if (!OwnsDIT)
+    return;
+
+  auto emit = [&](const char *Kind, const MachineInstr &MI,
+                  const Function *Callee, const char *Why) {
+    *OS << "NONLOCAL " << Kind;
+    if (Callee)
+      *OS << " callee=" << Callee->getName();
+    else if (StringRef(Kind) == "musttail")
+      *OS << " callee=<indirect>";
+    *OS << " caller=" << MF.getName() << " bb=" << MI.getParent()->getNumber();
+    if (const DebugLoc &DL = MI.getDebugLoc())
+      *OS << " line=" << DL.getLine();
+    *OS << " (DIT left set: " << Why << ")\n";
+  };
+
+  for (MachineBasicBlock &MBB : MF) {
+    // An invoke's unwind edge is a successor that is an EH pad. Compute once per
+    // block rather than per call.
+    const bool HasEHSucc = llvm::any_of(
+        MBB.successors(), [](const MachineBasicBlock *S) { return S->isEHPad(); });
+
+    for (MachineInstr &MI : MBB) {
+      if (!MI.isCall())
+        continue;
+
+      // musttail: a TCRETURN that survived -fno-optimize-sibling-calls. A tail
+      // call is BOTH isReturn() and isCall(), so test it first.
+      if (MI.isReturn()) {
+        emit("musttail", MI, findCalledFunction(M, MI),
+             "musttail bypasses the TU-wide tail-call disable, and a tail call "
+             "has no epilogue");
+        continue;
+      }
+
+      const Function *Callee = findCalledFunction(M, MI);
+      if (Callee && Callee->hasFnAttribute(Attribute::ReturnsTwice))
+        emit("setjmp", MI, Callee,
+             "a longjmp back through here skips this frame's epilogue, and DIT "
+             "is not in jmp_buf");
+
+      if (HasEHSucc)
+        emit("unwind", MI, Callee,
+             "_Unwind_Resume destroys the frame without running the epilogue");
+    }
+  }
+}
+
 static void reportUnbalancedDITExits(MachineFunction &MF,
                                      const TaintSummaryInfo *TSI, Module &M,
                                      const TargetInstrInfo *TII, bool OwnsDIT,
@@ -3256,6 +3443,12 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   auto ExitOSPtr = openTaintReport(TaintCallsiteReportFile,
                                    "taint callsite report", /*Append=*/true);
   raw_ostream *ExitOS = ExitOSPtr.get();
+  // Append, like the other per-function audits: this runs once per function and
+  // every function's findings must accumulate into one file.
+  auto NonlocalOSPtr = openTaintReport(TaintNonlocalReportFile,
+                                       "DIT non-local exit report",
+                                       /*Append=*/true);
+  raw_ostream *NonlocalOS = NonlocalOSPtr.get();
 
   // Track B: cost-model region placement (WIP). Opt-in; default stays
   // function-granularity below, so shipped codegen is untouched. Both modes
@@ -3265,6 +3458,7 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
     // After the region emitter, so a function that fell back to whole-function
     // granularity is checked in the shape it actually shipped.
     reportUnbalancedDITExits(MF, TSI, M, TII, OwnsDIT, ExitOS);
+    reportNonlocalDITExits(MF, M, OwnsDIT, NonlocalOS);
     emitDITPrecisionReport(MF, TR, TSI, AA);
     return TaintedInstrCount;
   }
@@ -3281,8 +3475,9 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   // mode when it contains any tainted instruction. Per-region toggles would
   // clear an enclosing region's DIT when a tainted callee's exit switch runs
   // inside a caller's still-open region.
-  emitFunctionGranularityDIT(MF, TSI, OwnsDIT, ReassertOS);
+  emitFunctionGranularityDIT(MF, TSI, OwnsDIT, ReassertOS, NonlocalOS);
   reportUnbalancedDITExits(MF, TSI, M, TII, OwnsDIT, ExitOS);
+  reportNonlocalDITExits(MF, M, OwnsDIT, NonlocalOS);
   emitDITPrecisionReport(MF, TR, TSI, AA);
 
   return TaintedInstrCount;

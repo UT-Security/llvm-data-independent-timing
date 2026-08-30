@@ -112,6 +112,30 @@ a callee's memory clobber only at call sites that actually pass a secret: withou
 that escape it (returned pointer into a secret buffer, global read by a sibling with no
 call edge, inline asm, NEON register tuple). `-taint-no-modset-gate` is the escape hatch.
 
+### The DIT ABI (settled 2026-08-30) - `docs/design/dit-abi.md`
+
+**PSTATE.DIT is callee-saved.** An instrumented callee returns DIT exactly as it found
+it at every exit it controls; a caller may rely on DIT never coming back lower than it
+went in, so **call sites emit nothing**. That removes all four after-call re-assert
+classes by construction, with no LTO and no annotation.
+
+Landed and ON by default: **`-ftaint-harden` now implies `-fno-optimize-sibling-calls`**
+(TU-wide). A tail call is an exit with no epilogue, so the callee cannot restore there;
+the per-function form is unavailable because the instrumented set is only known after a
+post-PEI pass. `musttail` and `MachineOutlinerTailCall` survive the flag and show up as
+`DITLEAK tailcall`, which is now a violation to audit rather than an accepted cost.
+
+Landed and OPT-IN: **`-mllvm -taint-dit-abi`**, the callee half (entry `MRS` into a
+pre-PEI-reserved frame slot, `MSR DIT, Xt` restore at each return, no call-site
+re-asserts). **Implemented for `-taint-dit-placement=function` only** - region placement
+narrows by clearing, and every interior clear must first be guarded on the saved value
+(`dit-unconditional-design.md` §6.1). Default off until that lands, since `region` is
+the shipped default.
+
+New report: **`-taint-nonlocal-report=<file>`** lists the sites where the obligation
+degrades to the guarantee and DIT is simply left set - `setjmp`, `musttail`, `unwind`,
+and `noscratch`. All are dwell, never exposure.
+
 ### Taint-source file format (one per line)
 
 ```
@@ -131,6 +155,7 @@ Taint source auto-detected as `<basename>_secret.txt`. Steps it performs: clang
 bug), `llc -enable-new-pm -run-taint-interproc -taint-insert-dit`, then
 `llc -start-after=prologepilog -filetype=obj`. Report
 files: `-taint-output`, `-taint-regions-output`, `-taint-source-regions-output`,
+`-taint-nonlocal-report` (DIT obligation degrades to the guarantee),
 `-taint-callsite-report` (secret-escape call sites; the clang flag does not emit
 these), `-taint-dit-precision-report` (DIT accounting - need/underdit/collateral/
 switches per function; reachable from clang as `-mllvm

@@ -1197,6 +1197,11 @@ void TargetPassConfig::addMachinePasses() {
     addPass(&ShrinkWrapID);
   }
 
+  // Frame layout has NOT happened yet, so this is the last point at which a
+  // frame object can be reserved. See setPrePrologEpilogCallback.
+  if (PrePrologEpilogCallback)
+    PrePrologEpilogCallback(*PM);
+
   // Prolog/Epilog inserter needs a TargetMachine to instantiate. But only
   // do so if it hasn't been disabled, substituted, or overridden.
   if (!isPassSubstitutedOrOverridden(&PrologEpilogCodeInserterID))

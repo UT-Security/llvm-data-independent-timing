@@ -86,6 +86,12 @@ class LLVM_ABI TargetPassConfig : public ImmutablePass {
 private:
   PassManagerBase *PM = nullptr;
 
+  /// Passes to insert immediately BEFORE PrologEpilogInserter. Needed by a
+  /// hardener that must reserve a frame object: PEI lays the frame out, so an
+  /// object created after it would shift SP-relative offsets it has already
+  /// computed. Only read while the pipeline is being constructed.
+  function_ref<void(PassManagerBase &)> PrePrologEpilogCallback = nullptr;
+
   /// Passes to insert immediately after PrologEpilogInserter. Only read while
   /// the pipeline is being constructed, so a function_ref is safe here.
   function_ref<void(PassManagerBase &)> PostPrologEpilogCallback = nullptr;
@@ -166,6 +172,10 @@ public:
   ///
   /// Must be called before addMachinePasses(); the callback is used only during
   /// pipeline construction.
+  void setPrePrologEpilogCallback(function_ref<void(PassManagerBase &)> CB) {
+    PrePrologEpilogCallback = CB;
+  }
+
   void setPostPrologEpilogCallback(function_ref<void(PassManagerBase &)> CB) {
     PostPrologEpilogCallback = CB;
   }

@@ -62,6 +62,13 @@ extern cl::opt<std::string> TaintSourceRegionsOutputFile;
 /// produced.
 extern cl::opt<bool> TaintInsertDIT;
 
+/// Callee-saved PSTATE.DIT (docs/design/dit-abi.md). Read DIT at entry into a
+/// frame slot reserved before PrologEpilogInserter, restore it at every return,
+/// and emit nothing at call sites. Read by BOTH the placement code and the
+/// pre-PEI slot reservation, which must not reserve a slot the placement will
+/// never use.
+extern cl::opt<bool> TaintDITAbi;
+
 /// Command-line option for the call-site residual (escape) report: call sites
 /// passing tainted/pointee-tainted arguments to callees the analysis cannot
 /// instrument (external declarations, indirect calls).
@@ -106,6 +113,15 @@ extern cl::opt<std::string> TaintDITReassertReportFile;
 /// points where a "taint explosion" originates — so they can be pinpointed and
 /// audited. Distinct from the escape report (which is about secrets leaving to
 /// callees we cannot instrument).
+/// Sites where the PSTATE.DIT callee-saved OBLIGATION degrades to the weaker
+/// GUARANTEE, because control leaves the frame without running its epilogue:
+/// an EH unwind, a `longjmp` out of a `setjmp` this function performed, or a
+/// `musttail` that survived the TU-wide tail-call disable. All three leave DIT
+/// SET, so none can strip a caller's protection - the residual is dwell, not
+/// exposure. They are reported rather than fixed because none is repairable
+/// from inside the function. See docs/design/dit-abi.md §2.2.
+extern cl::opt<std::string> TaintNonlocalReportFile;
+
 extern cl::opt<std::string> TaintClobberReportFile;
 extern cl::opt<std::string> TaintDITJoinReportFile;
 extern cl::opt<std::string> TaintFrameRefReportFile;

@@ -1689,6 +1689,56 @@ public:
                                       MachineBasicBlock::iterator MI,
                                       const DebugLoc &DL, bool Enable) const;
 
+  /// Reserve stack storage for this function's INCOMING timing-mode value, so
+  /// that a callee-saved timing-mode ABI can restore it (docs/design/dit-abi.md).
+  /// Must be called BEFORE PrologEpilogInserter: PEI lays the frame out, and an
+  /// object created after it would either not be allocated or would shift every
+  /// SP-relative offset already computed.
+  ///
+  /// A frame slot rather than a register because the carrier is live across
+  /// calls, so a register allocator would assign a callee-saved register that
+  /// PEI then spills and reloads anyway - identical memory traffic, far more
+  /// machinery. With a slot, a scratch register is needed only AT the entry read
+  /// and AT each return, never across the body.
+  ///
+  /// Default: no target support, returns std::nullopt.
+  virtual std::optional<int> createTimingModeSaveSlot(MachineFunction &MF) const {
+    return std::nullopt;
+  }
+
+  /// Retrieve the slot created by createTimingModeSaveSlot, or std::nullopt if
+  /// this function has none.
+  virtual std::optional<int>
+  getTimingModeSaveSlot(const MachineFunction &MF) const {
+    return std::nullopt;
+  }
+
+  /// Emit, at \p MI, a read of the current timing mode into \p FrameIndex.
+  /// Returns false if no scratch register could be proven free at this point, in
+  /// which case the caller must NOT emit a matching restore.
+  virtual bool insertTimingModeSave(MachineBasicBlock &MBB,
+                                    MachineBasicBlock::iterator MI,
+                                    const DebugLoc &DL, int FrameIndex) const {
+    return false;
+  }
+
+  /// Emit, at \p MI, a restore of the timing mode saved in \p FrameIndex.
+  ///
+  /// The restore must be a no-op or a DISABLE, never an enable: the write is
+  /// guarded so that a function entered with the mode already on leaves it on.
+  /// Guarding a disable is safe under speculation, guarding an ENABLE is not -
+  /// a mispredict would run secret work with the mode off. See
+  /// docs/design/dit-unconditional-design.md §3.
+  ///
+  /// Returns false if no scratch register could be proven free, in which case
+  /// the mode is left SET, which is the safe direction (dwell, not exposure).
+  virtual bool insertTimingModeRestore(MachineBasicBlock &MBB,
+                                       MachineBasicBlock::iterator MI,
+                                       const DebugLoc &DL,
+                                       int FrameIndex) const {
+    return false;
+  }
+
   /// Give \p MI a dependence on the target's data-independent-timing mode, so
   /// that a mode switch emitted by insertTimingModeSwitch cannot be reordered
   /// across it. Needed because "has side effects" is not enough: the machine

@@ -2304,6 +2304,27 @@ bool CompilerInvocation::ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args,
 
   Opts.StaticClosure = Args.hasArg(options::OPT_static_libclosure);
 
+  // -ftaint-harden makes PSTATE.DIT callee-saved: an instrumented function must
+  // return DIT exactly as it found it (docs/design/dit-abi.md). A tail call is an
+  // exit with no epilogue, so there is nowhere to put the restore, and the callee
+  // would leak its enable into its caller's caller.
+  //
+  // The per-function form of this fix is not available to us. Setting
+  // "disable-tail-calls" on only the instrumented functions requires knowing which
+  // functions the taint analysis will instrument, and that is decided by a MIR pass
+  // running after PrologEpilogInserter -- long after ISel has already formed the
+  // tail calls. Disabling them for the whole TU needs no analysis at all, which is
+  // what keeps this ABI off a two-pass compile.
+  //
+  // The cost is therefore paid by uninstrumented functions too. That is the
+  // deliberate trade. Two tail calls still survive and are audited rather than
+  // prevented: `musttail`, which bypasses the attribute at
+  // SelectionDAGBuilder::canTailCall because guaranteed TCO is a correctness
+  // requirement, and MachineOutlinerTailCall, which runs downstream of the pass.
+  // Both surface as `DITLEAK tailcall` lines.
+  if (!Opts.TaintHarden.empty())
+    Opts.DisableTailCalls = true;
+
   return Diags.getNumErrors() == NumErrorsBefore;
 }
 

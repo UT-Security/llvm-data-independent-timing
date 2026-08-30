@@ -7041,6 +7041,161 @@ void AArch64InstrInfo::pinToTimingMode(MachineInstr &MI) const {
                                           /*isImp=*/true));
 }
 
+//===----------------------------------------------------------------------===//
+// Callee-saved PSTATE.DIT: save the incoming value, restore it at every exit.
+// docs/design/dit-abi.md
+//===----------------------------------------------------------------------===//
+
+/// Resolve the carrier slot to a base register and a SCALED offset for the
+/// LDRXui/STRXui unsigned-immediate form.
+///
+/// Returns false if the slot cannot be reached that way - a scalable offset, a
+/// misaligned one, or one past the 12-bit scaled range. The caller then treats
+/// the carrier as unavailable, which leaves DIT set rather than clearing it: the
+/// safe direction under docs/design/dit-abi.md §1.
+static bool resolveTimingModeSlot(MachineFunction &MF, int FrameIndex,
+                                  Register &Base, int64_t &ScaledOffset) {
+  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  StackOffset Off = TFI->getFrameIndexReference(MF, FrameIndex, Base);
+  if (Off.getScalable())
+    return false;
+  int64_t Bytes = Off.getFixed();
+  if (Bytes < 0 || (Bytes % 8) != 0 || (Bytes / 8) > 4095)
+    return false;
+  ScaledOffset = Bytes / 8;
+  return true;
+}
+
+static MachineMemOperand *timingModeSlotMMO(MachineFunction &MF, int FrameIndex,
+                                            MachineMemOperand::Flags Flags) {
+  return MF.getMachineMemOperand(
+      MachinePointerInfo::getFixedStack(MF, FrameIndex), Flags, 8, Align(8));
+}
+
+/// Find a caller-saved GPR64 that is dead at \p MI.
+///
+/// Only x9-x15 are considered: they are the AAPCS64 temporary registers, so a
+/// dead one here cannot be carrying anything the ABI requires us to preserve.
+/// We deliberately do NOT consider callee-saved registers - PEI has already
+/// decided which ones to spill, and using an unspilled one would clobber the
+/// caller's value with no save (the Darwin compact-unwind revert at
+/// AArch64FrameLowering's `SavedRegs.reset(UnspilledCSGPR)` makes that failure
+/// silent).
+///
+/// This is only ever asked AT the entry read and AT a return, never across the
+/// body, which is the whole reason the DIT ABI keeps its carrier in a frame slot
+/// rather than a register. x9 is free at those two points; it is not free across
+/// them.
+static Register findTimingModeScratch(MachineBasicBlock &MBB,
+                                      MachineBasicBlock::iterator MI,
+                                      const TargetRegisterInfo &TRI) {
+  const MachineFunction &MF = *MBB.getParent();
+  LivePhysRegs LPR(TRI);
+  LPR.addLiveOuts(MBB);
+  // Walk backwards from the end of the block to MI, so LPR holds the set live
+  // at the insertion point.
+  for (MachineBasicBlock::reverse_iterator
+           It = MBB.rbegin(),
+           End = MachineBasicBlock::reverse_iterator(MI);
+       It != End; ++It)
+    LPR.stepBackward(*It);
+
+  for (MCRegister Reg :
+       {AArch64::X9, AArch64::X10, AArch64::X11, AArch64::X12, AArch64::X13,
+        AArch64::X14, AArch64::X15})
+    if (LPR.available(MF.getRegInfo(), Reg))
+      return Reg;
+  return Register();
+}
+
+std::optional<int>
+AArch64InstrInfo::createTimingModeSaveSlot(MachineFunction &MF) const {
+  auto *AFI = MF.getInfo<AArch64FunctionInfo>();
+  if (auto Existing = AFI->getTimingModeSaveIndex())
+    return Existing;
+  // Spill-slot so it is placed with the other spills rather than among
+  // address-taken locals, and so it is exempt from stack-protector ordering.
+  int FI = MF.getFrameInfo().CreateSpillStackObject(8, Align(8));
+  AFI->setTimingModeSaveIndex(FI);
+  return FI;
+}
+
+std::optional<int>
+AArch64InstrInfo::getTimingModeSaveSlot(const MachineFunction &MF) const {
+  return MF.getInfo<AArch64FunctionInfo>()->getTimingModeSaveIndex();
+}
+
+bool AArch64InstrInfo::insertTimingModeSave(MachineBasicBlock &MBB,
+                                            MachineBasicBlock::iterator MI,
+                                            const DebugLoc &DL,
+                                            int FrameIndex) const {
+  MachineFunction &MF = *MBB.getParent();
+  const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
+  Register Scratch = findTimingModeScratch(MBB, MI, TRI);
+  if (!Scratch)
+    return false;
+
+  // Resolve the slot address ourselves. storeRegToStackSlot would emit a
+  // FrameIndex operand, and frame-index elimination has already run - this pass
+  // is post-PEI - so the operand would survive to MCInstLower and abort there
+  // with "unknown operand type".
+  int64_t Offset;
+  Register Base;
+  if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset))
+    return false;
+
+  const AArch64SysReg::SysReg *DIT = AArch64SysReg::lookupSysRegByName("DIT");
+  assert(DIT && "DIT system register not registered");
+  BuildMI(MBB, MI, DL, get(AArch64::MRS), Scratch).addImm(DIT->Encoding);
+  BuildMI(MBB, MI, DL, get(AArch64::STRXui))
+      .addReg(Scratch, RegState::Kill)
+      .addReg(Base)
+      .addImm(Offset)
+      .addMemOperand(timingModeSlotMMO(MF, FrameIndex, MachineMemOperand::MOStore));
+  return true;
+}
+
+bool AArch64InstrInfo::insertTimingModeRestore(MachineBasicBlock &MBB,
+                                               MachineBasicBlock::iterator MI,
+                                               const DebugLoc &DL,
+                                               int FrameIndex) const {
+  MachineFunction &MF = *MBB.getParent();
+  const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
+  Register Scratch = findTimingModeScratch(MBB, MI, TRI);
+  if (!Scratch)
+    return false;
+
+  int64_t Offset;
+  Register Base;
+  if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset))
+    return false;
+
+  BuildMI(MBB, MI, DL, get(AArch64::LDRXui), Scratch)
+      .addReg(Base)
+      .addImm(Offset)
+      .addMemOperand(timingModeSlotMMO(MF, FrameIndex, MachineMemOperand::MOLoad));
+
+  // Branchless restore: `MSR DIT, Xt` writes back bit 24, which is exactly what
+  // `MRS` read, so the exit state equals the entry state.
+  //
+  // Structurally it cannot enable: at this point DIT is 1 (the entry enable put
+  // it there) and the saved value is 0 or 1, so the write is a no-op or a clear.
+  // The speculation hazard of docs/design/dit-unconditional-design.md §3.1
+  // therefore cannot arise for it, with no predictor to reason about.
+  //
+  // The guarded form (`TBNZ` over an `MSR DIT, #0`) is what dit-abi.md OPEN item
+  // 1 selects on cost - it is free when the function was entered with DIT
+  // already on - and is a strict improvement to make here later. It needs an MBB
+  // split at a point where the frame is already laid out, so it is staged after
+  // this correct-but-unconditional form rather than bundled with it.
+  const AArch64SysReg::SysReg *DIT = AArch64SysReg::lookupSysRegByName("DIT");
+  assert(DIT && "DIT system register not registered");
+  BuildMI(MBB, MI, DL, get(AArch64::MSR))
+      .addImm(DIT->Encoding)
+      .addReg(Scratch, RegState::Kill);
+  return true;
+}
+
 void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
                                               MachineBasicBlock::iterator MI,
                                               const DebugLoc &DL,

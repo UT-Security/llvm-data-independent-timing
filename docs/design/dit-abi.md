@@ -387,14 +387,48 @@ The contract is satisfied by `dit-unconditional-design.md` §4's sequence. Three
 3. **Entry read plus exit restore, with somewhere to keep the entry value**
    (`dit-unconditional-design.md` §5). Two options, and the prior art now favours the
    second:
-   - **B3, over-provision at ISel and elide late. RECOMMENDED, and it needs no two-pass
-     compile.** `ENTRY_PSTATE_SM` is created in *every* streaming-compatible function and
-     erased when `use_empty()` (`AArch64ISelLowering.cpp:3339`), so the instrumented set
-     never has to be known in advance. One adaptation: our uses are created post-PEI, so a
-     **placeholder use at each return must be emitted at ISel** to keep the value live
-     through RA. See `dit-unconditional-design.md` §5.2.
-   - **B1, pre-RA virtual register decided in advance.** Superseded by B3, which is the
-     same mechanism without the scheduling problem.
+   - **B2, frame slot. CHOSEN 2026-08-30, on implementation review.** A pre-PEI pass
+     reserves one 8-byte object in each candidate function; the post-PEI pass emits
+     `mrs`+`str` at entry and `ldr`+guarded-clear at each return, using a scratch
+     register **at those two points only**. This is what GCC shipped for PSTATE.SM.
+   - ~~B3, over-provision a vreg at ISel and elide late~~ and ~~B1, pre-RA vreg~~:
+     **rejected, see §5.1 below.**
+
+   ### 5.1 Why the frame slot beats the register (reversal, 2026-08-30)
+
+   B3 was recommended in an earlier draft of this file on the strength of the shipped
+   `ENTRY_PSTATE_SM` pattern. Working out the implementation reversed it.
+
+   **B3's advantage evaporates.** The carrier must be live across calls, so register
+   allocation assigns a **callee-saved** register, and PEI then spills and reloads it in
+   the prologue and epilogue. That is one store and one load: **exactly the memory
+   traffic B2 pays with an explicit frame slot.** B3 wins only in a leaf function with a
+   spare CSR, and a leaf function is the least likely to need a carrier at all, since the
+   thing that forces one is a call.
+
+   **B3's costs do not evaporate.** Two new pseudo instructions, emission at ISel, and a
+   placeholder use at every return that must survive to post-PEI and be recognized there.
+   `ENTRY_PSTATE_SM` can elide on `use_empty()` only because SME creates its uses at ISel
+   too; ours appear post-PEI, so the placeholder is load-bearing and fragile.
+
+   **And §5.1's own objection to a scratch register is what makes B2 work.** That
+   objection is exact: *"x9 is free at entry and at exit, not across them."* With a frame
+   slot the value does not have to cross anything. A scratch register is needed at the
+   entry read and at each return, and at both points `LivePhysRegs` can prove one free.
+
+   So B2 is the same cost, much less machinery, and matches an upstream implementation of
+   the identical problem. Equal cost with less mechanism is the whole argument.
+
+   ### 5.2 The fallback must not clear
+
+   If no scratch register can be proven free at entry or at some return, the function
+   falls back to **emitting the entry enable and no clear at all**.
+
+   The tempting fallback, today's unconditional `msr DIT, #0`, is **wrong under this
+   ABI**: a function entered with DIT on would return with it off and strip its caller's
+   protection, and under the ABI the caller emits no re-assert to repair it. Leaving DIT
+   set instead satisfies the §1 guarantee, costs dwell, and can never expose a secret.
+   Reported as a `NONLOCAL noscratch` line.
    - **B2, frame slot behind a hard frame pointer.** This is what **GCC shipped** for
      PSTATE.SM (`dd8090f40079fa41ee58d9f76b2e50ed4f95c6bf`). A hard FP defeats the
      "post-PEI stack push is a miscompile" objection. In LLVM it needs a small pre-PEI
@@ -407,3 +441,139 @@ flag took it off that dependency, so pieces 1 and 2 can land immediately and
 independently. Piece 3 takes the guarded clear (OPEN item 1, settled by Apple's shipping
 sequence); its storage should be B3, over-provision and elide, which **removes the
 two-pass compile from the project entirely** - no piece of this ABI now needs it.
+
+---
+
+## 9. Implementation, as landed 2026-08-30
+
+What exists in the tree, where, and why each piece is shaped the way it is.
+Everything below is verified by the tests named at the end.
+
+### 9.1 Piece 1: TU-wide tail-call disable. LANDED, on by default.
+
+`clang/lib/Frontend/CompilerInvocation.cpp`, end of `ParseCodeGenArgs`:
+
+```cpp
+  if (!Opts.TaintHarden.empty())
+    Opts.DisableTailCalls = true;
+```
+
+Placed in `ParseCodeGenArgs` rather than the driver so it applies to a direct
+`-cc1` invocation too, which is how the tests drive it. `CodeGenOpts.DisableTailCalls`
+adds `"disable-tail-calls"="true"` to every function (`CGCall.cpp:2661`), an
+IR-level attribute, so it survives into LTO.
+
+Verified both directions: 2 attributes with the flag on a 2-function TU, 0 without.
+
+### 9.2 Piece 2: the `NONLOCAL` report. LANDED, opt-in.
+
+`-taint-nonlocal-report=<file>`, emitted by `reportNonlocalDITExits` in
+`TaintAnalysis.cpp` next to the existing `reportUnbalancedDITExits`. Three kinds:
+
+| kind | detection |
+|---|---|
+| `setjmp` | callee carries `Attribute::ReturnsTwice` |
+| `musttail` | a surviving `TCRETURN`, i.e. both `isReturn()` and `isCall()` |
+| `unwind` | the call's block has an EH-pad successor |
+| `noscratch` | §5.2's fallback fired: the function could not establish a carrier |
+
+Only emitted for functions that OWN DIT. A function entered with DIT already set
+never took on the obligation, so nothing there degrades.
+
+### 9.3 Piece 3: the carrier. LANDED behind `-taint-dit-abi`, default OFF.
+
+Four `TargetInstrInfo` hooks, mirroring the existing `insertTimingModeSwitch` so
+`TaintAnalysis.cpp` stays target-independent:
+`createTimingModeSaveSlot`, `getTimingModeSaveSlot`, `insertTimingModeSave`,
+`insertTimingModeRestore`. AArch64 implements all four; the slot lives in
+`AArch64FunctionInfo::TimingModeSaveIndex`.
+
+Reservation runs pre-PEI through a new `TargetPassConfig::setPrePrologEpilogCallback`,
+symmetric to the existing post-PEI one, wired in `CodeGenTargetMachineImpl.cpp`
+**only when the taint post-PEI callback is set**, so no other pipeline is touched.
+The pass (`TaintDITSlotReserve`) is a no-op unless `-taint-insert-dit` is on and
+`moduleHasTaintSources` is true.
+
+Emitted sequence, verified end to end:
+
+```asm
+        sub  sp, sp, #48
+        stp  x20, x19, [sp, #16]
+        stp  x29, x30, [sp, #32]
+        mrs  x9, DIT              ; read the incoming value
+        str  x9, [sp, #8]         ; into the carrier slot
+        msr  DIT, #1              ; enable
+        bl   _sink_a              ; <- no re-assert
+        bl   _sink_b              ; <- no re-assert
+        ldr  x9, [sp, #8]
+        msr  DIT, x9              ; restore exactly
+        ldp  ...                  ; epilogue
+        ret
+```
+
+### 9.3.1 The slot reservation is gated on the ABI flag, and why that matters
+
+`TaintDITSlotReserve` checks `TaintInsertDIT && TaintDITAbi`, not just the former. An
+earlier version checked only `TaintInsertDIT` and therefore reserved a carrier in every
+function of every hardened build, including the default `region` configuration that
+never touches it.
+
+Measured on the two-call test case: **32-byte frame with the ABI off, 48 with it on.**
+So the cost is real (one 8-byte object, 16 after alignment, per instrumented function)
+and it must not be paid by a configuration that cannot use it. Verified both ways: with
+the flag off the output contains no `mrs` at all and the frame is unchanged.
+
+### 9.4 Four things the implementation got wrong first, kept so they are not redone
+
+1. **`storeRegToStackSlot` emits a FrameIndex operand, and we run post-PEI.**
+   Frame-index elimination has already happened, so the operand survives to
+   MCInstLower and aborts with "unknown operand type". The address is now resolved
+   explicitly via `TargetFrameLowering::getFrameIndexReference` into a base
+   register and a scaled offset, with a safe bail (returning false, so no restore
+   is emitted) for a scalable, misaligned, or out-of-range offset.
+
+2. **The insertion point must be computed ONCE.** `afterPrologue` skips
+   `FrameSetup` instructions. Calling it a second time, after the save was
+   inserted, stops at the freshly emitted `mrs` - which is not FrameSetup - and
+   places the enable BEFORE the read. The function then saves the 1 it just wrote
+   and can never restore anything else. Silent: still safe, since it only ever
+   leaves DIT set, but the ABI is inert.
+
+3. **The save cannot precede the prologue and the restore cannot follow the
+   epilogue.** Both go through the frame, and SP is not adjusted before the
+   prologue nor still adjusted after the epilogue. Hence `afterPrologue` and
+   `beforeEpilogue`, which walk the `FrameSetup`/`FrameDestroy` runs.
+
+4. **Hand-written call-bearing MIR silently loses taint.** A two-`BL` block
+   written by hand reported zero tainted instructions while the identical C
+   compiled end to end reported four. Root cause not chased; the lesson is
+   recorded in the test, which now uses MIR generated by
+   `llc -stop-after=prologepilog`. Do not debug placement against hand-written MIR
+   with calls in it.
+
+### 9.5 What is NOT done
+
+- **Region placement.** `-taint-dit-abi` is implemented for
+  `-taint-dit-placement=function` only. Region placement narrows by CLEARING, and
+  under a dynamic entry value an interior clear is only legal if this frame owns
+  DIT. Every interior clear must first be guarded on the saved value
+  (`dit-unconditional-design.md` §6.1). Until then the flag stays default-off,
+  because `region` is the shipped default and the flag would be inert there.
+- **The guarded exit form.** §7 item 1 chose `tbnz` over the branchless restore on
+  measured cost. The landed code emits the branchless `msr DIT, Xt`, which is
+  correct and restores exactly, but pays the write even when the function was
+  entered with DIT already on. The guarded form needs an MBB split at a point
+  where the frame is laid out; staged separately rather than bundled with a
+  correctness change.
+- **`unwind` detection is untested.** The `setjmp` and `musttail` kinds are
+  covered; no test exercises an EH-pad successor yet.
+
+### 9.6 Tests
+
+| test | covers |
+|---|---|
+| `clang/test/CodeGen/taint-dit-abi.c` | pieces 1 and 3 end to end, plus a TODAY arm pinning the re-asserts the ABI deletes |
+| `llvm/test/CodeGen/AArch64/taint-analysis-nonlocal-report.mir` | piece 2, `setjmp` and `musttail`, with `plain` as a negative control |
+
+`llvm/test/CodeGen/AArch64/taint-analysis-*.mir` plus `TaintAnnotate`: 36 tests, all
+passing.

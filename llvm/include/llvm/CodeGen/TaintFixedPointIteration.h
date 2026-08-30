@@ -26,6 +26,7 @@ namespace llvm {
 
 class Function;
 class MachineFunction;
+class MachineFunctionPass;
 class MachineModuleInfo;
 class ModulePass;
 
@@ -76,6 +77,11 @@ bool moduleHasTaintSources(const Module &M);
 ///
 /// Add via addPassesToEmitFileWithPostPrologEpilogModulePasses, which is the
 /// point where every MachineFunction of the module is resident at once.
+/// Reserve, before PrologEpilogInserter lays the frame out, the 8-byte slot that
+/// holds a function's incoming PSTATE.DIT for the callee-saved DIT ABI. Must be
+/// scheduled pre-PEI; see TargetPassConfig::setPrePrologEpilogCallback.
+MachineFunctionPass *createTaintDITSlotReservePass();
+
 ModulePass *createTaintInterprocLegacyPass(MachineModuleInfo &MMI,
                                            FunctionAnalysisManager &FAM);
 

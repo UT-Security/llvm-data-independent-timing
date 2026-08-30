@@ -17,6 +17,7 @@
 #include "llvm/CodeGen/BasicTTIImpl.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TaintFixedPointIteration.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/MC/MCAsmBackend.h"
@@ -113,6 +114,13 @@ CodeGenTargetMachineImpl::getTargetTransformInfo(const Function &F) const {
   return TargetTransformInfo(std::make_unique<BasicTTIImpl>(this, F));
 }
 
+/// Add the pass that reserves the callee-saved-DIT carrier frame slot. It must
+/// run before PrologEpilogInserter computes the frame layout, and it is a no-op
+/// unless DIT insertion is on and the module actually carries taint sources.
+static void addTaintDITSlotReserve(PassManagerBase &PM) {
+  PM.add(createTaintDITSlotReservePass());
+}
+
 /// addPassesToX helper drives creation and initialization of TargetPassConfig.
 static TargetPassConfig *
 addPassesToGenerateCode(
@@ -124,8 +132,12 @@ addPassesToGenerateCode(
   TargetPassConfig *PassConfig = TM.createPassConfig(PM);
   // Set PassConfig options provided by TargetMachine.
   PassConfig->setDisableVerify(DisableVerify);
-  if (PostPrologEpilogPasses)
+  if (PostPrologEpilogPasses) {
     PassConfig->setPostPrologEpilogCallback(PostPrologEpilogPasses);
+    // Only in the taint pipeline: the carrier slot has to be reserved before PEI
+    // lays out the frame, and every other pipeline should be untouched.
+    PassConfig->setPrePrologEpilogCallback(addTaintDITSlotReserve);
+  }
   PM.add(PassConfig);
   PM.add(&MMIWP);
 

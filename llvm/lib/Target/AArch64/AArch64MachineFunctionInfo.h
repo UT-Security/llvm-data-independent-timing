@@ -164,6 +164,13 @@ class AArch64FunctionInfo final : public MachineFunctionInfo {
   SmallVector<ForwardedRegister, 1> ForwardedMustTailRegParms;
 
   /// FrameIndex for the tagged base pointer.
+  /// Frame index of the 8-byte slot holding this function's INCOMING
+  /// PSTATE.DIT, for the callee-saved DIT ABI (docs/design/dit-abi.md).
+  /// Reserved before PrologEpilogInserter, because an object created after PEI
+  /// has laid the frame out would shift offsets it already computed. Absent in
+  /// a function the taint hardener was never asked to consider.
+  std::optional<int> TimingModeSaveIndex;
+
   std::optional<int> TaggedBasePointerIndex;
 
   /// Offset from SP-at-entry to the tagged base pointer.
@@ -575,6 +582,11 @@ public:
   SmallVectorImpl<ForwardedRegister> &getForwardedMustTailRegParms() {
     return ForwardedMustTailRegParms;
   }
+
+  std::optional<int> getTimingModeSaveIndex() const {
+    return TimingModeSaveIndex;
+  }
+  void setTimingModeSaveIndex(int Index) { TimingModeSaveIndex = Index; }
 
   std::optional<int> getTaggedBasePointerIndex() const {
     return TaggedBasePointerIndex;
