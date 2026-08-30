@@ -7026,6 +7026,21 @@ void AArch64InstrInfo::insertNoop(MachineBasicBlock &MBB,
   BuildMI(MBB, MI, DL, get(AArch64::NOP));
 }
 
+static cl::opt<bool> TaintDitOracleHooks(
+    "taint-dit-oracle-hooks", cl::Hidden, cl::init(false),
+    cl::desc("Staple a call to the libditoracle re-arm trampoline to every "
+             "PSTATE.DIT switch, so a dynamic under-taint oracle can re-arm at "
+             "region boundaries. Instrumentation only: NEVER time such a "
+             "build."));
+
+void AArch64InstrInfo::pinToTimingMode(MachineInstr &MI) const {
+  if (MI.readsRegister(AArch64::DIT, /*TRI=*/nullptr))
+    return;
+  MI.addOperand(*MI.getMF(),
+                MachineOperand::CreateReg(AArch64::DIT, /*isDef=*/false,
+                                          /*isImp=*/true));
+}
+
 void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
                                               MachineBasicBlock::iterator MI,
                                               const DebugLoc &DL,
@@ -7033,9 +7048,45 @@ void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
   // MSR DIT, #Enable (PSTATE.DIT requires FEAT_DIT at run time).
   const auto *DIT = AArch64PState::lookupPStateImm0_15ByName("DIT");
   assert(DIT && "DIT PState not registered");
+  // The implicit def of $dit is what stops a later pass moving this switch
+  // across the instructions it governs; pinToTimingMode() puts the matching
+  // use on those. $dit is reserved and never allocated - it carries an
+  // ordering edge and nothing else.
   BuildMI(MBB, MI, DL, get(AArch64::MSRpstateImm4))
       .addImm(DIT->Encoding)
-      .addImm(Enable ? 1 : 0);
+      .addImm(Enable ? 1 : 0)
+      .addDef(AArch64::DIT, RegState::Implicit);
+
+  if (!TaintDitOracleHooks)
+    return;
+
+  // Oracle sled, in the shape XRay uses for its custom-event calls: the only
+  // register it disturbs is LR, which it saves inline, because the trampoline
+  // (libditoracle sled.S) preserves x0-x17, NZCV and v0-v31 itself. That makes
+  // the sled safe to insert here, after register allocation, without knowing
+  // what is live. Deliberately expensive; an oracle build is never timed.
+  //
+  //    stp x30, xzr, [sp, #-16]!
+  //    bl  __dit_oracle_rearm
+  //    ldp x30, xzr, [sp], #16
+  //
+  // The LR read is `undef`: the sled stores whatever LR holds and puts the same
+  // bits back, so it is value-neutral and genuinely does not depend on the
+  // incoming value. That matters after a call, where LR is defined-dead and a
+  // plain read is invalid MIR ("using an undefined physical register").
+  BuildMI(MBB, MI, DL, get(AArch64::STPXpre), AArch64::SP)
+      .addReg(AArch64::LR, RegState::Undef)
+      .addReg(AArch64::XZR)
+      .addReg(AArch64::SP)
+      .addImm(-2); // scaled by 8: -16 bytes, keeping SP 16-byte aligned
+  BuildMI(MBB, MI, DL, get(AArch64::BL))
+      .addExternalSymbol("__dit_oracle_rearm");
+  BuildMI(MBB, MI, DL, get(AArch64::LDPXpost))
+      .addDef(AArch64::SP)
+      .addDef(AArch64::LR)
+      .addDef(AArch64::XZR)
+      .addReg(AArch64::SP)
+      .addImm(2);
 }
 
 std::optional<bool>
@@ -10759,6 +10810,18 @@ AArch64InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
                                        MachineBasicBlock::iterator &MIT,
                                        unsigned Flags) const {
   MachineInstr &MI = *MIT;
+
+  // Don't outline anything tied to PSTATE.DIT: the mode switches themselves, or
+  // the instructions they protect (marked with an implicit $dit by
+  // pinToTimingMode). Lifting either into a shared function moves it out of the
+  // region the taint pass placed it in, and whether the result is safe then
+  // depends on the DIT state at every call site of the outlined function --
+  // which nothing checks, because the function did not exist when the analysis
+  // ran. The pre-emit verifier rejects such functions, so without this the
+  // outliner and DIT hardening simply cannot be used together.
+  if (MI.readsRegister(AArch64::DIT, /*TRI=*/nullptr) ||
+      MI.definesRegister(AArch64::DIT, /*TRI=*/nullptr))
+    return outliner::InstrType::Illegal;
 
   // Don't outline anything used for return address signing. The outlined
   // function will get signed later if needed

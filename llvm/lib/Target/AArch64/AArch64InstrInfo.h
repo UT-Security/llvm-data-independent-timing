@@ -429,6 +429,8 @@ public:
                               MachineBasicBlock::iterator MI, const DebugLoc &DL,
                               bool Enable) const override;
 
+  void pinToTimingMode(MachineInstr &MI) const override;
+
   std::optional<bool>
   getTimingModeSwitch(const MachineInstr &MI) const override;
 

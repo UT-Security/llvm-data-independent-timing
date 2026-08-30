@@ -19,9 +19,17 @@
 #
 # 26 is the PSTATE.DIT pstatefield encoding (op1=0b011, op2=0b010).
 
+# The switch and the instructions it governs are tied together by an implicit
+# def/use of $dit. Without that edge a scheduler may reorder them: the switch
+# already carries UnmodeledSideEffects, but the machine scheduler's barrier
+# (ScheduleDAGInstrs, isGlobalMemoryObject) chains only against MEMORY, while
+# DIT governs data processing. The PostRA scheduler was observed hoisting
+# `MSR DIT, #0` above a secret-dependent multiply. $dit is reserved and never
+# allocated; it exists solely to carry this ordering edge.
 # DIT-LABEL: name: tainted_fn
 # DIT: bb.0.entry:
-# DIT: MSRpstateImm4 26, 1
+# DIT: MSRpstateImm4 26, 1, implicit-def $nzcv, implicit-def $dit
+# DIT: ADDWrr {{.*}}implicit $dit
 # DIT-NOT: ISB
 # DIT-NOT: DSB
 # DIT: MSRpstateImm4 26, 0

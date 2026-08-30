@@ -1,0 +1,62 @@
+# RUN: not llc -mtriple=aarch64 -start-after=prologepilog -o /dev/null %s 2>&1 \
+# RUN:   | FileCheck %s
+# RUN: llc -mtriple=aarch64 -start-after=prologepilog -o /dev/null %s \
+# RUN:   -stop-after=unpack-mi-bundles 2>&1 | count 0
+
+# The pre-emit verifier is the last MIR pass, so it sees exactly what will be
+# emitted. The taint pass verifies its own output, but a dozen machine passes
+# run afterwards; without a late check, damage they do to PSTATE.DIT placement
+# ships silently. That is not hypothetical: the PostRA scheduler was observed
+# hoisting `MSR DIT, #0` above a secret-dependent multiply.
+#
+# An instruction that must run protected is marked by an implicit use of $dit
+# (AArch64InstrInfo::pinToTimingMode), which is also the scheduling dependence.
+# The verifier needs no taint analysis of its own -- it just checks that every
+# such instruction is reached with the mode on.
+
+# Violations are COLLECTED across the module and reported together, so one
+# build yields the whole list rather than the first entry. `correct` must not
+# appear in it.
+# CHECK: PSTATE.DIT placement is unsound: 1 instruction(s)
+# CHECK-NEXT: sunk_disable bb.0:
+# CHECK-NOT: correct
+# CHECK: Each one is a leaked secret, not a missed optimisation
+
+# -taint-dit-verify-warn-only downgrades to a warning and lets the build finish.
+# The object is unsound; it exists so a deliberately broken build (see
+# -taint-dit-assume-callees-preserve) can enumerate the sites that need the
+# invariant in a single run.
+# RUN: llc -mtriple=aarch64 -start-after=prologepilog -taint-dit-verify-warn-only \
+# RUN:     -o /dev/null %s 2>&1 | FileCheck %s --check-prefix=WARN
+# WARN: warning: PSTATE.DIT placement is unsound: 1 instruction(s)
+# WARN: sunk_disable bb.0:
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+  define i32 @sunk_disable(i32 %a, i32 %b) { ret i32 0 }
+  define i32 @correct(i32 %a, i32 %b) { ret i32 0 }
+...
+---
+# The disable has been moved above the instruction it was protecting.
+name:            sunk_disable
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $w0, $w1
+    MSRpstateImm4 26, 1, implicit-def $nzcv, implicit-def $dit
+    MSRpstateImm4 26, 0, implicit-def $nzcv, implicit-def $dit
+    $w0 = ADDWrr $w0, $w1, implicit $dit
+    RET_ReallyLR implicit $w0
+...
+---
+# The same code, correctly ordered: must not be reported.
+name:            correct
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $w0, $w1
+    MSRpstateImm4 26, 1, implicit-def $nzcv, implicit-def $dit
+    $w0 = ADDWrr $w0, $w1, implicit $dit
+    MSRpstateImm4 26, 0, implicit-def $nzcv, implicit-def $dit
+    RET_ReallyLR implicit $w0
+...

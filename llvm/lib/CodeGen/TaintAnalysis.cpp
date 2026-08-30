@@ -2329,6 +2329,23 @@ static void reportDITReassert(raw_ostream *OS, const MachineFunction &MF,
   *OS << " (sound: DIT re-asserted after the call)\n";
 }
 
+// The libditoracle re-arm trampoline, stapled to every switch by
+// -taint-dit-oracle-hooks. It is hand-written assembly that preserves every
+// volatile register AND PSTATE.DIT (PSTATE is per-thread and survives calls;
+// the trampoline never writes DIT). Treating it as a clobber would make the
+// soundness verifier report a leak that does not exist, and would provoke a
+// re-assert after every switch, so it is exempt by name.
+static bool isOracleRearmCall(const MachineInstr &MI) {
+  for (const MachineOperand &MO : MI.operands()) {
+    if (MO.isSymbol() && StringRef(MO.getSymbolName()) == "__dit_oracle_rearm")
+      return true;
+    if (MO.isGlobal() && MO.getGlobal() &&
+        MO.getGlobal()->getName() == "__dit_oracle_rearm")
+      return true;
+  }
+  return false;
+}
+
 // `OwnsDIT` is false for a function entered with DIT already set. Such a
 // function did not turn DIT on, so it must not turn it off: it keeps the
 // (redundant) entry enable but emits no disable before its returns. Eliding the
@@ -2364,6 +2381,11 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
         TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
                                     /*Enable=*/false);
       } else if (MI.isCall()) {
+        // Skip our own oracle sled. It preserves DIT, and (because this loop
+        // inserts INTO the block it is iterating) treating the sled's BL as a
+        // clobber would emit a sled after the sled, without end.
+        if (isOracleRearmCall(MI))
+          continue;
         const Function *Callee = findCalledFunction(*M, MI);
         if (calleeLeavesDITSet(Callee, TSI))
           continue;
@@ -2393,6 +2415,8 @@ static bool needsDIT(const MachineInstr &MI, const TaintFacts &F,
 static bool clobbersDIT(const MachineInstr &MI, const TaintSummaryInfo *TSI,
                         Module &M) {
   if (!MI.isCall())
+    return false;
+  if (isOracleRearmCall(MI))
     return false;
   return !calleeLeavesDITSet(findCalledFunction(M, MI), TSI);
 }
@@ -3116,6 +3140,27 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   if (TaintedRuns.empty())
     return TaintedInstrCount;
 
+  // Pin the mode before choosing a placement, so both region and
+  // function granularity get it. Every Need gains an implicit use of the
+  // target's timing-mode register; insertTimingModeSwitch gives the switch the
+  // matching implicit def. That dependence is what stops a later MIR pass
+  // reordering a switch across the instructions it governs.
+  //
+  // "Has side effects" is NOT enough, and it was already set: the machine
+  // scheduler's barrier (ScheduleDAGInstrs, isGlobalMemoryObject) chains only
+  // against loads, stores and FP exceptions, while DIT governs data
+  // processing. So a `madd` on secret operands had no edge to the disable and
+  // the PostRA scheduler hoisted the disable above it -- found by the gem5
+  // shadow-taint oracle on flowprobe's positive controls, which are supposed
+  // to be fully protected.
+  const TargetInstrInfo *PinTII = MF.getSubtarget().getInstrInfo();
+  replayTaint(MF, TR, TSI, AA,
+              [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
+                if (needsDIT(MI, F, *PinTII))
+                  PinTII->pinToTimingMode(MI);
+                return true;
+              });
+
   // The DIT ownership rule: a function entered with DIT already set did not turn
   // it on and must not turn it off. Region placement narrows coverage by
   // CLEARING DIT around clean stretches, so for such a function narrowing is not
@@ -3127,6 +3172,13 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   const bool OwnsDIT =
       !(TSI && TSI->getSummary(MF.getFunction()).AlwaysEnteredWithDIT) &&
       !isDITClone(&MF.getFunction());
+
+  // Record the entry assumption for the pre-emit verifier: a function the
+  // caller enters with DIT already set emits no entry enable, so a late check
+  // must not treat its entry as DIT-clear.
+  if (!OwnsDIT)
+    const_cast<Function &>(MF.getFunction()).addFnAttr("dit-entered-on");
+
 
   // Default mode's audit trail: every call site we could not prove leaves DIT
   // alone, and therefore re-asserted after. Sound but not free, so the list is
