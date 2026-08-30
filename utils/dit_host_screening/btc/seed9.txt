@@ -1,0 +1,9 @@
+secp256k1_ecdsa_sign,3,pointee
+secp256k1_ecdsa_sign_recoverable,3,pointee
+secp256k1_schnorrsig_sign32,3,pointee
+secp256k1_ec_seckey_tweak_add,1,pointee
+secp256k1_keypair_create,2,pointee
+secp256k1_ec_pubkey_create,2,pointee
+secp256k1_ellswift_create,2,pointee
+secp256k1_ellswift_xdh,4,pointee
+secp256k1_ec_seckey_verify,1,pointee

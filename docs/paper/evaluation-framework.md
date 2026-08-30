@@ -110,6 +110,7 @@ sweep confounds the two and the curve means nothing.
 | CPython + coincurve | signatures per request | yes |
 | Bitcoin Core | wallet send rate, `-assumevalid` | yes, and it is native to the application |
 | SQLCipher (rejected knob) | database size at fixed cache | **no** - also changes B-tree depth |
+| Bitcoin wallet | inputs per transaction | **yes, and verified rather than assumed** - `BTC_BENCH_SIGN=0` reruns each point without the real signatures, so f_secret is measured; the public lane moves only 14.21->15.53 ms while the secret lane grows 14x |
 
 ---
 
@@ -298,11 +299,22 @@ contribution, not boilerplate.
 > timing alone cannot distinguish "placed well" from "placed somewhere
 > irrelevant." An under-protecting oracle looks exactly like a win.
 
-**Which instrument answers which question.** Silicon for *how much* (gem5
-understated always-on 4.6x on the one workload measured both ways); gem5 for
-*which placement is better* (it reproduces silicon's ordering and ratio) and for
-the renamed-switch counterfactual, which does not exist in hardware. Neither
-answers both, and the paper must say so before a reviewer does.
+**Which instrument answers which question.** Revised 2026-08-26, when a second
+workload was measured both ways. gem5 tracks always-on cost well on code whose
+DIT sensitivity is real: Bitcoin `CoinSelection` reads **+11.06%** in gem5
+against **+13.01%** on silicon (85%, different microarchitectures). The earlier
+"gem5 understates 4.6x" figure came from a single workload and is a property of
+that workload, not of gem5.
+
+Where gem5 reports ~zero, check whether silicon resolves anything either:
+Bitcoin `SignTransactionECDSA` reads -1.11% in gem5 against a **marginal** +3.39%
+(26/40, p≈.08) on silicon, i.e. both instruments find little or no prize. Use
+gem5 for *which placement is better*, for magnitude on DIT-sensitive public code,
+and for the renamed-switch counterfactual that does not exist in hardware; use
+silicon to decide whether a small effect is real at all, since gem5's
+cross-binary resolution floor is a **-0.64% round-trip artifact between binaries
+with identical `simInsts`**. Sources: `docs/results/dit-bitcoin-coinsel-gem5.md`,
+`dit-bitcoin-sign-two-instruments.md`.
 
 ---
 
@@ -313,7 +325,7 @@ answers both, and the paper must say so before a reviewer does.
 | 1 | **SQLCipher cache sweep** | SQLite B-tree descent | AES-256-CBC + HMAC per page | `PRAGMA cache_size` | **in progress** |
 | 2 | SQLite + ECDSA | SQLite queries | libsecp256k1 sign | signatures per batch | gem5 point at 2.23%; curve missing |
 | 3 | CPython + coincurve | interpreter + Django | libsecp256k1 via coincurve | signatures per request | both endpoints measured; middle missing |
-| 4 | Bitcoin Core | wallet + mempool + validation | libsecp256k1 | wallet send rate, `-assumevalid` | 9 benches measured; knob not swept |
+| 4 | Bitcoin Core | wallet + mempool + validation | libsecp256k1 | **inputs per transaction** (`BTC_BENCH_INPUTS`) | 9 benches measured; **both endpoints now on gem5 too**; knob unpinned and demonstrated to span f_secret 4%-75%, sweep not yet run under the full rig -- see `bitcoin-secret-fraction-sweep.md` |
 | 5 | **Skia filters** | CPU raster | n/a | n/a | **done - negative control** |
 | 6 | libsodium | n/a | 13 primitives | n/a | done - fails Q1 |
 

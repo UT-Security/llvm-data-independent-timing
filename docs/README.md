@@ -56,6 +56,16 @@ How the analysis is built, which bugs were found in it, and what is still open.
   where DIT switches go: what exists today, the placement constraints the spec
   imposes, the remaining security and performance gaps, and the proposed spec-aware
   optimal placement with its evaluation plan.
+- **[design/dit-abi.md](design/dit-abi.md)** - **THE CONTRACT, read before the two
+  below.** Settled 2026-08-30: **PSTATE.DIT is callee-saved.** Obligation on every
+  instrumented callee, `d_out == d_in` at every exit it controls; guarantee to every
+  caller, `d_out >= d_in`, unconditionally. Call sites emit nothing, which removes all
+  four re-assert classes by construction with no LTO and no annotation. Two decisions
+  come with it: tail calls are disabled TU-wide (`-fno-optimize-sibling-calls`, so no
+  two-pass compile needed), and `_Unwind_Resume` / `longjmp` / `musttail` /
+  MachineOutliner sites degrade to the guarantee and are reported as `NONLOCAL` lines
+  rather than fixed. Supersedes the framing in `dit-tailcall-gap.md` and
+  `dit-unconditional-design.md` §2.
 - **[design/dit-callee-ownership.md](design/dit-callee-ownership.md)** - the
   ownership rule adopted 2026-08-08: *only the frame that turned DIT on may turn it
   off*. An instrumented callee used to clear DIT on exit, so callers re-asserted after

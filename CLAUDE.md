@@ -92,8 +92,11 @@ passed to external/indirect callees cannot be protected by placement - audit the
 `-taint-callsite-report=<file>` (`ESCAPE` lines). The same file carries `DITLEAK` lines:
 functions that enable DIT and exit without clearing it, which is every tail call in an
 instrumented function (a tail call is an exit with no epilogue, so there is nowhere to
-put the clear - `docs/design/dit-tailcall-gap.md`). `DITLEAK tailcall` is an accepted
-cost, not a hazard; `DITLEAK return` is a placement bug and also warns on stderr.
+put the clear - `docs/design/dit-tailcall-gap.md`). `DITLEAK return` is a placement bug and also
+warns on stderr. **`DITLEAK tailcall` was an accepted cost and is now an ABI violation
+to audit** - `docs/design/dit-abi.md` makes DIT callee-saved and disables tail calls
+TU-wide, so the line should normally be absent; a surviving one means `musttail` or the
+MachineOutliner.
 
 The coalesced "regions" in the reports **do not drive placement** - they feed the report
 files only. The gap that merges them was `-taint-region-merge-gap` until 2026-08-24 and

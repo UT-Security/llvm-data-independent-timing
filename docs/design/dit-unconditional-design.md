@@ -42,6 +42,13 @@ writes at run time: **256 executions per 4 KB page**, each paying one ~30 cyc wr
 
 ## 2. The invariant
 
+**SUPERSEDED 2026-08-30 by `docs/design/dit-abi.md` §1, which is now the contract.**
+The one-directional invariant below is retained as the *guarantee* layer, but the ABI
+adds a stronger *obligation* on instrumented callees (`d_out == d_in` at every exit they
+control) and disables tail calls TU-wide so that obligation actually binds. Read the ABI
+first; the rest of this file, especially §3 on speculation and §5 on storage, is
+unaffected and still load-bearing.
+
 > **No instrumented function returns with `PSTATE.DIT` cleared relative to its entry
 > state.**
 
@@ -264,6 +271,78 @@ So the storage choice is really a scope choice:
 |---|---|---|---|
 | **B1** | pre-RA vreg, the LLVM SME pattern | **no** - needs a two-pass compile | cleanest, cannot fail |
 | **B2** | frame slot created in a late pass, the GCC pattern (`TARGET_USE_LATE_PROLOGUE_EPILOGUE` + a hard-FP-relative slot) | yes | one L1-hot load at exit, on the dependency path of a commit-blocking write |
+
+**PRIOR-ART UPDATE 2026-08-30 (B3): OVER-PROVISION AT ISEL AND ELIDE LATE. This is the
+recommended option and it needs no two-pass compile.**
+
+`ENTRY_PSTATE_SM` does **not** decide in advance which functions need the carrier. It is
+created in *every* streaming-compatible function and erased if unused. Verified,
+`AArch64ISelLowering.cpp:3339`:
+
+```cpp
+Register ResultReg = MI.getOperand(0).getReg();
+if (MF->getRegInfo().use_empty(ResultReg)) {
+  // Nothing to do. Pseudo erased below.
+} else if (Subtarget->hasSME()) { ... BuildMI(... AArch64::MRS ...) }
+```
+
+So §5's premise, that a pre-RA vreg requires knowing the instrumented set before RA, is
+false. The set never has to be known: over-provision, then drop what went unused.
+
+**The one adaptation SME does not need and we do.** SME can elide on `use_empty()`
+because its uses are also created at ISel. Ours are created post-PEI, after register
+allocation, so a vreg with no uses at RA time is a dead def and the value is not kept
+live across the body. **A placeholder use must be emitted at each return during ISel**,
+which the post-PEI pass then expands into the real guarded restore or deletes.
+
+That placeholder is exactly what Andrew Trick recommended in the thread where the
+two-pass proposal was *rejected* (discourse.llvm.org/t/21516): *"creating a fake live
+range that spans the entire function."* The shipped SME pattern and the maintainer advice
+converge on the same mechanism.
+
+**Cost of over-provisioning:** a function that turns out not to be instrumented still
+carried a live range across its body during RA, which can force extra spilling. Bound it
+by scoping "candidate" narrowly (functions in a module that has taint sources, or
+reachable from a seed) rather than every function.
+
+**If a two-pass compile is built anyway, it is no longer novel.** LLVM ships
+`-codegen-data-thinlto-two-rounds` (`LTO.cpp:2132`, `CodeGenData.cpp:36`), which runs code
+generation twice so the global machine outliner can use cross-module MIR-level facts.
+Note *why*, from its RFC: **"Serializing MIR isn't supported and needs significant
+backing."** That is the design `-ftaint-harden` had until 2026-08-30. Upstream reached the
+same fork and took the other branch.
+
+**PRIOR-ART UPDATE 2026-08-30: B2 is what GCC actually shipped, and it may remove the
+blocker entirely.** A literature and commit-history sweep found no published system that
+compiles twice because its analysis runs post-RA, and found the one LLVM proposal to do
+so (discourse.llvm.org/t/21516, AVR, proposed for exactly the spill-discovery reason)
+**rejected** by Trick and Olesen. Meanwhile GCC shipped B2 for the sibling PSTATE bit on
+this architecture. Commit `dd8090f40079fa41ee58d9f76b2e50ed4f95c6bf`, R. Sandiford,
+2023-12-05, verified verbatim:
+
+> "Since changing PSTATE.SM changes the vector length and effectively changes the ISA,
+> the code to do the switching has to be emitted late. The patch does this using a new
+> pass that runs next to late prologue/epilogue insertion. ... The old mode must
+> therefore be available immediately after the call. **The easiest way of ensuring this
+> is to force the use of a hard frame pointer and ensure that the old state is saved at
+> an in-range offset from there.**"
+
+A hard frame pointer answers §5.1's objection that a post-PEI stack push is a miscompile:
+FP-relative offsets do not move when PEI has already fixed the SP-relative ones.
+
+The companion hook is `TARGET_USE_LATE_PROLOGUE_EPILOGUE` (commit
+`e9d2ae6b9816e61a6148040149c63faa83f54702`), whose own message prices it: *"This loses
+shrink-wrapping and scheduling opportunities, but that's a price worth paying."* Note
+also that the same hook existed for SPARC in 2004 (`TARGET_LATE_RTL_PROLOGUE_EPILOGUE`,
+r83901) and was **removed three months later** in favour of caching the information in
+`machine_function`, so it is not an unqualified success.
+
+**The LLVM-specific catch:** we have no equivalent of that hook, so the slot cannot be
+created after PEI has laid out the frame. The lighter substitute is a **pre-PEI
+reservation driven by an attribute the annotator already sets**, over-approximating to
+any function that might be instrumented and costing 8 bytes of frame in those that are
+not. That is the AArch64 SLH shape (a coarse pre-ISel attribute consumed by a late pass),
+not a two-pass compile.
 
 **B1 shares its blocker with `dit-tailcall-gap.md` §4.** If the two-pass compile is built
 for one, the other is nearly free. That is the strongest argument for building it, and it

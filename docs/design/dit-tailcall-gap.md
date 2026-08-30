@@ -1,5 +1,14 @@
 # The tail-call DIT gap: why a tail call can't both protect and restore
 
+**STATUS 2026-08-30: the accepted-cost framing here is SUPERSEDED by**
+`docs/design/dit-abi.md`. DIT is now callee-saved, so a tail call out of an
+instrumented function is an ABI violation rather than a tolerated leak. The fix is
+global (`-ftaint-harden` implies `-fno-optimize-sibling-calls`), not the per-function
+`disable-tail-calls` this file's §4 anticipated, so it no longer needs the two-pass
+compile. `musttail` and `MachineOutlinerTailCall` survive the flag and are reported.
+The mechanics below are still accurate; only the verdict changed.
+
+
 **Found 2026-08-05 on gem5, running hardened libsodium.** Whole-function placement
 cleared `PSTATE.DIT` immediately *before* a tail call, so the callee — which is
 exactly who receives the secret — ran with DIT=0. Fixed in
