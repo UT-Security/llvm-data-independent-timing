@@ -30,16 +30,25 @@
 #include "AArch64InstrInfo.h"
 #include "AArch64Subtarget.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/WithColor.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
 #define DEBUG_TYPE "aarch64-dit-verifier"
 #define PASS_NAME "AArch64 PSTATE.DIT placement verifier"
+
+static cl::opt<bool> WarnOnly(
+    "taint-dit-verify-warn-only", cl::Hidden, cl::init(false),
+    cl::desc("Report DIT placement violations as a warning instead of failing "
+             "the build. The object is UNSOUND; this exists so a deliberately "
+             "broken build can enumerate which sites need the invariant."));
 
 namespace {
 
@@ -49,6 +58,10 @@ public:
   AArch64DITVerifier() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
+
+  /// Reports everything found across the module, rather than dying on the
+  /// first violation: one build then yields the whole list.
+  bool doFinalization(Module &M) override;
 
   MachineFunctionProperties getRequiredProperties() const override {
     return MachineFunctionProperties().setNoVRegs();
@@ -60,6 +73,14 @@ public:
     AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
+
+private:
+  struct Violation {
+    std::string Function;
+    int Block;
+    std::string Instr;
+  };
+  SmallVector<Violation, 8> Violations;
 };
 
 } // end anonymous namespace
@@ -146,20 +167,42 @@ bool AArch64DITVerifier::runOnMachineFunction(MachineFunction &MF) {
     bool Cur = OnIn[&MBB];
     for (const MachineInstr &MI : MBB) {
       if (requiresDIT(MI) && !Cur) {
-        std::string Buf;
-        raw_string_ostream OS(Buf);
-        OS << "PSTATE.DIT placement is unsound in '" << MF.getName()
-           << "': an instruction that must execute with DIT set reaches "
-           << "bb." << MBB.getNumber() << " with it clear.\n"
-           << "  " << MI << "\n"
-           << "The taint pass verified its own output, so this was introduced "
-              "by a later machine pass moving, duplicating or synthesising "
-              "code. This is a leaked secret, not a missed optimisation.";
-        report_fatal_error(StringRef(Buf), /*GenCrashDiag=*/false);
+        std::string Text;
+        raw_string_ostream TS(Text);
+        TS << MI;
+        Violations.push_back({MF.getName().str(), MBB.getNumber(),
+                              StringRef(Text).trim().str()});
       }
       if (auto S = ditSwitchState(MI, TII))
         Cur = *S;
     }
   }
   return false;
+}
+
+bool AArch64DITVerifier::doFinalization(Module &M) {
+  if (Violations.empty())
+    return false;
+
+  std::string Buf;
+  raw_string_ostream OS(Buf);
+  OS << "PSTATE.DIT placement is unsound: " << Violations.size()
+     << " instruction(s) that must execute with DIT set are reachable with it "
+        "clear.\n";
+  for (const Violation &V : Violations)
+    OS << "  " << V.Function << " bb." << V.Block << ": " << V.Instr << "\n";
+  OS << "The taint pass verified its own output, so these were introduced by a "
+        "later machine pass moving, duplicating or synthesising code. Each one "
+        "is a leaked secret, not a missed optimisation.";
+
+  if (WarnOnly) {
+    // -taint-dit-verify-warn-only: the caller wants the LIST, and has accepted
+    // that the object is unsound. The measurement flags that deliberately break
+    // the invariant (see -taint-dit-assume-callees-preserve) use this to turn
+    // "some call sites need it" into an enumeration in one build.
+    WithColor::warning() << Buf << "\n";
+    Violations.clear();
+    return false;
+  }
+  report_fatal_error(StringRef(Buf), /*GenCrashDiag=*/false);
 }
