@@ -171,6 +171,11 @@ class AArch64FunctionInfo final : public MachineFunctionInfo {
   /// a function the taint hardener was never asked to consider.
   std::optional<int> TimingModeSaveIndex;
 
+  /// Whether the entry read into TimingModeSaveIndex has already been emitted.
+  /// Region placement emits it, and can then fall back to whole-function
+  /// granularity, which would otherwise emit a second one.
+  bool TimingModeSaved = false;
+
   std::optional<int> TaggedBasePointerIndex;
 
   /// Offset from SP-at-entry to the tagged base pointer.
@@ -587,6 +592,9 @@ public:
     return TimingModeSaveIndex;
   }
   void setTimingModeSaveIndex(int Index) { TimingModeSaveIndex = Index; }
+
+  bool hasTimingModeSave() const { return TimingModeSaved; }
+  void setTimingModeSaved() { TimingModeSaved = true; }
 
   std::optional<int> getTaggedBasePointerIndex() const {
     return TaggedBasePointerIndex;

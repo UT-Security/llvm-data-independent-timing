@@ -2354,6 +2354,15 @@ static unsigned redirectCallsToDITClones(
 
 static bool calleeLeavesDITSet(const Function *Callee,
                                const TaintSummaryInfo *TSI) {
+  // Under the callee-saved ABI this is the contract, not an analysis result:
+  // every callee returns DIT no lower than it found it, including indirect and
+  // cross-TU ones. Answering here rather than only at the emission sites means
+  // the region emitter's own soundness verifier stops modelling calls as
+  // clearing - otherwise it sees every Need after a call as uncovered and falls
+  // the whole function back to whole-function granularity.
+  if (TaintDITAbi)
+    return true;
+
   if (!TSI || !Callee)
     return false; // external or indirect: assume it clears
   const FunctionTaintSummary &S = TSI->getSummary(*Callee);
@@ -2428,10 +2437,16 @@ static bool isOracleRearmCall(const MachineInstr &MI) {
 /// The carrier save stores through the frame, so it cannot precede the prologue:
 /// SP has not been adjusted yet and the slot's address is not yet valid.
 static MachineBasicBlock::iterator afterPrologue(MachineBasicBlock &Entry) {
-  auto I = Entry.begin();
-  while (I != Entry.end() && I->getFlag(MachineInstr::FrameSetup))
-    ++I;
-  return I;
+  // Scan for the LAST FrameSetup instruction rather than stopping at the first
+  // non-FrameSetup one. Placement may already have put an `MSR DIT, #1` at the
+  // very top of the entry block, ahead of the prologue; stopping at that would
+  // return a point where SP is still the caller's, and a frame store there
+  // writes above the caller's stack pointer.
+  auto Last = Entry.end();
+  for (auto I = Entry.begin(), E = Entry.end(); I != E; ++I)
+    if (I->getFlag(MachineInstr::FrameSetup))
+      Last = I;
+  return Last == Entry.end() ? Entry.begin() : std::next(Last);
 }
 
 /// The point just before \p Ret at which the frame is still valid.
@@ -2464,11 +2479,12 @@ static MachineBasicBlock::iterator beforeEpilogue(MachineBasicBlock &MBB,
 /// caller's protection and, under this ABI, the caller emits no re-assert to
 /// repair it.
 static bool emitDITCarrierSave(MachineFunction &MF, const TargetInstrInfo *TII,
-                               MachineBasicBlock::iterator At,
+                               MachineBasicBlock::iterator ReadAt,
+                               MachineBasicBlock::iterator StoreAt,
                                raw_ostream *NonlocalOS) {
   std::optional<int> Slot = TII->getTimingModeSaveSlot(MF);
   MachineBasicBlock &Entry = MF.front();
-  if (Slot && TII->insertTimingModeSave(Entry, At, DebugLoc(), *Slot))
+  if (Slot && TII->insertTimingModeSave(Entry, ReadAt, StoreAt, DebugLoc(), *Slot))
     return true;
 
   if (NonlocalOS)
@@ -2512,7 +2528,8 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
   SmallVector<MachineInstr *, 4> ABIReturns;
 
   MachineBasicBlock::iterator EntryAt = afterPrologue(Entry);
-  const bool Carried = ABI && emitDITCarrierSave(MF, TII, EntryAt, NonlocalOS);
+  const bool Carried =
+      ABI && emitDITCarrierSave(MF, TII, EntryAt, EntryAt, NonlocalOS);
   std::optional<int> Slot =
       Carried ? TII->getTimingModeSaveSlot(MF) : std::nullopt;
 
@@ -2627,7 +2644,7 @@ computeDITOnEntry(MachineFunction &MF, const TaintSummaryInfo *TSI, Module &M,
   auto stepBlock = [&](MachineBasicBlock &MBB, bool In) -> bool {
     bool Cur = In;
     for (MachineInstr &MI : MBB) {
-      if (auto Sw = TII->getTimingModeSwitch(MI))
+      if (auto Sw = TII->getTimingModeStateAfter(MI))
         Cur = *Sw;
       else if (clobbersDIT(MI, TSI, M))
         Cur = false;
@@ -2783,7 +2800,7 @@ static void reportUnbalancedDITExits(MachineFunction &MF,
   for (MachineBasicBlock &MBB : MF) {
     bool Cur = OnIn.lookup(&MBB);
     for (MachineInstr &MI : MBB) {
-      if (auto Sw = TII->getTimingModeSwitch(MI)) {
+      if (auto Sw = TII->getTimingModeStateAfter(MI)) {
         Cur = *Sw;
         continue;
       }
@@ -2881,7 +2898,7 @@ static DITAccounting computeDITAccounting(MachineFunction &MF,
                 }
                 // A mode switch is overhead, not covered work: count it apart
                 // and let it change the state.
-                if (auto Sw = TII->getTimingModeSwitch(MI)) {
+                if (auto Sw = TII->getTimingModeStateAfter(MI)) {
                   CurOn = *Sw;
                   ++A.Switches;
                   return true;
@@ -2984,7 +3001,7 @@ static void fallbackToFunctionGranularity(MachineFunction &MF,
   for (MachineBasicBlock &MBB : MF) {
     SmallVector<MachineInstr *, 8> ToErase;
     for (MachineInstr &MI : MBB)
-      if (TII->getTimingModeSwitch(MI))
+      if (TII->getTimingModeStateAfter(MI))
         ToErase.push_back(&MI);
     for (MachineInstr *I : ToErase)
       I->eraseFromParent();
@@ -3144,7 +3161,8 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                                       const TaintResult &TR,
                                       const TaintSummaryInfo *TSI,
                                       AAResults *AA,
-                                      raw_ostream *ReassertOS = nullptr) {
+                                      raw_ostream *ReassertOS = nullptr,
+                                      bool ABI = false) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   Module &M = *const_cast<Module *>(MF.getFunction().getParent());
 
@@ -3297,10 +3315,14 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       // Re-assert after each clobber that is NOT a terminator (a non-preserving
       // tail call is a clobber AND a terminator: nothing follows it here, and
       // inserting after a terminator is invalid MIR).
+      // Under the callee-saved ABI the callee puts DIT back, so a caller emits
+      // nothing at any call site - the same deletion function granularity makes,
+      // and the one this whole convention exists for.
       SmallVector<MachineInstr *, 8> Clobbers;
-      for (MachineInstr &MI : MBB)
-        if (clobbersDIT(MI, TSI, M) && !MI.isTerminator())
-          Clobbers.push_back(&MI);
+      if (!ABI)
+        for (MachineInstr &MI : MBB)
+          if (clobbersDIT(MI, TSI, M) && !MI.isTerminator())
+            Clobbers.push_back(&MI);
       for (MachineInstr *C : Clobbers) {
         PendingReassertSites.push_back(C);
         TII->insertTimingModeSwitch(MBB, std::next(C->getIterator()),
@@ -3313,11 +3335,16 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       for (MachineInstr &MI : MBB) {
         if (!MI.isReturn())
           continue;
-        if (!NeedSet.count(&MI)) {
+        if (!NeedSet.count(&MI) && !ABI) {
           TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
                                       /*Enable=*/false);
           ++Toggles;
         }
+        // Under the ABI the exit is not a clear but a restore of the entry
+        // value, emitted by the caller of this function after the walk (it
+        // splits blocks). Leaving the clear here as well would be redundant at
+        // best and, for a return the region logic left DIT-off on, wrong: the
+        // restore may have to RE-ENABLE.
         break;
       }
     } else {
@@ -3367,7 +3394,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                   CurBlk = MI.getParent();
                   CurOn = OnIn.lookup(CurBlk);
                 }
-                if (auto Sw = TII->getTimingModeSwitch(MI)) {
+                if (auto Sw = TII->getTimingModeStateAfter(MI)) {
                   CurOn = *Sw;
                   return true;
                 }
@@ -3476,7 +3503,65 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   // function-granularity below, so shipped codegen is untouched. Both modes
   // report the same tainted-instruction count.
   if (TaintDITPlacement == DITPlacementMode::Region && OwnsDIT) {
-    insertTaintDITRegions(MF, TR, TSI, AA, ReassertOS);
+    // The callee-saved ABI under region placement. Ownership is NOT relaxed: a
+    // function that is provably always entered with DIT on still routes past the
+    // region emitter below, because narrowing inside a region its caller deemed
+    // secret is an under-taint no exit restore can repair.
+    //
+    // What the ABI changes here is the two boundaries. The carrier is saved at
+    // FUNCTION entry (not at a region preheader - the value being saved is the
+    // caller's, and regions may start anywhere), and each return gets an EXACT
+    // restore instead of the region emitter's clear.
+    //
+    // The restore must be the unconditional `MSR DIT, Xt`, not the guarded clear
+    // function granularity uses. The region body can leave DIT in EITHER state -
+    // a return inside an Off block is never enabled, and an On block's return is
+    // cleared - so a restore that can only clear would return DIT lower than
+    // entry for a function that was entered with it set, stripping the caller
+    // with no re-assert left to repair it. A guarded ENABLE is forbidden
+    // outright (dit-unconditional-design.md §3.1), so an unconditional write of
+    // the saved value is the only correct form. Being unconditional, it has no
+    // predictor to mispredict.
+    const bool ABI = TaintDITAbi;
+
+    // Region placement FIRST, carrier save second. The region emitter puts its
+    // enable at the region entry point, which in a function that is one big
+    // region is the first instruction after the prologue - the same place the
+    // save wants. Saving first would put the enable in front of the read, so the
+    // function would save the 1 it had just written and could never restore
+    // anything else. Emitting after, at afterPrologue(), lands the save in front
+    // of that enable, giving `mrs; str; msr DIT,#1`.
+    //
+    // It is also correct when the region emitter falls back to whole-function
+    // granularity, which emits its own save: insertTimingModeSave is idempotent.
+    insertTaintDITRegions(MF, TR, TSI, AA, ReassertOS, ABI);
+    // The read goes at the very TOP of the entry block, ahead of the enable the
+    // region emitter placed there; the store goes after the prologue, because it
+    // is a frame access. Two different constraints, so two insertion points.
+    const bool Carried =
+        ABI && emitDITCarrierSave(MF, TII, MF.front().begin(),
+                                  afterPrologue(MF.front()), NonlocalOS);
+
+    if (Carried) {
+      std::optional<int> Slot = TII->getTimingModeSaveSlot(MF);
+      SmallVector<MachineInstr *, 4> Returns;
+      for (MachineBasicBlock &MBB : MF)
+        for (MachineInstr &MI : MBB)
+          if (MI.isReturn() && !MI.isCall()) // a tail call has no epilogue
+            Returns.push_back(&MI);
+      for (MachineInstr *Ret : Returns) {
+        MachineBasicBlock &RetMBB = *Ret->getParent();
+        if (!TII->insertTimingModeRestoreExact(
+                RetMBB, beforeEpilogue(RetMBB, *Ret), Ret->getIterator(),
+                Ret->getDebugLoc(), *Slot) &&
+            NonlocalOS)
+          *NonlocalOS << "NONLOCAL noscratch caller=" << MF.getName()
+                      << " bb=" << RetMBB.getNumber()
+                      << " (DIT left as the region body set it: no free scratch "
+                         "register at this exit)\n";
+      }
+    }
+
     // After the region emitter, so a function that fell back to whole-function
     // granularity is checked in the shape it actually shipped.
     reportUnbalancedDITExits(MF, TSI, M, TII, OwnsDIT, ExitOS);

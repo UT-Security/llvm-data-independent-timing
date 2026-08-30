@@ -105,7 +105,18 @@ static std::optional<bool> ditSwitchState(const MachineInstr &MI,
                                           const AArch64InstrInfo *TII) {
   if (!MI.definesRegister(AArch64::DIT, /*TRI=*/nullptr))
     return std::nullopt;
-  return TII->getTimingModeSwitch(MI);
+  if (auto Known = TII->getTimingModeSwitch(MI))
+    return Known;
+  // Defines $dit but is not a switch we can read statically - the callee-saved
+  // ABI's `MSR DIT, Xt`, whose value is only known at run time. Treat it as
+  // CLEARING. That is the conservative direction: the pass must then prove
+  // coverage without relying on it, and a genuinely protected instruction placed
+  // after such a write becomes a build failure rather than a silent leak.
+  //
+  // Returning nullopt here instead - which is what this did before the ABI
+  // landed - leaves the model unchanged and makes the write INVISIBLE, so an
+  // unconditional restore would be treated as if DIT were still set.
+  return false;
 }
 
 bool AArch64DITVerifier::runOnMachineFunction(MachineFunction &MF) {

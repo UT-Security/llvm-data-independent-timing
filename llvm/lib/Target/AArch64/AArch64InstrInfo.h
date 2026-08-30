@@ -429,8 +429,14 @@ public:
   std::optional<int>
   getTimingModeSaveSlot(const MachineFunction &MF) const override;
   bool insertTimingModeSave(MachineBasicBlock &MBB,
-                            MachineBasicBlock::iterator MI, const DebugLoc &DL,
-                            int FrameIndex) const override;
+                            MachineBasicBlock::iterator ReadAt,
+                            MachineBasicBlock::iterator StoreAt,
+                            const DebugLoc &DL, int FrameIndex) const override;
+  bool insertTimingModeRestoreExact(MachineBasicBlock &MBB,
+                                    MachineBasicBlock::iterator LoadAt,
+                                    MachineBasicBlock::iterator SwitchAt,
+                                    const DebugLoc &DL,
+                                    int FrameIndex) const override;
   bool insertTimingModeRestore(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator LoadAt,
                                MachineBasicBlock::iterator SwitchAt,
@@ -442,6 +448,7 @@ public:
                               bool Enable) const override;
 
   void pinToTimingMode(MachineInstr &MI) const override;
+  bool definesTimingMode(const MachineInstr &MI) const override;
 
   std::optional<bool>
   getTimingModeSwitch(const MachineInstr &MI) const override;

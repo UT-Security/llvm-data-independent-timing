@@ -7033,6 +7033,10 @@ static cl::opt<bool> TaintDitOracleHooks(
              "region boundaries. Instrumentation only: NEVER time such a "
              "build."));
 
+bool AArch64InstrInfo::definesTimingMode(const MachineInstr &MI) const {
+  return MI.definesRegister(AArch64::DIT, /*TRI=*/nullptr);
+}
+
 void AArch64InstrInfo::pinToTimingMode(MachineInstr &MI) const {
   if (MI.readsRegister(AArch64::DIT, /*TRI=*/nullptr))
     return;
@@ -7166,12 +7170,22 @@ AArch64InstrInfo::getTimingModeSaveSlot(const MachineFunction &MF) const {
 }
 
 bool AArch64InstrInfo::insertTimingModeSave(MachineBasicBlock &MBB,
-                                            MachineBasicBlock::iterator MI,
+                                            MachineBasicBlock::iterator ReadAt,
+                                            MachineBasicBlock::iterator StoreAt,
                                             const DebugLoc &DL,
                                             int FrameIndex) const {
   MachineFunction &MF = *MBB.getParent();
+  auto *AFI = MF.getInfo<AArch64FunctionInfo>();
+  // Idempotent: region placement emits the save and may then fall back to
+  // whole-function granularity, which would otherwise emit a second one.
+  if (AFI->hasTimingModeSave())
+    return true;
+
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
-  Register Scratch = findTimingModeScratch(MBB, MI, TRI);
+  // The scratch must survive from the read to the store, i.e. across whatever
+  // sits between them - for region placement that is the entry enable AND the
+  // whole prologue, which may itself use a temporary for a large frame.
+  Register Scratch = findTimingModeScratchAcross(MBB, ReadAt, StoreAt, TRI);
   if (!Scratch)
     return false;
 
@@ -7186,12 +7200,49 @@ bool AArch64InstrInfo::insertTimingModeSave(MachineBasicBlock &MBB,
 
   const AArch64SysReg::SysReg *DIT = AArch64SysReg::lookupSysRegByName("DIT");
   assert(DIT && "DIT system register not registered");
-  BuildMI(MBB, MI, DL, get(AArch64::MRS), Scratch).addImm(DIT->Encoding);
-  BuildMI(MBB, MI, DL, get(AArch64::STRXui))
+  BuildMI(MBB, ReadAt, DL, get(AArch64::MRS), Scratch).addImm(DIT->Encoding);
+  BuildMI(MBB, StoreAt, DL, get(AArch64::STRXui))
       .addReg(Scratch, RegState::Kill)
       .addReg(Base)
       .addImm(Offset)
-      .addMemOperand(timingModeSlotMMO(MF, FrameIndex, MachineMemOperand::MOStore));
+      .addMemOperand(
+          timingModeSlotMMO(MF, FrameIndex, MachineMemOperand::MOStore));
+  AFI->setTimingModeSaved();
+  return true;
+}
+
+bool AArch64InstrInfo::insertTimingModeRestoreExact(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator LoadAt,
+    MachineBasicBlock::iterator SwitchAt, const DebugLoc &DL,
+    int FrameIndex) const {
+  MachineFunction &MF = *MBB.getParent();
+  const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
+  Register Scratch = findTimingModeScratchAcross(MBB, LoadAt, SwitchAt, TRI);
+  if (!Scratch)
+    return false;
+
+  int64_t Offset;
+  Register Base;
+  if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset))
+    return false;
+
+  BuildMI(MBB, LoadAt, DL, get(AArch64::LDRXui), Scratch)
+      .addReg(Base)
+      .addImm(Offset)
+      .addMemOperand(
+          timingModeSlotMMO(MF, FrameIndex, MachineMemOperand::MOLoad));
+
+  // `MSR DIT, Xt` writes back bit 24, so it restores the entry value whichever
+  // direction that is. The generic MSR carries no implicit $dit def of its own,
+  // unlike MSRpstateImm4, so add one: it is what keeps later passes from
+  // reordering pinned instructions across the restore, and it is what makes the
+  // write visible to the final-MIR DIT verifier.
+  const AArch64SysReg::SysReg *DIT = AArch64SysReg::lookupSysRegByName("DIT");
+  assert(DIT && "DIT system register not registered");
+  BuildMI(MBB, SwitchAt, DL, get(AArch64::MSR))
+      .addImm(DIT->Encoding)
+      .addReg(Scratch, RegState::Kill)
+      .addDef(AArch64::DIT, RegState::Implicit);
   return true;
 }
 
@@ -7254,8 +7305,21 @@ bool AArch64InstrInfo::insertTimingModeRestore(
   MachineBasicBlock *Clear = MF.CreateMachineBasicBlock(MBB.getBasicBlock());
   MF.insert(Cont->getIterator(), Clear);
 
-  BuildMI(&MBB, DL, get(AArch64::TBNZX))
-      .addReg(Scratch, RegState::Kill)
+  // TBNZ**W**, not TBNZX. The X form hard-codes b5=1, so its immediate is only
+  // the low five bits of the bit number: `TBNZX ..., 24` tests bit 32+24 = 56.
+  // Bit 56 of an MRS DIT result is always zero, so the branch would never be
+  // taken, the clear would always run, and a function entered with DIT ON would
+  // return with it OFF - stripping its caller, with no re-assert left to repair
+  // it. The asm printer shows the raw operand ("tbnz x9, #24"), so this reads
+  // correct in a .s file and is only visible in the encoding.
+  //
+  // The final-MIR verifier cannot catch it either: it is intraprocedural and
+  // treats calls as transparent, and this is a cross-frame property.
+  Register ScratchW =
+      TRI.getSubReg(Scratch, AArch64::sub_32);
+  assert(ScratchW && "GPR64 has no 32-bit subregister");
+  BuildMI(&MBB, DL, get(AArch64::TBNZW))
+      .addReg(ScratchW, RegState::Kill)
       .addImm(24) // PSTATE.DIT is bit 24 of the MRS result
       .addMBB(Cont);
   MBB.addSuccessor(Clear);

@@ -125,12 +125,29 @@ the per-function form is unavailable because the instrumented set is only known 
 post-PEI pass. `musttail` and `MachineOutlinerTailCall` survive the flag and show up as
 `DITLEAK tailcall`, which is now a violation to audit rather than an accepted cost.
 
-Landed and OPT-IN: **`-mllvm -taint-dit-abi`**, the callee half (entry `MRS` into a
-pre-PEI-reserved frame slot, `MSR DIT, Xt` restore at each return, no call-site
-re-asserts). **Implemented for `-taint-dit-placement=function` only** - region placement
-narrows by clearing, and every interior clear must first be guarded on the saved value
-(`dit-unconditional-design.md` §6.1). Default off until that lands, since `region` is
-the shipped default.
+Landed and OPT-IN: **`-mllvm -taint-dit-abi`**, the callee half - entry `MRS` into a
+pre-PEI-reserved frame slot, a restore at each return, and **nothing at any call site**.
+**Both placements are supported**, and they take DIFFERENT exit forms for a real reason:
+
+- `function`: the body provably leaves DIT on, so the exit is a **guarded clear**
+  (`tbnz w, #24` over `msr DIT, #0`), which is FREE when the function was entered with
+  DIT already on.
+- `region`: the body can leave DIT in either state (a return inside an Off block is
+  never enabled), so the exit must be the **unconditional `msr DIT, Xt`** - a restore
+  that can only clear would return DIT lower than entry, and guarding an ENABLE is
+  forbidden.
+
+Still default OFF: it is untested on a real workload. Flipping it wants the LTO and
+CoinSelection numbers re-run against a sound build, since the -16.89% / -3.51% figures
+came from the unsound measurement flag.
+
+**Two traps if you touch this.** `TBNZX` hard-codes b5=1, so `TBNZX ..., 24` tests bit
+**56**, the guard never fires, and the function strips its caller - use `TBNZW` on the
+32-bit subreg, and pin the register WIDTH in tests, because the asm printer shows the
+raw operand either way. And any dataflow over the mode must use
+`TII->getTimingModeStateAfter`, not `getTimingModeSwitch`: the latter reports
+`std::nullopt` for the register-form restore, which reads as "no change" and models DIT
+as still set.
 
 New report: **`-taint-nonlocal-report=<file>`** lists the sites where the obligation
 degrades to the guarantee and DIT is simply left set - `setjmp`, `musttail`, `unwind`,

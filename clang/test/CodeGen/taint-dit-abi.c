@@ -32,6 +32,36 @@
 // RUN:     -mllvm -taint-dit-placement=function -mllvm -taint-dit-abi %s -o - \
 // RUN:   | FileCheck %s --check-prefix=ABI
 
+// Region placement is the shipped default and takes a DIFFERENT exit form.
+// RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
+// RUN:     -ftaint-harden=%S/Inputs/dit-abi-secret.txt \
+// RUN:     -mllvm -taint-dit-abi %s -o - \
+// RUN:   | FileCheck %s --check-prefix=REGION
+
+// REGION-LABEL: _two_calls:
+// The read must precede the enable that region placement puts at the very top of
+// the entry block, and the store must follow the prologue because it is a frame
+// access - SP is still the caller's before then. Two constraints, two insertion
+// points; a single one writes above the caller's stack pointer.
+// REGION:      mrs x[[C:[0-9]+]], {{DIT|S3_3_C4_C2_5}}
+// REGION-NEXT: msr {{#26|DIT}}, #1
+// REGION:      sub sp, sp
+// REGION:      str x[[C]], [sp
+//
+// No call site emits anything.
+// REGION:      bl {{_?}}sink_a
+// REGION-NOT:  msr
+// REGION:      bl {{_?}}sink_b
+//
+// The exit is the UNCONDITIONAL `msr DIT, Xt`, not the guarded clear function
+// placement uses. A region body can leave DIT in either state - a return inside
+// an Off block is never enabled - so a restore that can only clear would return
+// DIT lower than entry for a function entered with it set. Guarding an ENABLE is
+// forbidden, so the unconditional write is the only correct form here.
+// REGION:      ldr x[[C]], [sp
+// REGION:      msr {{DIT|S3_3_C4_C2_5}}, x[[C]]
+// REGION-NEXT: ret
+
 typedef unsigned long u64;
 extern u64 sink_a(u64);
 extern u64 sink_b(u64);
@@ -81,7 +111,12 @@ extern u64 sink_b(u64);
 // ABI:      ldr x{{[0-9]+}}, [sp
 // (a block-label comment for the clear block sits between the branch and the
 // write, so this is CHECK, not CHECK-NEXT)
-// ABI:      tbnz x{{[0-9]+}}, #24, [[CONT:[.A-Za-z0-9_]+]]
+// TBNZ**W**, not TBNZX: the X form hard-codes b5=1, so `TBNZX ..., 24` tests bit
+// 32+24 = 56, which is always zero in an MRS DIT result. The branch would never
+// be taken, the clear would always run, and a function entered with DIT ON would
+// return with it OFF - stripping its caller. The asm printer shows the raw
+// operand either way, so pinning the register WIDTH here is what catches it.
+// ABI:      tbnz w{{[0-9]+}}, #24, [[CONT:[.A-Za-z0-9_]+]]
 // ABI:      msr {{#26|DIT}}, #0
 // ABI-NEXT: [[CONT]]:
 // ABI-NEXT: ret

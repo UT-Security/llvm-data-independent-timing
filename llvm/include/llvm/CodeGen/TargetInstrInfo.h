@@ -1713,11 +1713,21 @@ public:
     return std::nullopt;
   }
 
-  /// Emit, at \p MI, a read of the current timing mode into \p FrameIndex.
-  /// Returns false if no scratch register could be proven free at this point, in
-  /// which case the caller must NOT emit a matching restore.
+  /// Save the incoming timing mode into \p FrameIndex, using TWO insertion
+  /// points for the same reason the restore needs two.
+  ///
+  /// \p ReadAt is where the mode is read and must precede any instruction that
+  /// changes it - placement may already have put an enable at the top of the
+  /// entry block. \p StoreAt is where the value is spilled and must follow the
+  /// prologue, because it is a frame access and SP is still the caller's before
+  /// then. A single point cannot satisfy both when the enable precedes the
+  /// prologue, which is exactly what region placement produces.
+  ///
+  /// Returns false if no scratch register could be proven free across the span,
+  /// in which case the caller must NOT emit a matching restore.
   virtual bool insertTimingModeSave(MachineBasicBlock &MBB,
-                                    MachineBasicBlock::iterator MI,
+                                    MachineBasicBlock::iterator ReadAt,
+                                    MachineBasicBlock::iterator StoreAt,
                                     const DebugLoc &DL, int FrameIndex) const {
     return false;
   }
@@ -1747,6 +1757,49 @@ public:
                                        const DebugLoc &DL,
                                        int FrameIndex) const {
     return false;
+  }
+
+  /// Restore the timing mode saved in \p FrameIndex EXACTLY, from a body that may
+  /// have left the mode in either state.
+  ///
+  /// Region placement narrows by clearing, so a return can be reached with the
+  /// mode already off. A guarded clear cannot repair that - it can only clear,
+  /// never re-enable - and guarding an ENABLE is forbidden, because a mispredict
+  /// would run secret work with the mode off. The only remaining form is an
+  /// unconditional write of the saved value, which restores either direction and,
+  /// being unconditional, has no predictor to mispredict.
+  ///
+  /// Prefer insertTimingModeRestore where the body provably leaves the mode ON:
+  /// the guarded clear is free whenever the function was entered with it already
+  /// set. Same two-insertion-point contract as that hook.
+  virtual bool insertTimingModeRestoreExact(MachineBasicBlock &MBB,
+                                            MachineBasicBlock::iterator LoadAt,
+                                            MachineBasicBlock::iterator SwitchAt,
+                                            const DebugLoc &DL,
+                                            int FrameIndex) const {
+    return false;
+  }
+
+  /// Does \p MI write the timing-mode register at all, whether or not the value
+  /// written can be read statically? Default: no target support.
+  virtual bool definesTimingMode(const MachineInstr &MI) const { return false; }
+
+  /// The timing-mode state in effect AFTER \p MI, or std::nullopt if MI does not
+  /// change it.
+  ///
+  /// Use this, not getTimingModeSwitch, for any dataflow over the mode. An
+  /// instruction can write the mode with a value that is only known at run time
+  /// - the callee-saved ABI's `MSR DIT, Xt` restore - and getTimingModeSwitch
+  /// reports std::nullopt for it, which a caller naturally reads as "no change"
+  /// and so models the mode as still SET. This reports \c false for such a
+  /// write instead, which is the conservative direction: coverage must be proven
+  /// without relying on it.
+  std::optional<bool> getTimingModeStateAfter(const MachineInstr &MI) const {
+    if (std::optional<bool> Known = getTimingModeSwitch(MI))
+      return Known;
+    if (definesTimingMode(MI))
+      return false;
+    return std::nullopt;
   }
 
   /// Give \p MI a dependence on the target's data-independent-timing mode, so

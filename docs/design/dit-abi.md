@@ -593,20 +593,66 @@ regmask in between.
 
 ### 9.5 What is NOT done
 
-- **Region placement.** `-taint-dit-abi` is implemented for
-  `-taint-dit-placement=function` only. Region placement narrows by CLEARING, and
-  under a dynamic entry value an interior clear is only legal if this frame owns
-  DIT. Every interior clear must first be guarded on the saved value
-  (`dit-unconditional-design.md` §6.1). Until then the flag stays default-off,
-  because `region` is the shipped default and the flag would be inert there.
 - **`unwind` detection is untested.** The `setjmp` and `musttail` kinds are
   covered; no test exercises an EH-pad successor yet.
+
+### 9.5.1 Region placement, and why its exit form differs
+
+Region placement is supported. **Ownership is not relaxed**: a function that is
+provably always entered with DIT on still routes past the region emitter, because
+narrowing inside a region its caller deemed secret is an under-taint no exit
+restore can repair. What the ABI changes is only the two boundaries.
+
+**The exit must be the unconditional `MSR DIT, Xt`, not the guarded clear.** A
+region body can leave DIT in *either* state: a return inside an Off block is never
+enabled, and an On block's return is cleared. A restore that can only clear would
+therefore return DIT lower than entry for a function that happened to be entered
+with it set, stripping the caller with no re-assert left to repair it. Guarding an
+ENABLE is forbidden outright (§3.1), so an unconditional write of the saved value
+is the only correct form. Being unconditional it has no predictor to mispredict,
+and `getTimingModeStateAfter` makes it visible to the dataflow consumers that
+would otherwise ignore it.
+
+So the two placements take different exit forms for a real reason, not a
+preference: **function granularity's body provably leaves DIT on, region's does
+not.** Function granularity keeps the cheaper guarded clear.
+
+Three further things region placement forced:
+
+- **`calleeLeavesDITSet` returns true under the ABI**, as a contract rather than an
+  analysis result. Suppressing only the emission was not enough: the region
+  emitter's own soundness verifier models a clobbering call as clearing, so every
+  Need after a call read as uncovered and the whole function fell back to
+  whole-function granularity.
+- **The carrier save needs two insertion points too.** Region placement puts its
+  enable at the very top of the entry block, *ahead of the prologue*. The read must
+  precede that enable; the store must follow the prologue, because SP is still the
+  caller's before it. A single point put `str x9, [sp, #8]` above the caller's
+  stack pointer.
+- **`afterPrologue` scans for the LAST FrameSetup**, not the first non-FrameSetup.
+  The original form stopped at that pre-prologue enable and returned a point where
+  the frame did not yet exist.
+
+### 9.5.2 A leak the tests initially passed over: TBNZX vs TBNZW
+
+`AArch64::TBNZX` hard-codes b5=1, so its immediate is only the low five bits of the
+bit number: `TBNZX ..., 24` tests bit **56**. Bit 56 of an `MRS DIT` result is
+always zero, so the guard never took, the clear always ran, and a function entered
+with DIT on returned with it off - stripping its caller. A leak, not a slowdown.
+
+Two things hid it. The asm printer shows the raw operand, so the `.s` read
+`tbnz x9, #24` and a CHECK for that passed. And the final-MIR verifier could not
+see it either: it is intraprocedural and treats calls as transparent, and this is a
+cross-frame property. It was found by disassembling the object.
+
+Fixed by using `TBNZW` on the 32-bit subregister. The test now pins the register
+**width**, which is the part that distinguishes correct from broken.
 
 ### 9.6 Tests
 
 | test | covers |
 |---|---|
-| `clang/test/CodeGen/taint-dit-abi.c` | pieces 1 and 3 end to end, plus a TODAY arm pinning the re-asserts the ABI deletes |
+| `clang/test/CodeGen/taint-dit-abi.c` | pieces 1 and 3 end to end, with a TODAY arm pinning the re-asserts the ABI deletes and separate FUNCTION and REGION arms for the two exit forms |
 | `llvm/test/CodeGen/AArch64/taint-analysis-nonlocal-report.mir` | piece 2, `setjmp` and `musttail`, with `plain` as a negative control |
 
 `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` plus `TaintAnnotate`: 36 tests, all
