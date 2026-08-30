@@ -135,6 +135,20 @@ code and deeper stacks. It should be measured, not assumed, and the old +27% sta
 switch figure (414 -> 524) was taken on the per-function form under the caller-saved
 design and does not transfer.
 
+#### 2.1.0 The residual cost, now confined to ABI builds
+
+Disabling tail calls TU-wide also disables tail-RECURSION elimination, so a
+tail-recursive function in an ABI build gets O(n) stack frames where plain `-O2`
+would have produced a loop or a closed form. Measured: `rec(secret, n, acc)`
+compiles to no call and no frame at `-O2`, and to `bl` plus a frame under
+`-ftaint-dit-abi`.
+
+That is a real limitation of the ABI, not a bug - it is the price of "no analysis
+needed", and the alternative is per-function marking, which needs the two-pass
+compile this design exists to avoid. It is acceptable only because it is now
+**opt-in**: gating it on `-ftaint-harden` instead made every hardened build pay a
+stack-overflow hazard for an ABI that was switched off.
+
 #### 2.1.1 Two tail calls survive the flag
 
 Both are real and neither is hypothetical.
