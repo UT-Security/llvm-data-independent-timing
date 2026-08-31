@@ -239,6 +239,8 @@
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TaintAnalysis.h"
+#include "llvm/CodeGen/TaintFixedPointIteration.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/WinEHFuncInfo.h"
 #include "llvm/IR/Attributes.h"
@@ -2480,6 +2482,28 @@ void AArch64FrameLowering::determineStackHazardSlot(
     AFI->setSplitSVEObjects(true);
     LLVM_DEBUG(dbgs() << "SplitSVEObjects enabled!\n");
   }
+}
+
+bool AArch64FrameLowering::enableShrinkWrapping(
+    const MachineFunction &MF) const {
+  // The callee-saved PSTATE.DIT ABI keeps the incoming DIT value in a frame slot
+  // and spills it just after the prologue (docs/design/dit-abi.md §9.3). Shrink
+  // wrapping moves the prologue out of the entry block, so the taint pass - which
+  // runs post-PEI and locates the prologue by scanning the entry block for
+  // FrameSetup - would emit that spill where SP is still the CALLER's, writing
+  // over the caller's frame and its incoming stack arguments.
+  //
+  // Disabling shrink wrapping keeps the prologue in the entry block, which is the
+  // property the save relies on. It costs a prologue on early-exit paths, and it
+  // is paid only by builds that opt into the ABI.
+  //
+  // Gated on the option rather than on the reserved slot: ShrinkWrap runs BEFORE
+  // the pre-PEI pass that reserves it (TargetPassConfig::addMachinePasses), so at
+  // this point no slot exists yet to test.
+  if (TaintDITAbi && TaintInsertDIT &&
+      moduleHasTaintSources(*MF.getFunction().getParent()))
+    return false;
+  return true;
 }
 
 void AArch64FrameLowering::determineCalleeSaves(MachineFunction &MF,

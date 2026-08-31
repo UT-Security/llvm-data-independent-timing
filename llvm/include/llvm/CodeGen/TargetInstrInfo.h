@@ -1713,6 +1713,18 @@ public:
     return std::nullopt;
   }
 
+  /// Can this function carry its incoming timing mode at all?
+  ///
+  /// Must be answerable BEFORE any placement decision is taken. Placement under
+  /// the callee-saved ABI DELETES the after-call re-asserts and the exit clears
+  /// on the strength of the contract; discovering only afterwards that the
+  /// carrier cannot be established leaves the function with neither the old
+  /// protection nor the new, and under region placement it can then return the
+  /// mode LOWER than it entered - the one failure the ABI's guarantee forbids.
+  virtual bool canCarryTimingMode(const MachineFunction &MF) const {
+    return false;
+  }
+
   /// Save the incoming timing mode into \p FrameIndex, using TWO insertion
   /// points for the same reason the restore needs two.
   ///

@@ -7169,6 +7169,35 @@ AArch64InstrInfo::getTimingModeSaveSlot(const MachineFunction &MF) const {
   return MF.getInfo<AArch64FunctionInfo>()->getTimingModeSaveIndex();
 }
 
+bool AArch64InstrInfo::canCarryTimingMode(const MachineFunction &MF) const {
+  auto *AFI = MF.getInfo<AArch64FunctionInfo>();
+  std::optional<int> Slot = AFI->getTimingModeSaveIndex();
+  if (!Slot)
+    return false; // no pre-PEI reservation (e.g. the standalone llc entry point)
+
+  // The slot must be reachable by the scaled unsigned-immediate form. It is not
+  // when getFrameIndexReference picks FP as the base and hands back a negative
+  // offset, which is the normal answer for any function with a VLA.
+  int64_t Offset;
+  Register Base;
+  if (!resolveTimingModeSlot(const_cast<MachineFunction &>(MF), *Slot, Base,
+                             Offset))
+    return false;
+
+  // The store goes after the prologue and the reload before each epilogue, so a
+  // function with no prologue at all in its entry block (naked, or a frame the
+  // pass cannot see) has nowhere valid to put it. Shrink wrapping used to be the
+  // common way to reach this; AArch64FrameLowering::enableShrinkWrapping now
+  // turns it off under the ABI, and this is the backstop.
+  const MachineBasicBlock &Entry = MF.front();
+  if (llvm::none_of(Entry, [](const MachineInstr &MI) {
+        return MI.getFlag(MachineInstr::FrameSetup);
+      }))
+    return false;
+
+  return true;
+}
+
 bool AArch64InstrInfo::insertTimingModeSave(MachineBasicBlock &MBB,
                                             MachineBasicBlock::iterator ReadAt,
                                             MachineBasicBlock::iterator StoreAt,

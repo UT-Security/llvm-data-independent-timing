@@ -2521,7 +2521,11 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
   // the incoming value into its carrier slot, so that every exit can put back
   // exactly what it found. A clone is entered with DIT already on by
   // construction and owns nothing, so it neither saves nor restores.
-  const bool ABI = TaintDITAbi && OwnsDIT && !Clone;
+  // Decide BEFORE emitting: under the ABI the call-site re-asserts and the exit
+  // clears are deleted on the strength of the contract, so a carrier that turns
+  // out to be unavailable must not be discovered afterwards.
+  const bool ABI =
+      TaintDITAbi && OwnsDIT && !Clone && TII->canCarryTimingMode(MF);
 
   // Compute the insertion point ONCE. Both the carrier save and the entry enable
   // go here, and BuildMI inserts before the iterator, so calling them in this
@@ -3574,7 +3578,27 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
     // outright (dit-unconditional-design.md §3.1), so an unconditional write of
     // the saved value is the only correct form. Being unconditional, it has no
     // predictor to mispredict.
-    const bool ABI = TaintDITAbi;
+    const bool ABI = TaintDITAbi && TII->canCarryTimingMode(MF);
+
+    // Cannot carry: do NOT let the region emitter delete the re-asserts and the
+    // exit clears. Fall back to whole-function coverage that never clears, which
+    // is exactly the !OwnsDIT shape. DIT is left SET, satisfying the §1
+    // guarantee at the cost of dwell.
+    //
+    // Reverting to the pre-ABI scheme instead would be unsound: that clears on
+    // exit, and under this ABI the caller emits no re-assert to repair it.
+    if (TaintDITAbi && !ABI) {
+      emitFunctionGranularityDIT(MF, TSI, /*OwnsDIT=*/false, ReassertOS,
+                                 NonlocalOS);
+      if (NonlocalOS)
+        *NonlocalOS << "NONLOCAL nocarrier caller=" << MF.getName()
+                    << " (no usable carrier slot - whole-function coverage, DIT "
+                       "left set on exit)\n";
+      reportUnbalancedDITExits(MF, TSI, M, TII, /*OwnsDIT=*/false, ExitOS);
+      reportNonlocalDITExits(MF, M, /*OwnsDIT=*/false, NonlocalOS);
+      emitDITPrecisionReport(MF, TR, TSI, AA);
+      return TaintedInstrCount;
+    }
 
     // Region placement FIRST, carrier save second. The region emitter puts its
     // enable at the region entry point, which in a function that is one big
