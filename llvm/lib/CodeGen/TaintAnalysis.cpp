@@ -2887,12 +2887,28 @@ static void reportNonlocalDITExits(MachineFunction &MF, Module &M,
       if (!MI.isCall())
         continue;
 
-      // musttail: a TCRETURN that survived -fno-optimize-sibling-calls. A tail
-      // call is BOTH isReturn() and isCall(), so test it first.
+      // A tail call is BOTH isReturn() and isCall(), so test it first.
+      //
+      // DISTINGUISH WHY IT SURVIVED. Reporting every surviving TCRETURN as
+      // "musttail" sends the diagnosis in the wrong direction: on a libsodium
+      // sweep, seven of eight leak sites were labelled musttail, which implies
+      // an unfixable language requirement, when the flag simply may not have
+      // reached the translation unit. Only a function that actually CARRIES
+      // "disable-tail-calls" and still has a tail call is the hard case.
       if (MI.isReturn()) {
-        emit("musttail", MI, findCalledFunction(M, MI),
-             "musttail bypasses the TU-wide tail-call disable, and a tail call "
-             "has no epilogue");
+        const bool Gated =
+            MF.getFunction().getFnAttribute("disable-tail-calls")
+                .getValueAsBool();
+        if (!Gated)
+          emit("tailcall-ungated", MI, findCalledFunction(M, MI),
+               "this function has no `disable-tail-calls` attribute, so "
+               "-ftaint-dit-abi did not reach its translation unit - a build "
+               "configuration problem, NOT musttail");
+        else
+          emit("musttail", MI, findCalledFunction(M, MI),
+               "the function IS gated yet kept a tail call, so this is genuine "
+               "musttail or MachineOutlinerTailCall - neither is fixable by the "
+               "flag");
         continue;
       }
 

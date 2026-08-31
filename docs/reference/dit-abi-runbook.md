@@ -40,6 +40,21 @@ macOS: create `build/bin/clang.cfg` once per build dir (see `CLAUDE.md`).
 build/bin/clang -O2 -ftaint-harden=<seeds.txt> -ftaint-dit-abi -c file.c -o file.o
 ```
 
+> ### The single most common way to get an invalid arm
+>
+> **`-mllvm -taint-dit-abi` is NOT the same as `-ftaint-dit-abi`.** The `-mllvm`
+> form turns on the carrier but NOT the tail-call disable, so every tail call in
+> the TU survives and leaks DIT on. On a libsodium sweep this produced eight leak
+> sites, seven of them ordinary tail calls, and the arm degenerated to blanket.
+>
+> The driver flag did not exist before commit `86ce9846a55a` (2026-08-30), so any
+> ABI arm built before then is in this state.
+>
+> **Check the report:** `NONLOCAL tailcall-ungated` means the flag never reached
+> that translation unit - a build-configuration problem. `NONLOCAL musttail` means
+> the TU IS gated and the tail call survived anyway, which is genuine `musttail`
+> or the MachineOutliner and is not fixable by the flag.
+
 `-ftaint-dit-abi` is a **driver flag**, not `-mllvm`. It does two things that must
 stay in step: it turns on the backend option, and it implies
 `-fno-optimize-sibling-calls`. `-mllvm -taint-dit-abi` alone gives you the ABI
