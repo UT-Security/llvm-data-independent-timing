@@ -32,7 +32,7 @@ GATES, all exact because gem5 is deterministic:
     the ditSuppressed their placement implies; `off` must report exactly ZERO.
   * Checksums identical across arms.
 """
-import argparse, itertools, json, pathlib, re, subprocess, sys, time
+import argparse, hashlib, itertools, json, os, pathlib, re, shutil, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
 G = pathlib.Path.home() / "Documents/gem5-DIT"
@@ -117,7 +117,7 @@ def run_one(job):
             return collect(d, arm, cfg, sigs, period, verifies, 0, 0.0)
 
     suffix, mode = ARMS[arm]
-    binpath = BIN / f"xover_{suffix}"
+    binpath = canon_path(BIN / f"xover_{suffix}", arm, cfg, sigs, period, verifies)
     cmd = [str(GEM5), "-d", str(d), str(CONFIG)] + CONFIGS[cfg] + [
         "--binary", str(binpath),
         "--arguments", f"{mode} {a.rows} {a.rounds} {sigs} {period} {verifies}",
@@ -126,6 +126,34 @@ def run_one(job):
     with open(d / "run.log", "w") as log:
         rc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT).returncode
     return collect(d, arm, cfg, sigs, period, verifies, rc, time.time() - t0)
+
+
+def canon_path(src, *key):
+    """Run every arm from an EQUAL-LENGTH path.
+
+    gem5 SE mode writes the binary path onto the initial process stack as
+    argv[0], so its LENGTH shifts stack alignment for the whole run. Measured
+    with one byte-identical binary: 287,318 / 285,068 / 284,936 cycles at a 1-,
+    36- and 18-char name, a 0.84% spread from the file name alone. Only the
+    length matters, not the text: two 1-char names agreed to the cycle.
+
+    Here `xover_nodit`, `_hoist`, `_gated`, `_plain` are all 11 characters but
+    `_hoist0` and `_nopctl` are 12 and `_swcyc30` is 13, so the shipped-default
+    arm, the NOP alignment control and the switch-cyc arm were each measured
+    against a baseline at a different path length. Fixed-width hex slot keeps
+    every path the same length while staying unique per parallel job; hard
+    linked, so no disk or copy cost. See dit-gem5-rig-traps #5.
+    """
+    slot = hashlib.md5("/".join(map(str, key)).encode()).hexdigest()[:8]
+    c = BIN / "armlink" / slot / "b"
+    c.parent.mkdir(parents=True, exist_ok=True)
+    if c.exists():
+        c.unlink()
+    try:
+        os.link(src, c)
+    except OSError:
+        shutil.copy2(src, c)
+    return c
 
 
 def collect(d, arm, cfg, sigs, period, verifies, rc, wall):

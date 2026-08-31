@@ -281,7 +281,7 @@ contribution, not boilerplate.
 
 | control | what it prevents | how it failed here |
 |---|---|---|
-| **round-trip baseline** (`-ftaint-harden=<empty>`) | crediting MIR round-trip codegen to DIT | two retracted numbers; the artifact is workload-dependent (+0.58% QuickJS, 0.00% SQLCipher) |
+| **round-trip baseline** (`-ftaint-harden=<empty>`) | crediting MIR round-trip codegen to DIT | two retracted numbers; the artifact is workload-dependent (+0.58% QuickJS, 0.00% SQLCipher). Under gem5 the artifact is now known to be `argv[0]` path length and measures **0.00%** once arms share a path; whether the same mechanism inflates the NATIVE figures is untested |
 | **null arm** (harness loaded, no DIT write) | crediting the harness to DIT | +0.30% on Chromium, +3.12% on Bitcoin reindex |
 | **NOP substitution** (`-taint-dit-nop-switches`) | crediting code alignment to DIT | answers Marinaro et al. AsiaCCS'24; attributed 100.2% of a +51% to switches. **Gate it: the NOP arm must carry ZERO `msr DIT` AND be the same size as its twin.** Same-count/same-size/same-address are all true of a byte-identical arm, so checking only those hides an inert control - which is exactly what happened in the crossover rig |
 | **rotated arm order** + duplicate baseline | drift masquerading as an arm effect | 1.3% bias on an instruction-identical arm |
@@ -311,9 +311,23 @@ Bitcoin `SignTransactionECDSA` reads -1.11% in gem5 against a **marginal** +3.39
 (26/40, p≈.08) on silicon, i.e. both instruments find little or no prize. Use
 gem5 for *which placement is better*, for magnitude on DIT-sensitive public code,
 and for the renamed-switch counterfactual that does not exist in hardware; use
-silicon to decide whether a small effect is real at all, since gem5's
-cross-binary resolution floor is a **-0.64% round-trip artifact between binaries
-with identical `simInsts`**. Sources: `docs/results/dit-bitcoin-coinsel-gem5.md`,
+silicon to decide whether a small effect is real at all.
+
+> **The "-0.64% cross-binary resolution floor" is retracted as a floor** (2026-08-31).
+> It was a **-0.64% round-trip artifact between binaries with identical
+> `simInsts`**, read as irreducible. The mechanism is now identified: gem5 SE mode
+> writes the binary path onto the initial process stack as `argv[0]`, so its
+> LENGTH shifts stack alignment for the whole run. On libsecp256k1 one
+> byte-identical binary measured 287,318 / 285,068 / 284,936 cycles at a 1-, 36-
+> and 18-char name, a 0.84% spread from the file name alone; only the length
+> matters, not the text. The Bitcoin arms `btc_sign_base` (13 chars) and
+> `btc_sign_nodit` (14) differ, so they were never comparable. `btc_gem5.py` now
+> runs every arm from an equal-length path, and with that fix the two secp arms
+> with identical `.text` agree **to the cycle** (275,721 both) where they
+> previously differed by 561. **The -0.64% must be re-measured before it is
+> quoted again; it has not been.** See `dit-secp-tier2.md` §3.1.
+
+Sources: `docs/results/dit-bitcoin-coinsel-gem5.md`,
 `dit-bitcoin-sign-two-instruments.md`.
 
 ---

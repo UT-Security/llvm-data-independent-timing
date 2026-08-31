@@ -29,8 +29,15 @@ Two gates, both enforced rather than documented (each has failed before):
      perturbs the instruction stream, the cycle comparison is void.
   2. ditSuppressed == 0 in every arm that should carry no DIT (base, nodit). A
      baseline silently running with protection looks exactly like a win.
+  3. Every arm runs from an EQUAL-LENGTH path. gem5 SE mode writes the binary
+     path onto the initial process stack as argv[0], so its LENGTH shifts stack
+     alignment for the whole run. One byte-identical binary measured 287,318 /
+     285,068 / 284,936 cycles at a 1-, 36- and 18-char name: 0.84% from the file
+     name alone. Arms named btc_sign_base (13) and btc_sign_blanket (16) differ,
+     so comparing them where they are built confounds every delta. See
+     dit-gem5-rig-traps #5.
 """
-import argparse, csv, json, os, pathlib, re, subprocess, sys, time
+import argparse, csv, hashlib, json, os, pathlib, re, shutil, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
 G = pathlib.Path.home() / "Documents/gem5-DIT"
@@ -106,13 +113,33 @@ def pick(s, *keys):
     return None
 
 
+def canon_path(arm, cfg, binary):
+    """An equal-length path for every arm (gate 3).
+
+    Fixed-width hex slot, so the string length is identical for every arm and
+    config while staying unique enough for the parallel jobs not to collide.
+    Hard-linked beside the binaries so this costs no disk and no copy time;
+    falls back to a copy if the link cannot be made.
+    """
+    slot = hashlib.md5(f"{arm}/{cfg}".encode()).hexdigest()[:8]
+    c = BIN / "armlink" / slot / "b"
+    c.parent.mkdir(parents=True, exist_ok=True)
+    if c.exists():
+        c.unlink()
+    try:
+        os.link(BIN / binary, c)
+    except OSError:
+        shutil.copy2(BIN / binary, c)
+    return c
+
+
 def run_one(job):
     arm, cfg, outroot, a = job
     binary = BENCHES[a.bench][arm]
     d = outroot / f"{arm}__{cfg}"
     d.mkdir(parents=True, exist_ok=True)
     cmd = [str(GEM5), "-d", str(d), str(CONFIG)] + CONFIGS[cfg] + [
-        "--binary", str(BIN / binary),
+        "--binary", str(canon_path(arm, cfg, binary)),
         "--arguments", f"{a.iter} {a.warmup} {a.targets}".strip(),
     ]
     t0 = time.time()
