@@ -326,6 +326,21 @@ silicon to decide whether a small effect is real at all.
 > with identical `.text` agree **to the cycle** (275,721 both) where they
 > previously differed by 561. **The -0.64% must be re-measured before it is
 > quoted again; it has not been.** See `dit-secp-tier2.md` §3.1.
+>
+> **An equal-length path is necessary but NOT sufficient.** It removes the bias
+> between arms; the measured delta is still a function of that arbitrary path.
+> On libsecp256k1 the no-DIT baseline alone spans **2.41%** across eight
+> `argv[0]` lengths, and at 549k instructions the coarse-versus-fine verdict
+> flips sign with the file name. The mechanism is not vague "alignment": the
+> filename counts twice toward the guest's initial stack frame (once as
+> `AT_EXECFN`, once as `argv[0]`, `src/arch/arm/process.cc`) and the SP is then
+> rounded down to 16, so the initial SP is a step function of path length and
+> every stack address moves with it - changing pointer values, and therefore
+> what the machine's value-based optimisations can fold, differently per arm.
+> **Quote a sub-2% gem5 delta only if it is averaged over several `argv[0]`
+> lengths AND the workload is large enough that the sign is stable across them.**
+> `run_secp_gem5.sh` does this by default (8 offsets, 20 signatures) and prints a
+> 95% CI with an explicit *not resolved* verdict; the other rigs do not yet.
 
 Sources: `docs/results/dit-bitcoin-coinsel-gem5.md`,
 `dit-bitcoin-sign-two-instruments.md`.
