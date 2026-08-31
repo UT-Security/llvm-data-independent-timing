@@ -126,12 +126,27 @@ went **265 ops / 203 sites -> 5 / 5**, and libsecp256k1 and libsodium switch cou
 only loads of that object are affected. Test:
 `taint-analysis-global-sibling.mir`, verified to fail pre-fix.
 
-**The other three are NOT fixed, and flowprobe now understates them.** All four probe
-buffers are `static` globals, so the one module-level fact closes every delivery route
-in that program - `c1_consume`/`c3_consume`/`c4_consume` come out clean without their
-mechanisms being touched. A returned pointer, an inline-asm store or a NEON tuple
-carrying a secret through **heap or stack** memory still leaks. Do not read the probe's
-current all-clear as those channels being closed; it needs non-global variants.
+**The other three are NOT fixed.** flowprobe gained heap variants C5/C6/C7 the same day
+(gem5-DIT `a3ca11dc68`) - same mechanisms, bytes on the heap where the global rule
+cannot reach - and they fail identically to their global twins, so the three defects are
+storage-independent and still open:
+
+| channel | mechanism | status |
+|---|---|---|
+| C1 / C5 | returned pointer into a secret buffer (no `ReturnsPointeeTainted`) | 63 under-taint ops each |
+| C3 / C6 | inline asm store (`INLINEASM` isn't `isCall()`, carries no MMO) | 63 each |
+| C4 / C7 | NEON register tuple (`isSinglePhysReg` rejects `$q0_q1`) | 63 each |
+| C2 | global read by a sibling | **fixed** |
+
+**Two traps when reading that probe.** `consume_all` used to accumulate every consumer's
+secret-derived return into one local, so once ONE channel started working the first call
+made it tainted and region placement blanketed all seven calls - the probe reported
+everything clean. Note the direction: **the C2 fix is what broke the harness**, because
+while every channel was broken no return was recognised as secret and it discriminated by
+accident. Now one clean wrapper with its own sink per channel. And `ditseen[]` is a hint,
+not the verdict - it samples DIT at *entry*, so it cannot separate "unprotected" from
+"self-instrumented, enable comes later", and it reads 1 whenever the caller is DIT-on
+across the call. **Read the oracle's per-PC under-taint list.**
 
 ### The DIT ABI (settled 2026-08-30) - `docs/design/dit-abi.md`
 
