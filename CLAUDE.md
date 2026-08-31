@@ -402,12 +402,29 @@ X86/AMDGPU only), so lowering and emission remain on the legacy PM.
   gem5 switch models, two cache points) - so a NOP baseline overstates itself and
   therefore *understates* DIT cost. There is no `mul` mode in the pass yet; the
   measurements were done by rewriting the switch sites in the assembly.
-- **Most of what looks like switch cost can be codegen.** With all 121 SQLCipher
-  HMAC/SHA switches turned into NOPs and no DIT executing at all, the instrumented
-  build still cost **+17.10/+16.57 pp serializing and +4.05/+2.52 pp renamed** -
-  under a renamed switch, the majority of the total. Region placement splits
-  blocks inside a compression loop and the restructuring is expensive by itself.
-  Cheaper switches do not remove it.
+- **Most of what looks like switch cost can be codegen - CONTESTED, and scoped to
+  the round-tripping `llc` path.** With all 121 SQLCipher HMAC/SHA switches turned
+  into NOPs and no DIT executing at all, the instrumented build still cost
+  **+17.10/+16.57 pp serializing and +4.05/+2.52 pp renamed** - under a renamed
+  switch, the majority of the total. Region placement splits blocks inside a
+  compression loop and the restructuring is expensive by itself.
+
+  **Two later measurements say the opposite on other workloads, and both postdate
+  this one.** The Result 2 re-run (`docs/results/dit-switch-cyc-confirmation.md`
+  §8, 2026-08-31) finds the layout share **~0%, not ~100%** on the libsodium
+  composite, with the def-minus-NOP term positive at 19 of 20 points and scaling
+  2-3x with the switch model. And
+  `docs/results/dit-abi-committed-switches.md` resolves 9.54 points of pure switch
+  cost on libsodium AEAD from the two switch models over identical binaries, while
+  its round-trip control comes back **byte-identical** to base - a layout term of
+  exactly zero.
+
+  The likely reconciler: both the SQLCipher NOP arms and Result 2 as originally
+  run went through the **MIR-round-tripping `llc` path**, whose codegen lottery
+  this file prices at up to +2.65%. The clang `-ftaint-harden` path stopped
+  round-tripping in `4fb7600db532`. That cannot be all of +17.10 pp, so do not
+  treat it as settled - **rebuild the SQLCipher NOP arms on the current path
+  before quoting either side.**
 - **A gem5 ROI delimited by `m5_reset_stats` does NOT give exactly equal
   instruction counts across machine configs.** The marker lands as a scheduled
   event, so a ROB-scale number of in-flight instructions commit on either side.

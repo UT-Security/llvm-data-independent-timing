@@ -121,11 +121,18 @@ for the other.
 
 **ed25519 is the sharpest result in the table.** It pays **+4.61%** while
 committing **one** DIT write in the whole region, and the figure is identical
-under both switch models (+4.61% renamed, +4.61% serializing). Whatever that
-4.6% is, it is not switches - it is the codegen difference of going through the
-taint flow, which corroborates the NOP-control finding in `CLAUDE.md` from a
-completely different direction. No ABI, no placement policy and no cheaper switch
-can touch it.
+under both switch models (+4.61% renamed, +4.61% serializing). So it is not
+switch cost - one write cannot be 4.6%, and a term that does not move with the
+switch model is not the switch.
+
+It is not codegen either: the `rt` control in §3.2 is **byte-identical** to base,
+so going through the taint flow contributes exactly zero on the clang path.
+
+By elimination it is **DIT dwell** - the cost of executing with the mode on. The
+counters say so directly: 64,581 comp-simp opportunities suppressed and ~442,000
+instructions tagged DIT-set, and blanket pays **+6.88%** for the same coverage
+with no switches and no taint flow at all. Dwell is the one term no ABI, no
+placement policy and no cheaper switch can touch.
 
 The four zero-write rows are primitives the seed file does not reach; they are a
 negative control showing the counter reports zero when nothing is instrumented,
@@ -200,6 +207,37 @@ work (`ditTaggedSet` 442,272 vs 445,858), so the dwell should be near-identical.
 un-gated - and public scaffolding is exactly where the gated optimizations pay
 (`dit-finegrain-win-condition`). Consistent with the counters, not established by
 them.
+
+### 3.3 Relation to the Result 2 re-run (`dit-switch-cyc-confirmation.md` §8)
+
+That re-run landed hours before this one, on the same library, and reached two
+conclusions this study independently reproduces from a different direction.
+
+**"The def-minus-NOP term does not straddle zero; it scales with the switch
+model."** Confirmed here without needing a NOP arm at all. On AEAD the *same two
+binaries* under the two switch models give `taint` -0.24% renamed and **+9.30%**
+serializing. Nothing differs but how `MSR DIT` executes, so **9.54 points is
+switch cost**, resolved cleanly. The committed counters name the quantity that
+9.54 points is buying: 460 executed writes.
+
+**"The layout share is ~0%, not ~100%."** Confirmed, and here it is exact rather
+than estimated. The `rt` arm is **byte-identical** to base - same archive, same
+binaries - so the layout/codegen term is **0 by construction**, not 0 within
+noise.
+
+**A candidate explanation for why the old finding said the opposite.** Both
+retracted measurements - SQLCipher's NOP arms (`CLAUDE.md`, 2026-08-24) and
+Result 2 as originally run - were built through the **MIR-round-tripping `llc`
+path**; the re-run commit says so of its own arms. That path serializes MIR to
+text and reparses it, and `CLAUDE.md` prices the resulting codegen lottery at up
+to +2.65%. The clang path stopped doing this in `4fb7600db532` (2026-08-30), and
+its round-trip term is now measurably zero. So "layout is most of the cost" may
+have been substantially an artifact of a pipeline the pass no longer uses.
+
+Offered as a hypothesis with a mechanism, not as established: SQLCipher's +17.10
+pp is far larger than the lottery's measured range, so the round trip cannot be
+all of it, and that arm has not been rebuilt on the current path. Rebuilding it
+is the test.
 
 ---
 
