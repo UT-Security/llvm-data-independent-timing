@@ -1082,7 +1082,14 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           LLVM_DEBUG(dbgs() << "      load from global " << CI.GV->getName()
                             << " (poisoned by unknown mem)\n");
         } else {
-          bool Tainted = S.isWholeGlobalTainted(CI.GV) ||
+          // The module-level set is what closes the SIBLING case. S's own
+          // global taint arrives only along call edges (a callee's mod-set
+          // applied at its call site), so a reader with no call path from the
+          // writer sees a clean state and runs the secret with DIT off -
+          // flowprobe C2. Asking the module makes "this global holds a secret"
+          // a property of the global rather than of the path taken to it.
+          const bool ModuleSecret = TSI && TSI->isSecretGlobal(CI.GV);
+          bool Tainted = ModuleSecret || S.isWholeGlobalTainted(CI.GV) ||
                          (CI.Size ? S.isTaintedGlobalCellOverlapping(
                                         CI.GV, CI.Offset, *CI.Size)
                                   : S.anyTaintedGlobalCellForGV(CI.GV));

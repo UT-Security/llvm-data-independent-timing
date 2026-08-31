@@ -400,6 +400,22 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
       NewSummary.StackArgTainted =
           CurrentSummary.StackArgTainted || OldSummary.StackArgTainted;
 
+      // A global written with a secret is secret for the WHOLE module, not just
+      // along the call edges out of this function. Done inside the fixed point
+      // rather than as a post-pass because it feeds back: marking a global
+      // secret can taint a load in a sibling, which can taint a store into a
+      // further global. The set only grows, so this cannot prevent convergence.
+      for (const GlobalVariable *GV : MemEffects.WritesSecretToGlobal) {
+        if (TSI.addSecretGlobal(GV)) {
+          Changed = true;
+          LLVM_DEBUG(dbgs() << "  module-secret global: " << GV->getName()
+                            << " (written by " << F.getName() << ")\n");
+          if (TraceOS)
+            *TraceOS << "  ** module-secret global: " << GV->getName()
+                     << " **\n";
+        }
+      }
+
       if (NewSummary != OldSummary) {
         TSI.storeSummary(F, NewSummary);
         Changed = true;

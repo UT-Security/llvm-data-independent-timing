@@ -174,6 +174,11 @@ class TaintSummaryInfo {
   /// module-wide heap poison is too imprecise for public heap inputs.
   bool ModuleUnknownMemTainted = false;
 
+  /// Globals that receive a secret ANYWHERE in the module (union of every
+  /// function's FunctionMemEffects::WritesSecretToGlobal). Grows monotonically,
+  /// so folding it into the fixed point cannot stop it converging.
+  SmallPtrSet<const GlobalVariable *, 8> ModuleSecretGlobals;
+
 public:
   TaintSummaryInfo() = default;
 
@@ -189,6 +194,27 @@ public:
 
   /// Check the module-level unknown-mem-tainted flag.
   bool hasUnknownMemTainted() const { return ModuleUnknownMemTainted; }
+
+  /// Record that some function in the module writes a secret into \p GV.
+  /// Returns true if this is new information (so the caller can keep iterating).
+  ///
+  /// Module-scoped ON PURPOSE, unlike ModuleUnknownMemTainted's deliberate
+  /// locality. A global is a named object, not "all of memory", so marking one
+  /// secret poisons exactly the loads that read it - there is no flood to fear.
+  /// The per-function TaintState carries the same fact only along CALL EDGES (a
+  /// callee's mod-set is applied at its call site), which means a SIBLING reader
+  /// - one with no call path from the writer - is analysed with its own entry
+  /// state and never learns the global holds a secret. That is flowprobe
+  /// channel C2, and it is an under-taint: 64 secret operations executing with
+  /// PSTATE.DIT clear.
+  bool addSecretGlobal(const GlobalVariable *GV) {
+    return GV && ModuleSecretGlobals.insert(GV).second;
+  }
+
+  /// Does any function in the module write a secret into \p GV?
+  bool isSecretGlobal(const GlobalVariable *GV) const {
+    return GV && ModuleSecretGlobals.contains(GV);
+  }
 
   /// Store a taint summary for a function.
   void storeSummary(const Function &F, FunctionTaintSummary Summary) {

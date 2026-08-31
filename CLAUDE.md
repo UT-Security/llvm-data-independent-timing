@@ -117,6 +117,22 @@ a callee's memory clobber only at call sites that actually pass a secret: withou
 that escape it (returned pointer into a secret buffer, global read by a sibling with no
 call edge, inline asm, NEON register tuple). `-taint-no-modset-gate` is the escape hatch.
 
+**The sibling-global channel is FIXED (2026-08-31).** A global written with a secret
+anywhere in the module is now secret module-wide
+(`TaintSummaryInfo::addSecretGlobal`, folded into the fixed point and consulted on the
+global load path), instead of travelling only along call edges. flowprobe under-taint
+went **265 ops / 203 sites -> 5 / 5**, and libsecp256k1 and libsodium switch counts are
+**unchanged** (16/4 and 120/69), so it is not a flood - a global is a named object, and
+only loads of that object are affected. Test:
+`taint-analysis-global-sibling.mir`, verified to fail pre-fix.
+
+**The other three are NOT fixed, and flowprobe now understates them.** All four probe
+buffers are `static` globals, so the one module-level fact closes every delivery route
+in that program - `c1_consume`/`c3_consume`/`c4_consume` come out clean without their
+mechanisms being touched. A returned pointer, an inline-asm store or a NEON tuple
+carrying a secret through **heap or stack** memory still leaks. Do not read the probe's
+current all-clear as those channels being closed; it needs non-global variants.
+
 ### The DIT ABI (settled 2026-08-30) - `docs/design/dit-abi.md`
 
 **To RUN it, read `docs/reference/dit-abi-runbook.md`** - build steps (including the

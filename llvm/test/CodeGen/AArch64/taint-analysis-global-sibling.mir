@@ -1,0 +1,349 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s
+
+# A global written with a secret is secret MODULE-WIDE, not just along call edges.
+#
+# Global taint used to live only in the per-function TaintState, and the sole
+# cross-function carrier was a callee's mod-set applied AT ITS CALL SITE. A
+# SIBLING reader - one with no call path from the writer - was analysed with its
+# own entry state and never learned the global held a secret, so it computed on
+# it with PSTATE.DIT clear. That is an under-taint: a leaked secret, not a cost.
+#
+# Found by the gem5 shadow-taint oracle as flowprobe channel C2
+# (gem5-DIT/benchmarks/taint_oracle/flowprobe_gem5.c): c2_reader executed 64
+# secret operations with DIT off while carrying zero MSR DIT.
+#
+# The fix is TaintSummaryInfo::addSecretGlobal - the union of every function's
+# FunctionMemEffects::WritesSecretToGlobal, folded into the fixed point (it feeds
+# back: a newly-secret global can taint a load that stores into another global)
+# and consulted on the global load path.
+#
+# 26 is the PSTATE.DIT pstatefield encoding (op1=0b011, op2=0b010).
+
+# The writer holds the secret and must be instrumented. This passed before the
+# fix too - it is here so "instrument nothing" cannot pass.
+# CHECK-LABEL: name: writer
+# CHECK: MSRpstateImm4 26, 1
+
+# THE REGRESSION. sibling_reader has NO call edge from writer; it loads @chan and
+# multiplies. Pre-fix this function contained zero MSR DIT.
+# CHECK-LABEL: name: sibling_reader
+# CHECK: MSRpstateImm4 26, 1
+# CHECK: MADDXrrr
+# CHECK: MSRpstateImm4 26, 0
+
+# PRECISION CONTROL - reads a DIFFERENT global that no one ever writes a secret
+# into. Marking one global secret must not flood the rest, otherwise "taint every
+# global" would also satisfy the check above.
+# CHECK-LABEL: name: control_reader
+# CHECK-NOT: MSRpstateImm4
+
+# COVERAGE CONTROL - consume() receives no secret and passes none, so it must stay
+# clean. This is what stops the readers inheriting DIT from a caller and masking
+# the bug, exactly as consume_all does in flowprobe.
+# CHECK-LABEL: name: consume
+# CHECK-NOT: MSRpstateImm4
+
+--- |
+  ; ModuleID = '/Users/rohan/.claude/jobs/a4c901b2/tmp/c2.ll'
+  source_filename = "/Users/rohan/.claude/jobs/a4c901b2/tmp/c2.c"
+  target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32"
+  target triple = "aarch64"
+  
+  @chan = internal unnamed_addr global i64 0, align 8
+  
+  ; Function Attrs: mustprogress nofree noinline norecurse nosync nounwind willreturn memory(write, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) uwtable
+  define dso_local void @writer(i64 noundef "tainted" %sk) local_unnamed_addr #0 {
+  entry:
+    store i64 %sk, ptr @chan, align 8, !tbaa !10
+    ret void
+  }
+  
+  ; Function Attrs: mustprogress nofree noinline norecurse nosync nounwind willreturn memory(read, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) uwtable
+  define dso_local i64 @sibling_reader() local_unnamed_addr #1 {
+  entry:
+    %0 = load i64, ptr @chan, align 8, !tbaa !10
+    %mul = mul i64 %0, 131
+    ret i64 %mul
+  }
+  
+  ; Function Attrs: mustprogress nofree noinline norecurse nosync nounwind willreturn memory(none) uwtable
+  define dso_local noundef i64 @control_reader() local_unnamed_addr #2 {
+  entry:
+    ret i64 0
+  }
+  
+  ; Function Attrs: mustprogress nofree noinline norecurse nosync nounwind willreturn memory(read, inaccessiblemem: none, target_mem0: none, target_mem1: none) uwtable
+  define dso_local i64 @consume() local_unnamed_addr #3 {
+  entry:
+    %call = tail call i64 @sibling_reader()
+    ret i64 %call
+  }
+  
+  attributes #0 = { mustprogress nofree noinline norecurse nosync nounwind willreturn memory(write, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) uwtable "frame-pointer"="non-leaf-no-reserve" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="generic" "target-features"="+fp-armv8,+neon,+v8a,-fmv" }
+  attributes #1 = { mustprogress nofree noinline norecurse nosync nounwind willreturn memory(read, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) uwtable "frame-pointer"="non-leaf-no-reserve" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="generic" "target-features"="+fp-armv8,+neon,+v8a,-fmv" }
+  attributes #2 = { mustprogress nofree noinline norecurse nosync nounwind willreturn memory(none) uwtable "frame-pointer"="non-leaf-no-reserve" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="generic" "target-features"="+fp-armv8,+neon,+v8a,-fmv" }
+  attributes #3 = { mustprogress nofree noinline norecurse nosync nounwind willreturn memory(read, inaccessiblemem: none, target_mem0: none, target_mem1: none) uwtable "frame-pointer"="non-leaf-no-reserve" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="generic" "target-features"="+fp-armv8,+neon,+v8a,-fmv" }
+  
+  !llvm.module.flags = !{!0, !1, !2, !3, !4}
+  !llvm.ident = !{!5}
+  !llvm.errno.tbaa = !{!6}
+  
+  !0 = !{i32 1, !"wchar_size", i32 4}
+  !1 = !{i32 8, !"PIC Level", i32 2}
+  !2 = !{i32 7, !"PIE Level", i32 2}
+  !3 = !{i32 7, !"uwtable", i32 2}
+  !4 = !{i32 7, !"frame-pointer", i32 4}
+  !5 = !{!"clang version 23.0.0git (https://github.com/UT-Security/llvm-data-independent-timing.git af2ab4a6c60819d3e5614a66c5636022c153f2bf)"}
+  !6 = !{!7, !7, i64 0}
+  !7 = !{!"int", !8, i64 0}
+  !8 = !{!"omnipotent char", !9, i64 0}
+  !9 = !{!"Simple C/C++ TBAA"}
+  !10 = !{!11, !11, i64 0}
+  !11 = !{!"long", !8, i64 0}
+...
+---
+name:            writer
+alignment:       4
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: true
+registers:       []
+liveins:
+  - { reg: '$x0', virtual-reg: '' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    1
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: true
+  localFrameSize:  0
+fixedStack:      []
+stack:           []
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+body:             |
+  bb.0.entry:
+    liveins: $x0
+  
+    renamable $x8 = ADRP target-flags(aarch64-page) @chan
+    STRXui killed renamable $x0, killed renamable $x8, target-flags(aarch64-pageoff, aarch64-nc) @chan :: (store (s64) into @chan, !tbaa !10)
+    RET_ReallyLR
+...
+---
+name:            sibling_reader
+alignment:       4
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: true
+registers:       []
+liveins:         []
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    1
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: true
+  localFrameSize:  0
+fixedStack:      []
+stack:           []
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+body:             |
+  bb.0.entry:
+    renamable $x8 = ADRP target-flags(aarch64-page) @chan
+    renamable $x8 = LDRXui killed renamable $x8, target-flags(aarch64-pageoff, aarch64-nc) @chan :: (dereferenceable load (s64) from @chan, !tbaa !10)
+    renamable $w9 = MOVi32imm 131, implicit-def $x9
+    renamable $x0 = MADDXrrr killed renamable $x8, killed renamable $x9, $xzr
+    RET_ReallyLR implicit $x0
+...
+---
+name:            control_reader
+alignment:       4
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: true
+registers:       []
+liveins:         []
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    1
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: true
+  localFrameSize:  0
+fixedStack:      []
+stack:           []
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+body:             |
+  bb.0.entry:
+    $x0 = COPY $xzr
+    RET_ReallyLR implicit killed $x0
+...
+---
+name:            consume
+alignment:       4
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: true
+registers:       []
+liveins:         []
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    1
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     true
+  isCalleeSavedInfoValid: true
+  localFrameSize:  0
+fixedStack:      []
+stack:           []
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+body:             |
+  bb.0.entry:
+    TCRETURNdi @sibling_reader, 0, csr_aarch64_aapcs, implicit $sp
+...
