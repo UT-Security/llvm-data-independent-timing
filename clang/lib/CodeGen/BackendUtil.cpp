@@ -1571,6 +1571,19 @@ void clang::emitBackendOutput(CompilerInstance &CI, CodeGenOptions &CGOpts,
   llvm::TimeTraceScope TimeScope("Backend");
   DiagnosticsEngine &Diags = CI.getDiagnostics();
 
+  // Record -ftaint-dit-abi IN THE MODULE, not only in the cl::opt.
+  //
+  // Under LTO, code generation happens inside libLTO driven by the linker, which
+  // never sees CodeGenOptions. A flag consumed only on the clang codegen path is
+  // therefore silently inert for an LTO build - measured: the LTO arm paid the
+  // ABI's tail-call disable (an IR attribute, so it survives) and got no carrier
+  // at all, 0 `mrs DIT` in the whole binary. LTOBackend reads this flag back.
+  //
+  // Set here rather than in RunTaintHardenCodegen because THAT is the non-LTO
+  // path; with -flto clang emits bitcode without going through it.
+  if (CGOpts.TaintDITAbi && M && !M->getModuleFlag("taint-dit-abi"))
+    M->addModuleFlag(llvm::Module::Override, "taint-dit-abi", 1);
+
   std::unique_ptr<llvm::Module> EmptyModule;
   if (!CGOpts.ThinLTOIndexFile.empty()) {
     // FIXME(sandboxing): Figure out how to support distributed indexing.

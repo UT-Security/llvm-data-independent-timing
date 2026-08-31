@@ -502,6 +502,11 @@ static void codegen(const Config &Conf, TargetMachine *TM,
     // identical codegen stays available for A/B benchmarking.
     if (Hardening && TaintInsertDIT.getNumOccurrences() == 0)
       TaintInsertDIT = true;
+    // The callee-saved DIT ABI, requested by -ftaint-dit-abi at compile time and
+    // carried in the module because CodeGenOptions do not reach us here.
+    if (Hardening && Mod.getModuleFlag("taint-dit-abi") &&
+        TaintDITAbi.getNumOccurrences() == 0)
+      TaintDITAbi = true;
     PassInstrumentationCallbacks PIC;
     LoopAnalysisManager LAM;
     FunctionAnalysisManager FAM;
