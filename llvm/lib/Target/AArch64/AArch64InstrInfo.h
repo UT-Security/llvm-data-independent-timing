@@ -430,6 +430,7 @@ public:
   getTimingModeSaveSlot(const MachineFunction &MF) const override;
   bool hasTimingModeSave(const MachineFunction &MF) const override;
   bool canCarryTimingMode(const MachineFunction &MF) const override;
+  const char *timingModeCarrierBlocker(const MachineFunction &MF) const override;
   bool insertTimingModeSave(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator ReadAt,
                             MachineBasicBlock::iterator StoreAt,

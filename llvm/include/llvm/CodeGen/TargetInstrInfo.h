@@ -1731,6 +1731,15 @@ public:
     return false;
   }
 
+  /// Why canCarryTimingMode said no, for the audit report. A bare "cannot carry"
+  /// is not actionable: the causes have completely different fixes, and a
+  /// function that silently reverts to whole-function coverage has degenerated to
+  /// BLANKET mode, which invalidates any selective-placement measurement taken on
+  /// that build. Returns a short stable token.
+  virtual const char *timingModeCarrierBlocker(const MachineFunction &MF) const {
+    return "unsupported-target";
+  }
+
   /// Save the incoming timing mode into \p FrameIndex, using TWO insertion
   /// points for the same reason the restore needs two.
   ///

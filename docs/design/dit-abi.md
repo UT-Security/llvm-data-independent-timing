@@ -442,36 +442,39 @@ The contract is satisfied by `dit-unconditional-design.md` §4's sequence. Three
    So B2 is the same cost, much less machinery, and matches an upstream implementation of
    the identical problem. Equal cost with less mechanism is the whole argument.
 
-   ### 5.2 The fallback must not clear
+   ### 5.2 The fallback must not clear - and must be LOUD
 
-   If no scratch register can be proven free at entry or at some return, the function
-   falls back to **emitting the entry enable and no clear at all**.
+If no scratch register can be proven free at entry or at some return, the function
+falls back to **emitting the entry enable and no clear at all**.
 
-   The tempting fallback, today's unconditional `msr DIT, #0`, is **wrong under this
-   ABI**: a function entered with DIT on would return with it off and strip its caller's
-   protection, and under the ABI the caller emits no re-assert to repair it. Leaving DIT
-   set instead satisfies the §1 guarantee, costs dwell, and can never expose a secret.
-   Reported as a `NONLOCAL noscratch` line.
-   - **B2, frame slot behind a hard frame pointer.** This is what **GCC shipped** for
-     PSTATE.SM (`dd8090f40079fa41ee58d9f76b2e50ed4f95c6bf`). A hard FP defeats the
-     "post-PEI stack push is a miscompile" objection. In LLVM it needs a small pre-PEI
-     slot reservation driven by an annotator-set attribute, because we lack GCC's
-     `TARGET_USE_LATE_PROLOGUE_EPILOGUE`. That is the **AArch64 SLH shape**: a coarse
-     pre-ISel attribute consumed by a late pass, with an assert in the late pass.
+The tempting fallback, today's unconditional `msr DIT, #0`, is **wrong under this
+ABI**: a function entered with DIT on would return with it off and strip its
+caller's protection, and under the ABI the caller emits no re-assert to repair it.
+Leaving DIT set instead satisfies the §1 guarantee and can never expose a secret.
 
-**Only piece 3 needs the two-pass compile now.** Moving the tail-call fix to a global
-flag took it off that dependency, so pieces 1 and 2 can land immediately and
-independently. Piece 3 takes the guarded clear (OPEN item 1, settled by Apple's shipping
-sequence); its storage should be B3, over-provision and elide, which **removes the
-two-pass compile from the project entirely** - no piece of this ABI now needs it.
+**But "safe" is not the whole story, and an earlier draft of this section stopped
+there.** A function that never clears has degenerated to **BLANKET mode for that
+function**. It is safe and it is also fatal to any selective-placement measurement
+taken on that build - and it was silent unless someone passed
+`-taint-nonlocal-report`. An arm of a libsodium f-sweep was withdrawn on
+2026-08-31 for exactly this: one function's fallback (in
+`crypto_aead_chacha20poly1305_ietf_encrypt`) turned the whole arm into blanket, so
+its f* values were invalid.
 
----
+So the fallback now warns on stderr, with a **specific** blocker token, because
+the four causes have unrelated fixes:
 
-## 9. Implementation, as landed 2026-08-30
+| token | cause | fix direction |
+|---|---|---|
+| `no-slot` | no pre-PEI reservation (the `llc` entry point) | wire the pre-PEI callback, or refuse the flag |
+| `slot-negative-offset` | `getFrameIndexReference` picked FP, i.e. a VLA frame | use the unscaled `LDUR`/`STUR` form, which takes a signed 9-bit offset |
+| `slot-out-of-range` | past the 12-bit scaled range | materialize the address |
+| `slot-scalable-offset` | SVE frame | unsupported |
+| `no-prologue` | naked, or no frame at all | refuse |
+| `no-scratch` | x9-x15 all live across the span | widen the candidate set, or spill |
 
-What exists in the tree, where, and why each piece is shaped the way it is.
-Everything below is verified by the tests named at the end.
-
+**Treat any of these on a hot function as invalidating the measurement**, not as a
+tolerable cost.
 ### 9.1 Piece 1: TU-wide tail-call disable. LANDED, on by default.
 
 `clang/lib/Frontend/CompilerInvocation.cpp`, end of `ParseCodeGenArgs`:

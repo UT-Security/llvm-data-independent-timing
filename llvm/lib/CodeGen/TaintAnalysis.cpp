@@ -2539,12 +2539,16 @@ static bool emitDITCarrierSave(MachineFunction &MF, const TargetInstrInfo *TII,
   if (Slot && TII->insertTimingModeSave(Entry, ReadAt, StoreAt, DebugLoc(), *Slot))
     return true;
 
+  const char *Why = TII->timingModeCarrierBlocker(MF);
+  errs() << "taint: " << MF.getName() << " cannot carry DIT ("
+         << (StringRef(Why) == "none" ? "no free scratch register" : Why)
+         << ") - DIT left set on exit; this function is effectively BLANKET\n";
   if (NonlocalOS)
-    *NonlocalOS << "NONLOCAL noscratch caller=" << MF.getName()
-                << " (DIT left set: "
-                << (Slot ? "no free scratch register at entry"
-                         : "no carrier slot reserved")
-                << ", so the function cannot restore and must not clear)\n";
+    *NonlocalOS << "NONLOCAL nocarrier caller=" << MF.getName()
+                << " reason="
+                << (StringRef(Why) == "none" ? "no-scratch" : Why)
+                << " (DIT left set: the function cannot restore and must not "
+                   "clear)\n";
   return false;
 }
 
@@ -3662,10 +3666,23 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
     if (TaintDITAbi && !ABI) {
       emitFunctionGranularityDIT(MF, TSI, /*OwnsDIT=*/false, ReassertOS,
                                  NonlocalOS);
+      // LOUD, not just reported. A function that cannot carry silently reverts
+      // to whole-function coverage that never clears - which is BLANKET mode for
+      // that function. It is safe, but it destroys any selective-placement
+      // measurement taken on the build, and it is invisible unless someone
+      // happened to pass -taint-nonlocal-report. An arm of a libsodium f-sweep
+      // was withdrawn on 2026-08-31 for exactly this: one function's fallback
+      // degenerated the whole arm to blanket.
+      const char *Why = TII->timingModeCarrierBlocker(MF);
+      errs() << "taint: " << MF.getName()
+             << " cannot carry DIT (" << Why
+             << ") - falling back to whole-function coverage, which is BLANKET "
+                "for this function; selective-placement numbers from this build "
+                "are not valid\n";
       if (NonlocalOS)
         *NonlocalOS << "NONLOCAL nocarrier caller=" << MF.getName()
-                    << " (no usable carrier slot - whole-function coverage, DIT "
-                       "left set on exit)\n";
+                    << " reason=" << Why
+                    << " (whole-function coverage, DIT left set on exit)\n";
       reportUnbalancedDITExits(MF, TSI, M, TII, /*OwnsDIT=*/false, ExitOS);
       reportNonlocalDITExits(MF, M, /*OwnsDIT=*/false, NonlocalOS);
       emitDITPrecisionReport(MF, TR, TSI, AA);

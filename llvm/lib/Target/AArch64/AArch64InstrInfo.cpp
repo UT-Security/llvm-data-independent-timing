@@ -7173,6 +7173,37 @@ bool AArch64InstrInfo::hasTimingModeSave(const MachineFunction &MF) const {
   return MF.getInfo<AArch64FunctionInfo>()->hasTimingModeSave();
 }
 
+const char *
+AArch64InstrInfo::timingModeCarrierBlocker(const MachineFunction &MF) const {
+  auto *AFI = MF.getInfo<AArch64FunctionInfo>();
+  std::optional<int> Slot = AFI->getTimingModeSaveIndex();
+  if (!Slot)
+    return "no-slot"; // no pre-PEI reservation, e.g. the llc entry point
+
+  int64_t Offset;
+  Register Base;
+  if (!resolveTimingModeSlot(const_cast<MachineFunction &>(MF), *Slot, Base,
+                             Offset)) {
+    const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+    Register B2;
+    StackOffset Off =
+        TFI->getFrameIndexReference(const_cast<MachineFunction &>(MF), *Slot, B2);
+    if (Off.getScalable())
+      return "slot-scalable-offset";
+    if (Off.getFixed() < 0)
+      return "slot-negative-offset"; // FP-based, e.g. a VLA frame
+    return "slot-out-of-range";
+  }
+
+  const MachineBasicBlock &Entry = MF.front();
+  if (llvm::none_of(Entry, [](const MachineInstr &MI) {
+        return MI.getFlag(MachineInstr::FrameSetup);
+      }))
+    return "no-prologue";
+
+  return "none";
+}
+
 bool AArch64InstrInfo::canCarryTimingMode(const MachineFunction &MF) const {
   auto *AFI = MF.getInfo<AArch64FunctionInfo>();
   std::optional<int> Slot = AFI->getTimingModeSaveIndex();
