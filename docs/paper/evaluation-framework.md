@@ -283,7 +283,7 @@ contribution, not boilerplate.
 |---|---|---|
 | **round-trip baseline** (`-ftaint-harden=<empty>`) | crediting MIR round-trip codegen to DIT | two retracted numbers; the artifact is workload-dependent (+0.58% QuickJS, 0.00% SQLCipher) |
 | **null arm** (harness loaded, no DIT write) | crediting the harness to DIT | +0.30% on Chromium, +3.12% on Bitcoin reindex |
-| **NOP substitution** (`-taint-dit-nop-switches`) | crediting code alignment to DIT | answers Marinaro et al. AsiaCCS'24; attributed 100.2% of a +51% to switches |
+| **NOP substitution** (`-taint-dit-nop-switches`) | crediting code alignment to DIT | answers Marinaro et al. AsiaCCS'24; attributed 100.2% of a +51% to switches. **Gate it: the NOP arm must carry ZERO `msr DIT` AND be the same size as its twin.** Same-count/same-size/same-address are all true of a byte-identical arm, so checking only those hides an inert control - which is exactly what happened in the crossover rig |
 | **rotated arm order** + duplicate baseline | drift masquerading as an arm effect | 1.3% bias on an instruction-identical arm |
 | **in-band positive control** (`lvp_chase`) | a null result from a broken instrument | reads 4.00x; without it a table of 1.00x ratios is uninterpretable |
 | **identical checksums across arms** | arms doing different work | standard in every rig |
