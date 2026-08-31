@@ -15,8 +15,19 @@ different INSTRUMENT, with arms that are actually NOPed:
 
 def-minus-NOP is now a real comparison: same placement, same instruction count,
 same addresses, switches replaced by HINT #0 so no DIT executes.
+
+Every arm also runs from an EQUAL-LENGTH path. gem5 SE mode writes the binary
+path onto the initial process stack as argv[0], so its LENGTH shifts stack
+alignment for the whole run: one byte-identical binary measured 287,318 /
+285,068 / 284,936 cycles at a 1-, 36- and 18-char name, 0.84% from the file name
+alone. Only the length matters, not the text. Here the `def0` and `nop0`
+suffixes are 4 characters against 5 for `nodit`, `def30` and `nop30`, so
+def0-vs-def30 and any *0-vs-nodit comparison were confounded; the NOP pairs
+(nop0/def0, nop30/def30) happened to match and were not. `nodit` vs `always` is
+one binary in two runtime modes and was never affected. See dit-gem5-rig-traps
+ #5.
 """
-import argparse, json, pathlib, re, subprocess, sys, time
+import argparse, hashlib, json, os, pathlib, re, shutil, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
 G = pathlib.Path.home() / "Documents/gem5-DIT"
@@ -33,6 +44,20 @@ CONFIGS = {
     "serdit": ["--eves", "--dmp", "--comp-simp", "--no-speculative-dit"],
 }
 STAT_RE = re.compile(r"^(\S+)\s+([-\d.eninf]+)")
+
+
+def canon_path(src, *key):
+    """Hard-link `src` to a fixed-WIDTH path so argv[0] length is constant."""
+    slot = hashlib.md5("/".join(map(str, key)).encode()).hexdigest()[:8]
+    c = BIN / "armlink" / slot / "b"
+    c.parent.mkdir(parents=True, exist_ok=True)
+    if c.exists():
+        c.unlink()
+    try:
+        os.link(src, c)
+    except OSError:
+        shutil.copy2(src, c)
+    return c
 
 
 def first_dump(path):
@@ -74,6 +99,9 @@ def run_one(job):
     if not binpath.exists():
         return {"lane": lane, "arm": arm, "cfg": cfg, "msg": msg,
                 "error": f"missing {binpath}"}
+    # Equal-length path for every arm (see the module docstring). Kept under BIN
+    # so the lua lane's relative work_sodium.lua still resolves against cwd.
+    binpath = canon_path(binpath, lane, arm, cfg, msg)
 
     # mode 0 everywhere: the DIT comes from the compiler, not from argv. The
     # oracle modes are not part of Result 2.
