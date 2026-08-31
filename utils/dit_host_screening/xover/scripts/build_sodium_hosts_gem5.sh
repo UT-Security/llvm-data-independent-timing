@@ -34,7 +34,7 @@ say "shared objects (compiled once, shared by every arm)"
 [[ -f "$S/host_lua.o"   ]] || $CC $FLAGS -O2 -c -I"$LUA/src" -I"$X" "$X/host_lua_sodium.c" -o "$S/host_lua.o" || exit 1
 
 say "linking arms"
-ARMS=${ARMS:-nodit def0 def30 nop0 nop30}
+ARMS=${ARMS:-nodit def0 def30 nop0 nop30 abi30 abinop}
 for arm in $ARMS; do
     a="$SOD/libsodium-$arm.a"
     [[ -f "$a" ]] || { echo "  missing $a"; continue; }

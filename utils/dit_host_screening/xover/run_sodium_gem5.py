@@ -38,7 +38,12 @@ BIN = pathlib.Path.home() / "Documents/dit-crossover/build/sodium_gem5"
 # nodit binary, so blanket DIT is measured on the SAME codegen as the baseline.
 ARMS = {"nodit": ("nodit", 0), "always": ("nodit", 1),
         "def0": ("def0", 0), "def30": ("def30", 0),
-        "nop0": ("nop0", 0), "nop30": ("nop30", 0)}
+        "nop0": ("nop0", 0), "nop30": ("nop30", 0),
+        # Callee-saved DIT ABI (docs/design/dit-abi.md), region placement.
+        # abinop is its NOP control and is only meaningful since
+        # "NOP-substitute both forms of the DIT write": before that the ABI's
+        # unconditional `MSR DIT, Xt` exits survived substitution.
+        "abi30": ("abi30", 0), "abinop": ("abinop", 0)}
 CONFIGS = {
     "spec":   ["--eves", "--dmp", "--comp-simp"],
     "serdit": ["--eves", "--dmp", "--comp-simp", "--no-speculative-dit"],
