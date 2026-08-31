@@ -68,6 +68,14 @@ How the analysis is built, which bugs were found in it, and what is still open.
   where DIT switches go: what exists today, the placement constraints the spec
   imposes, the remaining security and performance gaps, and the proposed spec-aware
   optimal placement with its evaluation plan.
+- **[results/dit-openssl-asm-limit.md](results/dit-openssl-asm-limit.md)** - **a
+  scope limit with no workaround inside the compiler.** OpenSSL implements AES,
+  AES-GCM, ChaCha20-Poly1305, P-256, bignum and SHA on aarch64 as hand-written
+  perlasm, so the pass cannot instrument the crypto in the most widely deployed TLS
+  stack - and unlike the SQLCipher prebuilt-library case, building from source does
+  not fix it. `no-asm` makes it reachable but is a strawman. What IS reachable is
+  the C TLS 1.3 key schedule in `ssl/tls13_enc.c`. Reason libsodium works: its
+  primitives are C.
 - **[results/dit-abi-measured.md](results/dit-abi-measured.md)** - **the ABI's
   numbers and the default decision.** Region placement, Apple M5, pinned toolchain.
   Non-LTO 95 -> 57 switches for no measurable time; full LTO 127,744 -> 15,462

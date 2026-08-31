@@ -182,6 +182,24 @@ New report: **`-taint-nonlocal-report=<file>`** lists the sites where the obliga
 degrades to the guarantee and DIT is simply left set - `setjmp`, `musttail`, `unwind`,
 and `noscratch`. All are dwell, never exposure.
 
+### Reach limits: what the pass CANNOT instrument
+
+Three, and they compound. The third has no workaround inside the compiler.
+
+1. **Cross-TU** - taint is module-scoped; a secret entering another TU needs its own
+   seed line.
+2. **Prebuilt libraries** - SQLCipher's OpenSSL provider got 25 `MSR DIT` sites and
+   **zero on any cipher instruction**, costing +2.27% for no protection.
+3. **Hand-written assembly** - and on aarch64 that is where every serious crypto
+   library puts its hot loops. OpenSSL 3.5.4 has 19 perlasm generators covering AES,
+   AES-GCM, ChaCha20-Poly1305, P-256, bignum and SHA. **Building from source does not
+   help** (unlike limit 2), and `no-asm` is a strawman because the C AES is the
+   T-table version whose real leak is cache timing, which DIT does not cover.
+   `docs/results/dit-openssl-asm-limit.md`.
+
+**libsodium works because its primitives are C.** When picking a workload, check for
+assembly first: `find crypto -name '*armv8*'`.
+
 ### Taint-source file format (one per line)
 
 ```
