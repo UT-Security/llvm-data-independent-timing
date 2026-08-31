@@ -91,11 +91,99 @@ SME PSTATE.SM**; its `TARGET_MODE_BACKPROP` hook is our hoisting algebra already
 formalised.
 
 **So "a compiler places hardware-mode-bit writes around regions" is not novel.**
-What is: the driver is a *security taint analysis* rather than a correctness
-requirement, and there is an explicit *cost model* deciding whether switching is
-worth it. GCC's LCM answers "where must the mode be correct"; it never asks "is
-switching profitable." State the claim that way. (Confirmed: zero DIT references
-in any AArch64 `.cpp`/`.h`.)
+GCC's LCM answers "where must the mode be correct"; it never asks "is switching
+profitable." (Confirmed: zero DIT references in any AArch64 `.cpp`/`.h`.)
+
+**The obvious next claim is ALSO taken, and by a paper we must cite.** It is
+tempting to say the novelty is that the driver is a *security taint analysis*
+rather than a correctness requirement, and that there is an explicit *cost
+model* deciding whether switching is worth it. **CryptoMPK has both** - see §3a.
+Do not make that claim; §3b is the one that survives.
+
+### 3a. CryptoMPK (IEEE S&P 2022) is the closest structural prior art
+
+Jin et al., *Annotating, Tracking, and Protecting Cryptographic Secrets with
+CryptoMPK*. Source, prebuilt binaries and dataset at
+`cryptompk.code-analysis.org`; the notes below were taken from the paper AND
+from reading the shipped artifact, which is where several of them only appear.
+
+A compiler that annotates crypto secrets, propagates taint over whole-program
+LLVM IR, and inserts writes to a per-thread hardware mode register (`WRPKRU`,
+Intel MPK) around the code that must run privileged. Same shape as ours, three
+years earlier:
+
+| | CryptoMPK | ours |
+|---|---|---|
+| seeds | `#pragma tainter`, 39 tags over 8 apps | seed file, 21-23 symbols |
+| propagation | context-SENSITIVE call tree, field-sensitive points-to, on `-O0` IR | context-insensitive mod-set + call-site gate, on MIR |
+| switch | `WRPKRU`, "about 20 to 30 CPU cycles" (their microbenchmark) | `MSR DIT`, 9.7 cyc renamed / 22.6 serializing (our gem5) |
+| granularity decision | Q score: weighted ratio of tainted to total memops vs a threshold | admission test in cycles, MBFI-weighted |
+| soundness net | SIGSEGV + capstone single-step over the faulting access | verifier on the final MIR + the dynamic oracle |
+
+**Cite it for three things, and concede the first two.**
+
+1. **The cost model is not ours.** `FunctionModifyRunner::countTaint` computes
+   `tainted/total` with `CALLFACTOR 30` and `LOOPFACTOR 10` and compares against
+   a threshold, exactly to decide per-instruction versus whole-function
+   placement. That is our admission test three years early.
+2. **Nor is "a security analysis drives the switch."** That is the whole paper.
+3. **Context sensitivity by cloning, with the bloat contained.** Algorithm 1
+   hashes each context's *transformation scheme* and shares one body across
+   contexts that hash alike. Measured in their shipped Nginx libcrypto: 153
+   functions replicated into 318 bodies, +18.5% object size, 1,179 s of analysis
+   on OpenSSL. This is the answer to "why not just clone" in
+   `design/context-insensitivity.md`, with a price attached.
+
+**Where they are weaker, stated only where we can show it.**
+
+- **Their cost model has no units and was hand-tuned per benchmark.** The paper
+  says the threshold is 0.25. The code defaults to 0.5. The shipped build
+  scripts pass 0.25, 0.20 and **0.01** depending on the target - a 25x spread,
+  undisclosed. Ours is in cycles against a measured switch cost, and we measured
+  the crossover instead of picking it.
+- **No region formation.** `insertWrpkruInst` wraps *each* tainted instruction
+  in its own enable/disable pair; no merging, no hoisting. Measured in their
+  shipped Nginx libcrypto: 547 `WRPKRU`, median 45 bytes between consecutive
+  switches, 242 of 546 gaps under 32 bytes. At their own 20-30 cyc, a pair costs
+  40-60 cycles to protect roughly ten instructions. That is why the Q score has
+  to be so aggressive.
+- **Their headline overhead is mostly not the isolation.** Table V pairs every
+  result with a switches-compiled-out arm but never subtracts. Doing so:
+  **median 0.74 points** attributable to privilege switching, under 2.4 points
+  in 13 of 16 cases. The rest is relocating crypto buffers onto a pkey-bound
+  jemalloc heap.
+- **Statistical rigour.** Single run per arm, fixed arm order (protected always
+  before baseline), no dispersion anywhere in the paper or the scripts; the
+  whole HTTPS result is one `ab -n 1000 -c 20`. They do have a matched
+  round-trip baseline and a mechanism-off ablation, which are the two controls
+  that matter most, so credit those.
+
+**One thing to take from them outright:** the `mxor` declassification tag.
+Annotate plaintext/ciphertext as public and taint flowing out of it dies. Their
+measurement on Nginx + OpenSSL: 3.06% of memops labelled with it versus 9.5%
+without, a 3.1x precision gain from one extra annotation kind. We have no
+analogue. (Their *implementation* of it is unsound in the under-protecting
+direction - one declassified field permanently declassifies the whole
+`AliasObject` - so take the tag, not the object-level rule.)
+
+### 3b. What survives, and it is stronger
+
+**You cannot always-on a memory domain.** "Grant everything" is not weaker
+protection, it is no protection, so CryptoMPK's baseline is unprotected code and
+selectivity is pure upside on a security story already told.
+
+DIT is the opposite. `MSR DIT, #1` once at process start is *complete* security
+at a measured 12.66% (M5) or 3.2% (gem5). Selective placement has to beat that,
+and on four of nine Bitcoin Core benchmarks it does not.
+
+**Ours is therefore the first setting in this literature where the
+selective-versus-blanket question is even askable** - every prior selective
+system, CryptoMPK included, is measured against no protection at all. That
+asymmetry also explains why we needed an instrument they did not: MPK faults on
+an unauthorised access, so a memory oracle is complete for a disclosure threat
+model; DIT gives no fault and governs *computation*, so a page-based oracle is
+structurally incomplete and shadow taint in a simulator is required. See
+`design/verification.md`.
 
 ## 4. DIT/DOIT specifically: the gap is real, and so is the objection
 
@@ -125,6 +213,12 @@ free on current x86*. Our counter is GoFetch fn. 22: **DIT disables the DMP on
 M3**, plus Intel's own "may be significantly higher on future processors."
 
 ## 5. Prior art for "over-tainting has a runtime cost"
+
+- **CryptoMPK** (§3a) is the precision half rather than the cost half: their
+  `mxor` declassification takes labelled memory operations on Nginx + OpenSSL
+  from 9.5% to **3.06%**, a 3.1x gain, and they cite DynPTA at 12.79% on the same
+  target. They never convert that into time, so quote it as a precision result,
+  not a performance one.
 
 - **Serberus** (S&P'24) — the best-controlled ablation. Widening the taint *source*
   set alone: geomean **21.3% → 65.8%**, worst case **646.3%**.
@@ -168,11 +262,19 @@ M3**, plus Intel's own "may be significantly higher on future processors."
 - **Imprecision priced in cycles.** The entire summary-analysis literature measures
   precision in alarms or points-to set size. Ours drives a code transformation, so
   imprecision has a runtime price. Nobody in that literature can make this
-  measurement.
-- **Blanket beating an *automatic* selective placement.** No prior art, because
-  every selective system published is manual annotation (SpectreGuard, PROSPECT,
-  SplittingSecrets, ConTExT) or hardware tags. There is no automatic selective
-  placement to compare against.
+  measurement. **A prior cost model does exist** (CryptoMPK's Q score, §3a) but it
+  is a unitless ratio against a hand-set threshold, and they never measure what
+  their own over-tainting costs; the distinction to claim is calibration in
+  cycles against a measured switch cost, plus a measured crossover.
+- **Blanket beating an *automatic* selective placement.** Careful: **CryptoMPK
+  IS an automatic selective placement** (§3a), so the old form of this claim -
+  "every selective system published is manual annotation (SpectreGuard,
+  PROSPECT, SplittingSecrets, ConTExT) or hardware tags" - is false and must not
+  be repeated. What survives is narrower and better: nobody has compared a
+  selective placement against a BLANKET one, because in every prior setting
+  blanket is not a defence at all. For MPK, "grant everything" is no isolation;
+  for DIT, the mode bit set once is complete protection at a measured cost. Ours
+  is the first setting where the comparison exists to be made.
 - **Secret fraction as the deciding variable.** Never stated in this form. Closest:
   PROSPECT's sweep (blanket 110% → 145% as the secret fraction rises, precise flat
   at 100%) and SpectreGuard's *"secrets that are accessed infrequently will have
@@ -180,6 +282,17 @@ M3**, plus Intel's own "may be significantly higher on future processors."
 
 ## 8. Corrections made during verification
 
+- **2026-08-30: two novelty claims retracted after reading CryptoMPK (§3a).**
+  §3 claimed novelty for "a security taint analysis drives the switch" and "an
+  explicit cost model decides whether switching is worth it". CryptoMPK has
+  both, at S&P 2022. §7 claimed "every selective system published is manual
+  annotation or hardware tags, there is no automatic selective placement to
+  compare against"; CryptoMPK is one. The paper was found by reading its
+  artifact, not its abstract - several of the sharpest points (the per-benchmark
+  threshold spread, the absence of region formation, the unpublished
+  switches-only build arm) appear only in the shipped source and binaries.
+  **Lesson: read the artifact of the closest prior work before writing a
+  novelty claim.**
 - `msr DIT` **does** have a published cycle cost (12.0/10.0); an agent's claim that
   none exists was wrong.
 - oo7 reports **72%** (arXiv, coreutils) and **430%** (TSE, SPECint) for nominally
