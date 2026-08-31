@@ -4,6 +4,9 @@
 > of work. `-ftaint-dit-abi` is opt-in and stays that way (§4). Nothing here changes
 > shipped codegen. Full AArch64 suite: 3907 tests, 0 failures.
 >
+> **Soundness is a wash, measured** - the shadow-taint oracle reports identical
+> protection with and without the ABI (§4.1). It is not a security improvement.
+>
 > **Open, in priority order.** (1) Nobody has measured the ABI on a workload with a
 > high switch-per-function ratio that is NOT LTO - §3 predicts that is where it
 > would pay off in a shippable configuration, and no such workload has been tried.
@@ -96,6 +99,37 @@ This is consistent with the other evidence against LTO on record: libsodium tell
 users not to build with it, the hardened link is single-threaded and doubles an
 already-slow build (29 min compile, 20 min link), and `dit-secp-tier2.md` finds
 blanket DIT beating our placement on libsecp256k1 signing regardless.
+
+## 4.1 Soundness: measured, and it is a WASH
+
+The static verifier cannot answer whether the ABI is safer. It is intraprocedural
+and treats calls as **transparent** by design - exactly the cross-frame property
+the ABI is about - so "the verifier passes" is evidence it cannot see the question.
+
+The gem5 shadow-taint oracle can. Run 2026-08-31 on libsecp256k1 ECDSA signing,
+two arms identical except for `-ftaint-dit-abi`
+(`gem5-DIT/benchmarks/taint_oracle/run_secp_abi.sh`, compiler `5c1be960d0d0`):
+
+| arm | secret ops protected | secret ops with DIT clear | cycles |
+|---|---|---|---|
+| ABI off | 464,796 | 4 | 283,325 |
+| ABI on | **464,796** | **4** | 284,983 |
+
+**Protection is bit-identical.** The same four under-taint sites appear in both,
+all in the driver's `main`, none inside libsecp256k1 - the same residue the
+existing tier-2 run reports.
+
+So the ABI is **exactly as sound here, neither more nor less**. It relocates
+responsibility for the mode from caller to callee; it does not change which
+instructions execute protected. The one genuine security argument for it is
+narrower than "more secure": it stops soundness depending on the `PreservesDIT`
+and `AlwaysEnteredWithDIT` summary bits being correct, since the callee now
+guarantees the contract regardless. That removes two analyses from the trusted
+base, and buys nothing observable on this workload.
+
+Note the cycles: +0.585% with the ABI on. This is a non-LTO build at a
+switch-per-function ratio near 6, so §3 predicts neutral-to-slightly-negative, and
+that is what a third instrument shows.
 
 ## 5. Method notes
 
