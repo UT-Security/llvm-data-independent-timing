@@ -136,11 +136,32 @@ years earlier:
 
 **Where they are weaker, stated only where we can show it.**
 
-- **Their cost model has no units and was hand-tuned per benchmark.** The paper
-  says the threshold is 0.25. The code defaults to 0.5. The shipped build
-  scripts pass 0.25, 0.20 and **0.01** depending on the target - a 25x spread,
-  undisclosed. Ours is in cycles against a measured switch cost, and we measured
-  the crossover instead of picking it.
+- **Every OpenSSL number they report is from a `no-asm` build.** Their scripts
+  configure `./config -DOPENSSL_SMALL_FOOTPRINT no-asm shared`, and libsodium
+  with `--disable-asm`. They had no choice: an IR pass cannot instrument
+  perlasm, and OpenSSL's hot paths are perlasm on x86 exactly as they are on
+  aarch64 (`dit-openssl-asm-limit.md`). Two consequences, and the second is the
+  one that bites. **Nobody deploys `no-asm` OpenSSL** - it is several times
+  slower, so the HTTPS results describe a configuration no server runs. And the
+  C fallback `no-asm` selects for AES is the **T-table** implementation, whose
+  real leak is cache timing from data-dependent table indices; MPK does not
+  address that and neither does DIT. So the Apache and Nginx rows are measured
+  on a build that is both slower than deployment and, for the primitive they
+  spend the most time in, hardened against the wrong channel. **This is the
+  limitation to raise, and it is one we share** - it is why our own reachable
+  claim is "the ABI reduces DIT overhead on TLS 1.3 handshake key handling"
+  (`dit-abi-nginx-tls.md`) rather than "we harden TLS".
+
+  > **Do not repeat the threshold criticism.** An earlier revision of this file
+  > said the shipped scripts pass "0.25, 0.20 and **0.01** depending on the
+  > target - a 25x spread, undisclosed." The shipped dataset does not support
+  > that. Every `build_protected.sh` in `dataset.tar.gz` (sha256 `ab8125b6...`)
+  > passes `-threshold=0.25`, except ccrypt at `-threshold=0.24`; an exhaustive
+  > grep of the extracted tree finds no `0.01`, no `0.20` and no `0.5`. A 4%
+  > spread across seven targets is not a hand-tuning charge. Checked 2026-08-31.
+  > What survives is only that the score itself is **unitless**, where ours is in
+  > cycles against a measured switch cost - and that we measured the crossover
+  > instead of picking it.
 - **No region formation.** `insertWrpkruInst` wraps *each* tainted instruction
   in its own enable/disable pair; no merging, no hoisting. Measured in their
   shipped Nginx libcrypto: 547 `WRPKRU`, median 45 bytes between consecutive
