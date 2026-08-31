@@ -26,6 +26,9 @@ rig `utils/dit_host_screening/xover/` on `dit-tainter` (`5ad90a087fd5`).
 > Fixed in `xover: fix the NOP arms, which were never NOPed`, which also adds a
 > gate that fails the build unless each NOP arm carries zero `msr DIT` *and*
 > matches its twin's object size. Re-running Result 2 needs only rebuilt arms.
+>
+> **Re-run under gem5 in section 8 (2026-08-31): both of Result 2's conclusions
+> are contradicted on the merits, not just unsupported.**
 
 ## Why this run existed
 
@@ -198,3 +201,105 @@ exit clears, and post-call re-asserts. Further switch reduction needs the
 callee-ownership mechanism (cloning, or Mode 2's runtime `mrs DIT`), not a bigger
 constant. Given §2 showed the cost is instructions in hot loops, and these are
 what remain, that is now the highest-value target.
+
+---
+
+## 8. Result 2 re-run under gem5 (2026-08-31): both claims contradicted
+
+**120 points**, gem5 NeoverseV2, both libsodium composite lanes, five message
+sizes, both switch models, all gates passing. Rig
+`utils/dit_host_screening/xover/run_sodium_gem5.py` +
+`scripts/build_sodium_hosts_gem5.sh`.
+
+WHAT THIS IS AND IS NOT. Same WORKLOAD as Result 2 -- both lanes of the libsodium
+composite -- on a different INSTRUMENT, with arms that are actually NOPed. It
+cannot restore or replace Result 2: silicon is for magnitude, gem5 for ordering,
+and gem5 charges ~21 cyc of rename stall per serializing switch by model. The
+M5 re-run still needs doing; the arms exist and are gated for it.
+
+### 8.1 The def-minus-NOP term does not straddle zero
+
+Against the `nodit` baseline (empty seed, same pipeline):
+
+| lane | model | 200 B | 512 B | 1400 B | 4 KiB | 64 KiB |
+|---|---|---|---|---|---|---|
+| lua | serializing | **+9.86p** | **+8.14p** | **+5.19p** | +1.28p | +0.42p |
+| lua | renamed | +3.30p | +3.07p | +1.98p | +0.84p | -0.06p |
+| sqlite | serializing | +2.66p | +1.64p | +1.87p | +1.29p | +0.89p |
+| sqlite | renamed | +1.00p | +0.38p | +0.23p | +0.32p | +0.01p |
+
+Positive at 19 of 20 points, up to **+9.86**, against Result 2's "-0.33 to +0.97,
+straddling zero". And it SCALES WITH THE SWITCH MODEL -- serializing is 2-3x
+renamed at the small sizes. The two builds are identical apart from how `MSR DIT`
+executes, so a term that tracks the model is the mode switches being paid for.
+
+`nop30` sits within +-1.01% of baseline at all 20 points and is NEGATIVE at every
+Lua point. Layout is not merely cheap on these workloads; it is at noise.
+
+### 8.2 The layout share is ~0%, not ~100%
+
+Result 2's own table form, on the Lua lane where `def0->def30` is large enough for
+the ratio to mean anything:
+
+| msg | `def0->def30` | `nop0->nop30` | layout share | Result 2 reported |
+|---|---|---|---|---|
+| 200 B | **-4.30p** | -0.06p | **1%** | 99.6% |
+| 512 B | **-2.74p** | +0.13p | **-5%** | 100% |
+| 1400 B | **-1.96p** | +0.15p | **-8%** | 84% |
+
+So what `switch-cyc=30` buys is cheaper mode switching, not fewer instructions in
+hot loops. The conclusion in Result 2 is inverted.
+
+**Do not read the same ratio off the sqlite lane or the two largest Lua sizes.**
+There `def0->def30` is +-0.5p or less, and dividing by it produces figures from
+-355% to 4667%. Noise over noise. The three rows above are the only ones with a
+denominator worth dividing by, which is also why the single-lane presentation is
+the honest one.
+
+### 8.3 What the trap section got backwards
+
+Section "The trap this creates" argued that renaming the switch would recover
+"the 0.3, not the 28", because the mode switch was not the term being paid. On the
+Lua lane the switch model does not shave tenths off the verdict -- it REVERSES it:
+
+| lane | model | 200 B | 512 B | 1400 B | 4 KiB | 64 KiB |
+|---|---|---|---|---|---|---|
+| lua | serializing | **+5.89%** | **+4.23%** | **+2.39%** | -2.16% | -3.34% |
+| lua | renamed | -0.72% | -0.83% | -0.92% | -3.25% | -3.57% |
+| sqlite | serializing | -0.59% | -0.68% | -0.28% | -1.30% | -1.83% |
+| sqlite | renamed | -1.54% | -1.79% | -1.47% | -1.86% | -1.75% |
+
+(`def30` vs `always`; negative = selective beats blanket.)
+
+At Lua 200 B, serializing loses by 5.89 points and renamed wins by 0.72 -- same
+binaries, same input, only the switch model differs. **On that lane at small
+message sizes the renamed switch is what makes selective placement viable at
+all.** SQLite wins in all ten cells, so this is a property of the lane, not of the
+pass.
+
+This also reproduces RESULT 1's structure, which was never retracted: selective
+beats blanket where f is small and loses where f is large.
+
+### 8.4 Caveats, and one that cuts the other way
+
+- **gem5, not silicon.** Shows the term is resolvable and which way it points, not
+  the M5 magnitude.
+- **Arms built by the pre-driver script.** These were built through the two-stage
+  `llc` path, which is correct for reproducing Result 2 as originally measured but
+  is no longer how the pass ships (`xover: build the libsodium arms through the
+  clang driver`, same day).
+- **The Lua lane sits at f = 32-67%**, above the >20% band where
+  `paper/evaluation-framework.md` says the prize collapses; the original ran at
+  f = 2-25%. So this is not a like-for-like reproduction of the original's
+  operating point. But the collapse it predicts is exactly what the serializing
+  rows show, so the caveat is about comparability, not about the mechanism.
+- **The sqlite lane's `def0->def30` was too small to test 8.2**, which is a sizing
+  choice of this run, not a finding.
+
+### 8.5 Net
+
+Both of Result 2's claims are contradicted: the DIT-specific term is large and
+model-dependent rather than unresolvable, and the layout share is ~0% rather than
+~100%. The retraction stands on the inert control alone; this says the conclusion
+was also wrong on the merits, on a different instrument. Results 1, 3 and section
+4 remain unaffected throughout.
