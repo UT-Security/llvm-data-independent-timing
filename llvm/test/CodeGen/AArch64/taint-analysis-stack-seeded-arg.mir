@@ -1,0 +1,189 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s
+
+# Regression for the 2026-08-26 fix. See docs/design/stack-arguments.md S6.
+
+# A SEEDED parameter at argument index >= 8 used to be silently discarded.
+#
+# AAPCS64 passes arguments past the eighth on the stack. The 2026-08-19 fix
+# (S1-S4 of that doc) covers a secret PASSED on the stack: it recognises the
+# caller's outgoing-arg store, reports it at the call, and seeds the callee's
+# frame objects. It does not cover a secret DECLARED on the stack, because there
+# is no caller and no store -- the taint originates from the taint-source file,
+# and nothing maps an annotated argument index onto an incoming fixed frame
+# object.
+#
+# Two identical bodies. The only difference is the argument position.
+#
+# Blast radius on the shipped CIO-parity seed: four of its 65 lines sit at index
+# 8 and all four are AEAD KEYS. Annotating libsodium with only those four applies
+# 4 pointee attributes and produces 0 `msr DIT` across 0 functions -- a key-only
+# annotation of the AEAD compiles to a completely unprotected build. It goes
+# unnoticed in the full seed only because the PLAINTEXT is also declared secret
+# at register-passed argument 2, so the function is instrumented via the message.
+#
+# 26 is the PSTATE.DIT pstatefield encoding.
+
+# CONTROL: index 7 is the last register-passed argument, and it works.
+# CHECK-LABEL: name: reg_arg7
+# CHECK: MSRpstateImm4 26, 1
+# CHECK: MADDXrrr
+# CHECK: MSRpstateImm4 26, 0
+
+# THE FIX: index 8 is the first stack-passed argument. Before 2026-08-26 the
+# multiply below ran on secret data with PSTATE.DIT clear.
+# CHECK-LABEL: name: stack_arg8
+# CHECK: MSRpstateImm4 26, 1
+# CHECK: MADDXrrr
+# CHECK: MSRpstateImm4 26, 0
+
+--- |
+  ; ModuleID = 'seeded.ll'
+  source_filename = "seeded.ll"
+  target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32"
+  target triple = "aarch64-unknown-linux-gnu"
+  
+  define i64 @reg_arg7(ptr %a0, ptr %a1, i64 %a2, i64 %a3, ptr %a4, i64 %a5, ptr %a6, ptr "tainted-pointee" %k) {
+  entry:
+    %v = load i64, ptr %k, align 8
+    %r = mul i64 %v, 12345
+    ret i64 %r
+  }
+  
+  define i64 @stack_arg8(ptr %a0, ptr %a1, i64 %a2, i64 %a3, ptr %a4, i64 %a5, ptr %a6, ptr %a7, ptr "tainted-pointee" %k) {
+  entry:
+    %v = load i64, ptr %k, align 8
+    %r = mul i64 %v, 12345
+    ret i64 %r
+  }
+...
+---
+name:            reg_arg7
+alignment:       4
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: true
+registers:       []
+liveins:
+  - { reg: '$x7', virtual-reg: '' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    1
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: true
+  localFrameSize:  0
+fixedStack:      []
+stack:           []
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+body:             |
+  bb.0.entry:
+    liveins: $x7
+  
+    renamable $x8 = LDRXui killed renamable $x7, 0 :: (load (s64) from %ir.k)
+    renamable $w9 = MOVi32imm 12345, implicit-def $x9
+    renamable $x0 = MADDXrrr killed renamable $x8, killed renamable $x9, $xzr
+    RET_ReallyLR implicit $x0
+...
+---
+name:            stack_arg8
+alignment:       4
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: true
+registers:       []
+liveins:         []
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    8
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: true
+  localFrameSize:  0
+fixedStack:
+  - { id: 0, type: default, offset: 0, size: 8, alignment: 16, stack-id: default, 
+      isImmutable: true, isAliased: false, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+stack:           []
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+body:             |
+  bb.0.entry:
+    renamable $x8 = LDRXui $sp, 0 :: (load (s64) from %fixed-stack.0, align 16)
+    renamable $x8 = LDRXui killed renamable $x8, 0 :: (load (s64) from %ir.k)
+    renamable $w9 = MOVi32imm 12345, implicit-def $x9
+    renamable $x0 = MADDXrrr killed renamable $x8, killed renamable $x9, $xzr
+    RET_ReallyLR implicit $x0
+...

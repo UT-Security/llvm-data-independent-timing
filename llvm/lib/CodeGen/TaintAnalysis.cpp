@@ -15,6 +15,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/PostOrderIterator.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -1813,7 +1814,46 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
   // all: an over-approximation confined to this function, in the safe direction,
   // and one that only fires for functions a caller actually handed a stack
   // secret. See docs/design/stack-arguments.md.
-  if (TSI && TSI->hasSummary(F) && TSI->getSummary(F).StackArgTainted) {
+  bool SeedStackArgs =
+      TSI && TSI->hasSummary(F) && TSI->getSummary(F).StackArgTainted;
+
+  // A DECLARED secret can arrive on the stack too, and until 2026-08-26 that was
+  // dropped on the floor. The loop below walks liveins only, so a tainted
+  // argument index that no incoming argument register covers is never seeded:
+  // the annotation applies cleanly to the IR and then protects nothing. On the
+  // CIO-parity libsodium seed that silently killed all four AEAD KEY lines,
+  // which sit at argument 8; a key-only annotation compiled to zero `msr DIT`.
+  //
+  // The caller-side path above (StackArgTainted, 2026-08-19) does not reach this
+  // case because there is no caller and no outgoing-arg store -- the taint comes
+  // from the taint-source file. Detect it the same way the rest of this function
+  // reasons about arguments, WITHOUT re-running ABI assignment: if no livein
+  // argument register carries the index, it did not arrive in a register.
+  //
+  // An unused argument has no livein either, so this over-approximates onto the
+  // frame for that case. Safe direction, confined to a function that already has
+  // a declared secret, and it costs precision rather than coverage.
+  // See docs/design/stack-arguments.md S6.
+  if (!SeedStackArgs &&
+      !(TaintedArgIndices.empty() && PointeeTaintedArgIndices.empty())) {
+    SmallSet<unsigned, 8> RegisterArgIndices;
+    for (const auto &[PhysReg, VirtReg] : MRI.liveins()) {
+      unsigned Idx = TRI->getEncodingValue(PhysReg);
+      if (Idx <= 7)
+        RegisterArgIndices.insert(Idx);
+    }
+    for (unsigned Idx : TaintedArgIndices)
+      if (!RegisterArgIndices.count(Idx))
+        SeedStackArgs = true;
+    for (unsigned Idx : PointeeTaintedArgIndices)
+      if (!RegisterArgIndices.count(Idx))
+        SeedStackArgs = true;
+    LLVM_DEBUG(if (SeedStackArgs) dbgs()
+               << "  a declared-secret argument has no incoming argument "
+                  "register: treating it as stack-passed\n");
+  }
+
+  if (SeedStackArgs) {
     const MachineFrameInfo &MFI = MF.getFrameInfo();
     unsigned Seeded = 0;
     for (int FI = MFI.getObjectIndexBegin(); FI < 0; ++FI) {
