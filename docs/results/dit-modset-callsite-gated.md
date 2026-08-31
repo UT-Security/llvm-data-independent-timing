@@ -288,8 +288,33 @@ performance, so the hardening had never been the cost.
 `-mllvm -taint-dit-nop-switches` (hidden, default off) is the control. It emits
 `HINT #0` in place of every inserted `MSR DIT`. `build-nopctl` vs `build-hoist`:
 same instruction count (1,790,954), same binary size, and **every instruction at
-the same address** — verified by diffing the full address column of both
+the same address** - verified by diffing the full address column of both
 disassemblies. Same dynamic instruction count, same layout, no mode switching.
+
+> **!! Those three properties do not by themselves prove the control works, and
+> checking only them is how an inert one hides.** Same instruction count, same
+> size and same addresses are all satisfied by a NOP arm that is
+> BYTE-IDENTICAL to its twin, which is exactly what happens when the flag never
+> takes effect. **The check has two halves and both are needed:** the NOP arm
+> must contain **zero `msr DIT`**, and it must still be the **same size** as its
+> twin. Either half alone can be satisfied by a broken build.
+>
+> This is not hypothetical. The crossover rig had precisely that bug:
+> `-taint-dit-nop-switches` is consumed at EMISSION
+> (`AArch64AsmPrinter::emitInstruction`), and `build_arm` passed it only to the
+> analysis stage of its two-stage llc pipeline, so every NOP arm came out
+> byte-identical and the control was inert while looking like it passed. Fixed
+> by `xover: fix the NOP arms, which were never NOPed`, which added the
+> two-part gate.
+>
+> **The result below is unaffected**, and was re-verified rather than assumed.
+> Bitcoin Core builds through clang's `-ftaint-harden`, not that script, and the
+> flag reaches emission there: rebuilt on `dit-tainter` at `d04695a`, the
+> default arm carries 19 `msr DIT` and the NOP arm carries 0 at the same binary
+> size, with identical address columns and `d503415f msr DIT, #0x1` replaced in
+> place by `d503201f nop`. The measured 51-point separation between the arms is
+> independent evidence, since byte-identical binaries cannot differ by 51
+> points.
 
 | benchmark | `nop_ctl` vs base | `pass_hoist` vs base | `hoist` vs `nop_ctl` |
 |---|---|---|---|
