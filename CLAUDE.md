@@ -238,23 +238,40 @@ switches per function; reachable from clang as `-mllvm
 | `TargetInstrInfo::insertTimingModeSwitch` hook (emits `MSR DIT`; the ISB/DSB `insertInstructionBarrier`/`insertDataBarrier` hooks were removed 2026-07-14) | `TargetInstrInfo.h`, `AArch64InstrInfo.cpp` |
 | `isDITProtected` membership list - **keep in sync with `docs/reference/dit-spec.md`** | `AArch64InstrInfo.cpp` |
 | Taint cl::opts (`-taint-insert-dit` etc. are `extern cl::opt` globals) | `llvm/include/llvm/CodeGen/TaintAnalysis.h` |
-| `-ftaint-harden` flag + in-process 3-phase codegen (`RunTaintHardenCodegen`) | `clang/lib/CodeGen/BackendUtil.cpp`; flag in `clang/include/clang/Options/Options.td`, `clang/include/clang/Basic/CodeGenOptions.h`, forwarding in `clang/lib/Driver/ToolChains/Clang.cpp` |
-| **SQLCipher, MEASURED 2026-08-12 (100 paired reps, M5) - a DEFINITIVE NEGATIVE: there is no headroom to recover.** With the oracle correctly wrapping all 3 provider entry points (cipher+kdf+**hmac**): libtomcrypt headroom **+0.89% +/-0.19**, OpenSSL (the DEFAULT shipping provider, hardware AES) headroom **-0.08% +/-0.38 = ZERO (48/100)**. Protecting the secret costs what protecting everything costs (oracle +7.85% vs blanket +8.81% on ltc; +1.87% vs +1.76% on OpenSSL) - almost all of always-on's cost is DIT **on the crypto**, which any correct placement must also pay. **A +8.15% 'first positive result' was reported earlier the same day and is RETRACTED** - the oracle had missed the per-page HMAC, so it was protecting less, not costing less. Also: on the OpenSSL build the pass **cannot instrument the AES at all** (it lives in prebuilt `libcrypto.dylib`) - 25 `MSR DIT` sites, zero on any cipher instruction, costing +2.27% for no protection. Software AES is DIT-expensive only because of its **T-table data-dependent loads**, whose real leak (cache timing) DIT does not even cover; hardware `AESE` is already constant-time. **AES is a bad motivating workload for this project** | `docs/results/sqlcipher.md` **gem5 corroboration 2026-08-13** (`gem5-DIT/docs/dit/studies/sqlcipher-dit-placement-2026-08-13.md`): running the identical binary under serializing vs renamed `MSR DIT` isolates **toggle cost with dwell held constant** - **+0.08% / +12.8% / +19.1%** for 6 / 54 / 63 switch sites, reproducing the M5 ordering and region:hoist ratio (1.49x vs 1.52x) at ~1/3 magnitude. The **prize is ~1.4%** (all of it EVES; DMP/SIP/comp-simp inert or negative here), so the shipped placement spends 19% to protect 1.4%. **Microbenchmarks overstate the prize ~200x** (`lvp_chase` 4.0x vs 1-2% real). **The MIR round-trip is a per-binary codegen LOTTERY** (+0.58% QuickJS, +0.06% native, **+2.65%** gem5, where the zero-DIT `nodit` control is the slowest binary in the table) - baselining against it is necessary but NOT sufficient |
+| `-ftaint-harden` flag + codegen takeover (`RunTaintHardenCodegen`; runs the taint pass in-pipeline after PEI - the 3-phase MIR round-trip was removed 2026-08-30) | `clang/lib/CodeGen/BackendUtil.cpp`; flag in `clang/include/clang/Options/Options.td`, `clang/include/clang/Basic/CodeGenOptions.h`, forwarding in `clang/lib/Driver/ToolChains/Clang.cpp` |
+| **SQLCipher, MEASURED 2026-08-12 (100 paired reps, M5) - a DEFINITIVE NEGATIVE: there is no headroom to recover.** With the oracle correctly wrapping all 3 provider entry points (cipher+kdf+**hmac**): libtomcrypt headroom **+0.89% +/-0.19**, OpenSSL (the DEFAULT shipping provider, hardware AES) headroom **-0.08% +/-0.38 = ZERO (48/100)**. Protecting the secret costs what protecting everything costs (oracle +7.85% vs blanket +8.81% on ltc; +1.87% vs +1.76% on OpenSSL) - almost all of always-on's cost is DIT **on the crypto**, which any correct placement must also pay. **A +8.15% 'first positive result' was reported earlier the same day and is RETRACTED** - the oracle had missed the per-page HMAC, so it was protecting less, not costing less. Also: on the OpenSSL build the pass **cannot instrument the AES at all** (it lives in prebuilt `libcrypto.dylib`) - 25 `MSR DIT` sites, zero on any cipher instruction, costing +2.27% for no protection. Software AES is DIT-expensive only because of its **T-table data-dependent loads**, whose real leak (cache timing) DIT does not even cover; hardware `AESE` is already constant-time. **AES is a bad motivating workload for this project** | `docs/results/sqlcipher.md` **gem5 corroboration 2026-08-13** (`gem5-DIT/docs/dit/studies/sqlcipher-dit-placement-2026-08-13.md`): running the identical binary under serializing vs renamed `MSR DIT` isolates **toggle cost with dwell held constant** - **+0.08% / +12.8% / +19.1%** for 6 / 54 / 63 switch sites, reproducing the M5 ordering and region:hoist ratio (1.49x vs 1.52x) at ~1/3 magnitude. The **prize is ~1.4%** (all of it EVES; DMP/SIP/comp-simp inert or negative here), so the shipped placement spends 19% to protect 1.4%. **Microbenchmarks overstate the prize ~200x** (`lvp_chase` 4.0x vs 1-2% real). **The MIR round-trip is a per-binary codegen LOTTERY** (+0.58% QuickJS, +0.06% native, **+2.65%** gem5, where the zero-DIT `nodit` control is the slowest binary in the table) - baselining against it is necessary but NOT sufficient. **Applies to the `utils/taint_harden_c.sh` / `llc` path only since 2026-08-30**: the clang `-ftaint-harden` path no longer round-trips MIR and its empty-seed control is byte-identical to plain `-O2` |
 | Tests | `llvm/test/CodeGen/AArch64/taint-analysis-*.mir`, `llvm/test/Transforms/TaintAnnotate/taint-annotate.ll` |
 | Scratch experiments (not shipping code) | `playground/` |
 
-### Why the 3-phase design (load-bearing constraints)
+### The MIR round-trip is GONE from the clang path (2026-08-30, `4fb7600db532`)
 
-1. `TaintInterprocPass` needs **all MachineFunctions of the TU resident at once**; the
-   legacy PM frees each MF after emission, so it must serialize to MIR text and
-   reparse (MIRParser materializes all MFs together).
-2. **AArch64 has no new-PM codegen pipeline** (`buildCodeGenPipeline` is X86/AMDGPU
-   only), so lowering/emission must use the legacy PM, driven via the process-global
-   `start-after`/`stop-after` cl::opts (saved/restored RAII-style).
+`-ftaint-harden` used to run codegen three times - legacy PM `stop-after=prologepilog`
+to in-memory MIR text (+ `<mcsymbol >` strip), reparse so every MachineFunction is
+resident at once for the interprocedural pass, then `start-after=prologepilog` to
+object. That was only ever a way to materialize all MFs simultaneously, and it cost
+real correctness: MIR does not serialize exception-handling state, so LandingPadInfo /
+TypeInfos / FilterIds were dropped on reparse and any C++ TU with a landing pad lost
+its exception tables.
 
-So `-ftaint-harden` runs: (1) legacy PM `stop-after=prologepilog` to in-memory MIR text
-(+ `<mcsymbol >` strip); (2) MIR reparse + new-PM `TaintInterprocPass` to hardened MIR
-text; (3) legacy PM `start-after=prologepilog` to object.
+**`RunTaintHardenCodegen` now adds `TaintInterprocPass` as a module pass immediately
+after PrologEpilogInserter**, in the ordinary pipeline. Same all-resident view, same
+point in the pipeline, no serialization - so EH, debug info and CFI stay as codegen
+built them.
+
+**Consequence for measurement: the codegen lottery is gone on the clang path.** A
+round-trip control (`-ftaint-harden=<empty seed file>`, zero switches) is now
+**byte-identical** to a plain `-O2` build. Verified 2026-08-31 on libsodium
+(`libsodium.a` and both driver binaries identical) and on libsecp256k1
+(`secp_gem5_rt` == `secp_gem5_nodit`). So a `taint`-vs-`base` delta from a
+clang-built binary is DIT cost, full stop - no round-trip term to subtract.
+
+**The wrapper still round-trips.** `utils/taint_harden_c.sh` drives `llc` with
+`-stop-after`/`-start-after` and the perl `<mcsymbol >` strip, so the lottery still
+applies to anything built that way, and to hand-driven `llc` flows. Scope the warning
+below accordingly.
+
+Still true: **AArch64 has no new-PM codegen pipeline** (`buildCodeGenPipeline` is
+X86/AMDGPU only), so lowering and emission remain on the legacy PM.
 
 ## Constraints and gotchas
 
