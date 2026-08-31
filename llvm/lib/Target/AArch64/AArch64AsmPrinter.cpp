@@ -3097,8 +3097,22 @@ static cl::opt<bool> TaintDitNopSwitches(
 void AArch64AsmPrinter::emitInstruction(const MachineInstr *MI) {
   AArch64_MC::verifyInstructionPredicates(MI->getOpcode(), STI->getFeatureBits());
 
+  // Both forms, or the control is incomplete. getTimingModeSwitch matches only
+  // the immediate `MSR DIT, #imm`; the callee-saved ABI's unconditional exit is
+  // `MSR DIT, Xt`, whose value is not statically known, and it used to survive
+  // substitution. A def-minus-NOP term on an ABI build then understated by one
+  // write per unconditional exit -- 2 of 194 on libsodium, 8 on a build with the
+  // Bitcoin ratio of 21 guarded exits to 8 unconditional.
+  //
+  // Substituting the restore is sound for what this flag is for: in a NOP build
+  // no mode switch executes at all, so PSTATE.DIT still holds the value the
+  // function was entered with, which is exactly what the restore would have
+  // written. The carrier read and the `tbnz` are left alone, so instruction
+  // count and every address are preserved, which is the property the control
+  // rests on. NEVER run such a build for anything but measurement.
   if (TaintDitNopSwitches &&
-      STI->getInstrInfo()->getTimingModeSwitch(*MI).has_value()) {
+      (STI->getInstrInfo()->getTimingModeSwitch(*MI).has_value() ||
+       STI->getInstrInfo()->definesTimingMode(*MI))) {
     EmitToStreamer(*OutStreamer, MCInstBuilder(AArch64::HINT).addImm(0));
     return;
   }
