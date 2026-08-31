@@ -68,6 +68,13 @@ How the analysis is built, which bugs were found in it, and what is still open.
   where DIT switches go: what exists today, the placement constraints the spec
   imposes, the remaining security and performance gaps, and the proposed spec-aware
   optimal placement with its evaluation plan.
+- **[results/dit-abi-nginx-tls.md](results/dit-abi-nginx-tls.md)** - **the ABI on a
+  deployed server.** nginx + OpenSSL, TLS 1.3, session reuse off so every connection
+  is a full handshake. Hardening the reachable C key schedule costs **+0.65%** of
+  server CPU; with the ABI **+0.21%**, so the ABI removes two thirds (13/15 sign
+  test). Narrow by necessity - see the assembly limit below. Method notes worth
+  reading: server CPU not throughput (the client burns 7x the server's CPU), and
+  `getrusage` not `ps -o time=` (10 ms granularity returned exactly one tick).
 - **[results/dit-openssl-asm-limit.md](results/dit-openssl-asm-limit.md)** - **a
   scope limit with no workaround inside the compiler.** OpenSSL implements AES,
   AES-GCM, ChaCha20-Poly1305, P-256, bignum and SHA on aarch64 as hand-written

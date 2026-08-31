@@ -113,6 +113,18 @@ whole-function coverage, which is blanket for that function, and an earlier abi3
 arm was withdrawn for exactly that. This one reports **zero** non-local exits.
 Check `<arm>.nonlocal.txt` is empty before believing any number from an ABI arm.
 
+### 3.2 A deployed server: nginx TLS 1.3
+
+`dit-abi-nginx-tls.md`. Hardening the reachable C key schedule costs **+0.65%** of
+server CPU per handshake; with the ABI, **+0.21%** - so the ABI removes about two
+thirds of it (13/15 sign test). Small in absolute terms because the reachable slice
+is small: OpenSSL's bulk cipher and EC arithmetic are aarch64 assembly and cannot
+be instrumented at all (`dit-openssl-asm-limit.md`).
+
+This is the third confirmation of §3's mechanism and the first on a deployed
+application: a full TLS 1.3 handshake runs the key schedule at the maximum rate the
+protocol allows, which is the high-call-rate condition.
+
 ## 4. The decision: default stays OFF
 
 The criterion was set before the numbers were seen: flipping the default requires
