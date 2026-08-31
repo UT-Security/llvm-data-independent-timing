@@ -428,6 +428,7 @@ public:
   std::optional<int> createTimingModeSaveSlot(MachineFunction &MF) const override;
   std::optional<int>
   getTimingModeSaveSlot(const MachineFunction &MF) const override;
+  bool hasTimingModeSave(const MachineFunction &MF) const override;
   bool canCarryTimingMode(const MachineFunction &MF) const override;
   bool insertTimingModeSave(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator ReadAt,

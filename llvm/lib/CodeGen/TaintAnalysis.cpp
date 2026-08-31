@@ -2490,6 +2490,12 @@ static bool emitDITCarrierSave(MachineFunction &MF, const TargetInstrInfo *TII,
                                raw_ostream *NonlocalOS) {
   std::optional<int> Slot = TII->getTimingModeSaveSlot(MF);
   MachineBasicBlock &Entry = MF.front();
+  // Asserted, not tolerated: every caller reads a true return as "a carrier now
+  // exists AND I placed it, so I must emit the matching restores". Reaching here
+  // twice means some path already emitted restores and this one is about to add
+  // a second set. The region fallback used to do exactly that.
+  assert(!TII->hasTimingModeSave(MF) &&
+         "carrier save requested twice; the caller will double-restore");
   if (Slot && TII->insertTimingModeSave(Entry, ReadAt, StoreAt, DebugLoc(), *Slot))
     return true;
 
@@ -3052,7 +3058,8 @@ static bool blockInCycle(const MachineBasicBlock *MBB) {
 static void fallbackToFunctionGranularity(MachineFunction &MF,
                                           const TaintSummaryInfo *TSI,
                                           StringRef Reason,
-                                          raw_ostream *ReassertOS = nullptr) {
+                                          raw_ostream *ReassertOS = nullptr,
+                                          raw_ostream *NonlocalOS = nullptr) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   for (MachineBasicBlock &MBB : MF) {
     SmallVector<MachineInstr *, 8> ToErase;
@@ -3218,7 +3225,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                                       const TaintSummaryInfo *TSI,
                                       AAResults *AA,
                                       raw_ostream *ReassertOS = nullptr,
-                                      bool ABI = false) {
+                                      bool ABI = false,
+                                      bool *FellBack = nullptr,
+                                      raw_ostream *NonlocalOS = nullptr) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   Module &M = *const_cast<Module *>(MF.getFunction().getParent());
 
@@ -3420,7 +3429,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
 
   if (NeedFallback) {
     fallbackToFunctionGranularity(MF, TSI, "irreducible need-loop, cannot hoist",
-                                  ReassertOS);
+                                  ReassertOS, NonlocalOS);
+    if (FellBack)
+      *FellBack = true;
     return NeedCount;
   }
   LLVM_DEBUG(dbgs() << "  DIT region placement in " << MF.getName() << ": "
@@ -3464,7 +3475,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   if (!Sound) {
     // The fallback erases these switches and reports its own sites.
     fallbackToFunctionGranularity(MF, TSI, "verifier: uncovered need",
-                                  ReassertOS);
+                                  ReassertOS, NonlocalOS);
+    if (FellBack)
+      *FellBack = true;
     return NeedCount;
   }
 
@@ -3608,15 +3621,22 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
     // anything else. Emitting after, at afterPrologue(), lands the save in front
     // of that enable, giving `mrs; str; msr DIT,#1`.
     //
-    // It is also correct when the region emitter falls back to whole-function
-    // granularity, which emits its own save: insertTimingModeSave is idempotent.
-    insertTaintDITRegions(MF, TR, TSI, AA, ReassertOS, ABI);
+    // If the region emitter FALLS BACK it erases every switch and re-runs
+    // whole-function placement, which under the ABI emits the carrier save and
+    // the exit restores itself. Doing it again here produced a SECOND restore
+    // per exit, placed in the block the first one had split off - so its reload
+    // landed after `add sp` and read the CALLER's frame, and the unconditional
+    // form then wrote bit 24 of that garbage straight into PSTATE.DIT.
+    bool FellBack = false;
+    insertTaintDITRegions(MF, TR, TSI, AA, ReassertOS, ABI, &FellBack,
+                          NonlocalOS);
     // The read goes at the very TOP of the entry block, ahead of the enable the
     // region emitter placed there; the store goes after the prologue, because it
     // is a frame access. Two different constraints, so two insertion points.
     const bool Carried =
-        ABI && emitDITCarrierSave(MF, TII, MF.front().begin(),
-                                  afterPrologue(MF.front()), NonlocalOS);
+        ABI && !FellBack &&
+        emitDITCarrierSave(MF, TII, MF.front().begin(),
+                           afterPrologue(MF.front()), NonlocalOS);
 
     if (Carried)
       emitDITExitRestores(MF, TSI, M, TII, *TII->getTimingModeSaveSlot(MF),

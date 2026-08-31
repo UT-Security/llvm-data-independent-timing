@@ -7169,6 +7169,10 @@ AArch64InstrInfo::getTimingModeSaveSlot(const MachineFunction &MF) const {
   return MF.getInfo<AArch64FunctionInfo>()->getTimingModeSaveIndex();
 }
 
+bool AArch64InstrInfo::hasTimingModeSave(const MachineFunction &MF) const {
+  return MF.getInfo<AArch64FunctionInfo>()->hasTimingModeSave();
+}
+
 bool AArch64InstrInfo::canCarryTimingMode(const MachineFunction &MF) const {
   auto *AFI = MF.getInfo<AArch64FunctionInfo>();
   std::optional<int> Slot = AFI->getTimingModeSaveIndex();

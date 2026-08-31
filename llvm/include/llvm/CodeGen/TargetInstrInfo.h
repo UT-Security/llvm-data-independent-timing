@@ -1713,6 +1713,12 @@ public:
     return std::nullopt;
   }
 
+  /// Has the entry read into the carrier slot already been emitted? Used to
+  /// assert that no two paths both place a save and then both emit restores.
+  virtual bool hasTimingModeSave(const MachineFunction &MF) const {
+    return false;
+  }
+
   /// Can this function carry its incoming timing mode at all?
   ///
   /// Must be answerable BEFORE any placement decision is taken. Placement under
