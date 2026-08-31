@@ -98,6 +98,11 @@ that the gate preserves coverage *for argument-carried taint*, which is what
 libsecp256k1 uses.
 
 **Open, and worth answering before the gate is defaulted on:** are any of these
+> **ANSWERED 2026-08-30 for libsecp256k1 ECDSA signing: they do not occur
+> there.** 464,796 of 464,800 secret-operand instructions run protected, and
+> the four that do not are the driver testing the API return code. See
+> `dit-secp-tier2.md`, and read its scope section before generalising.
+
 four channels reachable in real crypto code? C1 (a function returning a pointer
 into a secret buffer) and C3 (`asm volatile` as an optimisation barrier) are both
 ordinary idioms in that setting.
