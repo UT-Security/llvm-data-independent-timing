@@ -35,9 +35,9 @@ point over the call graph), then inserts **PSTATE.DIT (data-independent timing) 
 switches** (`MSR DIT, #1` / `MSR DIT, #0`) so that secret-dependent code runs with
 data-operand timing side-channels suppressed. Flag absent ⇒ codegen byte-for-byte unchanged.
 
-## 2. Threat model — read this or you will misunderstand everything
+## 2. Threat model - read this or you will misunderstand everything
 
-**The channel is data-OPERAND instruction timing** — instruction latency that depends on the
+**The channel is data-OPERAND instruction timing** - instruction latency that depends on the
 *values* of operands. NOT memory-address timing (cache/TLB), NOT control-flow (branch
 prediction), NOT speculation/Spectre. This is exactly what ARM's **PSTATE.DIT** and Intel's
 DOIT are built to suppress.
@@ -73,7 +73,7 @@ function_name,arg_index,pointee    # pointer is public; memory loaded THROUGH it
 0-based indices; `#` comments; C++ needs **mangled** names (get them with
 `llvm-nm file.bc | grep X`; strip ONE leading underscore: `__ZN` → `_ZN`).
 
-### Manual / wrapper flow (for the report files — the clang flag does not emit these)
+### Manual / wrapper flow (for the report files - the clang flag does not emit these)
 The pipeline is 3 phases (see §5 for *why*). Canonical playground run:
 ```
 clang -O2 -isysroot $(xcrun --show-sdk-path) -S -emit-llvm file.c -o f.ll
@@ -104,10 +104,10 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
 ## 4. How the taint analysis works
 
 **Taint kinds** (parameterized by `TaintKind`, one bitvector each):
-- **Data** — the value itself is secret.
-- **Pointee** — the value is a pointer to secret memory. A load *through* a pointee-tainted
+- **Data** - the value itself is secret.
+- **Pointee** - the value is a pointer to secret memory. A load *through* a pointee-tainted
   pointer yields Data taint. Pointee taint survives pointer arithmetic (`base+offset`).
-- **Address** — the value may be used as a secret-dependent address (cache/TLB domain — DIT
+- **Address** - the value may be used as a secret-dependent address (cache/TLB domain - DIT
   does NOT cover this; it lands in the uncovered report, not a barrier).
 
 **Interprocedural fixed point** (`TaintInterprocPass`, a new-PM module pass):
@@ -117,13 +117,13 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
   taint into callee summaries; **callee→caller** propagates return-value taint and a
   **memory mod-set** (see §6).
 - Every consumer replays through the single `replayTaint(MF, TR, ...)` visitor. Do NOT
-  hand-roll another replay loop — that is how the replay drifts from `propagateTaintMI`.
+  hand-roll another replay loop - that is how the replay drifts from `propagateTaintMI`.
 
 **DIT placement** (`insertTaintDITSwitches`): a block/region is a "Need" if it contains a
 tainted instruction that is `isDITProtected || isCall`. Region placement covers only
 secret-dependent regions (clean preambles / public index math stay DIT-off), carries a
 **soundness verifier** (forward AND-meet), and falls back per-function to whole-function
-coverage if it cannot prove coverage — so it is always safe. Requires FEAT_DIT (Armv8.4+,
+coverage if it cannot prove coverage - so it is always safe. Requires FEAT_DIT (Armv8.4+,
 Apple M-series has it; Neoverse N1 does not → SIGILL there).
 
 **DIT ownership (2026-08-08): only the frame that turned DIT on may turn it off.** A
@@ -162,26 +162,26 @@ This is the subtle heart of the analysis.
 **A callee that writes a secret into caller-visible memory** must taint the caller's later
 reload, or the secret leaks unprotected. This is carried by a **`FunctionMemEffects`
 mod-set** per function:
-- `WritesSecretToGlobal{g}` — wrote a secret into global `g` (precise; only that global).
-- `WritesSecretThroughArgPointee{i}` — wrote a secret through pointer-arg `i` (currently
+- `WritesSecretToGlobal{g}` - wrote a secret into global `g` (precise; only that global).
+- `WritesSecretThroughArgPointee{i}` - wrote a secret through pointer-arg `i` (currently
   applied bluntly, P1a).
-- `WritesSecretToUnknown` (**TOP**) — did something to memory we can't pin down.
+- `WritesSecretToUnknown` (**TOP**) - did something to memory we can't pin down.
 
 **At a call:**
 - **Direct in-TU callee (has a body):** apply its computed mod-set. TOP or arg-pointee →
   `setExternalMemClobbered()`; specific global → `setTaintedWholeGlobal(g)`.
 - **External declaration or indirect call (no body / unknown target):** if a secret is
-  *passed* (see fix B below), assume the worst — `taintCallResultDefs` (return may be secret)
+  *passed* (see fix B below), assume the worst - `taintCallResultDefs` (return may be secret)
   **and** `setExternalMemClobbered()` (it may have written the secret anywhere).
 
 **`ExternalMemClobbered` = TOP landing point.** Once set, every subsequent stack/global/heap
 **load** in that function is treated as secret. The call itself runs under DIT, and PSTATE.DIT
 **persists across the call**, so an opaque callee **inherits DIT=1** (best-effort protection;
-re-asserted after non-preserving calls — gap G1).
+re-asserted after non-preserving calls - gap G1).
 
 **A load consumes the clobber** (over-approximate, never misses a leak on this path). An
 `-taint-annotation-driven` mode once suppressed that consumption in favour of trusting
-per-function annotations — the standard constant-time-tool contract, cf. FaCT — and was
+per-function annotations - the standard constant-time-tool contract, cf. FaCT - and was
 **removed on 2026-08-24**: it was built to suppress a flood that a controlled A/B later
 attributed to the `$lr` artifact (see the attribution correction in §8), and after those
 fixes it was equivalent to sound mode on every TU measured. Reintroducing it would be a
@@ -189,23 +189,23 @@ deliberate change of threat model, not a tuning knob.
 
 **What IS gated, by default, is the mod-set APPLICATION.** A callee's memory clobber is
 applied only at call sites that actually pass a secret, and only for a callee whose taint is
-argument-sourced (the source condition) — the same rule applying to the `ReturnsTainted`
+argument-sourced (the source condition) - the same rule applying to the `ReturnsTainted`
 register summary. This is the pass's answer to context-insensitive summaries: without it
 `secp256k1_ecdsa_verify` carries 17 `MSR DIT` for public data and Bitcoin Core's
 `ConnectBlockAllEcdsa` costs **+51.20%**; with it, **+0.67%** at no measured loss of coverage
 (gem5 `ditSuppressed` 103.1% of a hand oracle). The soundness claim is scoped: *preserves
 coverage for argument-carried taint*. `flowprobe` confirmed four channels that escape it by
-reading PSTATE.DIT at the consumer — a callee returning a pointer into a secret buffer, a
+reading PSTATE.DIT at the consumer - a callee returning a pointer into a secret buffer, a
 secret in a global read by a sibling with no call edge, a secret stored through a pointer by
 inline asm (`INLINEASM` is not `isCall()`, so the pass cannot see it at all), and a secret
 moved through a NEON register tuple. Closing the inline-asm and register-tuple channels is
 the next precision work; the sound end state is an origin bit in the fixed point.
 `-taint-no-modset-gate` gives up the precision for whole-memory conservatism.
 
-## 7. Cost model (why placement granularity matters) — do not skip
+## 7. Cost model (why placement granularity matters) - do not skip
 
 `cost = toggles × ~30 cyc + dwell(workload) × time_in_DIT`. The two terms pull opposite ways
-— that tension *is* the placement problem.
+ - that tension *is* the placement problem.
 - **Toggle ≈ 30 cyc, fully serializing** (measured, M4). Floor: a region costs ~60 cyc to
   enter+leave, so only create one if it removes more dwell than that.
 - **Dwell up to ~15%** on sensitive SPEC 2026 benchmarks with DIT fully on (measured).
@@ -214,12 +214,12 @@ the next precision work; the sound end state is an origin bit in the fixed point
   the basis of the deferred runtime `MRS` mode, the only mechanism that fixes indirect
   and cross-TU calls.
 - ⚠️ **Do NOT conclude "DIT is free" from microkernels.** `playground/dit_bench/` and
-  `firefox_convolve_int` (0.968x) are DIT-*insensitive* — they measure the benchmark's blind
+  `firefox_convolve_int` (0.968x) are DIT-*insensitive* - they measure the benchmark's blind
   spot, not DIT. Bad workloads for evaluating a placement *win*. Do not size the *prize*
   from them either: `lvp_chase` measures 4.0x where real workloads measure 1-2%, so
   microbenchmarks **overstate the prize ~200x** (gem5, 2026-08-13).
 - The project owner implemented a **non-serializing DIT switch in GEM5** (via register
-  renaming) — so on that model set `-taint-dit-switch-cyc` low and prefer the finest groups.
+  renaming) - so on that model set `-taint-dit-switch-cyc` low and prefer the finest groups.
 
 ### End-to-end runtime on real workloads - the record
 
@@ -287,7 +287,7 @@ Full detail: `docs/results/dit-cost-model.md`, `docs/results/quickjs.md`,
 
 ## 8. Key mechanisms & the most recent fixes (this session, 2026-07-24→26)
 
-**Fix #1 — the `$lr` seeding guard (commit `2d81ec4`) — THE flood fix.** The arg-taint
+**Fix #1 - the `$lr` seeding guard (commit `2d81ec4`) - THE flood fix.** The arg-taint
 seeding mapped every callee livein's register encoding to an "argument index". `$lr`/x30
 (the return address, livein of every function, encoding 30) became a bogus "arg 30"; a caller
 reusing x30 as tainted scratch seeded callees' return-address register as secret, cascading
@@ -300,18 +300,18 @@ secret set). Test: `taint-analysis-lr-not-arg.mir`.
 > (git-stash the fixes, rebuild, compare) proved that WRONG: the flood was the `$lr` artifact;
 > `ExternalMemClobbered` was only the amplification channel. The flood numbers quoted in
 > `docs/research/memory-summaries.md` carry that same correction. Annotation-driven mode was
-> removed on 2026-08-24 as a consequence — it was the fix for a misdiagnosis.
+> removed on 2026-08-24 as a consequence - it was the fix for a misdiagnosis.
 
-**Fix B — passed-vs-live (commit `2d81ec4`).** A secret counts as reaching a callee only when
+**Fix B - passed-vs-live (commit `2d81ec4`).** A secret counts as reaching a callee only when
 genuinely *passed* in an argument register (data or pointee), read on the state *entering* the
-call — NOT merely live/clobbered across it (an ABI-compliant callee can't read a caller-saved
+call - NOT merely live/clobbered across it (an ABI-compliant callee can't read a caller-saved
 register it wasn't handed). Narrows `anyTaintedCallArgument` (gates the external-call
 `ExternalMemClobbered`) and the ESCAPE report. Does not change the instrumentation count (the
 flood was fix #1); it removes spurious escapes and makes the memory trigger sound. Preserves
 the pointee channel (still a real reach). Test: `taint-analysis-call-arg-passed.mir`.
 
 **`-taint-clobber-report` (commit `71be809`).** Lists every call site that makes the caller
-treat memory as secret — the *sources* of a taint explosion — with reasons
+treat memory as secret - the *sources* of a taint explosion - with reasons
 (`external-arg`/`indirect-arg`/`modset-top`/`modset-argptr`/`modset-global`). Test:
 `taint-analysis-clobber-report.mir`.
 
@@ -320,12 +320,12 @@ one seed flowed through **all 8 functions** via register args (down), memory wri
 (callee→caller), and return values (up), with **zero false positives**. On real `-O2` Firefox
 code, one `GenerateNormal<float>` seed propagates cleanly to `ColorComponentAtPoint`
 (`arg 0 now pointee-tainted`). What limits *visible* cross-function spread on real code is
-**upstream inlining** removing call edges before the MIR analysis runs — not the analysis. Use
+**upstream inlining** removing call edges before the MIR analysis runs - not the analysis. Use
 `-O2` (the real target and canonical flag), not `-O3` (over-inlines).
 
 ## 8b. The libsodium / CIO head-to-head, and two soundness bugs (2026-07-27→29)
 
-**Setup — SCRIPTED, do not rebuild by hand (2026-08-03).** The original rig lived in an
+**Setup - SCRIPTED, do not rebuild by hand (2026-08-03).** The original rig lived in an
 untracked home directory (`~/Documents/libsodium-stable/`, `~/Documents/cio/`) and **was
 lost**. It is now reproducible from a clean machine by two tracked scripts:
 
@@ -342,8 +342,8 @@ bitcode (WLLVM + `llvm-link`, `--disable-asm`), derives the pointee-typed seed f
 emits `libsodium-{baseline,hardened,tuned,func}.a` plus reports in `rpt/`. Stages are
 independently runnable (`--list`).
 
-*Verification (2026-08-05): a full clean-machine pass was run* — all nine stages from an
-empty directory, into a work dir with a deliberately non-default name — and it
+*Verification (2026-08-05): a full clean-machine pass was run* - all nine stages from an
+empty directory, into a work dir with a deliberately non-default name - and it
 **reproduced every number exactly**: 926 functions, 48 pointee + 17 data attrs across 21
 functions, 647/516/611 switches, `__text` +1.09%/+0.85%/+1.00%, ESCAPE 35 / UNCOVERED
 168 / CLOBBER 610, and **`make check` 86/86 on both the baseline control and the
@@ -364,7 +364,7 @@ so a longer work-dir path makes a bigger archive. The emitted objects are identi
   successful. The script hard-fails on any unresolved line and on zero attributes.
 - **The 3 renamed statics are all in `crypto_stream/chacha20/ref/chacha20_ref.c`**
   (`chacha20_encrypt_bytes`, `stream_ref`, `stream_ref_xor_ic`). Rename with `\b`
-  anchoring — `stream_ref` must not match inside `stream_ref_xor_ic`. They are `static`
+  anchoring - `stream_ref` must not match inside `stream_ref_xor_ic`. They are `static`
   and `stream_ref`/`stream_ref_xor_ic` also exist in `salsa20/ref/`, which is almost
   certainly why CIO patched them: after `llvm-link` merges the module, colliding
   statics get `.N` suffixes and seeding by plain name stops working.
@@ -373,7 +373,7 @@ so a longer work-dir path makes a bigger archive. The emitted objects are identi
 
 Two gotchas found the hard way: 3 of CIO's 21 seed names only exist after *their* rename
 patches (`chacha20_encrypt_bytes_ref`, `stream_ref_ref`, `stream_ref_xor_ic_ref`) and
-`taint-annotate` **silently ignores** unmatched names — always pre-flight the seed list
+`taint-annotate` **silently ignores** unmatched names - always pre-flight the seed list
 against `llvm-nm`. And CIO's `arg_index` is an index into SysV GPR arg registers, capped at
 5, so their four `crypto_aead_*,8` lines are **dead**: they never seed the AEAD key. Ours
 does.
@@ -384,10 +384,10 @@ Ours distinguishes: a load through a *data*-tainted pointer is a secret ADDRESS,
 data. Transcribing their config literally left 462 `secret-address` UNCOVERED lines; typing
 the 48 pointer args as `pointee` cut it to 205 and is the faithful translation.
 
-**Bug A — `implicit-def` counted as a use (OVER-taint).** `MI.uses()` spans implicit defs, so
+**Bug A - `implicit-def` counted as a use (OVER-taint).** `MI.uses()` spans implicit defs, so
 `dead $w0 = MOVi32imm 1, implicit-def $x0` with `$x0` tainted re-tainted its own defs: taint
 could never leave a register. **−33% tainted instructions** once fixed.
-**Bug B — narrowed reload of a spilled secret (UNDER-taint = leaked secret).** Cell lookup
+**Bug B - narrowed reload of a spilled secret (UNDER-taint = leaked secret).** Cell lookup
 required an exact `(FI,offset,size)` match, so spill-8/reload-low-4 returned the secret as
 public. Read path now tests overlap; clear path stays exact-match.
 Both in `docs/design/spill-soundness-bugs.md`, both regression-tested, each test verified to
@@ -397,7 +397,7 @@ and a method note (rematerialization defeated the first repro).
 **Results after the fixes** (libsodium, 109/932 functions instrumented, fallback off):
 `__text` **+1.14%** vs unhardened, 711 DIT switches, 48% recall against CIO's alert set.
 *(2026-08-03 scripted rebuild reproduces this: 105/926 instrumented, **+1.09%** `__text`,
-647 switches, ESCAPE **35** — exact — CLOBBER 610. UNCOVERED came back 168 vs 203, the
+647 switches, ESCAPE **35** - exact - CLOBBER 610. UNCOVERED came back 168 vs 203, the
 one delta not yet explained; the rest is consistent with the `--disable-asm` build
 config, 926 vs 932 functions. **`make check` passes 86/86** on the hardened library, with
 the baseline whole-bitcode object run first as a control to prove the round-trip is
@@ -406,18 +406,18 @@ With the since-removed `-taint-frame-addr-args=1` fallback: 286/932, +3.94%, **8
 but **9.1×** tainted instructions. For scale, CIO's own libsodium cost is
 **+62%/+208%/+266%** code size and up to **27.84×** runtime. That fallback was **deleted on
 2026-08-24**: it reasoned about whole frames rather than objects, so once the mod-set gate
-existed nearly every call site looked secret-passing and the gate stopped firing —
+existed nearly every call site looked secret-passing and the gate stopped firing -
 `ConnectBlockAllEcdsa` measured **+45.32%** with both against **+0.66%** with the gate alone.
 P1b (`docs/design/p1b-frame-provenance.md`) is the per-object replacement and does not rescue
 it. The caller→callee half of that gap (`f(&local_secret)`) is therefore **open**.
 
 **Correctness audit (the important part).** Of the 19 CIO functions we don't instrument,
-**15 are unreachable from any seed** — artifacts of their blunt domain, not our misses; the
+**15 are unreachable from any seed** - artifacts of their blunt domain, not our misses; the
 rest are init/abort paths that process no secret, plus one thin forwarding wrapper
 (`crypto_stream_chacha20_ietf`) that is a modeling difference, not a leak. The miss direction
 is clean. The **false-positive** direction is where the work is: see §9.6.
 
-## 9. Limitations (what this does NOT protect — be honest with reviewers)
+## 9. Limitations (what this does NOT protect - be honest with reviewers)
 
 1. **DIT coverage gaps (intra-procedural).** Even inside an instrumented function DIT does not
    cover: **divide / sqrt** (not DIT-listed), a secret used as a **memory address**
@@ -428,16 +428,16 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
    memory poisoned) and best-effort inherited-DIT protection only. A callee that does a
    secret-dependent divide/sqrt, secret-addressed access, or clears DIT is outside the
    guarantee. Audit via `-taint-callsite-report` (ESCAPE lines).
-3. **Soundness rests on an ABI-compliance assumption** — a callee that scavenges caller-saved
+3. **Soundness rests on an ABI-compliance assumption** - a callee that scavenges caller-saved
    registers it wasn't passed would need in-process code execution, which defeats DIT anyway.
 4. **Cross-TU scope.** Interprocedural analysis is one TU/module. Cross-TU taint is not
-   tracked — annotate the entry function in *each* TU that receives the secret. Also
+   tracked - annotate the entry function in *each* TU that receives the secret. Also
    incompatible with LTO for that TU (lowers to object eagerly).
 5. **Channel-3 memory gap:** an external callee that reads a secret *global* on its own (no
    secret argument) and re-exports it is not caught by the argument path.
 6. **Mod-sets are context-INSENSITIVE, and that is now the dominant false-positive source.**
    A callee's mod-set is per function, so once *any* caller passes a secret into
-   `crypto_hash_sha512_update`, every other caller of it absorbs `ExternalMemClobbered` —
+   `crypto_hash_sha512_update`, every other caller of it absorbs `ExternalMemClobbered` -
    e.g. `crypto_auth_hmacsha512`, which handles no seeded secret, is instrumented anyway.
    Measured on libsodium: **48 of 63** (fallback off) and **169 of 199** (fallback on) of
    the functions we instrument but CIO does not are outside the seed call-graph closure
@@ -522,7 +522,7 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
    default.** The call-site mod-set gate plus the strict source condition and
    return-call-site gating shipped on by default 2026-08-24 (+51.20% -> +0.67% on Bitcoin
    Core's `ConnectBlockAllEcdsa`). **What remains** is closing the four channels
-   `flowprobe` found — start with inline asm (`INLINEASM` is not `isCall()`, so the pass
+   `flowprobe` found - start with inline asm (`INLINEASM` is not `isCall()`, so the pass
    is blind to `asm volatile ::: "memory"`) and NEON register tuples, both contained; then
    `ReturnsPointeeTainted` for a callee returning a pointer into a secret buffer. The
    sound end state is an origin bit in the fixed point, which is what would let the gate
@@ -554,8 +554,8 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 | Scratch experiments (not shipping) | `playground/` |
 | Browser always-on DIT rig | `utils/taint_browser_dit_bench.sh`, `utils/browser_dit/` |
 | DIT precision / region-spacing analysis | `utils/taint_dit_precision.py`, `utils/taint_region_distance.py` |
-| **libsodium/CIO rig — SCRIPTED** (the old `~/Documents/libsodium-stable/` + `~/Documents/cio/` copies were lost; do not look for them) | `utils/taint_libsodium_eval.sh` (build+analyze+archives+`make check`), `utils/taint_libsodium_bench.sh` (runtime A/B/D/E/C). Default work dir `~/Documents/libsodium-1.0.21/`. |
-| Runtime benchmark drivers (kperf cycles, P-core pinning) — **untracked, outside the repo**; vendor or pin it or this rig will be lost the same way | `~/Documents/crypto-dit-benchmarks/` (`perf.c`, `libcpupin.dylib`, per-primitive drivers); override with `BENCH_DIR=` |
+| **libsodium/CIO rig - SCRIPTED** (the old `~/Documents/libsodium-stable/` + `~/Documents/cio/` copies were lost; do not look for them) | `utils/taint_libsodium_eval.sh` (build+analyze+archives+`make check`), `utils/taint_libsodium_bench.sh` (runtime A/B/D/E/C). Default work dir `~/Documents/libsodium-1.0.21/`. |
+| Runtime benchmark drivers (kperf cycles, P-core pinning) - **untracked, outside the repo**; vendor or pin it or this rig will be lost the same way | `~/Documents/crypto-dit-benchmarks/` (`perf.c`, `libcpupin.dylib`, per-primitive drivers); override with `BENCH_DIR=` |
 
 ## 12. Deeper reference docs (this doc is the map; these are the territory)
 

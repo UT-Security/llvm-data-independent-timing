@@ -2,7 +2,7 @@
 
 **Measured 2026-08-18**, Apple M5, 40 paired reps, arm order rotated. Workload:
 `eth-account` signing 25,000 Ethereum transactions through coincurve's vendored
-libsecp256k1 — `web3.py`'s actual signing stack, no harness code in the signing
+libsecp256k1 - `web3.py`'s actual signing stack, no harness code in the signing
 path. Rig: `utils/dit_host_screening/coincurve/`.
 
 > **Supersedes the 2026-08-17 version of this document**, whose oracle was
@@ -16,7 +16,7 @@ path. Rig: `utils/dit_host_screening/coincurve/`.
 engineering choice today.**
 
 - Always-on DIT costs **+2.66%**.
-- A perfect hand placement recovers only **0.64%** of that — the rest is
+- A perfect hand placement recovers only **0.64%** of that - the rest is
   unavoidable, because the secret is ~19.5% of runtime.
 - The pass costs **+5.35%** (with cloning) or **+11.21%** (shipped default):
   **+2.74% and +8.35% WORSE than always-on**, 39-40/40 reps.
@@ -30,7 +30,7 @@ good trade, and it is the honest headline for this workload.
 
 | arm | median | CoV | vs baseline | reps slower | IQR |
 |---|---|---|---|---|---|
-| `baseline` (round-trip control, 0 switches) | 3.158 s | 0.53% | — | — | — |
+| `baseline` (round-trip control, 0 switches) | 3.158 s | 0.53% | - | - | - |
 | `baseline2` (noise floor) | 3.158 s | 0.96% | −0.01% | 20/40 | −0.30 .. +0.61 |
 | `null` (dylib injected, DIT never set) | 3.160 s | 0.50% | +0.20% | 25/40 | −0.30 .. +0.42 |
 | **`oracle`** (8 switches: 2 per entry point) | 3.218 s | 0.66% | **+1.91%** | 40/40 | +1.51 .. +2.47 |
@@ -40,7 +40,7 @@ good trade, and it is the honest headline for this workload.
 
 | comparison | result | reps |
 |---|---|---|
-| **`oracle` vs `always` — the entire prize** | **−0.64%** | 3/40 slower |
+| **`oracle` vs `always` - the entire prize** | **−0.64%** | 3/40 slower |
 | `pass_clone` vs `always` | **+2.74% worse** | 39/40 |
 | `pass_hoist` vs `always` | **+8.35% worse** | 40/40 |
 | noise floor | −0.01% | 20/40 |
@@ -75,11 +75,11 @@ Per transaction (126.6 us total):
 `eth_keys`' `CoinCurveECCBackend.ecdsa_sign` constructs a **fresh
 `coincurve.PrivateKey` on every call**, and `PrivateKey.__init__` eagerly
 computes `PublicKey.from_valid_secret()` and `PublicKeyXOnly.from_valid_secret()`.
-Both derive from the **secret key**, so both are genuine secret work — not
+Both derive from the **secret key**, so both are genuine secret work - not
 false positives.
 
 Measured directly (`probe_ctor.py`, 20,000 constructions): baseline 13.79 us,
-under-protecting oracle 13.60 us (**unchanged — it was not protecting this**),
+under-protecting oracle 13.60 us (**unchanged - it was not protecting this**),
 corrected oracle 15.24 us, `pass_hoist` 17.82 us.
 
 **This is the single most important structural fact about the workload**, and it
@@ -92,13 +92,13 @@ of the always-on cost is unavoidable no matter how good the placement is.
 
 | arm | raw signing (25,000 sigs) | vs baseline |
 |---|---|---|
-| `baseline` | 288.3 ms | — |
+| `baseline` | 288.3 ms | - |
 | `oracle` | 306.8 ms | **+6.50%** |
 | `always` | 307.3 ms | **+6.58%** |
 | `pass_clone` | 316.7 ms | **+9.82%** |
 | `pass_hoist` | 416.1 ms | **+44.28%** |
 
-`oracle` and `always` agree to 0.08 points — both hold DIT across the whole
+`oracle` and `always` agree to 0.08 points - both hold DIT across the whole
 signature, as they must. That agreement is the check that the oracle is not
 under-protecting *the signing path*; §4 is about the path it missed entirely.
 
@@ -108,7 +108,7 @@ because the prize it is competing for is only 0.64 points.
 
 ---
 
-## 4. The oracle was under-protecting — twice
+## 4. The oracle was under-protecting - twice
 
 Both errors were caught the same way: **an arithmetic inconsistency between the
 protected region and the whole program.**
@@ -116,22 +116,22 @@ protected region and the whole program.**
 **Error 1 (caught 2026-08-17).** Ethereum needs a recovery id, so `eth_keys`
 calls `sign_recoverable` → `secp256k1_ecdsa_sign_recoverable`, not
 `secp256k1_ecdsa_sign`. The first oracle wrapped only the latter. It read
-−0.11% overall while showing +6.80% on the raw signing loop — impossible if it
+−0.11% overall while showing +6.80% on the raw signing loop - impossible if it
 were really protecting the workload.
 
 **Error 2 (caught 2026-08-18).** With signing fixed, the oracle read +0.78%
-overall. But signing is 8.6% of runtime at +10%, which predicts +0.9% — while
+overall. But signing is 8.6% of runtime at +10%, which predicts +0.9% - while
 the *pass* arms showed ~5% overhead that signing could not explain. Chasing that
 residual found the per-signature key derivation above.
 
-Corrected oracle: **4 entry points, 8 switches**, verified in the disassembly —
+Corrected oracle: **4 entry points, 8 switches**, verified in the disassembly -
 `ecdsa_sign`, `ecdsa_sign_recoverable`, `ec_pubkey_create`, `keypair_create`.
 
 **The detector, worth adopting as standard practice:** measure the protected
 region *and* the whole program in the same run, and check the arithmetic closes.
 If protection shows up in one and not the other, the placement is covering the
 wrong code. Whole-program timing alone cannot distinguish "placed well" from
-"placed somewhere irrelevant" — which is `dit-measurement-traps` trap 8, and it
+"placed somewhere irrelevant" - which is `dit-measurement-traps` trap 8, and it
 has now bitten this project three times.
 
 **Lesson for the annotation model:** the seed must name every entry point through
@@ -153,8 +153,8 @@ Void data: `signbench_wrongseed.csv` (error 1), `signbench_2seed.csv` (error 2).
   prize nearly the whole always-on cost. Both are correct; the difference is
   entirely the denominator, and it is the strongest evidence yet that **secret
   fraction is the variable that decides whether this work pays**.
-- **What the project needs is a real application that signs OCCASIONALLY** —
-  small secret fraction, DIT-sensitive public code — which is the shape the
+- **What the project needs is a real application that signs OCCASIONALLY** -
+  small secret fraction, DIT-sensitive public code - which is the shape the
   composites had and this workload does not.
 - Cloning is validated as a mechanism (§3) even though it does not win here.
 
@@ -172,8 +172,8 @@ byte-identical to `hoist4`, so old and new arms are comparable.
 
 | arm | switches in `.so` | median | vs baseline | raw signing | **vs always-on** |
 |---|---|---|---|---|---|
-| `baseline` | 0 | 3.168 s | — | 289.1 ms | — |
-| `always` | — | 3.251 s | +2.59% | +6.74% | — |
+| `baseline` | 0 | 3.168 s | - | 289.1 ms | - |
+| `always` | - | 3.251 s | +2.59% | +6.74% | - |
 | `oracle` | 8 | 3.226 s | +1.71% | +6.52% | **−0.83%** (1/40) |
 | `pass_hoist` | 575 | 3.528 s | +11.33% | +45.40% | **+8.40%** (40/40) |
 | `pass_clone` | 368 | 3.340 s | +5.37% | +9.88% | **+2.77%** (40/40) |
@@ -185,14 +185,14 @@ Everything reproduces §1 closely (always +2.66% → +2.59%, oracle vs always �
 
 ### Why the gate barely helps here, having transformed Bitcoin Core
 
-The gate takes this library from **575 switches to 39** — a bigger static cut
-than on Bitcoin Core — and moves the workload only from +8.40% to +6.04% against
+The gate takes this library from **575 switches to 39** - a bigger static cut
+than on Bitcoin Core - and moves the workload only from +8.40% to +6.04% against
 always-on. Bitcoin Core's `ConnectBlockAllEcdsa` went +51.14% → +0.66%.
 
 **Because this workload never executes the false positives.** It signs; it never
 verifies, never touches musig or ellswift. `dit-coincurve-real-application.md`
 measured 93.6% of the switches as false positives and called them free at
-runtime here — that was right for *this* workload, and Bitcoin Core is the
+runtime here - that was right for *this* workload, and Bitcoin Core is the
 exception precisely because a node verifies constantly.
 
 What is left is toggling **on the signing path itself**, and there the gate is a
@@ -211,7 +211,7 @@ The oracle beats always-on by **0.83%**. That is the entire prize, and it is
 capped by the secret fraction (§2), not by placement quality. No precision or
 granularity work can win more than 0.83% here. **The conclusion of §5 stands: a
 real application that signs *occasionally* is what this project needs, and
-Bitcoin Core is that application** — which is why the gate matters there and not
+Bitcoin Core is that application** - which is why the gate matters there and not
 here.
 
 ### A methodological note worth keeping

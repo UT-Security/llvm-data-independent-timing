@@ -11,7 +11,7 @@ always-on screen that decides whether it is worth instrumenting.
 
 ## Bottom line
 
-**Yes — and by the largest margin of any real application tested.**
+**Yes - and by the largest margin of any real application tested.**
 `CoinSelection` costs **+14.39%** under always-on DIT, 15/15 reps, which ties
 Lua for the highest DIT sensitivity measured in this project and is the first
 time that figure has come from production C++ rather than a benchmark
@@ -60,7 +60,7 @@ Same rig as the five-host screen: ONE binary, DIT injected by
 
 Each row is an **independent benchmark** from Bitcoin Core's own `bench_bitcoin`
 suite (193 total, 11 selected). The class column is ours, and is verified by
-which source file the benchmark lives in — only `sign_transaction.cpp`,
+which source file the benchmark lives in - only `sign_transaction.cpp`,
 `verify_script.cpp` and `wallet_create_tx.cpp` call signing at all.
 
 | benchmark | class | base ns/op | harness | **DIT cost** | slower |
@@ -111,7 +111,7 @@ figure comes from `-reindex-chainstate` over real mainnet data (separate doc).
 
 The coincurve result failed not because placement was bad but because the secret
 fraction was too high for any placement to matter. Bitcoin Core inverts that, and
-— uniquely among surveyed candidates — offers the fraction as a **knob** in one
+ - uniquely among surveyed candidates - offers the fraction as a **knob** in one
 binary: ~0% (reindex under default `-assumevalid`), ~0.4% (`WalletCreateTx`),
 higher by raising the wallet send rate, with `-assumevalid=0` as a separate axis
 that re-enables the script interpreter and signature verification.
@@ -145,7 +145,7 @@ the effect here:
 - CoV is **6.7-7.3%**, against 0.3-0.5% on every other measurement in this
   project. An effect of 1-3% is invisible inside that.
 - The IQR spans **+-7-10%** and 6/12 reps slower is a coin flip.
-- **The null arm reads +3.12%** — an arm that loads a dylib which never writes
+- **The null arm reads +3.12%** - an arm that loads a dylib which never writes
   the DIT bit. If a no-op registers +3.12%, a real +3% cannot be distinguished
   from zero.
 
@@ -153,8 +153,8 @@ The cause is the workload, not the rig: reindex is **I/O-dominated** (`sys` was
 9 s of a 26 s wall, reading 3.7 GB of blocks and writing LevelDB), so disk and
 page-cache variance swamp a few-percent CPU effect.
 
-This is exactly the `dit-measurement-traps` trap 5 situation — a null result and
-an unresolving measurement look identical — except that here the null arm tells
+This is exactly the `dit-measurement-traps` trap 5 situation - a null result and
+an unresolving measurement look identical - except that here the null arm tells
 us which one we have. **The result is "unresolved", and condition (d) rests on
 the microbenchmarks in §2, which have the precision to support it.**
 

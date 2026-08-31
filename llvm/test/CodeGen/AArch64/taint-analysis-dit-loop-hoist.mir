@@ -9,13 +9,13 @@
 #    enable hoists ONCE to the loop preheader (bb.0's terminator) and the public
 #    body bb.2 runs DIT-on with no switch inside the loop.
 #  * hoist=0 (MIN, block-minimal): only the Need-containing block bb.1 is covered.
-#    The enable lands at bb.1's entry (re-run every iteration — the deliberate cost
+#    The enable lands at bb.1's entry (re-run every iteration - the deliberate cost
 #    of covering the fewest instructions), bb.2 is DISABLED at its entry and runs
 #    the public work DIT-off, and the exit bb.3 disables before the return.
 #
 # hoist=1 is the DEFAULT; hoist=0 is the opt-in. Both RUN lines pin
 # -taint-dit-switch-cyc=0 so the admission test cannot merge the corridor and the
-# only variable is the block partition this flag selects — at the default
+# only variable is the block partition this flag selects - at the default
 # switch-cyc=30 the MIN arm coalesces back toward the HOIST arm, which is the
 # point of that default, not of this test.
 #

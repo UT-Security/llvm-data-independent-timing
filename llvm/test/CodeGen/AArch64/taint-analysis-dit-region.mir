@@ -6,7 +6,7 @@
 # The REGION run line pins -taint-dit-loop-hoist=1 to check loop coarsening. Two properties:
 #
 #  1. DEGENERACY (@whole): when every block anticipates a need (whole-function
-#     taint), region mode is byte-identical to function granularity — MSR DIT #1
+#     taint), region mode is byte-identical to function granularity - MSR DIT #1
 #     at entry, #0 before the return. Same CHECK pattern passes in both modes.
 #
 #  2. NARROWING (@narrows): a trailing clean block (bb.1's public epilogue) is
@@ -17,7 +17,7 @@
 #
 # 26 is the PSTATE.DIT pstatefield encoding.
 
-# @whole — identical in both modes (degeneracy):
+# @whole - identical in both modes (degeneracy):
 # FUNC-LABEL: name: whole
 # FUNC: MSRpstateImm4 26, 1
 # FUNC: ADDWri
@@ -29,7 +29,7 @@
 # REGION: MSRpstateImm4 26, 0
 # REGION-NEXT: RET_ReallyLR
 
-# @narrows bb.1 — function mode keeps DIT on THROUGH the epilogue ADDWri, disables
+# @narrows bb.1 - function mode keeps DIT on THROUGH the epilogue ADDWri, disables
 # before the return:
 # FUNC-LABEL: name: narrows
 # FUNC: bb.1
@@ -37,18 +37,18 @@
 # FUNC: MSRpstateImm4 26, 0
 # FUNC-NEXT: RET_ReallyLR
 
-# @narrows bb.1 — region mode disables DIT at the epilogue's ENTRY, before its
+# @narrows bb.1 - region mode disables DIT at the epilogue's ENTRY, before its
 # ADDWri (the clean epilogue is excluded from the region):
 # REGION-LABEL: name: narrows
 # REGION: bb.1
 # REGION: MSRpstateImm4 26, 0
 # REGION-NEXT: {{.*}}ADDWri
 
-# @tailcall_secret — a secret forwarded through a TAIL call (TCRETURN, which is
+# @tailcall_secret - a secret forwarded through a TAIL call (TCRETURN, which is
 # isCall && isReturn). A pre-fix region build inserted a DIT re-assert AFTER the
 # terminator (invalid MIR → MachineVerifier crash). Now: DIT is enabled at entry
 # and stays ON through the tail call so the (external) callee inherits it
-# (Scenario B) — no MSR DIT #0 before it, and nothing after the terminator.
+# (Scenario B) - no MSR DIT #0 before it, and nothing after the terminator.
 # REGION-LABEL: name: tailcall_secret
 # REGION: MSRpstateImm4 26, 1
 # REGION-NEXT: TCRETURNdi @ext
@@ -68,7 +68,7 @@
 # it would run to end-of-file and match loop_hoist's legitimate clear.
 # FUNC-LABEL: name: loop_hoist
 
-# @loop_hoist — increment (b): a Need inside a loop, behind a clean preamble.
+# @loop_hoist - increment (b): a Need inside a loop, behind a clean preamble.
 # Region mode leaves the preamble (bb.0, bb.1 body) DIT-OFF, HOISTS the enable to
 # the loop preheader (bb.1's terminator), keeps NO enable inside the loop body
 # (bb.2, so no per-iteration toggle), and disables at the loop exit (bb.3).
@@ -83,11 +83,11 @@
 # REGION: bb.3
 # REGION: MSRpstateImm4 26, 0
 
-# @multi_entry — a need-loop header (bb.3) with NO unique preheader (reached from
+# @multi_entry - a need-loop header (bb.3) with NO unique preheader (reached from
 # two external edges bb.1, bb.2). Region mode enables DIT at the end of EACH
 # external predecessor (entered once), keeps NO enable in the loop header itself
 # (no per-iteration toggle), and does NOT fall back to whole-function coarse
-# placement — the common multi-entry shape the review flagged.
+# placement - the common multi-entry shape the review flagged.
 # REGION-LABEL: name: multi_entry
 # REGION: bb.1
 # REGION: MSRpstateImm4 26, 1

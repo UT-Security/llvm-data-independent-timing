@@ -39,28 +39,28 @@ comparison that matters most.
 | arm | build |
 |---|---|
 | `plain` | stock -O2, no pass |
-| `nodit` | `-ftaint-harden=<empty>` — **the baseline**, never `plain` |
+| `nodit` | `-ftaint-harden=<empty>` - **the baseline**, never `plain` |
 | `hoist` | `region` + `loop-hoist=1` |
 | `gated` | `hoist` + `modset-callsite-gated` |
-| `hoist0` | `region` + `loop-hoist=0` — the shipped default |
-| `swcyc30` | `hoist` + `switch-cyc=30` — **the best measured configuration** |
+| `hoist0` | `region` + `loop-hoist=0` - the shipped default |
+| `swcyc30` | `hoist` + `switch-cyc=30` - **the best measured configuration** |
 | `func` | `placement=function` |
-| `nopctl` | `gated` with every switch emitted as `HINT #0` — the alignment control |
+| `nopctl` | `gated` with every switch emitted as `HINT #0` - the alignment control |
 
 `hoist`, `gated` and `hoist0` are indistinguishable wherever there is signal
 (<=10%, usually <=3%); prefer reporting one plus an ablation rather than a
-best-of. `relaxed-ownership` is inert on a shared library — its precondition is a
+best-of. `relaxed-ownership` is inert on a shared library - its precondition is a
 local-linkage, address-not-taken callee, which exported functions never satisfy.
 
 ## Controls, none of which are optional
 
 - **Baseline is the round-trip control**, not the stock build. On both targets the
   `nodit` object is byte-identical to `plain` for the instrumented TU here, so the
-  pipeline's own codegen perturbation is exactly zero — verified, not assumed.
+  pipeline's own codegen perturbation is exactly zero - verified, not assumed.
 - **`nopctl`** separates switch cost from code layout. It has caught a case where
   the residual was entirely alignment.
 - **`dit_probe` in band.** The probe prints `const/perm`, so a HEALTHY reading is
-  **~0.26** — the constant chase is the FAST one when the predictor works. Gating
+  **~0.26** - the constant chase is the FAST one when the predictor works. Gating
   on the reciprocal once rejected a perfectly quiet machine and threw away a
   sweep. With DIT injected it must read ~1.00, and noise in that ratio is
   one-directional, so take the MINIMUM of several probes.
@@ -75,7 +75,7 @@ local-linkage, address-not-taken callee, which exported functions never satisfy.
 
 Use **master**, not `taint-gem5-bridge`. The bridge predates the removal of a
 pipeline drain at DIT region exit (~170 cycles), and region-exit cost is exactly
-what this measures — on the bridge the same sweep placed the crossover at 49.8%
+what this measures - on the bridge the same sweep placed the crossover at 49.8%
 serialising / 60.2% renamed, against 46.8% / 76.2% on master. The correction is
 microarchitectural, so architectural quantities are unchanged: executed switch
 counts are identical on both.
@@ -98,5 +98,5 @@ python3 analyze.py <results.jsonl> --kind gem5|native|opt
 libsodium arms start from the whole-library bitcode and CIO-parity seed that
 `utils/taint_libsodium_eval.sh bitcode seed` produces (926 functions, 48 pointee
 + 17 data attrs across 21 functions). Note that seed declares the **plaintext and
-its length** secret, not just the key — a much wider source set than a key-only
+its length** secret, not just the key - a much wider source set than a key-only
 annotation, and itself a dial on tau.

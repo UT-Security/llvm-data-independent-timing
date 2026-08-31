@@ -3074,11 +3074,11 @@ void AArch64AsmPrinter::EmitToStreamer(MCStreamer &S, const MCInst &Inst) {
 // Measurement control for the DIT placement work, NOT a codegen option. Emits
 // `HINT #0` (NOP) in place of every `MSR DIT` the taint pass inserted: same 4
 // bytes, same address for every following instruction, same dynamic instruction
-// count — but no mode switching at all.
+// count - but no mode switching at all.
 //
 // It answers the standard objection to any "we removed unnecessary hardening and
 // got faster" result: that the delta is code ALIGNMENT rather than the hardening.
-// Marinaro et al. (AsiaCCS 2024) found exactly that on ARM — substituting NOPs for
+// Marinaro et al. (AsiaCCS 2024) found exactly that on ARM - substituting NOPs for
 // removed hardening recovered the performance, so the hardening was never the cost.
 // If a measured cost survives this substitution, it was layout, not DIT.
 //

@@ -25,7 +25,14 @@ Two facts limit how far that can be pushed:
    not that one of them is broken.
 2. The gem5 round-trip artifact is **-0.64%** between two binaries with
    *identical* `simInsts`. Every gem5 effect below is within a factor of two of
-   that floor.
+   it. **This was recorded as a resolution floor; that reading is retracted
+   (2026-08-31).** The cause is `argv[0]` path length: gem5 SE mode puts the
+   binary path on the initial process stack, so its LENGTH shifts stack
+   alignment, and `btc_sign_base` (13 chars) and `btc_sign_nodit` (14) are not
+   the same length. It is a fixable confound, not a floor - `btc_gem5.py` now
+   runs every arm from an equal-length path. **Every gem5 number in this
+   document predates that fix and needs re-taking.** See `dit-secp-tier2.md`
+   §3.1 and `dit-gem5-rig-traps` #5.
 
 ---
 

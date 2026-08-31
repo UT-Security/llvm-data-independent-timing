@@ -75,7 +75,7 @@ extern cl::opt<bool> TaintDITAbi;
 extern cl::opt<std::string> TaintCallsiteReportFile;
 
 /// Command-line option for the DIT-uncovered report (gap G2): tainted
-/// instructions PSTATE.DIT does not actually protect — divide/sqrt (not
+/// instructions PSTATE.DIT does not actually protect - divide/sqrt (not
 /// DIT-listed), secret-dependent memory addresses (cache/TLB timing), and
 /// secret-dependent branches (control-flow timing). Counting these as protected
 /// is silent false assurance; the report surfaces them for audit.
@@ -109,8 +109,8 @@ extern cl::opt<std::string> TaintDITReassertReportFile;
 
 /// Command-line option for the memory-clobber report: every call site that
 /// makes the caller treat memory as secret (sets ExternalMemClobbered / a
-/// whole-global). These are the sources of cross-function memory taint — the
-/// points where a "taint explosion" originates — so they can be pinpointed and
+/// whole-global). These are the sources of cross-function memory taint - the
+/// points where a "taint explosion" originates - so they can be pinpointed and
 /// audited. Distinct from the escape report (which is about secrets leaving to
 /// callees we cannot instrument).
 /// Sites where the PSTATE.DIT callee-saved OBLIGATION degrades to the weaker
@@ -166,7 +166,7 @@ struct TaintState {
   /// A call may have written a secret into memory the analysis cannot pin down
   /// (through a pointer argument, to the heap, or via an unknown callee). Once
   /// set, every subsequent stack / global / heap load in this function must be
-  /// treated as secret — this is the caller-side landing point of a callee's
+  /// treated as secret - this is the caller-side landing point of a callee's
   /// FunctionMemEffects TOP. Distinct from UnknownMemTainted (which the analysis
   /// keeps deliberately local for heap-store precision) so this coarser,
   /// call-induced poison does not perturb the existing heap-store behavior.
@@ -229,7 +229,7 @@ public:
     NonArgSourcedTaint |= O.NonArgSourcedTaint;
     // Frame provenance INTERSECTS on merge: a register only points at a known
     // object if every incoming path agrees which one. Disagreement, or presence
-    // on only one path, drops to unknown — the conservative direction, since
+    // on only one path, drops to unknown - the conservative direction, since
     // unknown means "fall back to the whole-frame clobber".
     if (!FrameRefs.empty()) {
       SmallVector<unsigned, 8> Drop;
@@ -274,14 +274,14 @@ public:
   /// argument registers may then be overwritten before the call, so by the time
   /// the call is reached NO register holds the secret. Without this bit the
   /// analysis concluded that such a call passes nothing secret, and the callee
-  /// was analysed as clean — a real leak, not merely imprecision
+  /// was analysed as clean - a real leak, not merely imprecision
   /// (docs/design/stack-arguments.md).
   /// Some taint in this function did NOT enter through its own parameters: it
   /// was read from a tainted global, arrived from another TU's unknown memory,
   /// or was produced by a call this function did not hand a secret to. This is
   /// the source condition the mod-set call-site gate needs: a caller's arguments
   /// can only account for a callee's secret if that secret came from parameters
-  /// in the first place. Monotone — set, never cleared, merged with OR.
+  /// in the first place. Monotone - set, never cleared, merged with OR.
   void setNonArgSourcedTaint() { NonArgSourcedTaint = true; }
   bool hasNonArgSourcedTaint() const { return NonArgSourcedTaint; }
 
@@ -343,7 +343,7 @@ public:
 
   /// Do byte ranges [AOff,AOff+ASz) and [BOff,BOff+BSz) overlap? Size 0 is the
   /// unknown-extent sentinel (recorded by an unknown-size store) and is treated
-  /// as covering the whole object — the safe direction.
+  /// as covering the whole object - the safe direction.
   static bool rangesOverlap(int64_t AOff, uint64_t ASz, int64_t BOff,
                             uint64_t BSz) {
     if (ASz == 0 || BSz == 0)
@@ -365,7 +365,7 @@ public:
   /// byte range? Exact (FI,Off,Sz) matching was an UNDER-TAINT: spilling 8
   /// secret bytes and reloading the low 4 (`STRXui` then `LDRWui` on the same
   /// slot) missed the cell entirely and handed the secret back as public. The
-  /// CLEAR path deliberately stays exact-match — widening a clear would drop
+  /// CLEAR path deliberately stays exact-match - widening a clear would drop
   /// taint a partial public store did not actually overwrite.
   bool isTaintedStackCellOverlapping(int FI, int64_t Off, uint64_t Sz) const {
     if (TaintedStackCells.contains({FI, {Off, Sz}}))
@@ -565,7 +565,7 @@ const char *classifyDITUncovered(const MachineInstr &MI, const TaintFacts &F,
                                  const TaintState &S,
                                  const TargetInstrInfo &TII);
 
-/// Taint carried by a call's *passed arguments* — the secret an ABI-compliant
+/// Taint carried by a call's *passed arguments* - the secret an ABI-compliant
 /// callee can actually read. Only argument-register use operands (AAPCS64:
 /// X0-X7 / V0-V7, encodings 0-7) count; a register merely live or clobbered
 /// across the call is not an argument and is excluded. `Pointee` covers a
@@ -646,7 +646,7 @@ unsigned exportTaintSourceRegions(MachineFunction &MF, const TaintResult &TR,
 /// Instrument MF with PSTATE.DIT mode switches if it contains any tainted
 /// instruction: MSR DIT, #1 at entry, MSR DIT, #0 before every return, and a
 /// re-assert after each non-tail call whose callee is not proven DIT-preserving.
-/// Placement is function-granularity — see docs/design/dit-placement.md.
+/// Placement is function-granularity - see docs/design/dit-placement.md.
 /// If RegionsOS is non-null, also prints the coalesced tainted regions (which
 /// are reported but do not currently drive placement).
 /// Returns the number of tainted instructions protected.

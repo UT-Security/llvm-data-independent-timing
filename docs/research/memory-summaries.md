@@ -1,9 +1,9 @@
 # Interprocedural taint through memory: research findings and design recommendation
 
-**Date:** 2026-07-14  
-**Status:** research complete. **P0 (blunt TOP) IMPLEMENTED 2026-07-15 — see box below.**
+**Date:** 2026-07-14
+**Status:** research complete. **P0 (blunt TOP) IMPLEMENTED 2026-07-15 - see box below.**
 
-> ## P0 as-built (2026-07-15) — blunt TOP, no provenance
+> ## P0 as-built (2026-07-15) - blunt TOP, no provenance
 >
 > The fix shipped is the domain from §11 with **all precision knobs at their bluntest
 > sound setting**, chosen to get a baseline over-instrumentation number before investing
@@ -12,7 +12,7 @@
 > - **Domain:** `FunctionMemEffects { SmallPtrSet<GlobalVariable*> WritesSecretToGlobal;
 >   bool WritesSecretToUnknown; }` on `FunctionTaintSummary` (`TaintSummaryInfo.h`).
 > - **Callee side** (`computeFunctionMemEffects`, `TaintAnalysis.cpp`): classify each
->   tainted-data store by `getCellFromMMO` — own non-fixed FrameIndex → ignore (caller-
+>   tainted-data store by `getCellFromMMO` - own non-fixed FrameIndex → ignore (caller-
 >   invisible); global → `WritesSecretToGlobal`; **everything else** (through a pointer
 >   arg, heap, no-MMO, or a *fixed* incoming-arg slot) → `WritesSecretToUnknown` (TOP).
 >   Transitive: a function that itself makes a clobbering call becomes TOP.
@@ -53,13 +53,13 @@ extracted, 25 adversarially verified, 19 confirmed / 6 refuted).
 
 The verified evidence converges on one answer: every interprocedural taint engine that
 actually catches a callee writing a secret into caller-visible memory carries an
-explicit MEMORY component in its interprocedural transfer — either (a) mod/ref-derived
+explicit MEMORY component in its interprocedural transfer - either (a) mod/ref-derived
 MU/CHI annotations on call sites that turn callee defs into implicit returns (SVF), (b)
 per-object Mod/Ref flags on a points-to graph (LLVM DSA), (c) access-path-to-access-path
 summary rules "AP A is tainted if AP B is tainted" (Andromeda, StubDroid/FlowDroid
 library models, IFDS-with-access-paths), or (d) footprint-local separation-logic
 pre/post pairs applied with the frame rule (Infer/Pulse). A summary carrying only
-tainted-arg indices plus a returns-tainted bit — the current design — has no
+tainted-arg indices plus a returns-tainted bit - the current design - has no
 representation in any of these families and is structurally incapable of propagating
 callee heap/stack writes; the observed missing barriers are the predicted consequence,
 not an implementation bug. For callees whose body is invisible the field is split, and
@@ -73,7 +73,7 @@ EasyTaintWrapper/StubDroid) as the real answer. Where the literature disagrees o
 truncate an unbounded heap abstraction, the security-relevant precedent is unambiguous:
 Andromeda appends a Kleene star so an over-length access path matches everything sharing
 its k-prefix (over-taints, sound w.r.t. the abstraction) while precision-oriented
-engines simply drop it (under-taints) — a hardening client that must fail safe takes the
+engines simply drop it (under-taints) - a hardening client that must fail safe takes the
 wildcard side. The design that follows for post-regalloc AArch64 MIR is a coarse, alias-
 case-free mod-set summary (writes-secret-through-pointer-arg-i / writes-secret-to-
 global-g / writes-secret-to-unknown-memory) iterated to a fixed point alongside the
@@ -89,8 +89,8 @@ attributes.
 verified claims. NOTHING survived verification on (5) binary/machine-level taint
 (libdft, Triton, angr, BAP, Binsec) or (6) the constant-time / speculative-execution
 literature (ct-verif, Blade, Serberus, Ultimate SLH, SLH, Jasmin/FaCT/Vale,
-PSTATE.DIT/CSDB prior art). The explicitly requested priority item — "what the constant-
-time/Spectre tools specifically do about calls" — is therefore UNANSWERED, as is "is
+PSTATE.DIT/CSDB prior art). The explicitly requested priority item - "what the constant-
+time/Spectre tools specifically do about calls" - is therefore UNANSWERED, as is "is
 there prior work doing exactly MIR-level interprocedural taint + barrier insertion". Do
 not read this as evidence that no such prior work exists; read it as evidence this round
 did not surface it. The Soundiness Manifesto sub-question is likewise unverified. 2) ALL
@@ -109,19 +109,19 @@ an unseen callee". 4) TIME-SENSITIVITY: Infer's bi-abduction backend is DEPRECAT
 removed (v1.2.0+); Pulse, which is under-approximate by design (incorrectness separation
 logic), now powers Infer's taint analysis. Cite bi-abduction as a technique / to the
 classic backend, not as "what Infer does today". FlowDroid's 2014 "library calls are
-fully analyzed" is stale in practice — modern FlowDroid runs against stub android.jar
+fully analyzed" is stale in practice - modern FlowDroid runs against stub android.jar
 with StubDroid/SummaryTaintWrapper summaries. PhASAR's model channels have grown beyond
 SpecialSummaries (getSummaryFlowFunction, LLVMTaintConfig JSON). 5) ATTRIBUTION FIXES:
 PhASAR's stated reason for identity-by-default is PRECISION; the gloss "because it is a
 bug-finding tool" is not in the paper and PhASAR bills itself as a general framework.
-FlowDroid's native-call rule is NOT "the standard conservative fallback" — it is
+FlowDroid's native-call rule is NOT "the standard conservative fallback" - it is
 explicitly unsound (misses writes to globals and to memory merely reachable from an
 argument). The circulated IFDS quote "Case 5 is applied for the store statement in
 Box.put" has the wrong case number (the store is Case 24); the load-bearing clause is
 verbatim. 6) Martin's CC'99 paper is EMPIRICAL; the precision theorem itself belongs to
 Sharir-Pnueli / Reps-Horwitz-Sagiv. Khedker & Karkare (CC'08) call full call-strings on
 finite lattices "the most general, simplest, and most precise" context-sensitive method,
-which softens the "it depends on the domain" framing — the one place the foundations
+which softens the "it depends on the domain" framing - the one place the foundations
 literature is not fully aligned. Zhang et al.'s exponential case-split is hedged as "can
 grow", not proven inevitable. 7) The "reuse LLVM attributes / MemorySSA" guidance in the
 recommendation is design reasoning, not a cited result; no verified claim covers LLVM's
@@ -132,12 +132,12 @@ on argmemonly/writeonly to narrow the TOP default.
 
 ## Verified findings
 
-### 1. Distributivity — not the choice between call-strings and summary-based analysis — is
+### 1. Distributivity - not the choice between call-strings and summary-based analysis - is
 what determines whether an interprocedural summary can be precise; the two approaches
 differ measurably in time, space AND precision depending on the abstract domain and
 transfer functions.
 
-*confidence:* **high** — *vote:* 3-0 (claims 4, 5)
+*confidence:* **high** - *vote:* 3-0 (claims 4, 5)
 
 > Martin (CC'99) built both approaches in PAG and found they "differ in time and space
 > complexity as well as in precision due to properties of the abstract domains and
@@ -149,27 +149,27 @@ transfer functions.
 > subset lattice, IDE the weaker distributivity of environment transformers (so linear
 > constant propagation is IDE- but not IFDS-expressible). Design bearing: taint as a set
 > of tainted locations with gen/kill transfer functions IS distributive, so a
-> functional/summary formulation is precision-adequate — the precision loss in the
+> functional/summary formulation is precision-adequate - the precision loss in the
 > current tool comes from the summary's impoverished DOMAIN (registers only), not from
 > the summary methodology.
 
-### 2. Alias-condition-guarded bottom-up summaries case-split exponentially — a direct argument
+### 2. Alias-condition-guarded bottom-up summaries case-split exponentially - a direct argument
 AGAINST an alias-predicated memory summary and FOR a coarse, join-only (over-tainting,
 no-strong-update) mod-set summary at MIR level.
 
-*confidence:* **high** — *vote:* 3-0
+*confidence:* **high** - *vote:* 3-0
 
 > Zhang, Mangal, Naik & Yang (PLDI'14, Fig. 1 / Sec. 2.2): a two-statement procedure
 > foo(File f){f.open(); f.close();} already needs FOUR bottom-up summaries B1-B4,
 > guarded by must-alias (f in the must set), must-not-alias (f in the must-not set), and
-> may-alias predicates on the pointer argument f — "Procedure foo has only two
+> may-alias predicates on the pointer argument f - "Procedure foo has only two
 > statements yet there are already four cases represented in its bottom-up summaries...
 > For real-world programs, the number of cases can grow exponentially with the number of
 > commands, and hinder scalability." The paper's own hedge is "can grow", not a proven
 > lower bound; and the split is over aliasing only because the authors used a symbolic
 > typestate transformer to avoid splitting on the state. Design bearing: a hardening
 > summary that must run inside a normal -O2 compile cannot afford alias-predicated
-> disjunction — and the fail-safe-toward-over-tainting requirement conveniently licenses
+> disjunction - and the fail-safe-toward-over-tainting requirement conveniently licenses
 > collapsing all alias cases into a single weak update (join), which is both case-
 > explosion-free and errs in the required direction.
 
@@ -177,10 +177,10 @@ no-strong-update) mod-set summary at MIR level.
 interprocedural mod/ref pass over points-to results annotates every call site with
 MU(o)/o=CHI(o) for objects the callee may read/modify, and the callee's entry/exit with
 matching CHI/MU, so non-local memory behaves as implicit formal parameters (IPara) and
-implicit returns (IRet) — a callee memory def becomes an explicit value-flow edge back
+implicit returns (IRet) - a callee memory def becomes an explicit value-flow edge back
 into the caller.
 
-*confidence:* **high** — *vote:* 3-0 (claims 12, 13, 14)
+*confidence:* **high** - *vote:* 3-0 (claims 12, 13, 14)
 
 > Sui & Xue (CC'16): "A callsite cs is also annotated with mu(o) and o = chi(o), where o
 > in A, to capture interprocedural uses and defs of o. Likewise, o = chi(o) (mu(o)) is
@@ -191,21 +191,21 @@ into the caller.
 > at lcs"), with call/return edges labelled as balanced parentheses for realizable-path
 > filtering. Ordering matters: "Based on the points-to information obtained, we first
 > perform a lightweight Mod-Ref Analysis to capture interprocedural reference and
-> modification side-effects for each variable" — mod/ref is a PREREQUISITE analysis, not
+> modification side-effects for each variable" - mod/ref is a PREREQUISITE analysis, not
 > a byproduct of SSA (contrast LLVM's own MemorySSA, which is intraprocedural and
 > queries AA lazily, treating unknown calls conservatively). Qualifications: the objects
 > o are scoped by the mod-ref/region-partitioning result, not all address-taken objects;
 > the whole construction presupposes a whole-program Andersen points-to analysis to NAME
-> o, which a post-regalloc MIR pass does not have — hence the fallback to a coarser
+> o, which a post-regalloc MIR pass does not have - hence the fallback to a coarser
 > named-cell abstraction plus a TOP default. SVF also cannot build these edges for body-
 > less externals and uses hand-written extapi models there.
 
 ### 4. LLVM's Data Structure Analysis attaches Mod/Ref effects as per-node flags ('M'/'R') on
 abstract memory OBJECTS (classed Heap/Stack/Global/Unknown) rather than on syntactic
-access paths — the design most directly transferable to a cell-based MIR summary of the
+access paths - the design most directly transferable to a cell-based MIR summary of the
 form "callee writes secret to the object reachable from arg i".
 
-*confidence:* **high** — *vote:* 3-0
+*confidence:* **high** - *vote:* 3-0
 
 > Lattner & Adve, Sec. 2.1.2: "Our analysis keeps track of whether a particular memory
 > object has been Modified or Read within the current scope of analysis, and this is
@@ -216,7 +216,7 @@ form "callee writes secret to the object reachable from arg i".
 > transfer happens by graph inlining plus unification of the node pointed to by actual
 > arg i with the node pointed to by formal i (Fig. 4, resolveArguments/mergeCells), so
 > callee-side M flags land on the caller's arg-i object. CAVEATS: "directly
-> transferable" is a design inference, not the paper's claim — DSA's M/R flags are
+> transferable" is a design inference, not the paper's claim - DSA's M/R flags are
 > actionable at a call site only because they ride on a unification-based points-to
 > graph that identifies which node a formal maps to, and a post-regalloc MIR pass must
 > synthesize that object abstraction itself. DSA nodes are unification-based and can
@@ -229,11 +229,11 @@ form "callee writes secret to the object reachable from arg i".
 
 ### 5. Access paths (base + field sequence) are the standard heap abstraction in IFDS taint
 engines, and a callee's memory effect is encoded as "access path A is tainted if access
-path B is tainted" summary rules — not as tainted-argument bits. Because access paths
+path B is tainted" summary rules - not as tainted-argument bits. Because access paths
 are unbounded they must be k-limited (k=5 is the de-facto default), and the literature
 explicitly DISAGREES on how to truncate.
 
-*confidence:* **high** — *vote:* 3-0 (claims 7, 8, 9, 18)
+*confidence:* **high** - *vote:* 3-0 (claims 7, 8, 9, 18)
 
 > Allen/Gauthier/Jordan (arXiv:2103.16240): IFDS summaries "are generated on demand
 > during the analysis"; for Box.put "this summary produced is that this.f flows from the
@@ -251,7 +251,7 @@ explicitly DISAGREES on how to truncate.
 > Andromeda "favours soundness by appending a Kleene star to access paths exceeding k,
 > that are considered to match all other access paths sharing the same k-prefix"
 > (accepting "spurious taint flows"), whereas the Oracle engine "favours precision... by
-> ignoring any taint flows involving access paths exceeding k" — i.e. "access paths
+> ignoring any taint flows involving access paths exceeding k" - i.e. "access paths
 > longer than k are assumed to be untainted", a self-described "deliberate trade-off of
 > soundness for scalability", and precisely the missing-barrier failure mode. A
 > hardening client MUST take the Andromeda/StubDroid side: widen to a wildcard, never
@@ -259,11 +259,11 @@ explicitly DISAGREES on how to truncate.
 > unbounded-length paths.
 
 ### 6. Field/heap structure can be moved off the IFDS fact domain and onto IDE edge functions
-by reinterpreting access-path generation as a context-free language — keeping the fact
+by reinterpreting access-path generation as a context-free language - keeping the fact
 count small while improving precision. Relevant if fact explosion becomes the
 bottleneck, but unproven below IR level.
 
-*confidence:* **medium** — *vote:* 3-0
+*confidence:* **medium** - *vote:* 3-0
 
 > Li, Shi, Lu, Li & Xue (OOPSLA 2024): "we propose a new field-sensitive technique that
 > reinterprets the generation of access paths as a Context-Free Language (CFL) for
@@ -281,12 +281,12 @@ bottleneck, but unproven below IR level.
 
 ### 7. FlowDroid deliberately has NO mod/ref-style memory-effects summary: a callee's heap
 write reaches the caller's later reload via an on-demand BACKWARD alias analysis spawned
-at every heap store, which descends into callees but never returns into callers — the
+at every heap store, which descends into callees but never returns into callers - the
 forward analysis maps heap taints back into the caller, re-spawning an alias search
 there. This is a second, architecturally different answer to callee->caller memory, and
 a poor fit for post-regalloc MIR.
 
-*confidence:* **high** — *vote:* 3-0
+*confidence:* **high** - *vote:* 3-0
 
 > FlowDroid (PLDI'14, Sec. 4.2): "Whenever a tainted value is assigned to a heap
 > location such as a field or an array, FLOWDROID searches backwards for aliases of the
@@ -298,20 +298,20 @@ a poor fit for post-regalloc MIR.
 > in; the backward search finds the alias out.f in the callee (spawning a forward
 > analysis that finds the leak) and continues to discover p.f in main. So FlowDroid does
 > not need a memory-effects summary because it re-runs alias search in the caller on
-> every heap taint — which requires a points-to/alias oracle and is expensive.
+> every heap taint - which requires a points-to/alias oracle and is expensive.
 > (FlowDroid does have IFDS path/summary edges over access paths and hand-written
 > library/native models; "no mod/ref summary" must not be misread as "no summaries". A
-> stronger claim — that FlowDroid's k-limiting conservatively over-approximates the
-> truncated suffix and that callee effects transfer by mere access-path root rewriting —
+> stronger claim - that FlowDroid's k-limiting conservatively over-approximates the
+> truncated suffix and that callee effects transfer by mere access-path root rewriting -
 > was REFUTED.)
 
 ### 8. THE EXTERNAL-CALLEE ANSWER: the two dominant defaults are BOTH unsound, and both tools
 ship a hand-written model/stub mechanism as the real answer. PhASAR uses the IDENTITY
-flow function for bodies it cannot see — explicitly naming and rejecting the sound
-"raise everything to TOP" alternative — and FlowDroid taints all arguments plus the
+flow function for bodies it cannot see - explicitly naming and rejecting the sound
+"raise everything to TOP" alternative - and FlowDroid taints all arguments plus the
 return value if any parameter was tainted, but only for unmodeled NATIVE calls.
 
-*confidence:* **high** — *vote:* 3-0 (claims 0, 1, 2, 11)
+*confidence:* **high** - *vote:* 3-0 (claims 0, 1, 2, 11)
 
 > PhASAR (TACAS'19): "PhASAR's data-flow solvers treat calls to dynamically loaded
 > libraries and libraries for which function definitions are missing as identity, unless
@@ -326,13 +326,13 @@ return value if any parameter was tainted, but only for unmodeled NATIVE calls.
 > FlowDroid: "For native methods without an explicit rule, FLOWDROID assumes a sensible
 > default: call arguments and the return value to become tainted if at least one
 > parameter was tainted before. This is neither entirely sound nor maximally precise but
-> is likely the best practical approximation in a black-box setting" — and this rule is
+> is likely the best practical approximation in a black-box setting" - and this rule is
 > applied "only for native calls not modeled explicitly"; unmodeled library calls are
 > "fully analyzed". FlowDroid's rule is STILL unsound (it misses a native callee writing
 > a secret to a static/global, or to memory reachable-from-but-not-equal-to an argument)
-> — SCanDroid's stricter base+params+return rule is dismissed as "much less precise".
+> - SCanDroid's stricter base+params+return rule is dismissed as "much less precise".
 > Bottom line: the identity default IS the current tool's bug, and the correct default
-> is the one PhASAR names and declines — TOP. PhASAR's stated rationale is precision,
+> is the one PhASAR names and declines - TOP. PhASAR's stated rationale is precision,
 > not a bug-finder/hardener distinction.
 
 ### 9. In IFDS/IDE frameworks the callee->caller memory transfer is a first-class, HAND-WRITTEN
@@ -340,14 +340,14 @@ part of the flow-function interface, not something the solver derives from point
 mod/ref: the analysis writer's getRetFlowFunction must map facts escaping through
 reference/pointer parameters back into the caller's scope.
 
-*confidence:* **high** — *vote:* 3-0
+*confidence:* **high** - *vote:* 3-0
 
 > PhASAR: "getRetFlowFunction handles inter-procedural flows at an exit statement (e.g.
 > a return statement). This maps the callee's return value, as well as data-flow facts
 > that may leave the function by reference or pointer parameters, back into the caller's
 > context/scope." The maintained wiki still says getRetFlowFunction "is responsible for
 > mapping the return-value to the callsite and OPTIONALLY mapping back parameters to
-> their corresponding arguments at the callsite" — "optionally" underscoring that this
+> their corresponding arguments at the callsite" - "optionally" underscoring that this
 > is the analysis writer's obligation. The interface is four required flow functions
 > (call / ret / call-to-ret / normal) plus one optional getSummaryFlowFunction.
 > COROLLARY, and the core diagnosis for this tool: IFDS tabulation auto-computes JUMP-
@@ -359,10 +359,10 @@ reference/pointer parameters back into the caller's scope.
 
 ### 10. Separation-logic tools (Infer's bi-abduction backend; Pulse) summarize a callee as
 footprint-local Hoare pre/post pairs and transfer the effect at the call site by solving
-A * ?antiframe |- B * ?frame — but these summaries are deliberately NOT sound over-
+A * ?antiframe |- B * ?frame - but these summaries are deliberately NOT sound over-
 approximations and cannot be adopted as-is by a fail-safe hardening client.
 
-*confidence:* **high** — *vote:* 3-0 (claims 16, 17)
+*confidence:* **high** - *vote:* 3-0 (claims 16, 17)
 
 > Infer docs: specs are Hoare triples {pre} prog {post}; the frame rule "enables local
 > reasoning: reasoning and specifications should concentrate on the resources that a
@@ -371,39 +371,39 @@ approximations and cannot be adopted as-is by a fail-safe hardening client.
 > that is needed for the above implication to hold and allow the analysis to proceed
 > (the antiframe) as well as state that the procedure leaves unchanged (the frame)." TWO
 > MATERIAL RIDERS. Currency: the standalone biabduction checker was deprecated in Infer
-> v1.2.0 and removed; Pulse — built on UNDER-approximate incorrectness separation logic,
-> which proves bugs exist rather than absent — now powers Infer's taint analysis (though
+> v1.2.0 and removed; Pulse - built on UNDER-approximate incorrectness separation logic,
+> which proves bugs exist rather than absent - now powers Infer's taint analysis (though
 > Pulse still "combines the effective biabductive inference algorithm of Infer with the
 > under-approximate foundation of ISL"). Soundness: classic bi-abduction summaries are
 > sound only RELATIVE TO an inferred precondition (silent when the precondition is
 > unmet), and Pulse is under-approximate by construction. The transferable idea is the
-> SHAPE — footprint-local pre/post applied with a frame at the call site, so untouched
-> caller memory is preserved without enumerating it — with abduction replaced by a TOP-
+> SHAPE - footprint-local pre/post applied with a frame at the call site, so untouched
+> caller memory is preserved without enumerating it - with abduction replaced by a TOP-
 > conservative default for unknown callees.
 
 ### 11. CONCRETE RECOMMENDATION: extend the per-function summary with a coarse, alias-case-free
-MEMORY-EFFECT (mod-set) component — {writes-secret-through-pointer-arg i} + {writes-
-secret-to-global g} + {writes-secret-to-unknown-memory} — computed in the SAME fixed
+MEMORY-EFFECT (mod-set) component - {writes-secret-through-pointer-arg i} + {writes-
+secret-to-global g} + {writes-secret-to-unknown-memory} - computed in the SAME fixed
 point as the register bits, with TOP (writes-secret-to-unknown-memory) as the mandatory
 default for external declarations and unresolved indirect calls whenever any argument,
 reachable global, or escaping stack cell is tainted.
 
-*confidence:* **medium** — *vote:* synthesis
+*confidence:* **medium** - *vote:* synthesis
 
-> Synthesis, not a single cited result — hence medium. The soundness argument, assembled
+> Synthesis, not a single cited result - hence medium. The soundness argument, assembled
 > from the confirmed claims: (i) THE DOMAIN MUST CONTAIN A MEMORY COMPONENT, or callee
 > heap/stack writes are structurally invisible; all four summary families carry one
 > (SVF's MU/CHI, DSA's M/R, StubDroid's access-path rules, Infer's postconditions), and
 > a tainted-args + returns-tainted bit-vector carries none. (ii) PER-OBJECT/CELL, NOT
 > PER-ACCESS-PATH: DSA attaches M/R to abstract nodes classed H/S/G/U, which maps
 > directly onto the existing stack-cell/global-cell/unknown-cell model and needs no
-> field or type information — which post-regalloc MIR does not have. (iii) ALIAS-CASE-
+> field or type information - which post-regalloc MIR does not have. (iii) ALIAS-CASE-
 > FREE: Zhang et al.'s four-summaries-for-two-statements result shows alias-predicated
 > bottom-up summaries can blow up exponentially; collapse every alias case into a single
-> WEAK update (never strong — cf. StubDroid: "There are no strong updates"), which is
+> WEAK update (never strong - cf. StubDroid: "There are no strong updates"), which is
 > cheap and errs toward over-tainting, the required direction. (iv) CALL-SITE TRANSFER =
 > SVF's IRet, degraded: for each callee mod-set entry, taint the corresponding caller-
-> side cells — an arg-i entry taints everything the caller's arg-i operand may point to
+> side cells - an arg-i entry taints everything the caller's arg-i operand may point to
 > (at MIR: if provenance resolves to a known FrameIndex/global via MachineMemOperand's
 > underlying IR Value, taint that object's cells; otherwise ESCALATE to unknown-memory
 > taint); a global entry taints that global's cells; unknown-memory taint must poison
@@ -411,36 +411,36 @@ reachable global, or escaping stack cell is tainted.
 > local object. (v) FIXED POINT: the mod-set is a finite lattice (arg-index bitset x
 > global set x unknown flag) ordered by subset with TOP = unknown; it is monotone and
 > joins with the existing register summary, so it iterates in the SAME callees-before-
-> callers worklist over call-graph SCCs already running — init to BOTTOM, recompute on
+> callers worklist over call-graph SCCs already running - init to BOTTOM, recompute on
 > change, widen within SCCs, TOP absorbs; convergence bounded by (#args + #globals + 1)
 > per function, so cost stays acceptable for an -O2 compile. (vi) DEFAULTS: external
 > declaration -> TOP; indirect call -> join over the resolvable callee set (in a single
 > TU, an address-taken-functions over-approximation is cheap), else TOP. This is exactly
-> the option PhASAR names — "set all variables involved in such calls to TOP" — and
+> the option PhASAR names - "set all variables involved in such calls to TOP" - and
 > rejects for precision; a barrier-inserting hardener must take it, because PhASAR's
 > identity default IS the observed bug. (vii) PRECISION ESCAPE HATCH: a small hand-
 > written model table for libc (memcpy/memmove/memset/strcpy/...) in the StubDroid /
-> EasyTaintWrapper / SpecialSummaries tradition — e.g. memcpy: writes-secret-through-
-> arg-0 if arg-1's pointee is tainted — recovers most of the loss, since blanket TOP on
+> EasyTaintWrapper / SpecialSummaries tradition - e.g. memcpy: writes-secret-through-
+> arg-0 if arg-1's pointee is tainted - recovers most of the loss, since blanket TOP on
 > every libc call is where precision collapses. (viii) REUSING LLVM: at post-
 > prologepilog MIR the MachineFunction still has its Function, so IR memory(...) effect
 > attributes (argmemonly / writeonly / readnone) and MachineMemOperand's underlying IR
-> Value are reachable and CAN NARROW TOP — e.g. memory(argmem: write) on an external
+> Value are reachable and CAN NARROW TOP - e.g. memory(argmem: write) on an external
 > decl safely rules out the writes-to-global and writes-to-unknown-heap components. Use
 > them ONLY as a refinement of a TOP default, never as the default itself: absence of an
 > attribute means unknown, not none, and attributes on declarations are
 > asserted/inferred rather than verified. LLVM's MemorySSA gives nothing interprocedural
 > here (it is intraprocedural and conservatively treats unknown calls); SVF-grade
 > interprocedural memory SSA requires whole-program points-to plus a dedicated mod/ref
-> pass — infrastructure this pass should not try to acquire inside an -O2 compile.
+> pass - infrastructure this pass should not try to acquire inside an -O2 compile.
 
 ### 12. SOUNDNESS POLICY: for a barrier-inserting hardener the only acceptable direction of
 imprecision is OVER-tainting, and every engine surveyed that chose the other direction
-did so knowingly and documented it — so the tool should take the sound variant at each
+did so knowingly and documented it - so the tool should take the sound variant at each
 of its three truncation points (unknown callee, unresolvable address provenance,
 unresolved indirect call).
 
-*confidence:* **medium** — *vote:* synthesis
+*confidence:* **medium** - *vote:* synthesis
 
 > Every unsoundness in the surveyed tools is an explicit, self-documented precision
 > trade: PhASAR's identity-for-missing-bodies ("A sound handling would be to set all
@@ -456,13 +456,13 @@ unresolved indirect call).
 > taint unknown-memory and poison subsequent unprovable loads, not drop; (3) unresolved
 > indirect call -> TOP, not identity. Confidence is medium ONLY because the surviving
 > evidence contains no verified claim from the constant-time/Spectre-defense literature
-> (SLH, Blade, Serberus, ct-verif, Binsec/Rel) — that sub-question went unanswered in
+> (SLH, Blade, Serberus, ct-verif, Binsec/Rel) - that sub-question went unanswered in
 > verification, so this policy is argued from the general taint literature plus the
 > client's own threat model rather than from CT-specific precedent.
 
 ---
 
-## P1 implementation plan — argument-provenance memory effects (design of record, 2026-07-20)
+## P1 implementation plan - argument-provenance memory effects (design of record, 2026-07-20)
 
 Implements §11's recommendation (the `{writes-secret-through-pointer-arg i}` mod-set
 component) as the concrete next increment. Motivated by measurement: applying the
@@ -521,7 +521,7 @@ a leaked secret and never happens; the forward soundness verifier remains the ba
 
 ---
 
-## Refuted in verification — DO NOT REUSE
+## Refuted in verification - DO NOT REUSE
 
 - Precise aliasing-sensitive bottom-up summarization does not scale in practice: the
   pure bottom-up (BU) baseline finished on only 2 of 12 Java benchmarks (60-250 KLOC),
@@ -535,13 +535,13 @@ a leaked secret and never happens; the forward soundness verifier remains the ba
 
 - FlowDroid's IFDS data-flow domain is bounded-length access paths (default k = 5
   fields), where an access path x.f implicitly denotes ALL objects reachable through
-  it (x.f.g, x.f.h, ...) — i.e. k-limiting is made conservative by over-approximating
+  it (x.f.g, x.f.h, ...) - i.e. k-limiting is made conservative by over-approximating
   the truncated suffix; callee memory effects are transferred at call sites purely by
   rewriting the access-path root (actual->formal on entry, formal->actual on return,
   plus the return value).
 
 - DSA's Bottom-Up phase produces, for each function, a single summary graph that encodes
-  the function's complete memory effect — imposed aliases plus mod/ref information —
+  the function's complete memory effect - imposed aliases plus mod/ref information -
   independent of calling context; this is exactly the 'memory-effects summary'
   abstraction a summary-based interprocedural taint analysis needs, and it is computed
   callees-before-callers over the call graph's SCCs.
@@ -559,7 +559,7 @@ a leaked secret and never happens; the forward soundness verifier remains the ba
   'incomplete' and must be treated conservatively (may gain extra edges/flags, may be
   merged with other nodes), guaranteeing the graph is conservatively correct at every
   intermediate stage. Nodes are only marked Complete once no external function can
-  reach them — this is the standard sound treatment of an unseen callee.
+  reach them - this is the standard sound treatment of an unseen callee.
 
 ---
 
@@ -567,7 +567,7 @@ a leaked secret and never happens; the forward soundness verifier remains the ba
 
 - What do the constant-time and Spectre-hardening compilers (Blade, Serberus, Ultimate
   SLH, ct-verif, Binsec/Rel, Jasmin, FaCT, Vale) actually do at a call to an external
-  or indirect callee — carry a memory-effects summary, require whole-
+  or indirect callee - carry a memory-effects summary, require whole-
   program/inlined/call-free code, or fall back to blanket hardening? This is the
   highest-value unanswered question and should be re-researched directly, since it is
   the only literature sharing the threat model in which under-taint is exploitable.
@@ -582,7 +582,7 @@ a leaked secret and never happens; the forward soundness verifier remains the ba
 - At MIR, what fraction of pointer operands passed to calls have provenance resolvable
   to a known FrameIndex or global (via MachineMemOperand's underlying IR Value)? This
   determines empirically whether the recommended arg-i mod-set entry usually lands on
-  a precise cell set or degrades to unknown-memory taint — i.e. whether the sound
+  a precise cell set or degrades to unknown-memory taint - i.e. whether the sound
   design is affordable at -O2 or collapses into "everything is tainted".
 
 - How much precision does a small hand-written libc model table
@@ -594,7 +594,7 @@ a leaked secret and never happens; the forward soundness verifier remains the ba
 
 - Can LLVM's memory(argmem: write) / writeonly / readnone attributes on external
   DECLARATIONS be trusted to narrow the TOP default, given they are asserted from
-  headers or inferred rather than verified — and is there a class of declarations the
+  headers or inferred rather than verified - and is there a class of declarations the
   frontend never annotates where relying on them silently reintroduces the under-
   taint?
 
@@ -602,61 +602,61 @@ a leaked secret and never happens; the forward soundness verifier remains the ba
 
 ## Sources
 
-- [secondary] https://cs.au.dk/~amoeller/spa/8-distributive.pdf  
-  *angle:* dataflow foundations / summary-based interprocedural theory — 5 claims
-- [primary] https://sse.cs.tu-dortmund.de/storages/sse-cs/r/Publications/Preprints/shb19-phasar.pdf  
-  *angle:* dataflow foundations / summary-based interprocedural theory — 5 claims
-- [primary] https://www.cis.upenn.edu/~mhnaik/papers/pldi14b.pdf  
-  *angle:* dataflow foundations / summary-based interprocedural theory — 5 claims
-- [primary] https://link.springer.com/chapter/10.1007/978-3-540-49051-7_5  
-  *angle:* dataflow foundations / summary-based interprocedural theory — 4 claims
-- [primary] https://dl.acm.org/doi/10.1145/3689804  
-  *angle:* dataflow foundations / summary-based interprocedural theory — 5 claims
-- [primary] https://arxiv.org/pdf/2103.16240  
-  *angle:* memory effects in function summaries (core) — 5 claims
-- [primary] https://www.bodden.de/pubs/far+14flowdroid.pdf  
-  *angle:* memory effects in function summaries (core) — 5 claims
-- [primary] https://yuleisui.github.io/publications/cc16.pdf  
-  *angle:* memory effects in function summaries (core) — 5 claims
-- [primary] https://llvm.org/pubs/2003-11-15-DataStructureAnalysisTR.pdf  
-  *angle:* memory effects in function summaries (core) — 5 claims
-- [primary] https://fbinfer.com/docs/separation-logic-and-bi-abduction/  
-  *angle:* memory effects in function summaries (core) — 4 claims
-- [unreliable] https://www.researchgate.net/publication/241623140_Efficient_bottom-up_heap_analysis_for_symbolic_path-based_data_access_summaries  
-  *angle:* memory effects in function summaries (core) — 0 claims
-- [primary] https://publica.fraunhofer.de/entities/publication/3ac4d672-b47c-49ab-9f60-73df3b22a387  
-  *angle:* real taint engines: heap + unknown callees — 5 claims
-- [primary] https://link.springer.com/content/pdf/10.1007/978-3-030-17465-1_22.pdf  
-  *angle:* real taint engines: heap + unknown callees — 5 claims
-- [primary] https://codeql.github.com/docs/codeql-language-guides/customizing-library-models-for-cpp/  
-  *angle:* real taint engines: heap + unknown callees — 5 claims
-- [primary] https://arxiv.org/pdf/2506.06247  
-  *angle:* real taint engines: heap + unknown callees — 5 claims
-- [primary] https://nsl.cs.columbia.edu/papers/2012/libdft.vee12.pdf  
-  *angle:* binary / post-regalloc machine-level taint and indirect calls — 5 claims
-- [primary] https://www.usenix.org/system/files/sec21-chen-sanchuan.pdf  
-  *angle:* binary / post-regalloc machine-level taint and indirect calls — 5 claims
-- [primary] https://binsec.github.io/assets/publications/papers/2015-tacas.pdf  
-  *angle:* binary / post-regalloc machine-level taint and indirect calls — 5 claims
-- [primary] https://www.ndss-symposium.org/ndss-paper/refining-indirect-call-targets-at-the-binary-level/  
-  *angle:* binary / post-regalloc machine-level taint and indirect calls — 4 claims
-- [primary] https://arxiv.org/abs/2309.05174  
-  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness — 5 claims
-- [primary] https://cseweb.ucsd.edu/~dstefan/pubs/vassena:2021:blade.pdf  
-  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness — 5 claims
-- [primary] https://www.usenix.org/system/files/usenixsecurity23-zhang-zhiyuan-slh.pdf  
-  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness — 5 claims
-- [primary] https://llvm.org/docs/SpeculativeLoadHardening.html  
-  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness — 5 claims
-- [primary] https://eprint.iacr.org/2022/1270  
-  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness — 4 claims
-- [primary] https://yanniss.github.io/Soundiness-CACM.pdf  
-  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design — 5 claims
-- [primary] https://releases.llvm.org/18.1.8/docs/LangRef.html#function-attributes  
-  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design — 5 claims
-- [primary] https://reviews.llvm.org/D135780  
-  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design — 5 claims
-- [primary] https://llvm.org/doxygen/classllvm_1_1AAResults.html  
-  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design — 5 claims
-- [primary] https://arxiv.org/pdf/2309.05174  
-  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design — 5 claims
+- [secondary] https://cs.au.dk/~amoeller/spa/8-distributive.pdf
+  *angle:* dataflow foundations / summary-based interprocedural theory - 5 claims
+- [primary] https://sse.cs.tu-dortmund.de/storages/sse-cs/r/Publications/Preprints/shb19-phasar.pdf
+  *angle:* dataflow foundations / summary-based interprocedural theory - 5 claims
+- [primary] https://www.cis.upenn.edu/~mhnaik/papers/pldi14b.pdf
+  *angle:* dataflow foundations / summary-based interprocedural theory - 5 claims
+- [primary] https://link.springer.com/chapter/10.1007/978-3-540-49051-7_5
+  *angle:* dataflow foundations / summary-based interprocedural theory - 4 claims
+- [primary] https://dl.acm.org/doi/10.1145/3689804
+  *angle:* dataflow foundations / summary-based interprocedural theory - 5 claims
+- [primary] https://arxiv.org/pdf/2103.16240
+  *angle:* memory effects in function summaries (core) - 5 claims
+- [primary] https://www.bodden.de/pubs/far+14flowdroid.pdf
+  *angle:* memory effects in function summaries (core) - 5 claims
+- [primary] https://yuleisui.github.io/publications/cc16.pdf
+  *angle:* memory effects in function summaries (core) - 5 claims
+- [primary] https://llvm.org/pubs/2003-11-15-DataStructureAnalysisTR.pdf
+  *angle:* memory effects in function summaries (core) - 5 claims
+- [primary] https://fbinfer.com/docs/separation-logic-and-bi-abduction/
+  *angle:* memory effects in function summaries (core) - 4 claims
+- [unreliable] https://www.researchgate.net/publication/241623140_Efficient_bottom-up_heap_analysis_for_symbolic_path-based_data_access_summaries
+  *angle:* memory effects in function summaries (core) - 0 claims
+- [primary] https://publica.fraunhofer.de/entities/publication/3ac4d672-b47c-49ab-9f60-73df3b22a387
+  *angle:* real taint engines: heap + unknown callees - 5 claims
+- [primary] https://link.springer.com/content/pdf/10.1007/978-3-030-17465-1_22.pdf
+  *angle:* real taint engines: heap + unknown callees - 5 claims
+- [primary] https://codeql.github.com/docs/codeql-language-guides/customizing-library-models-for-cpp/
+  *angle:* real taint engines: heap + unknown callees - 5 claims
+- [primary] https://arxiv.org/pdf/2506.06247
+  *angle:* real taint engines: heap + unknown callees - 5 claims
+- [primary] https://nsl.cs.columbia.edu/papers/2012/libdft.vee12.pdf
+  *angle:* binary / post-regalloc machine-level taint and indirect calls - 5 claims
+- [primary] https://www.usenix.org/system/files/sec21-chen-sanchuan.pdf
+  *angle:* binary / post-regalloc machine-level taint and indirect calls - 5 claims
+- [primary] https://binsec.github.io/assets/publications/papers/2015-tacas.pdf
+  *angle:* binary / post-regalloc machine-level taint and indirect calls - 5 claims
+- [primary] https://www.ndss-symposium.org/ndss-paper/refining-indirect-call-targets-at-the-binary-level/
+  *angle:* binary / post-regalloc machine-level taint and indirect calls - 4 claims
+- [primary] https://arxiv.org/abs/2309.05174
+  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness - 5 claims
+- [primary] https://cseweb.ucsd.edu/~dstefan/pubs/vassena:2021:blade.pdf
+  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness - 5 claims
+- [primary] https://www.usenix.org/system/files/usenixsecurity23-zhang-zhiyuan-slh.pdf
+  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness - 5 claims
+- [primary] https://llvm.org/docs/SpeculativeLoadHardening.html
+  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness - 5 claims
+- [primary] https://eprint.iacr.org/2022/1270
+  *angle:* constant-time / Spectre compiler hardening: calls, memory, soundness - 4 claims
+- [primary] https://yanniss.github.io/Soundiness-CACM.pdf
+  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design - 5 claims
+- [primary] https://releases.llvm.org/18.1.8/docs/LangRef.html#function-attributes
+  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design - 5 claims
+- [primary] https://reviews.llvm.org/D135780
+  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design - 5 claims
+- [primary] https://llvm.org/doxygen/classllvm_1_1AAResults.html
+  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design - 5 claims
+- [primary] https://arxiv.org/pdf/2309.05174
+  *angle:* soundness vs precision + LLVM memory-effect infrastructure for the design - 5 claims

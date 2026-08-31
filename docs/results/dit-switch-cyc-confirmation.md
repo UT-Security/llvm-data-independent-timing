@@ -64,7 +64,7 @@ through 1400 B, slower in 0 of 20 reps at every one**; inert at 4 KiB (6/20) and
 64 KiB (7/20), where regions are large enough that the admission test has little
 left to merge. The 27-31% band from the earlier gate-off measurement reproduces.
 
-## Result 2: the parameter does not price what its name says — RETRACTED
+## Result 2: the parameter does not price what its name says - RETRACTED
 
 > **Retracted 2026-08-30, see the notice at the top.** Kept in full rather than
 > deleted: the reasoning is sound *given* a working control, and the shape of the
@@ -110,7 +110,7 @@ SQLCipher finding that most of what looks like switch cost is codegen
 (`CLAUDE.md`, 2026-08-24): with all 121 HMAC/SHA switches NOPed, that build still
 cost the majority of its total under a renamed switch.
 
-### The trap this creates — also unsupported
+### The trap this creates - also unsupported
 
 > Both claims below rest on the retracted def-minus-NOP term. The *advice* may
 > still be right, but this run is not evidence for it.

@@ -48,7 +48,7 @@ struct FunctionMemEffects {
   /// be resolved still escalates to WritesSecretToUnknown.
   ///
   /// NOTE (staging): as of P1a this set is *recorded* precisely but *applied*
-  /// bluntly — the call site still treats a non-empty set as a full
+  /// bluntly - the call site still treats a non-empty set as a full
   /// ExternalMemClobbered, so behavior is byte-identical to blunt-TOP P0. P1b
   /// makes the application precise: taint only the pointee of the pointer the
   /// caller actually passed for argument i, instead of poisoning all of its
@@ -56,7 +56,7 @@ struct FunctionMemEffects {
   SmallSet<unsigned, 4> WritesSecretThroughArgPointee;
 
   /// THE SOURCE CONDITION. At least one of the effects above carries a secret
-  /// that did NOT arrive through this function's parameters — it was read from a
+  /// that did NOT arrive through this function's parameters - it was read from a
   /// tainted global, came from another TU, or was produced by a call this
   /// function passed nothing secret to.
   ///
@@ -74,7 +74,7 @@ struct FunctionMemEffects {
   bool NonArgSourced = false;
 
   /// TOP: the function may have written a secret to memory the analysis cannot
-  /// pin down — to the heap, through an unresolvable pointer, or transitively via
+  /// pin down - to the heap, through an unresolvable pointer, or transitively via
   /// a call it makes to an unknown/unknown-writing callee. Mandatory default for
   /// external declarations and indirect calls that receive a secret.
   bool WritesSecretToUnknown = false;
@@ -97,7 +97,7 @@ struct FunctionTaintSummary {
   SmallSet<unsigned, 8> PointeeTaintedArgIndices;
 
   /// A caller passed this function a secret in the STACK argument area rather
-  /// than in a register — AAPCS64 puts arguments past the eighth, and large
+  /// than in a register - AAPCS64 puts arguments past the eighth, and large
   /// aggregates, there. Kept as a flag rather than an index set because
   /// recovering the argument index would require re-running ABI assignment at
   /// the MIR level; the flag seeds every incoming fixed frame object instead,

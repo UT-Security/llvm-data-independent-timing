@@ -1,6 +1,6 @@
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s --check-prefix=DIT
 
-# Function-granularity PSTATE.DIT mode — the project's only protection
+# Function-granularity PSTATE.DIT mode - the project's only protection
 # mechanism (the per-region ISB/DSB speculation-barrier mode was a placeholder
 # for this toggle and was removed on 2026-07-14; see docs/handoff.md).
 # A function containing any tainted instruction gets MSR DIT, #1 as its first
@@ -15,7 +15,7 @@
 #
 # The re-assert is elided when the callee provably preserves DIT
 # (PreservesDIT summary bit): in-TU, not instrumented itself, and only makes
-# preserving calls — like pure_helper below.
+# preserving calls - like pure_helper below.
 #
 # 26 is the PSTATE.DIT pstatefield encoding (op1=0b011, op2=0b010).
 

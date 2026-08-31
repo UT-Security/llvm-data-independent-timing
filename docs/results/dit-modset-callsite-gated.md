@@ -9,7 +9,7 @@ stopgap worth measuring first" from `docs/design/context-insensitivity.md`.
 ## Bottom line
 
 **This changes the verdict on Bitcoin Core.** Over 30 paired reps the pass goes
-from losing to blanket DIT on 5 of 9 benchmarks — by **+28% to +51%** — to
+from losing to blanket DIT on 5 of 9 benchmarks - by **+28% to +51%** - to
 **5 wins, 2 ties and 2 losses, neither loss over 3 points**.
 
 `-taint-modset-gate-strict` narrows the unsoundness and is on by default with the
@@ -30,15 +30,15 @@ verification goes from **+51.20% to +0.67%**.
 
 | | base (`region`+hoist) | **gated** | oracle |
 |---|---|---|---|
-| `MSR DIT` in the secp256k1 TU | 660 | **178** | — |
-| `MSR DIT` in `bench_bitcoin` | 541 | **178** | — |
-| functions carrying >=1 switch | 73 | **18** | — |
+| `MSR DIT` in the secp256k1 TU | 660 | **178** | - |
+| `MSR DIT` in `bench_bitcoin` | 541 | **178** | - |
+| functions carrying >=1 switch | 73 | **18** | - |
 | toggles executed per signature | 386 | **112** | 3 |
 | toggles executed per verification | 506 | **2** | 0 |
 | signing coverage (`ditSuppressed`, % of oracle) | 104.4% | **103.1%** | 100% |
 | verification suppression (all of it waste) | 6,062,413 | **80** | 0 |
 
-**It is not sound in general** — see §6 — which is why it ships off by default.
+**It is not sound in general** - see §6 - which is why it ships off by default.
 
 ---
 
@@ -52,7 +52,7 @@ nothing secret. The flag keeps the summary context-insensitive but makes its
 actually passes a secret, matching how the external/indirect path already gates
 on `HasTaintedArg`.
 
-Two of the three mod-set applications are gated — `WritesSecretToUnknown` (TOP)
+Two of the three mod-set applications are gated - `WritesSecretToUnknown` (TOP)
 and `WritesSecretThroughArgPointee`, the two that set `ExternalMemClobbered` and
 flood every subsequent load. **`WritesSecretToGlobal` is deliberately left
 ungated**: it is already per-global rather than a flood, and it is exactly the
@@ -60,7 +60,7 @@ case ("the callee got the secret from a global, not from this caller") that the
 gate is otherwise unsound for.
 
 The suppression reaches the transitive re-export in `computeFunctionMemEffects`
-too — a caller that absorbs no clobber re-exports none — which is what stops the
+too - a caller that absorbs no clobber re-exports none - which is what stops the
 cascade rather than hiding its last hop. So the flag changes **summaries**, not
 only codegen.
 
@@ -105,7 +105,7 @@ measured +51% on `ConnectBlockAllEcdsa`.
 | `secp256k1_musig_pubkey_agg` | 14 | **0** | public |
 | `secp256k1_keypair_xonly_tweak_add` | 13 | **0** | public |
 | `secp256k1_ec_pubkey_serialize` | 12 | **0** | public |
-| `secp256k1_ecmult` | 20 | **0** | the *variable*-time multiply — verify's |
+| `secp256k1_ecmult` | 20 | **0** | the *variable*-time multiply - verify's |
 | `secp256k1_schnorrsig_verify` | 9 | **0** | public |
 | `secp256k1_musig_*`, `silentpayments_*` | 158 | **0** | public |
 
@@ -115,7 +115,7 @@ measured +51% on `ConnectBlockAllEcdsa`.
 
 ## 3. Static soundness check
 
-`-taint-uncovered-report` on both builds: base emits 644 entries, gated 46 — and
+`-taint-uncovered-report` on both builds: base emits 644 entries, gated 46 - and
 **the gated set is a strict subset**. `comm -13` gives **zero** entries present
 in gated but not base, i.e. the flag introduces no new self-reported gap.
 
@@ -130,7 +130,7 @@ coverage is what settles it.
 `compSimplifier.ditSuppressed` counts operations DIT actually blocked, so it *is*
 the coverage. Neoverse-V2 config, `--eves --dmp --comp-simp`, 40 iterations,
 driver `utils/dit_host_screening/modset/g5/mod_driver.c`. Two workloads: signing
-(secret present) and verification (no secret anywhere — the fixture is built
+(secret present) and verification (no secret anywhere - the fixture is built
 before `m5_reset_stats`).
 
 Gates: `simInsts` accounted for in every arm; checksums identical across all
@@ -139,11 +139,11 @@ reports exactly 0 suppressions; `off` and `always` are **bit-identical between
 the two machine configs**, as they must be since neither executes a switch
 inside the ROI.
 
-### 4a. Signing — the coverage gate
+### 4a. Signing - the coverage gate
 
 | arm | simInsts | cycles (ser) | `ditSuppressed` (ser) | % of oracle |
 |---|---|---|---|---|
-| `off` | 17,851,690 | — | 0 | — |
+| `off` | 17,851,690 | - | 0 | - |
 | `oracle` (2 switches/sig) | 17,851,810 | 6,611,048 | 4,467,738 | 100% |
 | `base` | 17,867,130 | 7,060,516 | 4,665,976 | 104.4% |
 | **`gated`** | 17,856,170 | **6,619,781** | **4,608,037** | **103.1%** |
@@ -156,22 +156,22 @@ Why coverage survives a 71% cut in switches: the switches that disappeared were
 inside functions the caller **already holds DIT across**. `secp256k1_ecmult_gen_gej`
 (8->0) and `ecmult_gen_blind` (8->0) run under `ecdsa_sign_inner`'s region, which
 keeps all 13 of its switches. Their own switches were redundant re-assertions,
-not protection — and `ditSuppressed` falling only 1.2% while they vanished is the
+not protection - and `ditSuppressed` falling only 1.2% while they vanished is the
 measurement that proves it rather than assuming it.
 
-### 4b. Verification — the false-positive cost
+### 4b. Verification - the false-positive cost
 
 No secret exists anywhere in this workload, so **every switch and every
 suppression here is pure waste**.
 
 | arm | cycles, speculative | vs `off` | cycles, serializing | vs `off` | `ditSuppressed` |
 |---|---|---|---|---|---|
-| `off` | 4,193,326 | — | 4,193,326 | — | 0 |
+| `off` | 4,193,326 | - | 4,193,326 | - | 0 |
 | `always` | 4,220,932 | +0.66% | 4,220,932 | +0.66% | 7,085,999 |
 | `base` | 4,413,078 | **+5.24%** | 4,674,650 | **+11.48%** | 6,062,413 |
 | **`gated`** | 4,246,930 | **+1.28%** | 4,252,916 | **+1.42%** | **80** |
 
-Blanket DIT costs verification **+0.66%** — that code has almost no DIT
+Blanket DIT costs verification **+0.66%** - that code has almost no DIT
 sensitivity, which is why the pass's cost here was never protection, only
 toggling. The gate takes the serializing penalty from **+11.48% to +1.42%**, an
 **8.1x** reduction, and leaves gated within 0.76 points of blanket DIT on code
@@ -186,7 +186,7 @@ cycles per switch on verification and ~20-26 on signing, consistent across arms.
 On the **signing** workload in the speculative config the DIT-on arms are
 *faster* than `off` (`always` −1.03%, `oracle` −0.75%). The plausible mechanism
 is that DIT disables load-value prediction, and on this workload LVP's
-misprediction recovery costs more than its hits save — but that is an
+misprediction recovery costs more than its hits save - but that is an
 **inference, not a measurement**. It is also why §4a leans on `ditSuppressed`
 rather than cycles for the coverage claim, and why cross-binary cycle deltas
 under ~1% here should not be read as real.
@@ -224,7 +224,7 @@ Gates: in-band `lvp_chase` control **3.87x**; harness (`null`) arm within
 
 ### The comparison that decides it: vs blanket always-on DIT
 
-**Pooled across both runs — 30 paired reps.** The second run (§5b) repeated
+**Pooled across both runs - 30 paired reps.** The second run (§5b) repeated
 `baseline`/`null`/`always`/`pass_hoist`/`pass_gated`/`baseline2` unchanged, so
 their per-rep ratios pool legitimately. Negative means the pass beats blanket DIT.
 
@@ -240,7 +240,7 @@ their per-rep ratios pool legitimately. Negative means the pass beats blanket DI
 | ConnectBlockAllEcdsa | +0.58% | +0.43 .. +0.86 | 27/30 | loss |
 | SignTransactionSchnorr | +2.69% | +2.54 .. +2.81 | 30/30 | loss |
 
-**5 wins, 2 ties, 2 losses — and both losses are under 3 points.** Compare
+**5 wins, 2 ties, 2 losses - and both losses are under 3 points.** Compare
 `pass_hoist` on the same runs: 4 wins and 5 losses of +28% to +51%.
 
 The two ties are the two noisiest benchmarks in the set (baseline CoV 4.2-4.8%),
@@ -270,7 +270,7 @@ Worst disagreement 0.97 points, on the noisiest benchmark. Both runs: control
 ### gem5 predicted the silicon residual
 
 On verification, gem5-serializing put `gated` at +1.42% and `always` at +0.66%
-over `off` — a predicted gap of **+0.76 points**. Silicon measured
+over `off` - a predicted gap of **+0.76 points**. Silicon measured
 **+0.61 points** (14/15 reps). Two independent instruments agreeing to 0.15
 points on a sub-1% residual is the strongest cross-validation this project has
 produced, and it is the residual §6 attributes to `scalar_set_b32`.
@@ -282,7 +282,7 @@ produced, and it is the residual §6 attributes to `scalar_set_b32`.
 **The standard objection to this whole result**, and it has published support:
 Marinaro et al. (AsiaCCS 2024) found on ARM that removing provably-unnecessary
 hardening gave no improvement or ~10% *regressions*, and traced it to **code
-alignment** — substituting NOPs for the removed instructions recovered the
+alignment** - substituting NOPs for the removed instructions recovered the
 performance, so the hardening had never been the cost.
 
 `-mllvm -taint-dit-nop-switches` (hidden, default off) is the control. It emits
@@ -351,7 +351,7 @@ strictly larger hole than the shipped default has, and it is why the flag is off
 
 **What it does not reach: the argument half of context-insensitivity.** Gated
 still executes exactly **2 switches per verification**, and they are all in
-`secp256k1_scalar_set_b32` — which `secp256k1_ecdsa_verify` calls on the *public*
+`secp256k1_scalar_set_b32` - which `secp256k1_ecdsa_verify` calls on the *public*
 message hash (`secp256k1.c:485`) and which signing calls on the *secret* nonce.
 Its summary carries `PointeeTaintedArgIndices` from the signing call sites and
 replays it at the verifying ones. That is the same context-insensitivity in the
@@ -365,7 +365,7 @@ context-sensitivity is what reaches it.
 
 The gate is unsound when the callee's secret arrived from somewhere other than
 this caller's arguments. `-taint-modset-gate-strict` narrows it: suppress a
-callee's clobber only when that callee has **at least one tainted argument** —
+callee's clobber only when that callee has **at least one tainted argument** -
 i.e. when a caller's arguments can speak for its secret at all. **On by default
 whenever the gate is on**; `=0` restores the permissive rule for A/B.
 
@@ -377,7 +377,7 @@ price that direction before building it.
 **It is free.** On Bitcoin Core's libsecp256k1 and on coincurve's, strict and
 permissive produce **byte-identical objects** (178 and 39 switches respectively),
 and the linked `bench_bitcoin` binaries disassemble identically. Every timing
-number in §4 and §5 therefore applies to the strict rule verbatim — measuring it
+number in §4 and §5 therefore applies to the strict rule verbatim - measuring it
 separately would be timing the same binary twice.
 
 **It is not vacuous.** `taint-analysis-modset-gate-strict.mir` builds the shape
@@ -389,7 +389,7 @@ drops that clobber and loses a real secret, strict keeps it.
 **Correcting an intermediate claim.** I first reported that 9 of the 26 suppressed
 mod-set clobbers (35%) were this unsound shape. That number was measuring the
 wrong thing: it came from differencing the clobber reports of the two builds,
-which mixes predicate suppressions with *second-order* disappearances — callees
+which mixes predicate suppressions with *second-order* disappearances - callees
 whose mod-sets go empty once the flood feeding them is removed. All nine were the
 second kind. In the gated build `ecmult_gen_blind`, `der_parse_integer`,
 `context_preallocated_create`, `musig_nonce_gen_internal` and
@@ -435,30 +435,30 @@ site; the clobber goes through, the flood taints more of the frame, and the next
 call site looks secret too. The fallback makes `HasTaintedArg` true nearly
 everywhere, which is exactly the condition under which the gate does nothing.
 
-The direction of the earlier reasoning was right — the fallback *does* stop the
+The direction of the earlier reasoning was right - the fallback *does* stop the
 gate from firing at genuine `&secret_local` sites, and `+frame-addr +gate` does
 restore `rfc6979_hmac_sha256_initialize` (0 -> 53 switches), `ecmult_gen_gej`,
 `ecmult_const` and `scalar_split_lambda`. The error was checking only what it
 restores and never what else it lets through.
 
 `fagated` is also the **only** configuration whose signing coverage lands below
-the hand oracle — 4,461,707 vs 4,467,738, or 99.86%. Small, but it is on the
+the hand oracle - 4,461,707 vs 4,467,738, or 99.86%. Small, but it is on the
 wrong side of the line and it is alone there, while executing **500 toggles per
 signature** against `base`'s 386 and `gated`'s 112.
 
 **Conclusion: ship the gate alone**, and note that on a workload whose false
 positives are never executed it is cloning, not the gate, that pays
-(`dit-coincurve-timing.md` §6) — the two attack different terms and do not stack.
+(`dit-coincurve-timing.md` §6) - the two attack different terms and do not stack.
 
 The `&secret_local` under-taint the fallback
 exists to close is real, but the fallback costs more than the flood it replaces
-and disables the precision fix. Closing that gap properly is **P1b** — apply
+and disables the precision fix. Closing that gap properly is **P1b** - apply
 `WritesSecretThroughArgPointee{i}` to the object the caller passed for argument
 *i*, which gives per-object precision instead of whole-frame taint and would not
 trip the gate's predicate.
 
-Two functions dropped relative to today's default do take secret keys —
-`ec_seckey_tweak_mul` and `ec_seckey_negate` — but neither is in the nine-seed
+Two functions dropped relative to today's default do take secret keys -
+`ec_seckey_tweak_mul` and `ec_seckey_negate` - but neither is in the nine-seed
 set, so today's build covers them only by flood. That is an
 **annotation-completeness** question, not a regression, and worth deciding
 deliberately rather than inheriting by accident.
@@ -468,7 +468,7 @@ deliberately rather than inheriting by accident.
 ## 7. Status and what to do next
 
 Default **off**, and the honest reason it stays off is §6's unsoundness, not the
-performance — on performance it is now the best placement the pass has produced.
+performance - on performance it is now the best placement the pass has produced.
 
 Verified: full `CodeGen/AArch64` + `CodeGen/MIR` lit suites pass (4,293 tests);
 the pass's own soundness verifier (fatal gate) passed on every build; the new lit
@@ -477,17 +477,17 @@ points on every benchmark.
 
 **Next, in order of value:**
 
-1. **P1b** — apply `WritesSecretThroughArgPointee{i}` to the object the caller
+1. **P1b** - apply `WritesSecretThroughArgPointee{i}` to the object the caller
    passed for argument *i*. It is the sound version of this stopgap, and it is
    also the only way to close the `&secret_local` under-taint without the
    frame-address fallback's whole-frame blunt taint, which §6 shows costs more
    than it buys.
-2. **The argument-summary residue** — `scalar_set_b32` replaying signing's
+2. **The argument-summary residue** - `scalar_set_b32` replaying signing's
    `PointeeTaintedArgIndices` at verification's call sites. 2 switches per
    verification, and now the largest false-positive source left.
 3. ~~Re-run the coincurve workload with the gate.~~ **Done 2026-08-19
    (`dit-coincurve-timing.md` §6): the verdict there is UNCHANGED.** The gate cuts
-   that build 575 → 39 switches — a bigger static cut than Bitcoin Core's — and
+   that build 575 → 39 switches - a bigger static cut than Bitcoin Core's - and
    moves it only from +8.40% to +6.04% against always-on, because that workload
    signs and never verifies, so it never *executed* the false positives. Cloning
    still wins there (+2.77%), the two do not stack (+2.75% combined), and the

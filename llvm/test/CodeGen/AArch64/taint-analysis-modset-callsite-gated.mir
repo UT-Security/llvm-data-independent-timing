@@ -7,7 +7,7 @@
 # `shared_copy` is a helper called from two places. `secret_caller` passes a secret
 # into it, so the fixed point marks its argument tainted and its mod-set records a
 # secret write into caller-visible memory. That mod-set is per FUNCTION, so without
-# the gate it is replayed at EVERY call site of `shared_copy` — including
+# the gate it is replayed at EVERY call site of `shared_copy` - including
 # `public_caller`, which passes nothing secret: the reload is clobbered and the
 # function gets DIT switches it has no reason to carry. This is the shape that put
 # 17 MSR DIT in secp256k1_ecdsa_verify and cost Bitcoin Core's block validation
@@ -20,7 +20,7 @@
 # 26 is the PSTATE.DIT pstatefield encoding.
 
 # secret_caller: instrumented EITHER WAY. The gate must not cost coverage where the
-# secret really flows — if this stops being instrumented the gate is unsafe, not
+# secret really flows - if this stops being instrumented the gate is unsafe, not
 # merely imprecise.
 # DEFAULT-LABEL: name: secret_caller
 # DEFAULT: MSRpstateImm4 26, 1

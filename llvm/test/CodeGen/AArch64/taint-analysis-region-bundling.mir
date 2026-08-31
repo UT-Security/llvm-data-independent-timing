@@ -9,7 +9,7 @@
 #
 # These regions do not drive placement. PSTATE.DIT placement partitions BLOCKS and
 # prices its own merges with -taint-dit-switch-cyc / -taint-dit-dwell-per-instr,
-# so a report-granularity constant cannot change what code gets protected — and
+# so a report-granularity constant cannot change what code gets protected - and
 # splitting a run never changes whether any run exists, so it cannot change
 # whether a function is instrumented either. See docs/design/dit-placement.md.
 

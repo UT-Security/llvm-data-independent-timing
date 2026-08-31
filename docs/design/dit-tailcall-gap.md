@@ -10,8 +10,8 @@ The mechanics below are still accurate; only the verdict changed.
 
 
 **Found 2026-08-05 on gem5, running hardened libsodium.** Whole-function placement
-cleared `PSTATE.DIT` immediately *before* a tail call, so the callee — which is
-exactly who receives the secret — ran with DIT=0. Fixed in
+cleared `PSTATE.DIT` immediately *before* a tail call, so the callee - which is
+exactly who receives the secret - ran with DIT=0. Fixed in
 `emitFunctionGranularityDIT`; test `llvm/test/CodeGen/AArch64/taint-analysis-tailcall.mir`.
 
 This doc exists because the **residual limitation is permanent**, not because the
@@ -30,7 +30,7 @@ taint     crypto_sign:  msr DIT, #0x1 ;                 b crypto_sign_ed25519
 
 On AArch64 a tail call (`TCRETURN*`) is **both** `isReturn()` and `isCall()`.
 `emitFunctionGranularityDIT` clears DIT "before every return" and tested
-`isReturn()` first, so the clear landed on the tail call — an **under-taint**, the
+`isReturn()` first, so the clear landed on the tail call - an **under-taint**, the
 direction this project treats as a security bug. The entire signing operation ran
 unprotected.
 
@@ -49,7 +49,7 @@ gem5-DIT tree.
 | ed25519, `taintfn` ditSuppressed | 0 | **127,445** of 128,298 (99.3%) |
 | ed25519 checksums across variants | agree | agree |
 
-`taint` (region) is unchanged by the fix at 191 `msr DIT` and 127,770 (99.6%) —
+`taint` (region) is unchanged by the fix at 191 `msr DIT` and 127,770 (99.6%) -
 it never emitted the clear. Its coverage is still leak-derived; see §6.
 
 ## 2. Why there is no clean fix at the tail call
@@ -60,13 +60,13 @@ binary and permanent for the rest of the caller's continuation:
 
 | Choice | Callee | Caller's continuation |
 |---|---|---|
-| Clear before the branch | **unprotected** — the hole | DIT correctly restored |
+| Clear before the branch | **unprotected** - the hole | DIT correctly restored |
 | Leave DIT set | protected | **DIT leaks**, possibly forever |
 
 Taint over-approximation is always the safe direction, so the fix leaves DIT set.
 
-A tempting third option — clear here and let an instrumented callee re-assert at
-its own entry — is **worse than it looks**: the callee's prologue may spill the
+A tempting third option - clear here and let an instrumented callee re-assert at
+its own entry - is **worse than it looks**: the callee's prologue may spill the
 secret argument registers *before* its `MSR DIT, #1` executes, opening a window
 where secret stores run unprotected. Leaving DIT set has no window.
 
@@ -78,7 +78,7 @@ indefinitely.**
 - If the tail callee is in-TU and instrumented, it clears DIT before its own
   return, so the leak ends there. Harmless.
 - If the tail callee is **external, uninstrumented, or indirect**, nothing ever
-  clears DIT. The rest of the program runs in DIT mode — a performance cost with
+  clears DIT. The rest of the program runs in DIT mode - a performance cost with
   no upper bound, and a divergence from the "DIT is off outside protected
   regions" discipline the rest of the placement assumes.
 
@@ -116,7 +116,7 @@ This is a *cost*, not a hole, which is why it is accepted. But it means:
   owns DIT. Currently unreachable, which is the point of checking it.
 - ~~On serializing-DIT hardware (Apple M4, where `MSR DIT` is ~30 cyc) the leak is
   nearly free, since the cost there is the toggle, not the dwell.~~ **CORRECTED
-  2026-08-30 — see section 7.** The leak is pure dwell and costs the same under both
+  2026-08-30 - see section 7.** The leak is pure dwell and costs the same under both
   switch models (+14.64% serializing, +14.77% renamed, a 0.13-point difference). A
   workload where it dominates has now been measured: any program that calls
   `sodium_init()` and then does little crypto pays the full always-on price.
@@ -128,7 +128,7 @@ secret-passing calls `notail` so a real `bl` + epilogue exists, at which point t
 existing post-call re-assert logic applies.
 
 That cannot be done where the bug lives. The taint pass runs **post-prologepilog**
-— by then the frame is gone and cannot be resurrected. `notail` has to be decided
+ - by then the frame is gone and cannot be resurrected. `notail` has to be decided
 before instruction selection, which means a genuine two-pass compile: analyze,
 then re-codegen from IR with the annotation. The 3-phase `-ftaint-harden` pipeline
 cannot express this, because phase 3 resumes at `start-after=prologepilog`.
@@ -191,7 +191,7 @@ call in an Off block - not a tail-call issue.
 
 ## 6. Region placement
 
-Region placement already leaves DIT set before the tail call — the safe direction —
+Region placement already leaves DIT set before the tail call - the safe direction -
 so it did not have this hole. It did have its own tail-call bugs: `std::next(C)` on a
 `TCRETURN` clobber inserted an `MSR` past the block terminator and aborted the
 MachineVerifier on any ordinary `-O2` sibling call, and the disable-before-return

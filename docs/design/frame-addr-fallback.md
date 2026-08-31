@@ -5,14 +5,14 @@
 > existed nearly every call site looked secret-passing and the gate stopped firing:
 > `ConnectBlockAllEcdsa` measured +45.32% with both against +0.66% with the gate alone,
 > 15/15 reps. P1b (`p1b-frame-provenance.md`) is the per-object replacement and does NOT
-> rescue this fallback (both got worse). The under-taint it targeted — passing
-> `&local_secret` into a callee — is REAL and now OPEN; see the KNOWN GAP comment in
+> rescue this fallback (both got worse). The under-taint it targeted - passing
+> `&local_secret` into a callee - is REAL and now OPEN; see the KNOWN GAP comment in
 > `TaintFixedPointIteration.cpp`. This document is kept as the record of what the
 > whole-frame approach cost.
 
 > Numbers below are the **re-measurement of 2026-07-27, after** the two soundness bugs
 > in `docs/design/spill-soundness-bugs.md` were fixed. (The pre-fix run gave 49% -> 84% recall
-> at 112 -> 287 functions — qualitatively identical, so those bugs did not drive this
+> at 112 -> 287 functions - qualitatively identical, so those bugs did not drive this
 > result. The only table still holding pre-fix numbers is the alloca one, labelled.)
 
 **Status:** prototype, **default OFF**. Measured 2026-07-27 on libsodium 1.0.21 (M4).
@@ -23,7 +23,7 @@ Closes a soundness gap; the question the measurement answers is what it costs.
 The analysis runs **post-prologepilog**, so a local buffer's address is just
 `$sp + imm`: no FrameIndex, no memory operand, nothing tying the register to the
 stack cell it points at. Register taint and memory (cell) taint are therefore two
-separate universes joined by exactly one bridge — pointee taint seeded on a pointer
+separate universes joined by exactly one bridge - pointee taint seeded on a pointer
 *argument*, which survives pointer arithmetic. **Taking the address of a local is not
 on that bridge.**
 
@@ -41,8 +41,8 @@ BL @ge25519_scalarmult_base  clean   <-- SECRET nonce, no tainted argument
 ```
 
 `ge25519_scalarmult_base` multiplies the secret nonce with **DIT off**. The taint is
-correctly recorded — loads after `sha512_final` do come back TAINTED via
-`ExternalMemClobbered` — but no register carries "points at it".
+correctly recorded - loads after `sha512_final` do come back TAINTED via
+`ExternalMemClobbered` - but no register carries "points at it".
 
 This violates the project's own invariant (`CLAUDE.md`): *any "can't classify" path
 must over-approximate*. The store-payload hook returns `std::nullopt` when it cannot
@@ -51,7 +51,7 @@ information about.
 
 ## The fix
 
-`TaintKind::FrameAddr` — **provenance, not taint**, tracked in the same
+`TaintKind::FrameAddr` - **provenance, not taint**, tracked in the same
 subreg/superreg-aware register machinery:
 
 - **Seed:** a def of an instruction that reads SP/FP (`anyFrameBaseUse`, via generic
@@ -59,14 +59,14 @@ subreg/superreg-aware register machinery:
   register number).
 - **Propagate:** through address arithmetic and copies; cleared by any other
   computation, by loads, and on call result defs.
-- **Consume — at call boundaries ONLY:** an argument register that is a frame address
+- **Consume - at call boundaries ONLY:** an argument register that is a frame address
   is treated as pointee-tainted iff `frameMayHoldSecret()` (any tainted stack cell, or
   `ExternalMemClobbered`). Feeds `taintedCallArguments`, `propagateArgTaintToCallees`,
   and `TaintFacts.UsesPointee` so the call becomes a DIT Need.
 
 **Why consume only at calls:** setting pointee taint at the `ADDXri` itself would make
 every subsequent load through that pointer secret, destroying cell-level stack
-precision — for a problem that only exists at the caller→callee transfer.
+precision - for a problem that only exists at the caller→callee transfer.
 
 Excluded from `empty()` / `countRegs()`: a function holding only frame addresses is
 not tainted and must not become instrumented on that basis.
@@ -80,7 +80,7 @@ not tainted and must not become instrumented on that basis.
 | `msr DIT` switches | 711 | 2,447 | 3.4× |
 | DIT regions | 524 | 2,111 | 4.0× |
 | ESCAPE / UNCOVERED / CLOBBER | 35 / 203 / 618 | 107 / 835 / 1,361 | ~3× |
-| `__text` (baseline 257,040) | 259,980 (+1.14%) | 267,152 (**+3.94%**) | — |
+| `__text` (baseline 257,040) | 259,980 (+1.14%) | 267,152 (**+3.94%**) | - |
 | Analysis wall-clock | ~7 min | ~30 min | ~4× |
 
 **Recall against the CIO artifact's own alert set** (116 of their subroutines exist in
@@ -94,7 +94,7 @@ our module; `cio_vs_ours.txt`):
 Note the taint-volume ratio got *worse* after the bug fixes (6.1× -> 9.1×) even though
 both absolute numbers are cleaner. The fallback's own total barely moved
 (26,964 -> 26,912) while the OFF baseline dropped 33%: under the fallback the taint is
-**saturated** — dominated by whole-frame poisoning, not by the implicit-def artifact.
+**saturated** - dominated by whole-frame poisoning, not by the implicit-def artifact.
 That is the clearest single argument that the fallback needs per-object precision (P1b)
 rather than tuning.
 
@@ -109,8 +109,8 @@ All previously-missing gap targets are now covered: `ge25519_scalarmult_base`,
 35 aead/stream cipher, 13 pwhash/scrypt**, 10 kdf/kx/box/sign API, 10 other, and only
 **6 utils/alloc/random** (`sodium_init`, `_sodium_alloc_init`,
 `randombytes_internal_random*`, `sodium_add`, `sodium_is_zero`). The growth is
-overwhelmingly in real crypto internals — the shape expected from correctly following a
-secret buffer into a primitive — not in unrelated support code. So the 2.6× function
+overwhelmingly in real crypto internals - the shape expected from correctly following a
+secret buffer into a primitive - not in unrelated support code. So the 2.6× function
 count is far better targeted than the raw ratio suggests; it is the 9.1× *instruction*
 volume, driven by whole-frame poisoning, that is the real cost.
 
@@ -136,7 +136,7 @@ not, and should not. The one genuine miss worth a look is `crypto_stream_chacha2
 
 An earlier version of this doc said per-object precision would mean "reconstructing what
 prologepilog erased." **That is wrong.** PEI *computes* the frame layout and
-`MachineFrameInfo` retains it — the MIR still carries the objects with their source
+`MachineFrameInfo` retains it - the MIR still carries the objects with their source
 names:
 
 ```
@@ -152,10 +152,10 @@ Only the *instruction operand* lost the FrameIndex (`ADDXri $sp, 232` rather tha
 Resolving `$sp+232` to `nonce` is a table lookup.
 
 **Worse, we do not track user locals as stack cells at all.** `getCellFromMMO` builds a
-Stack cell only from a `FixedStackPseudoSourceValue` — i.e. **spill slots**. In
+Stack cell only from a `FixedStackPseudoSourceValue` - i.e. **spill slots**. In
 `_crypto_sign_ed25519_detached` the 12 `%stack.N` MMOs are all spills; the real buffers
 are accessed via `%ir.az` / `%ir.add.ptr6` / `%ir.arrayidx2.i`, whose underlying object
-is an `AllocaInst`, for which there is no case — so they fall through to **Unknown**.
+is an `AllocaInst`, for which there is no case - so they fall through to **Unknown**.
 The "cell-level stack precision" the design claims covers spills, not the buffers
 secrets actually live in.
 
@@ -174,7 +174,7 @@ So option 2 is cheaper than stated, and splits into two pieces that must land to
 The alloca case was implemented (`getCellFromMMO` now resolves an `AllocaInst` underlying
 object to its frame object via `findFrameIndexForAlloca`, with a constant-offset check
 that drops to whole-object under a variable index rather than risk a half-matching key).
-It fixed the limitation `taint-analysis-memory.mir` documented in its own comment — that
+It fixed the limitation `taint-analysis-memory.mir` documented in its own comment - that
 test's local now tracks as `stack cell FI=0 off=0 sz=4` instead of falling into the
 unknown-memory set.
 
@@ -191,16 +191,16 @@ columns were measured on the same build):
 
 **Why:** at -O2, after inlining, the surviving functions operate on buffers owned by their
 *callers*. The MMO underlying objects are overwhelmingly pointer **Arguments**
-(`%ir.state`, `%ir.out`, `%ir.k`, `%ir.rkeys` — already handled by `CellInfo::Arg`) or
+(`%ir.state`, `%ir.out`, `%ir.k`, `%ir.rkeys` - already handled by `CellInfo::Arg`) or
 CodeGenPrepare-sunk addresses (`%ir.sunkaddr`, provenance destroyed). Own-frame allocas
 are mostly promoted to registers. In the ed25519 case the caller never stores to `nonce`
-at all — it passes `&nonce`, and `crypto_hash_sha512_final` writes it through its `out`
+at all - it passes `&nonce`, and `crypto_hash_sha512_final` writes it through its `out`
 parameter.
 
 **So the lever is (b), not (a).** The `nonce` taint arrives as that callee's
 `WritesSecretThroughArgPointee{1}`, which P1a applies bluntly as a whole-frame
-`ExternalMemClobbered`. P1b — mapping callee argument *i* back to the object the caller
-actually passed — is both the real precision win and the precondition for making the
+`ExternalMemClobbered`. P1b - mapping callee argument *i* back to the object the caller
+actually passed - is both the real precision win and the precondition for making the
 frame-address fallback per-object. Keep (a): it is correct, costs nothing measurable, and
 matters on less-inlined code. Do not expect it to move the numbers on optimized crypto.
 
@@ -212,7 +212,7 @@ slot (safe for taint, but "which local" is then ill-defined).
 **Expected payoff, honestly:** in `_crypto_sign_ed25519_detached` the entire frame
 (`hs`, `az`, `nonce`, `hram`, `R`) is secret-derived, so whole-frame is already about
 right and per-object recording buys little *there*. The win is in functions mixing
-secret and public locals, and on the **address** side — firing the fallback only for
+secret and public locals, and on the **address** side - firing the fallback only for
 addresses that point at a secret object rather than for any frame address in a dirty
 frame.
 

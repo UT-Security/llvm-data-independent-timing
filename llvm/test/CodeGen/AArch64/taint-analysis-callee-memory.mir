@@ -16,7 +16,7 @@
 # via_intu_memory, no_secret_ext.)
 
 # via_pointee_ext: the POINTEE case. The argument is a pointer whose *pointee* is
-# secret (tainted-pointee), passed to an external callee — the memcpy(dst,
+# secret (tainted-pointee), passed to an external callee - the memcpy(dst,
 # secret_src, n) shape. The pointer value itself is not data-tainted, so a
 # data-only taint check would (a) skip the TOP mem-clobber (reload leaks) and
 # (b) leave the function uninstrumented, which made the Scenario-B audit

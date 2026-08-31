@@ -5,7 +5,7 @@
 # On AArch64 a tail call (TCRETURN*) is BOTH isReturn() and isCall(). Whole-
 # function placement clears DIT "before every return", and emitFunctionGranularityDIT
 # tested isReturn() first, so the clear landed immediately before the tail
-# branch — precisely where control transfers to the callee, with this function's
+# branch - precisely where control transfers to the callee, with this function's
 # secret arguments still live in the argument registers. The callee then ran
 # with DIT=0.
 #
@@ -30,7 +30,7 @@
 # CHECK-NOT: MSRpstateImm4 26, 0
 # CHECK: TCRETURNdi @secret_consumer
 
-# Positive control — a REAL return in an instrumented function must still be
+# Positive control - a REAL return in an instrumented function must still be
 # preceded by the clear. Without this, "never clear anything" would also pass.
 # CHECK-LABEL: name: normal_caller
 # CHECK: MSRpstateImm4 26, 1
