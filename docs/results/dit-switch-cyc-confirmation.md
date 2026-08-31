@@ -7,6 +7,26 @@ gates the predictor). Checksums identical across all nine arms at every point.
 Data `~/Documents/dit-crossover/out/native/confirm_{lua,sqlite}_deploy.jsonl`,
 rig `utils/dit_host_screening/xover/` on `dit-tainter` (`5ad90a087fd5`).
 
+> ⚠️ **RESULT 2 IS RETRACTED (2026-08-30). The NOP control was inert.**
+>
+> `-taint-dit-nop-switches` is consumed by `AArch64AsmPrinter::emitInstruction`,
+> i.e. at EMISSION. `build_sodium_arms.sh` is two-stage and passed the flag only
+> to the first `llc`, the one that runs the taint pass and writes MIR; the second,
+> which emits the object, never received it. The flag was silently ignored and
+> **every NOP arm was byte-identical to its non-NOP twin** - `def30.o` and
+> `nop30.o` share a sha256, and `nop30.o` contains zero substituted instructions.
+> That was true in every revision of the script, including `5ad90a087fd5`, the one
+> this run used.
+>
+> So the def-minus-NOP term below is two timings of *the same binary*. It measured
+> machine noise. Every conclusion drawn from it is unsupported - not disproven,
+> unsupported. **Results 1, 3 and section 4 do not use the NOP arms and stand
+> unaffected.**
+>
+> Fixed in `xover: fix the NOP arms, which were never NOPed`, which also adds a
+> gate that fails the build unless each NOP arm carries zero `msr DIT` *and*
+> matches its twin's object size. Re-running Result 2 needs only rebuilt arms.
+
 ## Why this run existed
 
 Every previous `swcyc30` measurement was taken with the call-site mod-set gate
@@ -44,7 +64,14 @@ through 1400 B, slower in 0 of 20 reps at every one**; inert at 4 KiB (6/20) and
 64 KiB (7/20), where regions are large enough that the admission test has little
 left to merge. The 27-31% band from the earlier gate-off measurement reproduces.
 
-## Result 2: the parameter does not price what its name says
+## Result 2: the parameter does not price what its name says — RETRACTED
+
+> **Retracted 2026-08-30, see the notice at the top.** Kept in full rather than
+> deleted: the reasoning is sound *given* a working control, and the shape of the
+> error is worth preserving. An inert control does not fail loudly - it produces
+> exactly the reading a working one produces when layout is the whole story,
+> because the two binaries are the same binary.
+
 
 **The NOP control tracks the real build everywhere.** With
 `-taint-dit-nop-switches` every inserted `MSR DIT` is emitted as `HINT #0` at an
@@ -63,17 +90,31 @@ The NOP arms also reproduce the switch-cyc win almost exactly:
 | 512 B | -4.65 | -4.65 | 100% |
 | 1400 B | -2.36 | -1.98 | 84% |
 
-**So what `switch-cyc=30` buys is fewer INSTRUCTIONS INSERTED INTO HOT LOOPS,
+~~**So what `switch-cyc=30` buys is fewer INSTRUCTIONS INSERTED INTO HOT LOOPS,
 not cheaper mode switching**, and PSTATE.DIT's own execution cost is unresolvable
 at every region size measured - bounded around ±0.5 points while the pass itself
-costs up to +28%.
+costs up to +28%.~~
+
+**UNSUPPORTED.** The table above compares a binary pair against itself, so the
+99.6% / 100% / 84% "layout share" is 100% by construction and the deviations are
+run-to-run drift. With a WORKING NOP control the term is large and cleanly
+resolvable, at least on a different instrument: on the SQLite TCE composite under
+gem5, `nop30` sits within ±0.9% of the baseline at all twelve points while `def30`
+climbs monotonically to +23.4% under a serializing switch - layout costs nothing
+and the switches cost everything, the opposite reading. That is gem5 and a
+different workload, so it does not refute the M5 measurement; it shows the term is
+resolvable once the control works. See `docs/design/dit-tailcall-gap.md` §7.
 
 This corroborates, on a different library and a different instrument, the
 SQLCipher finding that most of what looks like switch cost is codegen
 (`CLAUDE.md`, 2026-08-24): with all 121 HMAC/SHA switches NOPed, that build still
 cost the majority of its total under a renamed switch.
 
-### The trap this creates
+### The trap this creates — also unsupported
+
+> Both claims below rest on the retracted def-minus-NOP term. The *advice* may
+> still be right, but this run is not evidence for it.
+
 
 **Do not lower `switch-cyc` for hardware with a renamed, non-serializing `MSR
 DIT`.** Renaming makes the mode switch cheaper; the mode switch is not the term
@@ -100,8 +141,9 @@ single run.
 - **Only two lanes of one library.** The attribution (layout, not DIT) is
   measured on libsodium at f = 2-25%. Bitcoin Core, where the gate is worth 50
   points and the toggle count is thin, is not covered here.
-- The DIT-only term is an **upper bound**, not a measurement: it never clears
-  the drift floor cleanly, and the NOP baseline biases it downward.
+- ~~The DIT-only term is an **upper bound**, not a measurement: it never clears
+  the drift floor cleanly, and the NOP baseline biases it downward.~~ There was no
+  DIT-only term: the NOP baseline was the same binary. See the notice at the top.
 - **Only two lanes of one library**, as above. The staircase in §4 is a property
   of libsodium's corridor-length distribution, not a universal fact.
 
