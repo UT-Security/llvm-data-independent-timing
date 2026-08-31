@@ -1,0 +1,130 @@
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit %s -o - | FileCheck %s
+
+# XFAIL: *
+# KNOWN GAP, recorded rather than fixed. Ownership does not compose through a
+# function that carries no taint of its own. A fix was prototyped 2026-08-26 and
+# REVERTED: it could not fire, because the taint never reaches this part of the
+# call graph in the first place (docs/design/stack-arguments.md S6), and the case
+# it handles may not survive once that gap is closed.
+
+# AlwaysEnteredWithDIT must survive a TRANSPARENT FORWARDER between the DIT-on
+# caller and the callee.
+#
+# The retraction in TaintFixedPointIteration.cpp treats "this call site passes no
+# tainted argument" as evidence that the callee can be entered with DIT off. For
+# a forwarder that performs no computation on the secret, that inference is
+# invalid: the function has no tainted runs, so it is never instrumented, so it
+# emits no DIT write at all and simply passes its caller's PSTATE.DIT through.
+# Every call it makes then looks secret-free and vetoes ownership for whatever it
+# forwards to.
+#
+# Found 2026-08-26 on libsodium. `crypto_stream_chacha20_ietf` is exactly this
+# shape -- it compiles to two instructions,
+#
+#   mov w1, #0x40 ; b stream_ietf_ext_ref
+#
+# -- and it is the only caller of `stream_ietf_ext_ref`, which IS a seeded taint
+# source. So the seeded callee is condemned to clear DIT on exit, and
+# `crypto_aead_chacha20poly1305_ietf_encrypt_detached` above it must re-assert
+# before all twelve of its calls. Measured cost of that cascade: ~56 executed
+# `MSR DIT` per AEAD call against a hand-placed oracle's 2.
+#
+# NOT a soundness bug -- coverage is correct either way, because the caller
+# enables DIT before the call and the forwarder never clears it. This is purely
+# the ownership inference failing to compose through a function with no taint.
+#
+# 26 is the PSTATE.DIT pstatefield encoding.
+
+# @api - the regression. With @worker owning DIT there is nothing to repair, so
+# the re-assert after `BL @fwd` must be gone.
+# CHECK-LABEL: name: api
+# CHECK: MSRpstateImm4 26, 1
+# CHECK: BL @fwd
+# CHECK-NOT: MSRpstateImm4 26, 1
+# CHECK: MSRpstateImm4 26, 0
+# CHECK: RET_ReallyLR
+
+# @fwd - the transparent forwarder. It must remain uninstrumented: it computes
+# nothing on the secret, so there is nothing here to protect.
+# CHECK-LABEL: name: fwd
+# CHECK-NOT: MSRpstateImm4
+# CHECK: BL @worker
+
+# @worker - a seeded taint source whose only entry is through @fwd, which is in
+# turn only entered from @api's DIT-on region. It is therefore always entered
+# with DIT set and must NOT clear on exit.
+# CHECK-LABEL: name: worker
+# CHECK: MSRpstateImm4 26, 1
+# CHECK-NOT: MSRpstateImm4 26, 0
+# CHECK: RET_ReallyLR
+
+--- |
+  target triple = "aarch64-unknown-linux-gnu"
+
+  define i64 @api(ptr "tainted-pointee" %k, ptr %scratch) {
+  entry:
+    %v = load i64, ptr %k
+    %r = call i64 @fwd(ptr %scratch)
+    %b = mul i64 %r, %v
+    ret i64 %b
+  }
+
+  define internal i64 @fwd(ptr %buf) {
+  entry:
+    %r = call i64 @worker(ptr %buf, i64 64)
+    ret i64 %r
+  }
+
+  define internal i64 @worker(ptr "tainted-pointee" %buf, i64 %len) {
+  entry:
+    %v = load i64, ptr %buf
+    %r = mul i64 %v, %len
+    ret i64 %r
+  }
+...
+---
+name:            api
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$x1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1
+
+    renamable $x19 = LDRXui killed renamable $x0, 0 :: (load (s64) from %ir.k)
+    renamable $x0 = COPY $x1
+    BL @fwd, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit $x0, implicit-def $sp, implicit-def $x0
+    renamable $x0 = MADDXrrr killed renamable $x19, killed renamable $x0, $xzr
+    RET_ReallyLR implicit $x0
+...
+---
+name:            fwd
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+body:             |
+  bb.0.entry:
+    liveins: $x0
+
+    dead $w1 = MOVi32imm 64, implicit-def $x1
+    BL @worker, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit $x0, implicit killed $x1, implicit-def $sp, implicit-def $x0
+    RET_ReallyLR implicit $x0
+...
+---
+name:            worker
+tracksRegLiveness: true
+isSSA:           false
+liveins:
+  - { reg: '$x0' }
+  - { reg: '$x1' }
+body:             |
+  bb.0.entry:
+    liveins: $x0, $x1
+
+    renamable $x8 = LDRXui killed renamable $x0, 0 :: (load (s64) from %ir.buf)
+    renamable $x0 = MADDXrrr killed renamable $x8, killed renamable $x1, $xzr
+    RET_ReallyLR implicit $x0
+...

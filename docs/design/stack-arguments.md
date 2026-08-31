@@ -114,3 +114,117 @@ were not re-run.
   conservative external-call path, not by this bit.
 
 Test: `llvm/test/CodeGen/AArch64/taint-analysis-stack-args.mir`.
+
+---
+
+## 6. A second entry point into the same class: a SEEDED parameter at index >= 8
+
+**Found and fixed 2026-08-26.**
+
+**Found 2026-08-26**, while tracing why `AlwaysEnteredWithDIT` never fires on
+libsodium. Section 2's fix is caller -> summary -> callee: it recognises the
+outgoing-arg store, reports it at the call, and seeds the callee's frame objects.
+That covers a secret **passed** on the stack. It does not cover a secret
+**declared** on the stack, because there is no caller and no store - the taint
+originates from the taint-source file.
+
+An annotation on an argument at index >= 8 was applied to the IR and then
+dropped. Identical bodies, same load-multiply, only the argument position
+differs:
+
+| seeded argument | `msr DIT`, before | after |
+|---|---|---|
+| index 7, `tainted-pointee` (x7) | 2 | 2 |
+| index 7, `tainted` (x7) | 2 | 2 |
+| **index 8, `tainted-pointee`** (stack) | **0** | **2** |
+| **index 8, `tainted`** (stack) | **0** | **2** |
+
+The boundary is exactly the AAPCS64 register/stack split, and both taint kinds
+were affected. Regression: `taint-analysis-stack-seeded-arg.mir`.
+
+### The fix
+
+`seedTaintFromArguments` walks `MRI.liveins()` and maps each incoming argument
+register to an argument index, so an index that no argument register carries was
+never seeded at all. It now detects exactly that -- a declared-secret index not
+covered by any livein argument register did not arrive in a register -- and takes
+the SAME path section 2(c) built for the caller-side case: seed every incoming
+fixed frame object.
+
+No ABI assignment is re-run, which is the constraint section 2(c) set. An unused
+argument also has no livein, so this over-approximates onto the frame in that
+case: safe direction, confined to a function that already carries a declared
+secret, and it costs precision rather than coverage.
+
+### What it costs on the shipped libsodium seed
+
+**Four of the 65 CIO-parity seed lines sit at index 8, and all four are AEAD
+KEYS:**
+
+```
+crypto_aead_aes256gcm_encrypt,8,pointee
+crypto_aead_aes256gcm_decrypt,8,pointee
+crypto_aead_chacha20poly1305_ietf_decrypt,8,pointee
+crypto_aead_chacha20poly1305_ietf_encrypt,8,pointee
+```
+
+Annotating the whole library with **only** those four lines applies 4 pointee
+attributes across 4 functions and produced **0 `msr DIT` across 0 functions**: a
+key-only annotation of libsodium's AEAD compiled to a completely unprotected
+build. It now produces **54 `msr DIT` across 9 functions**.
+
+On the full CIO-parity seed the fix costs **398 -> 414 switches across 81 -> 83
+functions**, about +4%, all of it coverage the analysis should always have had.
+
+**This corrected a claim in the generated seed header** (`utils/taint_libsodium_eval.sh`),
+which reads:
+
+> *"The four `crypto_aead_*,8` lines are LIVE here - arg 8 is a real pointer
+> param. In CIO arg_index counts SysV GPR arg regs, capped at 5, so those lines
+> are DEAD there and never seed the AEAD key. We are strictly more complete."*
+
+They were dead here too, for a different reason -- stack passing rather than
+CIO's GPR cap. With the fix they are live, and the header's claim now holds.
+
+**It was masked in the full seed, which is why nothing caught it.**
+`crypto_aead_chacha20poly1305_ietf_encrypt` is also seeded on args 2 (the
+plaintext, pointee) and 3 (its length), both register-passed, so the function is
+instrumented via the MESSAGE and looks fine. The key's taint is dropped silently.
+A key-only seed - the more conventional annotation, and the one a user would
+write first - had nothing to fall back on.
+
+### Why this blocks the ownership work
+
+The retraction that decides `AlwaysEnteredWithDIT` asks whether a call site passes
+a secret. Inside `crypto_aead_chacha20poly1305_ietf_encrypt_detached` the key is
+argument 9 - also stack-passed - so the call to `crypto_stream_chacha20_ietf`
+registers as passing nothing, and the chain unravels from there:
+
+```
+retract crypto_stream_chacha20_ietf (call in ..._encrypt_detached, transparent=0, instrumented=1)
+retract stream_ietf_ext_ref         (call in crypto_stream_chacha20_ietf, transparent=0)
+```
+
+So the ~56 executed `MSR DIT` per AEAD call (against a hand-placed oracle's 2)
+and this gap are the SAME root cause. A `-taint-dit-forwarder-ownership` fix was
+prototyped on 2026-08-26 and **reverted**: it measured 35 `msr DIT` with the flag
+on and 35 with it off on the internalized libsodium bitcode, because the taint
+never arrives for it to act on. Do not re-attempt it until this gap is closed --
+a transparent forwarder that starts carrying taint stops being transparent, so
+the case it handles may not survive the fix.
+`taint-analysis-dit-forwarder-ownership.mir` records the behaviour.
+
+### Severity
+
+Under-taint of a declared source, so the same class as section 1 - but it was
+**never demonstrated as a live leak** in the shipped libsodium build, because the
+message annotation covers the same code. What was demonstrated is that the
+annotation was silently discarded, which is enough to make a key-only deployment
+unprotected while reporting nothing.
+
+### What it did NOT fix
+
+The ~56 switches per AEAD call are still there: `encrypt_detached` still emits 14
+and the internalized build still measures 35. `stream_ietf_ext_ref` gained the
+ownership bit, `crypto_onetimeauth_poly1305_donna_init` did not. The stack gap was
+*a* root of the ownership problem, not *the* root. Whatever remains is unmeasured.

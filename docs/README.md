@@ -52,6 +52,12 @@ Stable facts that other docs and the code depend on.
 
 How the analysis is built, which bugs were found in it, and what is still open.
 
+- **[results/dit-secp-tier2.md](results/dit-secp-tier2.md)** - the four
+  under-taint channels do NOT occur in libsecp256k1 ECDSA signing: 464,796 of
+  464,800 secret-operand instructions run protected, with a null control that
+  reports 464,800 to prove the instrument is looking. Answers the question
+  `results/dit-flowprobe-undertaints.md` left open. Read its scope section.
+
 - **[design/verification.md](design/verification.md)** - how the two instruments
   that check the hardening work: a static verifier on the FINAL MIR (placement
   integrity, fatal) and a dynamic oracle (analysis soundness, two tiers). Why

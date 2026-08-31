@@ -34,11 +34,27 @@ fi
 build_arm() {
     local name="$1"; shift
     [[ -f "$OUT/$name.o" ]] && { echo "  $name already built"; return; }
+
+    # WHICH STAGE GETS WHICH FLAG. -taint-dit-nop-switches is consumed by
+    # AArch64AsmPrinter::emitInstruction, i.e. at EMISSION, so it belongs to the
+    # SECOND llc. Given only to the analysis stage it is silently ignored and the
+    # arm comes out byte-identical to its non-NOP twin - an inert control that
+    # looks like a passing one, because "the NOP arm tracks the real build" is
+    # exactly what identical binaries produce. The gate below catches it.
+    local analysis=() emit=()
+    local a
+    for a in "$@"; do
+        case "$a" in
+            -taint-dit-nop-switches) emit+=("$a") ;;
+            *)                       analysis+=("$a") ;;
+        esac
+    done
+
     say "$name: $*"
-    "$L/llc" -enable-new-pm -run-taint-interproc -taint-insert-dit "$@" \
+    "$L/llc" -enable-new-pm -run-taint-interproc -taint-insert-dit "${analysis[@]}" \
         -taint-dit-precision-report="$OUT/$name.prec.txt" \
         "$W/libsodium.pe.mir" -o "$OUT/$name.mir" || return 1
-    "$L/llc" -start-after=prologepilog "$OUT/$name.mir" -filetype=obj \
+    "$L/llc" -start-after=prologepilog "${emit[@]}" "$OUT/$name.mir" -filetype=obj \
         -o "$OUT/$name.o" || return 1
     rm -f "$OUT/$name.mir"
 }
@@ -86,6 +102,29 @@ build_arm nop300  -taint-dit-switch-cyc=300 -taint-dit-nop-switches
 #   build_arm gated   ... -taint-modset-callsite-gated      (== def0 today)
 #   build_arm hoist0  -taint-dit-placement=region -taint-dit-loop-hoist=0
 #   build_arm func    -taint-dit-placement=function
+
+
+# GATE: a NOP arm must carry ZERO `msr DIT` and must still be the same size as
+# its twin (that is the whole point - same layout, no mode switch). Both halves
+# have to hold; either one alone can be satisfied by a broken build.
+say "gate: NOP arms are actually NOPed"
+gate_fail=0
+for pair in "def0 nop0" "def30 nop30" "def100 nop100" "def300 nop300"; do
+    d="${pair%% *}"; n="${pair##* }"
+    [[ -f "$OUT/$d.o" && -f "$OUT/$n.o" ]] || continue
+    dn=$("$L/llvm-objdump" -d "$OUT/$d.o" | grep -ci 'msr.*dit')
+    nn=$("$L/llvm-objdump" -d "$OUT/$n.o" | grep -ci 'msr.*dit')
+    ds=$(stat -c%s "$OUT/$d.o" 2>/dev/null || stat -f%z "$OUT/$d.o")
+    ns=$(stat -c%s "$OUT/$n.o" 2>/dev/null || stat -f%z "$OUT/$n.o")
+    if [[ "$nn" -ne 0 ]]; then
+        printf '  FAIL %s: %s msr DIT survive (expected 0)\n' "$n" "$nn"; gate_fail=1
+    elif [[ "$ds" -ne "$ns" ]]; then
+        printf '  FAIL %s: size %s vs %s %s - layout not preserved\n' "$n" "$ns" "$d" "$ds"; gate_fail=1
+    else
+        printf '  ok   %s: %s msr DIT -> 0, size unchanged (%s)\n' "$n" "$dn" "$ns"
+    fi
+done
+[[ "$gate_fail" -eq 0 ]] || { red_msg="NOP control is inert - do not measure with these arms"; echo "  $red_msg" >&2; exit 1; }
 
 say "switch counts"
 for a in nodit def0 def30 def100 def300 nop0 nop30 nop100 nop300; do
