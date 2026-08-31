@@ -24,7 +24,12 @@ secret-dependent code. See `docs/results/dit-cost-model.md`.
 Running builds is fine. They are long, so start them in the background rather than
 blocking on them, and do not run benchmarks while one is in flight.
 
-- Build dir: `build/` (Debug, all targets). Typical: `ninja -C build clang llc opt`
+- Build dir: `build/` (Debug, all targets). **Use `ninja -C build` with NO target
+  list.** The taint analysis links into `clang`, `llc` AND **`libLTO.dylib`**, and
+  `ninja -C build clang llc` leaves libLTO stale - the LTO link then silently runs the
+  OLD analysis with no error. That cost two 50-minute measurement builds on 2026-08-30.
+  A targeted build must name `LTO` explicitly:
+  `ninja -C build clang llc LTO llvm-ar llvm-ranlib llvm-objdump`
 - All tools referenced below are `build/bin/...`
 - Touching `llvm/include/llvm/CodeGen/TaintAnalysis.h` rebuilds every taint TU and
   relinks `clang`/`llc`, which are large; expect the link to dominate.
@@ -113,6 +118,10 @@ that escape it (returned pointer into a secret buffer, global read by a sibling 
 call edge, inline asm, NEON register tuple). `-taint-no-modset-gate` is the escape hatch.
 
 ### The DIT ABI (settled 2026-08-30) - `docs/design/dit-abi.md`
+
+**To RUN it, read `docs/reference/dit-abi-runbook.md`** - build steps (including the
+libLTO trap), the exact flags for LTO and non-LTO, how to read the counts, and what a
+gem5 run sees.
 
 **PSTATE.DIT is callee-saved.** An instrumented callee returns DIT exactly as it found
 it at every exit it controls; a caller may rely on DIT never coming back lower than it

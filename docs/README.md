@@ -62,6 +62,12 @@ How the analysis is built, which bugs were found in it, and what is still open.
   where DIT switches go: what exists today, the placement constraints the spec
   imposes, the remaining security and performance gaps, and the proposed spec-aware
   optimal placement with its evaluation plan.
+- **[reference/dit-abi-runbook.md](reference/dit-abi-runbook.md)** - **how to RUN the
+  ABI.** Build steps (`ninja -C build` with no target list, because the analysis also
+  links into `libLTO.dylib` and a targeted build leaves it stale and silently wrong),
+  the exact LTO invocation (`llvm-ar`, `-lto_library`, and the module flag that carries
+  the request into the linker), how to read the switch/carrier/guard counts, what a gem5
+  run sees and where it overstates cost, and the known limitations.
 - **[design/dit-abi.md](design/dit-abi.md)** - **THE CONTRACT, read before the two
   below.** Settled 2026-08-30: **PSTATE.DIT is callee-saved.** Obligation on every
   instrumented callee, `d_out == d_in` at every exit it controls; guarantee to every
