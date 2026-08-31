@@ -22,11 +22,27 @@
 
 #define QUERIES_PER_ROUND 60
 
+#ifdef GEM5_NO_SELF_TIMING
+/* gem5 SE returns SIMULATED time from clock_gettime, so self-timing makes the
+ * run depend on its own cycle count and it stops being a deterministic replay:
+ * simInsts then differs between machine configs for an identical binary, because
+ * a timing-derived value printed with %%.3f/%%.4f emits different digits and
+ * therefore different work. Measured residual before this guard: 1.4e-6 relative
+ * (dit-gem5-composite.md sec 3 is the same defect on the secp composite).
+ *
+ * With the guard on, f and R come from DIFFERENCING against an nper=0 run of the
+ * same binary, which is exact because gem5 is deterministic:
+ *     f = (cyc - cyc_nocrypto) / cyc
+ *     R = (cyc - cyc_nocrypto) / ops / freq
+ * so nothing is lost -- the in-run timer was only ever a cross-check. */
+static double now_s(void) { return 0.0; }
+#else
 static double now_s(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
     return ts.tv_sec + ts.tv_nsec * 1e-9;
 }
+#endif
 
 static double g_secret_s;
 static sqlite3 *db;
