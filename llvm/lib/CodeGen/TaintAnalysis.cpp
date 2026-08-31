@@ -117,9 +117,9 @@ cl::opt<bool> llvm::TaintDITAbi(
     "taint-dit-abi", cl::init(false), cl::Hidden,
     cl::desc("Callee-saved PSTATE.DIT (docs/design/dit-abi.md): read DIT at "
              "entry, restore it at every return, and emit nothing at call "
-             "sites. Currently implemented for -taint-dit-placement=function "
-             "only; region placement additionally needs its interior clears "
-             "guarded on the entry value (dit-unconditional-design.md 6.1)."));
+             "sites. Works with BOTH placement modes, including the default "
+             "`region`. Prefer the driver flag -ftaint-dit-abi: this option "
+             "alone gives the ABI WITHOUT the tail-call disable it requires."));
 
 cl::opt<std::string> llvm::TaintNonlocalReportFile(
     "taint-nonlocal-report", cl::init(""), cl::Hidden,

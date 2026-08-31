@@ -365,6 +365,15 @@ the two-pass compile.
 
 ## 6.1 Interaction with region narrowing: this one is a real constraint
 
+**RESOLVED 2026-08-30 - region placement is supported.** Implemented in
+`741de92ae8cd` and refined in `451d8066f71d`: the choice of restore form is made
+per EXIT rather than per placement, so a region-placed return in an On block takes
+the same cheap guarded clear whole-function coverage does (measured 21 guarded
+against 8 unconditional on Bitcoin Core). Interior clears did NOT need guarding -
+see `docs/design/dit-abi.md` §9.5.1 for what was actually required. The analysis
+below is the pre-implementation reasoning and is kept for the record.
+
+
 Region placement narrows by *clearing* DIT around clean stretches. An interior clear is
 illegal when this frame does not own DIT - which is exactly why `insertTaintDITSwitches`
 routes `!OwnsDIT` functions past the region emitter today: *"every one of those clears
