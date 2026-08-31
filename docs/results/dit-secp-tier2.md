@@ -1,24 +1,34 @@
-# libsecp256k1 signing: no under-taints, and coarse beats fine
+# libsecp256k1 signing: no under-taints, and coarse beats fine on dwell
 
 **Measured 2026-08-31** with the gem5 shadow-taint oracle
-(`gem5-DIT/benchmarks/taint_oracle/run_secp_gem5.sh`). Compiler: `919569c5`
-(branch `nopctl-gate`, one docs-only commit ahead of `dit-tainter`, so codegen
-is `dit-tainter`'s), default flags. Guest: libsecp256k1 ECDSA signing, key seeded by
-m5 op, 2 signatures.
+(`gem5-DIT/benchmarks/taint_oracle/run_secp_gem5.sh`). Compiler: `8aaf61cf`
+(`dit-tainter`), default flags. Simulator: `gem5-DIT` at `3a78a102`. Guest:
+libsecp256k1 ECDSA signing, key seeded by m5 op, **20 signatures**, averaged over
+8 `argv[0]` lengths.
 
-> **The performance numbers in §3 were re-measured on 2026-08-31 and every one
-> of them changed.** The first run compared arms built to different file names,
-> and in gem5 SE mode the binary path is written onto the initial process stack
-> as `argv[0]`, so its LENGTH shifts stack alignment for the whole run. That is
-> worth up to 0.84% here, more than the effect being measured. §3 now runs every
-> arm from one identical path. The soundness result in §2 is unaffected: it
-> counts instructions, not cycles. Superseded numbers are listed in §3.1.
+> **§3 has been corrected TWICE on 2026-08-31 and §2 strengthened once. Read
+> §3.1 before quoting anything from an earlier revision.**
+>
+> The first correction made every arm run from one identical path, because in
+> gem5 SE mode `argv[0]` sits on the initial process stack and its LENGTH moves
+> the initial SP. That was necessary and **not sufficient**: sharing one path
+> removes the bias between arms, but the delta is still a function of that
+> arbitrary path, and at the old 2-signature workload the coarse-versus-fine
+> verdict flipped sign across path lengths. §3 is now averaged over **eight**
+> `argv[0]` lengths at **20** signatures, and reports a confidence interval with
+> an explicit *not resolved* verdict rather than a single number.
+>
+> §2 got **more** trustworthy, not less: the oracle had two precision faults
+> that manufactured under-taints, both now fixed, and the result is re-taken at
+> 10x the coverage. See §2.1.
 
 Two results. The soundness one closes the question
 `dit-flowprobe-undertaints.md` §5 left open (*"are the four channels reachable
 in real crypto code?"* - not here). The performance one goes the other way:
-blanket DIT beats our placement on this workload by 0.489 points, which is what
-the framework predicts at `f_secret` near 100%.
+blanket DIT beats our placement on this workload by **1.94 points**
+[+0.53, +2.52], which is what the framework predicts at `f_secret` near 100%.
+The NOP control says that cost is DIT running rather than the code-shape change
+of inserting the switches.
 
 ---
 
@@ -42,15 +52,22 @@ the instrument for this.
 
 ## 2. Result
 
+At **20** signatures, with the oracle faults of §2.1 fixed:
+
 | arm | secret ops protected | secret ops with DIT clear | distinct sites |
 |---|---|---|---|
-| hardened (default flags) | **464,796** | **4** | 2 |
-| no `-ftaint-harden` (control) | 0 | 464,800 | 7,495 in 66 functions |
+| hardened (default flags) | **4,647,778** | **40** | 2 |
+| no `-ftaint-harden` (control) | 0 | 4,647,818 | 7,495 |
 
 **Zero under-taint sites inside libsecp256k1.** Every instruction in the library
 that computed on secret-derived data ran with `PSTATE.DIT` set.
 
-### The four that remain are in the driver, and are not a leak
+This claim was originally made at 2 signatures. It now holds at 20, which
+matters because raising the count is what exposed the oracle faults below: at 20
+the *unfixed* oracle reported 6 sites, 2 of them inside the library, all of
+which turned out to be its own artifacts.
+
+### The two that remain are in the driver, and are not a leak
 
 Both sites are in the benchmark's own `main`, at the call site:
 
@@ -74,6 +91,50 @@ the ciphertext, the signature, and any other public output. Cited as the
 concrete argument for building it: see `related-work.md` §3a for CryptoMPK's
 `mxor` tag and the 3.1x precision it bought them.
 
+### 2.1 Two oracle faults that manufactured under-taints
+
+Both were fixed on 2026-08-31 (`gem5-DIT`: `sim,cpu-o3: separate the taint
+oracle's address and data channels`), and both are mirror images of faults the
+compiler side had already fixed.
+
+**Address and data were one bit.** The propagation OR-ed every source register
+into one `src_tainted`, so a pointer that had once touched a secret made every
+access through it a finding. `PSTATE.DIT` covers data-operand timing and nothing
+else; a secret-dependent *address* is the cache/TLB channel, which DIT does not
+cover. They are now separate channels and only the data channel can be an
+under-taint.
+
+**Load-pair payload granularity**, which is what actually produced the false
+findings. One `memTainted()` over the whole access was given to every
+destination of a multi-destination load, so on `ldp_uop x22, x21, [ureg0]` a
+tainted neighbour contaminated a clean register. Concretely: `ok`, which is
+secret-derived by design as the API return code, tainted the adjacent spill slot
+of `&msg`, and every subsequent use of that pointer - including the argument
+move into the callee - was reported. That accounted for 4 of the 6 sites,
+including both library ones. Each destination now takes the taint of its own
+byte slice. This is the same class as
+`TargetInstrInfo::getNumStoredValueRegs`.
+
+| | unfixed oracle | fixed |
+|---|---|---|
+| under-taint ops | 112 | **40** |
+| distinct sites | 6 | **2** |
+| sites inside libsecp256k1 | 2 | **0** |
+| ops consuming a secret ADDRESS | (not tracked) | 120 |
+
+**Validated three ways**, because reasoning about it was wrong twice: the
+unhardened control still reports 4,647,818 under-taints across the same 7,495
+sites, so the data channel is intact; the slice mapping is self-checking, since
+reversing it would make the genuinely tainted half of the pair come back clean
+and the `ok`-derived sites disappear, and they survive; and `flowprobe_gem5`,
+whose four channels are deliberate, still reports all four, corroborated by the
+guest's own `mrs DIT` readings.
+
+**The lesson generalises past this bug.** An over-approximating oracle is not
+"safe" the way an over-approximating analysis is. A spurious finding costs
+credibility and, worse, buries the real ones: here 4 false sites sat alongside
+2 true ones and pointed at the wrong functions.
+
 ---
 
 ## 3. Coarse versus fine on this workload: coarse wins
@@ -81,20 +142,52 @@ concrete argument for building it: see `related-work.md` §3a for CryptoMPK's
 The oracle answers a soundness question. The performance question is separate,
 and on this workload it goes the other way.
 
-| arm | cycles | vs no DIT | DIT suppressions |
-|---|---|---|---|
-| no DIT (round-trip control) | 275,721 | - | 0 |
-| **coarse**: blanket, `msr DIT` once in `main` | 281,947 | **+2.258%** | 123,694 |
-| **fine**: our selective placement | 283,325 | **+2.758%** | 122,159 |
+Measured over **8 `argv[0]` lengths** (18/22/26/30/34/38/42/46) at **20
+signatures**, `ROUNDS=20`. Percentages are against the round-trip control at the
+same offset; the interval is a 95% t-interval over the eight offsets.
 
-**Fine-grained is 0.489 points worse than blanket here**, and the suppression
-counts say why: 123,694 against 122,159. The two arms protect essentially the
-same instructions, so selectivity buys no reduction in dwell, and the switch
-bill is left with nothing to offset it. Per suppressed op the coarse arm pays
-0.050 cycles and the fine arm 0.062; the gap is the toggles, executed at loop
-frequency, buying 1,535 fewer suppressions.
+| term | median | mean | 95% CI | offsets +ve | verdict |
+|---|---|---|---|---|---|
+| **coarse**: blanket vs no-DIT | +0.167% | +0.360% | [−0.17, +0.89] | 7/8 | **not resolved** |
+| **layout only**: NOPed vs no-DIT | −0.124% | −0.319% | [−0.95, +0.31] | 3/8 | **not resolved** |
+| **fine**: our placement vs no-DIT | +1.963% | +1.886% | [+1.19, +2.58] | 8/8 | **resolved > 0** |
+| **fine vs coarse** | +1.935% | +1.526% | [+0.53, +2.52] | 7/8 | **resolved > 0** |
 
-That is the framework's Q2 answer, not a surprise. `f_secret` on ECDSA signing
+Three things follow, and the third is the reason the NOP arm exists.
+
+**Our placement costs about 1.9% here, and that is real.** It is the only term
+positive at every offset, and its interval clears zero comfortably.
+
+**Blanket DIT is not distinguishable from free on this workload.** Its interval
+spans zero. That is not "blanket is cheap" stated loosely - it is that this rig
+cannot resolve a term that small, and neither figure should be quoted as a value.
+
+**The cost is DIT running, not the code-shape change of inserting the
+switches.** The NOP arm (`-taint-dit-nop-switches`, every `MSR DIT` emitted as
+`HINT #0` at identical size, so identical instruction count and identical
+addresses) is *indistinguishable from the unhardened build*: median −0.124%,
+interval spanning zero, negative at 5 of 8 offsets. So none of fine's 1.9% is
+attributable to layout.
+
+That last point is worth stating against the precedent, because it does not
+generalise. On SQLCipher, NOPing all 121 HMAC/SHA switches still cost +17.10 pp
+serializing and +4.05 pp renamed - under a renamed switch, the majority of the
+total - because region placement split a hot compression loop there. Here the 20
+sites sit where the restructuring does not hurt. **Whether a placement's cost is
+dwell or layout is a property of the workload, not of the pass**, and only the
+NOP arm distinguishes them.
+
+**Why the offsets are not optional.** The no-DIT baseline alone spans **2.41%**
+across the eight lengths. Each path character adds 2 bytes to the guest's initial
+stack frame (the filename counts once as `AT_EXECFN` and again as `argv[0]` in
+`src/arch/arm/process.cc`), and the SP is then rounded down to 16, so the initial
+SP is a step function of path length. Every stack address moves with it, which
+changes pointer values and therefore what the machine's value-based
+optimisations can fold - so it perturbs each arm differently rather than adding a
+constant offset. A single-path measurement of a sub-2% effect on this rig is not
+a measurement.
+
+Coarse beating fine is the framework's Q2 answer, not a surprise. `f_secret` on ECDSA signing
 is about 100%: there is no public work for selective placement to spare. This
 is the losing end of the curve, and it is worth citing precisely because it is
 one unmodified crypto library rather than a constructed composite - nobody can
@@ -123,26 +216,30 @@ cycle once they share a path is the cleanest confirmation of the diagnosis.
 
 ### 3.1 Superseded numbers
 
-Do not quote these; they are recorded so the change is auditable.
+Do not quote these. Recorded so the changes are auditable.
 
-| arm | first run (confounded) | corrected |
-|---|---|---|
-| no DIT (round-trip) | 279,505 | 275,721 |
-| coarse / blanket | 280,322 (+0.292%) | 281,947 (+2.258%) |
-| fine / our placement | 283,188 (+1.318%) | 283,325 (+2.758%) |
-| **coarse advantage** | **1.02 points** | **0.489 points** |
+| revision | no-DIT | coarse | fine | coarse advantage | fault |
+|---|---|---|---|---|---|
+| first | 279,505 | 280,322 (+0.292%) | 283,188 (+1.318%) | 1.02 pts | arms built to different file names, hours apart, against a compiler that changed underneath them |
+| second | 275,721 | 281,947 (+2.258%) | 283,325 (+2.758%) | 0.489 pts | one shared path, so unbiased, but a single sample of a quantity whose spread is ~2 pp |
+| **current** | - | **not resolved** | **+1.963%** | **+1.935% [+0.53, +2.52]** | 8 offsets, 20 signatures, CI reported |
 
-The direction survived; the magnitude did not, and both absolute DIT costs were
-understated by roughly 2x. The arms were also built hours apart against a
-compiler that changed underneath them (the callee-saved PSTATE.DIT ABI series
-landed in between), which is why the run now prints its compiler commit.
+The direction survived both corrections; no magnitude did. Both earlier
+revisions also used `ROUNDS=2` (549k instructions), where the effect is the same
+size as stack-layout perturbation and the coarse-versus-fine sign flips with the
+file name. `ROUNDS` now defaults to 20.
+
+A preliminary reading taken between the second and current revisions - that
+roughly 88% of fine's cost was layout - is **retracted**. It came from a single
+offset at `ROUNDS=2`; at 20 signatures over 8 offsets the layout term is
+indistinguishable from zero.
 
 ---
 
 ## 4. The control is what makes the number mean anything
 
 A zero from an instrument that is not looking is worthless. Built without
-`-ftaint-harden`, the identical code reports **464,800** under-tainted ops
+`-ftaint-harden`, the identical code reports **4,647,818** under-tainted ops
 across 7,495 sites:
 
 | function | sites |
@@ -154,9 +251,15 @@ across 7,495 sites:
 | `secp256k1_i128_accum_mul` | 189 |
 | `secp256k1_fe_mul_inner` | 187 |
 
-The instrument sees the whole signing path. The hardened arm's 4 is a real 4.
-`run_secp_gem5.sh` asserts this rather than leaving it to the reader: the
-control must report more than 10,000, and must protect nothing.
+(Site counts are from the 2-signature run; the ranking is unchanged at 20.)
+
+The instrument sees the whole signing path. The hardened arm's 40 is a real 40,
+and the control's site count is **identical** before and after the §2.1 oracle
+fixes, which is what shows those fixes removed false positives rather than
+blinding the instrument. `run_secp_gem5.sh` asserts this rather than leaving it
+to the reader: the control must report more than 10,000 and must protect nothing,
+and the NOP arm must carry zero `MSR DIT`, an instruction count equal to the
+hardened arm's, and zero suppressions.
 
 ---
 
@@ -173,28 +276,32 @@ control must report more than 10,000, and must protect nothing.
 - **Dynamic, so it exhibits counterexamples and cannot prove absence.** The
   static verifier (`design/verification.md` §3) covers all paths, but only for
   what the analysis already decided to protect.
-- **The 0.489-point coarse-over-fine gap has NOT been separated from code
-  layout.** Coarse and fine are different binaries, so some of the gap is the
-  incidental alignment difference of inserting 20 `msr DIT` sites rather than
-  one, and none of it is attributable to DIT semantics until the NOP control
-  (`-taint-dit-nop-switches`, which emits every switch as `HINT #0` at identical
-  size) is run as a fourth arm here. It has not been. Given that this whole
-  section was previously wrong by a layout-class artifact, the direction should
-  be treated as established and the magnitude as provisional. See
+- **Coarse's own cost is not resolved here**, only fine's. Blanket's interval
+  spans zero, so "blanket is nearly free on ECDSA signing" is a statement about
+  this rig's resolution, not a measured value.
+- **The layout question IS now settled for this workload**, by the NOP arm: the
+  layout term is indistinguishable from zero, so fine's cost is dwell. That does
+  not carry to other workloads - on SQLCipher the same control showed layout was
+  the majority of the cost. Run the NOP arm per workload; see
   `dit-alignment-control` (memory).
 
 ### One number NOT to quote
 
-52,516 ops ran with DIT set and no secret operand. **That is not a
+525,342 ops ran with DIT set and no secret operand. **That is not a
 false-positive rate.** DIT regions cover contiguous code, so untainted
 instructions inside a genuine region are expected and correct.
 
 It does however bound what better precision could ever be worth here. Those ops
-are 10.15% of everything covered, and DIT's whole cost on this workload is
-2.758%, so a perfect analysis could recover at most **~0.28% of runtime** - and
+are 10.16% of everything covered, and DIT's whole cost on this workload is
+1.963%, so a perfect analysis could recover at most **~0.20% of runtime** - and
 §3 shows that even a perfect one still loses to blanket, because the problem is
 not precision. That is the measured argument for NOT building a declassification
 annotation, which the shape of §2 might otherwise suggest.
+
+A separate 120 ops consumed a secret **address** with DIT clear. That is the
+cache/TLB channel, which `PSTATE.DIT` does not cover at all, so it is neither an
+under-taint nor something this placement could have fixed. It is reported on its
+own line precisely so it stops being counted as one (§2.1).
 
 ---
 
@@ -202,7 +309,7 @@ annotation, which the shape of §2 might otherwise suggest.
 
 ```
 cd gem5-DIT/benchmarks/taint_oracle
-./run_secp_gem5.sh            # ROUNDS=2 by default; four arms, a few minutes each
+./run_secp_gem5.sh            # ROUNDS=20, 5 arms x 8 argv[0] offsets
 ```
 
 Builds all four arms, runs them, prints the coarse-versus-fine comparison,
