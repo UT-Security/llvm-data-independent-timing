@@ -1,5 +1,18 @@
 # The callee-saved DIT ABI, measured
 
+> **State on 2026-08-31.** The ABI is implemented, measured, and CLOSED as a piece
+> of work. `-ftaint-dit-abi` is opt-in and stays that way (§4). Nothing here changes
+> shipped codegen. Full AArch64 suite: 3907 tests, 0 failures.
+>
+> **Open, in priority order.** (1) Nobody has measured the ABI on a workload with a
+> high switch-per-function ratio that is NOT LTO - §3 predicts that is where it
+> would pay off in a shippable configuration, and no such workload has been tried.
+> (2) The four `DIT left set at a plain return` findings on the LTO baseline are a
+> precision bug, over-protection not exposure, uninvestigated; they are the same
+> four double-returning functions the verifier flagged. (3) `unwind` detection in
+> the NONLOCAL report is written but untested.
+
+
 **Measured 2026-08-31 on Apple M5, Bitcoin Core `bench_bitcoin`.** Compiler pinned
 at `bc6404a4a773` via a toolchain snapshot (§5). Region placement throughout - the
 shipped default - not `-taint-dit-placement=function`.
