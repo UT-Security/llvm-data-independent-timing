@@ -161,9 +161,14 @@ configuration gains nothing measurable and would pay shrink wrapping, a TU-wide
 tail-call disable and a frame slot per function. **Use `-ftaint-dit-abi` if you are
 already building with LTO; do not adopt LTO to get it.**
 
-The predictor is **switches per instrumented function**, not the workload: 5.9
-non-LTO (carrier costs back what the deleted re-asserts save) versus 51.1 under LTO
-(deletion dominates by an order of magnitude).
+**libsodium f-sweep, 2026-08-31**: at f=25.8% the ABI costs **+3.34%** against
+`def30`'s +8.64% and blanket's +8.78% - so **the ABI is what makes selective
+placement beat blanket** on that workload, where the shipped default merely ties it.
+
+The predictor is **re-asserts EXECUTED per unit of work**, not any static count. An
+earlier "switches per instrumented function" rule was a proxy that correlated with
+LTO and was falsified by libsodium at the same ratio. Ask how often control crosses
+an instrumented call boundary.
 
 **Two traps if you touch this.** `TBNZX` hard-codes b5=1, so `TBNZX ..., 24` tests bit
 **56**, the guard never fires, and the function strips its caller - use `TBNZW` on the

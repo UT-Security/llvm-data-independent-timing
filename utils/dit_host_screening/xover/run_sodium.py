@@ -28,7 +28,8 @@ import argparse, json, math, os, pathlib, re, statistics, subprocess, sys, time
 from collections import defaultdict
 
 HOME = pathlib.Path.home()
-BIN = HOME / "Documents/dit-crossover/build/sodium_native"
+BIN = pathlib.Path(os.environ.get("XOVER_BIN",
+                   HOME / "Documents/dit-crossover/build/sodium_native"))
 PROBE = HOME / "Documents/dit-crossover/build/native/dit_probe"
 DIT_DYLIB = HOME / "Documents/dit-browser-bench/dit_on.dylib"
 
@@ -60,9 +61,16 @@ ARMS = [
     ("def300", "def300", 0),   # the saturated ceiling, 2 switches below def30
     ("nop30",  "nop30",  0),   # dwell probe: a NOP build has no dwell at all, so
     ("nop300", "nop300", 0),   # def-minus-nop at a setting IS its dwell term
+    # The callee-saved DIT ABI at the shipped switch-cyc, region placement. Added
+    # 2026-08-31, after two earlier abi arms were withdrawn: one leaked DIT
+    # through tail calls that -ftaint-dit-abi never disabled on `-x ir` input, and
+    # the other lost its carrier on FP-relative frames. Both are fixed; the arm
+    # now reports zero non-local exits. An arm that leaks has silently
+    # degenerated to blanket, so CHECK <arm>.nonlocal.txt IS EMPTY before
+    # believing any number from it.
+    ("abi30",  "abi30",  0),
     ("off2",   "nodit",  0),
 ]
-
 RX = re.compile(r"total_s=([\d.]+) secret_s=([\d.]+) secret_frac=([\d.]+)% "
                 r"ops=(\d+) R_us=([\d.]+) toggles=(\d+)")
 CK = re.compile(r"checksum (\d+)")

@@ -7,9 +7,11 @@
 > **Soundness is a wash, measured** - the shadow-taint oracle reports identical
 > protection with and without the ABI (§4.1). It is not a security improvement.
 >
-> **Open, in priority order.** (1) Nobody has measured the ABI on a workload with a
-> high switch-per-function ratio that is NOT LTO - §3 predicts that is where it
-> would pay off in a shippable configuration, and no such workload has been tried.
+> **Open, in priority order.** (1) ~~No non-LTO workload with a high ratio~~ -
+> ANSWERED by the libsodium f-sweep (§3.1), which also falsified the ratio theory
+> itself; §3 is corrected. The open question is now narrower: real applications sit
+> near 1-2% secret fraction, where the ABI measures neutral, so is there a
+> *deployed* workload at a high enough call rate for it to pay?
 > (2) The four `DIT left set at a plain return` findings on the LTO baseline are a
 > precision bug, over-protection not exposure, uninvestigated; they are the same
 > four double-returning functions the verifier flagged. (3) `unwind` detection in
@@ -56,21 +58,60 @@ arm order, exclusive machine. Raw data in `data/abi-{coinsel,sign}-timing.csv`.
 Noise: 0.3-0.4% on CoinSelection, 4.1-4.9% on signing. The LTO wins are unanimous
 or near-unanimous and far outside it; the non-LTO rows are coin flips.
 
-## 3. Why LTO wins and non-LTO does not
+## 3. What predicts the win: executed re-asserts, not the static ratio
 
-**The ABI trades a per-CALL-SITE cost for a per-FUNCTION cost.** It deletes the
-after-call re-asserts, which scale with call sites, and adds a carrier read, a
-frame slot, and an exit restore, which scale with functions. So it wins exactly
-when switches-per-instrumented-function is high:
+**An earlier version of this section was wrong and is corrected here.** It claimed
+the predictor is switches per instrumented function - 5.9 non-LTO against 51.1
+under LTO - and predicted, in advance and in writing, that libsodium at 5.5 would
+be neutral. It is not. The libsodium f-sweep (§3.1) shows the ABI worth **5.3
+points** at high secret fraction, at a ratio essentially identical to Bitcoin's.
 
-| | switches | instrumented functions | ratio |
+The static ratio was a proxy that happened to correlate. The mechanism is
+**re-asserts EXECUTED per unit of work**, because a re-assert is paid per executed
+call site, not per call site in the binary:
+
+| workload | static ratio | dynamic character | ABI |
 |---|---|---|---|
-| non-LTO | 95 | 16 | **5.9** |
-| full LTO | 127,744 | 2,498 | **51.1** |
+| Bitcoin signing, non-LTO | 5.9 | one call into secp256k1, much internal work | neutral |
+| libsodium, f = 0.001-2% | 5.5 | few AEAD calls per period | neutral |
+| libsodium, f = 25.8% | 5.5 | 16 AEAD calls per period, boundaries crossed constantly | **-5.30 pts** |
+| Bitcoin, full LTO | 51.1 | whole-program merge multiplies executed call sites | **-5.4 / -8.5%** |
 
-At 5.9 the carrier costs back what the deleted re-asserts save, which is exactly
-what the non-LTO timing shows. At 51.1 the deletion dominates by an order of
-magnitude. **That ratio, not the workload, is the predictor.**
+LTO scored high on the static ratio for the same underlying reason - merging
+multiplies executed call sites per function - which is why the proxy held there
+and broke on libsodium.
+
+**To predict a new workload, ask how often control crosses an instrumented call
+boundary, not how many switches the binary contains.**
+
+### 3.1 The libsodium f-sweep
+
+SQLite lane, ChaCha20-Poly1305 AEAD, 10 points x 9 arms x 20 reps + 3 burn-in,
+rotating arm order, Apple M5. Raw data in `data/abi-libsodium-fsweep.{log,jsonl}`.
+Percentages are against the `nodit` baseline.
+
+|      f% | blanket | def30 | **abi30** | nop30 | ABI vs def30 |
+|---|---|---|---|---|---|
+|   0.001 |  +11.92 | -0.07 |     +0.08 | +0.17 |        +0.15 |
+|   0.023 |  +11.94 | +0.33 |     +0.00 | +0.43 |        -0.33 |
+|   0.729 |  +11.61 | +0.62 |     +0.05 | +0.07 |        -0.57 |
+|   2.142 |  +11.49 | +0.87 |     -0.05 | -0.18 |        -0.92 |
+|   8.026 |  +10.85 | +2.67 |     +0.95 | -0.32 |        -1.72 |
+|  25.763 |   +8.78 | +8.64 | **+3.34** | +0.03 |    **-5.30** |
+
+**The ABI is what makes selective placement beat blanket here.** At f = 25.8%,
+`def30` costs +8.64 against blanket's +8.78 - a tie inside noise, so the shipped
+placement buys nothing. `abi30` costs +3.34 and beats blanket outright.
+
+The `nop30` control is +0.03 at that point, so essentially all of `def30`'s +8.64
+is the switches themselves rather than layout. Switches fall 482 -> 278 (-42%)
+while time falls 8.64 -> 3.34 (-61%), more than proportional - consistent with the
+deleted re-asserts sitting on the hottest paths.
+
+**Validity gate.** An arm that cannot establish a carrier reverts to
+whole-function coverage, which is blanket for that function, and an earlier abi30
+arm was withdrawn for exactly that. This one reports **zero** non-local exits.
+Check `<arm>.nonlocal.txt` is empty before believing any number from an ABI arm.
 
 ## 4. The decision: default stays OFF
 
@@ -92,8 +133,14 @@ nothing measurable: shrink wrapping disabled, tail calls disabled TU-wide (which
 also disables tail-recursion elimination, so a tail-recursive function gets O(n)
 frames), and a frame slot in every function of a hardened module.
 
-**Recommendation: use `-ftaint-dit-abi` when you are building with LTO anyway.**
-Do not enable it otherwise, and do not adopt LTO to get it.
+**Recommendation, revised after the libsodium sweep: enable `-ftaint-dit-abi`
+when control crosses instrumented call boundaries often** - a high secret
+fraction, a high call rate into hardened code, or LTO. Leave it off otherwise.
+Do not adopt LTO to get it.
+
+The default stays off because real applications sit near 1-2% secret fraction
+(`dit-real-app-vs-benchmark.md`), where this measures neutral. That is a judgement
+about typical workloads, not a claim that the ABI does not help.
 
 This is consistent with the other evidence against LTO on record: libsodium tells
 users not to build with it, the hardened link is single-threaded and doubles an

@@ -30,7 +30,9 @@ say "shared objects"
 [[ -f "$S/host_lua.o" ]] || $CC -O2 -c -I"$LUA/src" -I"$X" "$X/host_lua_sodium.c" -o "$S/host_lua.o" || exit 1
 
 say "linking arms"
-for arm in nodit def0 def30 def100 def300 nop0 nop30 nop100 nop300; do
+# ARMS is overridable so a new arm can be linked without editing this list. abi30
+# is the callee-saved DIT ABI (docs/design/dit-abi.md), region placement.
+for arm in ${ARMS:-nodit def0 def30 def100 def300 nop0 nop30 nop100 nop300 abi30}; do
     a="$SOD/libsodium-$arm.a"
     [[ -f "$a" ]] || { echo "  missing $a"; continue; }
     $CC -O2 "$S/host_sqlite.o" "$S/payload.o" "$S/sqlite3.o" "$a" \

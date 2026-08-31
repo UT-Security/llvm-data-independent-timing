@@ -270,20 +270,27 @@ ABI wins exactly where switches-per-instrumented-function is high.
 | non-LTO | 95 -> **57** (-40%) | 16 | 5.9 | CoinSel +0.08%, Sign -0.05% |
 | full LTO | 127,744 -> **15,462** (-87.9%) | 2,498 | 51.1 | CoinSel **-5.40%** (25/25), Sign **-8.52%** (27/30) |
 
-**That ratio is the predictor, not the workload.** At 5.9 the carrier costs back
-what the deleted re-asserts save; at 51.1 the deletion dominates by an order of
-magnitude.
+**CORRECTION 2026-08-31: that ratio is NOT the predictor.** It was a proxy that
+happened to correlate, and a libsodium f-sweep falsified it - at a ratio of 5.5,
+essentially Bitcoin's, the ABI is worth **5.3 points** at high secret fraction and
+is what makes selective placement beat blanket there.
+
+The mechanism is **re-asserts EXECUTED per unit of work**, since a re-assert is
+paid per executed call site rather than per call site in the binary. LTO scores
+high on the static ratio because merging multiplies executed call sites, which is
+why the proxy held there and broke on libsodium. To predict a new workload, ask
+how often control crosses an instrumented call boundary. Full data:
+`docs/results/dit-abi-measured.md` §3.
 
 The sound build lands within 1.2% of the unsound upper bound (15,272), because
 under LTO the carrier is nearly free in switch terms: the entry read is `MRS`, not
 a mode switch, and the guarded clear replaces the exit clear one for one.
 
-**The default stays OFF anyway.** LTO with the ABI is still slower than non-LTO
-without it (+19.50% / +9.08%), so the ABI helps only in a configuration nobody
-should choose on performance grounds, while the configuration people do choose
-gains nothing measurable and would pay shrink wrapping, tail calls and a frame
-slot per function. Use `-ftaint-dit-abi` if you are building with LTO anyway; do
-not adopt LTO to get it.
+**The default stays OFF**, but the reason is narrower than it was. Enable
+`-ftaint-dit-abi` where control crosses instrumented call boundaries often: a high
+secret fraction, a high call rate into hardened code, or LTO. Real applications
+sit near 1-2% secret fraction, where it measures neutral, which is why the default
+is off - a judgement about typical workloads, not a claim that it does not help.
 
 ## 6. Relationship to the annotation proposal
 
