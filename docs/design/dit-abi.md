@@ -257,34 +257,33 @@ correspondingly:
   It is **not** a claim about hostile code, and DIT is not a security boundary against
   code that deliberately clears it.
 
-## 5. Cost model
+## 5. Cost model, MEASURED
 
-Cost moves from **O(call sites)** to **O(instrumented functions)**: two instructions per
-instrumented function (one entry read, one exit restore), zero per call site.
+Full results and the decision: `docs/results/dit-abi-measured.md`.
 
-Projected against the measured upper bound, full-LTO Bitcoin Core:
+Cost moves from **O(call sites)** to **O(instrumented functions)**: the after-call
+re-asserts go, and a carrier read, a frame slot and an exit restore arrive. So the
+ABI wins exactly where switches-per-instrumented-function is high.
 
-```
-  today (caller-saved)          127,740 MSR DIT
-  re-asserts deleted, unsound    15,272 MSR DIT   (measured 2026-08-30)
-  this ABI                       ~15,272 MSR DIT  + ~1 MRS per instrumented function
-```
+| arm | switches | instrumented fns | ratio | ABI vs baseline |
+|---|---|---|---|---|
+| non-LTO | 95 -> **57** (-40%) | 16 | 5.9 | CoinSel +0.08%, Sign -0.05% |
+| full LTO | 127,744 -> **15,462** (-87.9%) | 2,498 | 51.1 | CoinSel **-5.40%** (25/25), Sign **-8.52%** (27/30) |
 
-**The switch count does not grow when the callee half is added, and an earlier draft of
-this file was wrong to project ~23,000.** The exit restore *replaces* the existing
-`msr DIT, #0` one for one, and the entry read is `MRS`, a different instruction that is
-not a mode switch at all (1.00 cyc measured on M5, versus 30.34 for `MSR DIT`). So the
-measured 15,272 is close to the real sound figure, an **8.4x reduction**, and the added
-cost is one cheap read per instrumented function plus, for functions that did not
-already need one, a callee-saved register spill and reload in the prologue and epilogue.
+**That ratio is the predictor, not the workload.** At 5.9 the carrier costs back
+what the deleted re-asserts save; at 51.1 the deletion dominates by an order of
+magnitude.
 
-**The surviving exits are cheaper than today's.** The guarded clear is free whenever the
-function was entered with DIT already on (OPEN item 1), and otherwise costs what today's
-clear costs. Measured on M5: the branchless
-restore `msr DIT, x19` and today's unconditional `msr DIT, #0` are the same price to
-within 0.03 cyc. So the 8.4x count reduction is the whole win, and it is not diluted by
-a more expensive exit. A guarded clear would make a fraction of exits free on top of
-that, but is rejected on speculation grounds; see OPEN item 1.
+The sound build lands within 1.2% of the unsound upper bound (15,272), because
+under LTO the carrier is nearly free in switch terms: the entry read is `MRS`, not
+a mode switch, and the guarded clear replaces the exit clear one for one.
+
+**The default stays OFF anyway.** LTO with the ABI is still slower than non-LTO
+without it (+19.50% / +9.08%), so the ABI helps only in a configuration nobody
+should choose on performance grounds, while the configuration people do choose
+gains nothing measurable and would pay shrink wrapping, tail calls and a frame
+slot per function. Use `-ftaint-dit-abi` if you are building with LTO anyway; do
+not adopt LTO to get it.
 
 ## 6. Relationship to the annotation proposal
 

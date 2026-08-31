@@ -149,9 +149,21 @@ lower than entry and guarding an ENABLE is forbidden. Whole-function coverage al
 takes the cheap form; so does a region-placed return inside an On block, which is the
 common case.
 
-Still default OFF: it is untested on a real workload. Flipping it wants the LTO and
-CoinSelection numbers re-run against a sound build, since the -16.89% / -3.51% figures
-came from the unsound measurement flag.
+**MEASURED 2026-08-31, region placement, M5** (`docs/results/dit-abi-measured.md`):
+non-LTO 95 -> 57 switches for **no measurable time change**; full LTO
+127,744 -> **15,462** (8.26x) for **-5.40% CoinSelection (25/25)** and **-8.52%
+SignTransactionECDSA (27/30)**.
+
+**Default stays OFF, and the reason is not the per-arm delta.** LTO with the ABI is
+still slower than non-LTO WITHOUT it (+19.50% / +9.08%), so the ABI only helps in a
+configuration nobody should pick on performance grounds, while the default
+configuration gains nothing measurable and would pay shrink wrapping, a TU-wide
+tail-call disable and a frame slot per function. **Use `-ftaint-dit-abi` if you are
+already building with LTO; do not adopt LTO to get it.**
+
+The predictor is **switches per instrumented function**, not the workload: 5.9
+non-LTO (carrier costs back what the deleted re-asserts save) versus 51.1 under LTO
+(deletion dominates by an order of magnitude).
 
 **Two traps if you touch this.** `TBNZX` hard-codes b5=1, so `TBNZX ..., 24` tests bit
 **56**, the guard never fires, and the function strips its caller - use `TBNZW` on the

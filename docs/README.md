@@ -68,6 +68,12 @@ How the analysis is built, which bugs were found in it, and what is still open.
   where DIT switches go: what exists today, the placement constraints the spec
   imposes, the remaining security and performance gaps, and the proposed spec-aware
   optimal placement with its evaluation plan.
+- **[results/dit-abi-measured.md](results/dit-abi-measured.md)** - **the ABI's
+  numbers and the default decision.** Region placement, Apple M5, pinned toolchain.
+  Non-LTO 95 -> 57 switches for no measurable time; full LTO 127,744 -> 15,462
+  (8.26x) for **-5.40% CoinSelection (25/25)** and **-8.52% signing (27/30)**. The
+  predictor is switches-per-instrumented-function (5.9 vs 51.1), not the workload.
+  Default stays OFF because LTO+ABI is still slower than non-LTO without it.
 - **[reference/dit-abi-runbook.md](reference/dit-abi-runbook.md)** - **how to RUN the
   ABI.** Build steps (`ninja -C build` with no target list, because the analysis also
   links into `libLTO.dylib` and a targeted build leaves it stale and silently wrong),
