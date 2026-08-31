@@ -10,13 +10,13 @@
 # arg i" precisely.
 #
 # @writes_through_arg stores the tainted arg %s (arg 1) through the pointer arg %out
-# (arg 0), so the mem-effects summary must name arg0 — NOT UNKNOWN(TOP).
+# (arg 0), so the mem-effects summary must name arg0 - NOT UNKNOWN(TOP).
 # @writes_global stores the same secret into a named global, which stays precise
 # (a distinct bucket), confirming the arg case is not swallowing the global case.
 
 # The patterns are end-anchored ({{$}}): `arg0` must be the WHOLE bucket list, so a
 # regression that records arg0 but ALSO leaves TOP set (dump `arg0 UNKNOWN(TOP)`)
-# fails the test — the point of P1a is precise INSTEAD of TOP, not in addition to it.
+# fails the test - the point of P1a is precise INSTEAD of TOP, not in addition to it.
 # CHECK-DAG: mem-effects[writes_through_arg]: arg0{{$}}
 # CHECK-DAG: mem-effects[writes_global]: @g{{$}}
 

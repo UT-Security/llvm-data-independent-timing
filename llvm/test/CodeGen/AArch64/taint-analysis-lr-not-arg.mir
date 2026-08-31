@@ -3,7 +3,7 @@
 # Regression: x30 (LR) is not an argument register, so a caller's taint on it
 # must never seed the callee's entry as secret.
 #
-# @caller has a secret arg (%s in $x0) and copies it into $x30 — modelling the
+# @caller has a secret arg (%s in $x0) and copies it into $x30 - modelling the
 # register allocator reusing x30 as a general-purpose scratch after the return
 # address has been spilled. At the BL, $x30 is tainted. AAPCS64 passes arguments
 # only in X0-X7 / V0-V7 (encodings 0-7); x30's encoding is 30, which is NOT an
@@ -16,7 +16,7 @@
 # @callee would be DIT-instrumented. With the fix it is not: no MSR DIT anywhere
 # in @callee. (26 is the PSTATE.DIT pstatefield encoding.)
 
-# @caller legitimately handles the secret, so it may carry DIT — we do not pin it.
+# @caller legitimately handles the secret, so it may carry DIT - we do not pin it.
 # CHECK-LABEL: name: callee
 # CHECK-NOT: MSRpstateImm4
 

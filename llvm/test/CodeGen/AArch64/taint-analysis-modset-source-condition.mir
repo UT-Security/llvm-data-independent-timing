@@ -7,12 +7,12 @@
 # exists.
 #
 # `helper(dst, x)` does two things: it takes `x`, which `secret_caller` passes a
-# secret in — so its summary DOES name a tainted parameter — and it reads a secret
+# secret in - so its summary DOES name a tainted parameter - and it reads a secret
 # out of @g and writes it through `dst`, which has nothing to do with its
 # parameters.
 #
 # `public_caller` passes no secret. A gate resting on the tainted-parameter proxy
-# alone would suppress helper's clobber and leave the reload of %buf clean — but
+# alone would suppress helper's clobber and leave the reload of %buf clean - but
 # %buf really does receive @g's secret. The source condition refuses to gate,
 # because helper's taint reached it through a global load, which no caller's
 # arguments can account for. That refusal is unconditional: the permissive rule is

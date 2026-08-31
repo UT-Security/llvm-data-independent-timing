@@ -16,7 +16,7 @@ actually reach them.
 A `FunctionMemEffects` mod-set is **per function, not per call site**. Once any caller
 passes a secret into `crypto_hash_sha512_update`, that function's mod-set becomes TOP
 (`WritesSecretToUnknown`), and `propagateTaintMI` then applies TOP at **every** call site
-of it — including callers that passed nothing secret. `ExternalMemClobbered` is set in
+of it - including callers that passed nothing secret. `ExternalMemClobbered` is set in
 those callers, poisoning all their subsequent loads.
 
 Concretely, from `-taint-clobber-report`:
@@ -45,19 +45,19 @@ against that closure:
 169 of 199 (and 48 of 63 with the fallback off) are functions that no secret can reach by
 argument or return propagation. They are instrumented purely through context-insensitive
 mod-set application. **This is a larger false-positive source than the frame-address
-fallback, the `implicit-def` bug, and the alloca case combined** — and unlike those it is
+fallback, the `implicit-def` bug, and the alloca case combined** - and unlike those it is
 a design property, not an oversight.
 
 ## Are we *missing* anything? (the other direction)
 
 Of the 19 CIO-reference functions we do not instrument even with the fallback on, **15
-are not reachable from any seed at all** — no secret can arrive, so they are artifacts of
+are not reachable from any seed at all** - no secret can arrive, so they are artifacts of
 CIO's blunt domain (every unresolvable load returns TOP, and TOP = Taint, so any function
 their worklist *visits* generates alerts). The remaining 4 are reachable:
 
-- `crypto_hash_sha512_init`, `randombytes_init_if_needed`, `sodium_misuse` — write
+- `crypto_hash_sha512_init`, `randombytes_init_if_needed`, `sodium_misuse` - write
   constants / abort; they process no secret. Correct not to taint.
-- `crypto_stream_chacha20_ietf` — a thin wrapper that forwards its own arguments to the
+- `crypto_stream_chacha20_ietf` - a thin wrapper that forwards its own arguments to the
   seeded `stream_ietf_ext_ref`. A genuine **modeling difference**: seeding an internal
   function does not retroactively mark the corresponding argument of its *callers* as
   secret. Not a leak (the secret is protected where it is seeded), but if you care about
@@ -90,7 +90,7 @@ external/indirect path already gates on `HasTaintedArg`. That is still context-i
 in the summary but context-*sensitive* in the application, and it would have suppressed
 every example above. Needs care: a callee can write a secret it obtained from a global or
 a previous call rather than from this caller's arguments, so this is NOT sound in general
-— measure the delta, then decide whether it belongs behind a flag next to
+ - measure the delta, then decide whether it belongs behind a flag next to
 `-taint-annotation-driven`.
 
 **IMPLEMENTED AND MEASURED 2026-08-19** as `-mllvm -taint-modset-callsite-gated`
@@ -109,14 +109,14 @@ Two refinements the measurement produced:
   than a flood, and it is precisely the "callee got the secret from a global"
   case the gate is otherwise unsound for. Leaving it ungated costs nothing
   measurable and removes the most likely unsound shape.
-- **The gate must NOT be paired with `-taint-frame-addr-args`** — measured
+- **The gate must NOT be paired with `-taint-frame-addr-args`** - measured
   2026-08-19, correcting the opposite conclusion drawn from static switch counts.
   The gate asks whether an argument *register* is tainted; the fallback taints
   frame addresses on a **whole-frame** approximation, so nearly every call site
   looks secret-passing and the gate stops firing. `ConnectBlockAllEcdsa`: gate
   alone **+0.66%**, fallback+gate **+45.32%**, i.e. the fallback costs +44.43 points
   (15/15 reps). gem5 agrees: verification suppression 80 ops with the gate,
-  6,042,126 with fallback+gate. Static counts do fall (404 vs 975) — they are the
+  6,042,126 with fallback+gate. Static counts do fall (404 vs 975) - they are the
   wrong metric. `+frame-addr +gate` is also the only configuration whose signing
   coverage lands *below* the hand oracle (99.86%).
 

@@ -36,9 +36,9 @@ for a in arms:
     v = list(s.values())
     cov = st.stdev(v) / st.mean(v) * 100 if len(v) > 1 else 0
     p = paired("baseline", a)
-    cell = "—" if a == "baseline" else f"{p[0]:+.2f}%"
-    reps = "—" if a == "baseline" else f"{p[1]}/{p[2]}"
-    iqr = "—" if a == "baseline" else f"{p[3]:+.2f}..{p[4]:+.2f}"
+    cell = "-" if a == "baseline" else f"{p[0]:+.2f}%"
+    reps = "-" if a == "baseline" else f"{p[1]}/{p[2]}"
+    iqr = "-" if a == "baseline" else f"{p[3]:+.2f}..{p[4]:+.2f}"
     print(f"{a:<18}{st.median(v):>10.3f}{cov:>7.2f}%{cell:>13}{reps:>13}{iqr:>18}")
 
 print()
@@ -53,14 +53,14 @@ for a in arms:
     s = series(a, "raw_sign_s")
     if not s: continue
     p = paired("baseline", a, "raw_sign_s")
-    cell = "—" if a == "baseline" else f"{p[0]:+.2f}%"
+    cell = "-" if a == "baseline" else f"{p[0]:+.2f}%"
     print(f"  {a:<18}{st.median(s.values())*1000:>9.1f} ms{cell:>10}")
 
 print()
 sf = [float(r["secret_frac"]) for r in rows if r["arm"] == "baseline"]
 print(f"secret fraction (baseline): {st.median(sf):.2f}%")
 ck = {r["checksum"] for r in rows}
-print(f"checksums: {'IDENTICAL' if len(ck) == 1 else 'DIFFER — ' + str(ck)}")
+print(f"checksums: {'IDENTICAL' if len(ck) == 1 else 'DIFFER - ' + str(ck)}")
 po = [float(r["probe_const_off"]) for r in rows if r["probe_const_off"]]
 pn = [float(r["probe_const_on"]) for r in rows if r["probe_const_on"]]
 print(f"in-band lvp_chase control: {st.median(pn)/st.median(po):.2f}x  (must be ~4x)")

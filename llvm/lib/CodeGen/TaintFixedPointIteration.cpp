@@ -88,7 +88,7 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
 
         // A secret handed over in the outgoing argument area. No livein register
         // carries it, so the loop below cannot see it and the callee would be
-        // analysed as clean — the leak documented in
+        // analysed as clean - the leak documented in
         // docs/design/stack-arguments.md.
         if (S.isOutgoingArgSecret() && !CalleeSummary.StackArgTainted) {
           CalleeSummary.StackArgTainted = true;
@@ -104,16 +104,16 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           // never carry an argument value, so a caller's taint on them is NOT a
           // secret passed to this callee. Skipping them is the safe direction (a
           // caller never passes data in x30/x29/sp) and stops a tainted *scratch*
-          // use of x30 in the caller — e.g. the register allocator reusing x30
-          // after the return address is spilled — from spuriously seeding the
+          // use of x30 in the caller - e.g. the register allocator reusing x30
+          // after the return address is spilled - from spuriously seeding the
           // callee's return-address register as secret. See
           // taint-analysis-lr-not-arg.mir.
           if (ArgIdx > 7)
             continue;
           // A Data-tainted register in a POINTER parameter means "pointer to a
           // secret", not "the address is itself a secret value". Recording it as
-          // Data makes every value the callee computes from that pointer secret —
-          // including further addresses — and that is what turns one poisoned
+          // Data makes every value the callee computes from that pointer secret -
+          // including further addresses - and that is what turns one poisoned
           // function into a poisoned subtree: on libsecp256k1 a single caller
           // spread Data-taint through the output pointers of five shared group
           // helpers, and those helpers are on the verification path.
@@ -121,7 +121,7 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           // The callee's IR parameter type settles which reading is right, and it
           // is available here. The residual is a genuinely secret-valued pointer
           // (an address computed from a secret), which is secret-dependent
-          // ADDRESSING — already outside what PSTATE.DIT covers and already
+          // ADDRESSING - already outside what PSTATE.DIT covers and already
           // reported separately by -taint-uncovered-report as `secret-address`.
           const bool PtrParam = ArgIdx < Callee->arg_size() &&
                                 Callee->getArg(ArgIdx)->getType()->isPointerTy();
@@ -185,7 +185,7 @@ static bool functionReturnsTainted(MachineFunction &MF, const TaintResult &TR,
 }
 
 /// Visit every function that has both a MachineFunction and a converged taint
-/// result — i.e. everything the post-convergence steps (DIT summaries, reports,
+/// result - i.e. everything the post-convergence steps (DIT summaries, reports,
 /// barrier insertion) operate on.
 static void forEachAnalyzed(
     Module &M, TaintMFContext Ctx,
@@ -213,7 +213,7 @@ static void forEachAnalyzed(
 // MachineModuleInfo -- can run exactly this analysis without serializing the
 // module to MIR text and back. See TaintMFContext.
 void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
-  // Step 2: Create TaintSummaryInfo — shared database of per-function summaries
+  // Step 2: Create TaintSummaryInfo - shared database of per-function summaries
   TaintSummaryInfo TSI;
 
   // Seed TSI from IR taint attributes (set by taint-annotate pass)
@@ -625,18 +625,18 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
   //
   // Two distinct things happen at a call that receives a secret:
   //
-  //  (A) ESCAPE audit — the secret is passed to a callee the analysis cannot
+  //  (A) ESCAPE audit - the secret is passed to a callee the analysis cannot
   //      instrument (external declaration or indirect target). Unlike the old
   //      ISB/DSB model, this is NOT an unprotected hazard: PSTATE.DIT is
   //      inherited, so the callee runs with DIT=1 (see docs/design/dit-placement.md
   //      G3). The line is an audit record of where secrets leave the TU, not a
   //      list of unprotected sites.
   //
-  //  (B) Coverage invariant — for the secret to be protected DURING the call,
+  //  (B) Coverage invariant - for the secret to be protected DURING the call,
   //      the call must execute with DIT=1. Under function granularity that is
   //      guaranteed (a tainted call argument makes the enclosing function have
   //      a tainted run, so it is DIT-instrumented and entry set DIT=1). We do
-  //      not assume this — we verify it, so the future region work cannot
+  //      not assume this - we verify it, so the future region work cannot
   //      silently break it. A violation is a leaked secret: report UNCOVERED
   //      and, in an assertions build, assert.
   {
@@ -652,7 +652,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
               MF, TR, &TSI, AA, /*Post=*/{},
               /*Pre=*/[&](MachineInstr &MI, const TaintState &State) {
                 // Fix B: only a secret genuinely *passed* to the callee matters
-                // — a secret merely live/clobbered across the call is not
+                // - a secret merely live/clobbered across the call is not
                 // something an ABI-compliant callee can read. Read the state
                 // ENTERING the call (the Pre hook): arguments are set up before
                 // the call, and the call then clears/sets result registers, so
@@ -673,7 +673,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                   assert(false && "secret-passing call outside DIT coverage");
                 }
 
-                // (A) ESCAPE audit — only callees we cannot instrument.
+                // (A) ESCAPE audit - only callees we cannot instrument.
                 const Function *Callee = findCalledFunction(M, MI);
                 if ((Callee && !Callee->isDeclaration()) || !CallsiteOS)
                   return true;
@@ -695,7 +695,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
         });
   }
 
-  // Step 3c-2: Memory-clobber report — the *sources* of cross-function memory
+  // Step 3c-2: Memory-clobber report - the *sources* of cross-function memory
   // taint. Every call site listed here makes the caller treat memory as secret
   // (sets ExternalMemClobbered, or a whole-global taint), which then poisons
   // every subsequent load in sound mode. These are the points where a "taint
@@ -766,7 +766,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
   // a secret-dependent memory ADDRESS leaks through cache/TLB timing (DIT covers
   // the data value, not the address), and a secret-dependent BRANCH leaks
   // through control-flow timing. Counting these as protected is silent false
-  // assurance — surface them for audit / constant-time rewriting.
+  // assurance - surface them for audit / constant-time rewriting.
   if (auto UncoveredOSPtr =
           openTaintReport(TaintUncoveredReportFile, "taint uncovered report")) {
     raw_fd_ostream &UncoveredOS = *UncoveredOSPtr;

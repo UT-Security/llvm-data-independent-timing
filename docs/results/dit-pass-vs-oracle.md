@@ -2,7 +2,7 @@
 
 > ⚠️ **READ `dit-coincurve-timing.md` BEFORE CITING THIS (2026-08-17).** On a
 > real signing workload, where the secret is **9.1%** of runtime instead of the
-> 0.02%/0.06% here, the pass is **+12.62%** against always-on's **+2.74%** —
+> 0.02%/0.06% here, the pass is **+12.62%** against always-on's **+2.74%** -
 > i.e. **4.6x worse than blanket protection**. This document is not wrong, but it
 > is **insensitive**: a workload whose secret is 0.02% of runtime cannot
 > distinguish good placement from bad, because the secret region is too small to
@@ -21,7 +21,7 @@ actually emits.
 
 **With `-taint-dit-loop-hoist=1` the pass is indistinguishable from the hand
 oracle on both hosts, and both recover essentially the entire always-on cost.**
-This is the first time the *pass itself* — not an oracle, not a projection —
+This is the first time the *pass itself* - not an oracle, not a projection -
 beats always-on DIT on a real host workload.
 
 The shipped default (`region`, no hoist) recovers ~90%. Compare
@@ -44,7 +44,7 @@ secp256k1's amalgamated build is a single TU, so interprocedural taint reaches
 the whole signing path without the per-library re-declaration that SQLCipher and
 mbedTLS needed.
 
-Every arm is compared to `nodit` — the **round-trip control**, the same pipeline
+Every arm is compared to `nodit` - the **round-trip control**, the same pipeline
 with an empty seed file, which emits **0** `MSR DIT`. Never to a stock `-O2`
 build (`dit-measurement-traps` trap 7).
 
@@ -56,7 +56,7 @@ build (`dit-measurement-traps` trap 7).
 | `pass_region` | `-ftaint-harden=seed` | off | **148** |
 | `pass_hoist` | `+ -taint-dit-loop-hoist=1` | off | **136** |
 | `pass_function` | `+ -taint-dit-placement=function` | off | **122** |
-| `baseline2` | second run of `baseline` | off | 0 — the noise floor |
+| `baseline2` | second run of `baseline` | off | 0 - the noise floor |
 
 16 reps, 2 burn-in discarded, **arm order rotated every rep**. Checksums
 identical across every arm on both hosts.
@@ -65,21 +65,21 @@ identical across every arm on both hosts.
 
 ## 2. Results
 
-### CPython — baseline 3.823 s, CoV 0.54%, noise floor +0.11%
+### CPython - baseline 3.823 s, CoV 0.54%, noise floor +0.11%
 
 | arm | median | vs baseline | reps slower | recovers |
 |---|---|---|---|---|
-| `always` | 4.199 s | **+9.99%** | 16/16 | — |
+| `always` | 4.199 s | **+9.99%** | 16/16 | - |
 | `oracle` | 3.822 s | +0.01% | 8/16 | 99.9% |
 | `pass_region` | 3.857 s | +0.91% | 13/16 | 90.9% |
 | **`pass_hoist`** | **3.818 s** | **−0.08%** | 7/16 | **100.8%** |
 | `pass_function` | 3.854 s | +1.18% | 14/16 | 88.2% |
 
-### SQLite — baseline 2.927 s, CoV 1.16%, noise floor −0.16%
+### SQLite - baseline 2.927 s, CoV 1.16%, noise floor −0.16%
 
 | arm | median | vs baseline | reps slower | recovers |
 |---|---|---|---|---|
-| `always` | 3.034 s | **+3.47%** | 16/16 | — |
+| `always` | 3.034 s | **+3.47%** | 16/16 | - |
 | `oracle` | 2.928 s | +0.09% | 8/16 | 97.5% |
 | `pass_region` | 2.944 s | +0.35% | 11/16 | 89.8% |
 | **`pass_hoist`** | **2.931 s** | **−0.02%** | 8/16 | 100.5% |
@@ -119,17 +119,17 @@ unit of secret work**, exactly as `dit-granularity-crossover` predicts:
 The secret being genuinely rare is condition (a) doing real work: when secret
 code is 0.02% of the run, even sloppy placement inside it is cheap in absolute
 terms. **Placement precision matters in proportion to the secret's share of the
-dynamic instruction stream** — which is a cleaner statement of the design
+dynamic instruction stream** - which is a cleaner statement of the design
 constraint than "regions must be big".
 
 ---
 
 ## 5. Two things this does NOT establish
 
-**Coverage — RESOLVED 2026-08-16, the pass does not under-protect.** The concern
+**Coverage - RESOLVED 2026-08-16, the pass does not under-protect.** The concern
 was real: the oracle wraps the entire `secp256k1_ecdsa_sign` call blindly, the
 pass protects only what taint reached, and a placement that is faster *because
-it covers less* looks exactly like a win — the failure that produced and then
+it covers less* looks exactly like a win - the failure that produced and then
 retracted SQLCipher's "+8.15%". Settled under gem5 by counting DIT-covered
 dynamic work directly. See §7.
 
@@ -147,7 +147,7 @@ dynamic work directly. See §7.
 
 **Verification takes no secret and carries the largest single block of
 switches.** It is free in these workloads only because neither host calls
-verify. A Bitcoin node — which validates far more signatures than it produces —
+verify. A Bitcoin node - which validates far more signatures than it produces -
 would pay for all 30, and this would look very different. That is a precision
 bug (context-insensitive mod-sets, `docs/design/context-insensitivity.md`), not
 a placement bug, and it is now the highest-value precision target.
@@ -162,7 +162,7 @@ oracle, subject to §5's coverage verification.
 
 ---
 
-## 7. gem5 coverage check — the pass protects at least as much as the oracle
+## 7. gem5 coverage check - the pass protects at least as much as the oracle
 
 **Measured 2026-08-16**, `gem5.opt` (`--eves --dmp --comp-simp`), driver
 `utils/dit_host_screening/gem5cov/cov_driver.c`, 50 signatures in the ROI.
@@ -172,7 +172,7 @@ counting DIT-covered dynamic work directly:
 `compSimplifier.ditSuppressed` (simplifications actually blocked by DIT) and
 `valuePredictor.ditTaggedSet` (DitCC instructions seen with DIT set).
 
-The driver is minimal by design — just the signing path — because the coverage
+The driver is minimal by design - just the signing path - because the coverage
 question is entirely about what taint reached inside `secp256k1_ecdsa_sign`. All
 arms are the same source; only placement differs.
 
@@ -193,13 +193,13 @@ arms are the same source; only placement differs.
 | `always` | 99.1% | 100.1% |
 
 **Verdict: no under-protection.** Both pass placements cover the same secret work
-as the hand oracle, to within ~1% — and that ~1% is the counters' own noise, not
+as the hand oracle, to within ~1% - and that ~1% is the counters' own noise, not
 a coverage gap (both are counted at dispatch *and* commit, so speculation moves
 them; `lvp.hh` says so explicitly of `ditTaggedSet`). The §2 wall-time win is
 therefore a real placement result, not an artifact of protecting less.
 
 Gates:
-- **`off` reads exactly 0 on both counters** — the counters genuinely track DIT,
+- **`off` reads exactly 0 on both counters** - the counters genuinely track DIT,
   so a null result would have been distinguishable from a broken rig
   (`dit-measurement-traps` trap 5).
 - **Instruction counts agree across arms to 0.02%**, so the counts are
@@ -210,7 +210,7 @@ Gates:
 **Simulator build note.** These arms were first run on `gem5.opt`, because
 `gem5.fast` was stale (built 2026-08-07, predating `SIPPrefetcher`, so it could
 not even import `fdp_neoverse_v2_binary.py`). `gem5.fast` was rebuilt
-2026-08-16 and **reproduces all five arms bit-identically** — same `simInsts`,
+2026-08-16 and **reproduces all five arms bit-identically** - same `simInsts`,
 same `ditSuppressed`, same `ditTaggedSet`, to the digit. The coverage conclusion
 does not depend on which simulator binary is used, and the matrix runner
 (`util/run_dit_matrix.sh`, which is sized around `gem5.fast`) is usable again.

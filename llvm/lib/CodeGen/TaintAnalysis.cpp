@@ -109,7 +109,7 @@ cl::opt<std::string> llvm::TaintDITReassertReportFile(
 cl::opt<std::string> llvm::TaintUncoveredReportFile(
     "taint-uncovered-report",
     cl::desc("Output file for tainted instructions PSTATE.DIT does not protect "
-             "(divide/sqrt, secret-dependent addresses, secret branches) — "
+             "(divide/sqrt, secret-dependent addresses, secret branches) - "
              "silent false assurance otherwise (gap G2)"),
     cl::value_desc("file"));
 
@@ -130,7 +130,7 @@ cl::opt<std::string> llvm::TaintNonlocalReportFile(
 cl::opt<std::string> llvm::TaintClobberReportFile(
     "taint-clobber-report",
     cl::desc("Output file for call sites that make the caller treat memory as "
-             "secret (ExternalMemClobbered / whole-global) — the sources of "
+             "secret (ExternalMemClobbered / whole-global) - the sources of "
              "cross-function memory taint, i.e. where a taint explosion "
              "originates"),
     cl::value_desc("file"));
@@ -139,7 +139,7 @@ cl::opt<std::string> llvm::TaintFrameRefReportFile(
     "taint-frameref-report",
     cl::desc("Output file for frame-address resolution: for every register "
              "computed as base+imm off SP/FP, whether it resolves to a specific "
-             "frame object. The go/no-go measurement for P1b — per-object pointee "
+             "frame object. The go/no-go measurement for P1b - per-object pointee "
              "taint is only worth building if most frame addresses resolve."),
     cl::value_desc("file"));
 
@@ -148,7 +148,7 @@ cl::opt<std::string> llvm::TaintDITJoinReportFile(
     cl::desc("Output file for Off->On placement boundaries, split by whether the "
              "join is MIXED (some predecessors already DIT-on). A mixed join emits "
              "one enable at the block start that executes on EVERY incoming path, "
-             "redundantly on the already-on ones — the cost edge bundling or edge "
+             "redundantly on the already-on ones - the cost edge bundling or edge "
              "splitting would remove."),
     cl::value_desc("file"));
 
@@ -158,7 +158,7 @@ cl::opt<std::string> llvm::TaintDITJoinReportFile(
 // have at least one tainted argument and whose taint is argument-sourced; the
 // same rule applies to the `ReturnsTainted` register summary. Together they are
 // the pass's answer to context-insensitive mod-sets, which is not optional
-// engineering: without the gate, `secp256k1_ecdsa_verify` — public data only —
+// engineering: without the gate, `secp256k1_ecdsa_verify` - public data only -
 // carries 17 `MSR DIT` and Bitcoin Core's ConnectBlockAllEcdsa costs +51.20%,
 // so the default configuration would lose to blanket DIT by 50 points on the
 // most realistic workload measured. With it that becomes +0.67% at no loss of
@@ -182,12 +182,12 @@ static cl::opt<bool> TaintNoModsetGate(
     cl::desc(
         "Disable the call-site mod-set gate: apply a callee's memory "
         "clobber at every call site of that callee, not only where a secret "
-        "is passed. Maximally conservative and much slower — the escape "
+        "is passed. Maximally conservative and much slower - the escape "
         "hatch for taint that does not travel by arguments."),
     cl::init(false));
 
 // Track B: PSTATE.DIT placement granularity. `region` (the DEFAULT) is fine-grain
-// cost-model placement — DIT covers only the secret-dependent regions, leaving clean
+// cost-model placement - DIT covers only the secret-dependent regions, leaving clean
 // preambles off and hoisting enables out of loops (docs/design/dit-placement.md §5.6;
 // tuned by -taint-dit-switch-cyc / -taint-dit-dwell-per-instr / -taint-dit-loop-hoist).
 // `function` is the coarse whole-function policy (DIT on entry-to-return for any
@@ -219,7 +219,7 @@ static cl::opt<DITPlacementMode> TaintDITPlacement(
 // fine-grain crossover). Only reached under -taint-dit-placement=region.
 //
 // WHY NOT 0. A zero switch cost makes the left side of the admission test
-// identically zero, so only an empty corridor ever merges — the default would
+// identically zero, so only an empty corridor ever merges - the default would
 // be asserting that emitting a switch is free, which no measurement supports.
 // On the libsodium composite (native M5, 20 paired reps per point, both public
 // lanes), moving from 0 to 30 is worth -8.96/-6.08/-4.01/-1.99 points at 200 B
@@ -242,7 +242,7 @@ static cl::opt<DITPlacementMode> TaintDITPlacement(
 //
 // THE TRAP THAT FOLLOWS: do not lower this for hardware with a renamed
 // (non-serializing) `MSR DIT`. Renaming makes the mode switch cheaper, and the
-// mode switch is not the term being paid — the instruction's presence in the
+// mode switch is not the term being paid - the instruction's presence in the
 // loop is, and renaming does not remove it. The published 22.6 cyc serializing
 // / 9.7 cyc renamed figures are real but they are gem5 numbers for the switch
 // alone; they do not govern this default.
@@ -258,8 +258,8 @@ static cl::opt<DITPlacementMode> TaintDITPlacement(
 // only callee ownership reaches.
 //
 // The error is ASYMMETRIC, which is why erring high is right: merging a corridor
-// keeps DIT on across it, which costs dwell (cheap — 0.0039 cyc per suppressed
-// op — and fail-SAFE, since it widens coverage and never narrows it), while
+// keeps DIT on across it, which costs dwell (cheap - 0.0039 cyc per suppressed
+// op - and fail-SAFE, since it widens coverage and never narrows it), while
 // failing to merge leaves a switch pair in the instruction stream, which the
 // measurements above say is the term that actually costs. Err high.
 static cl::opt<double> TaintDitSwitchCyc(
@@ -280,7 +280,7 @@ static cl::opt<double> TaintDitDwellPerInstr(
 
 // DEFAULT is true = each need-loop is coarsened On and the enable is hoisted to
 // the loop preheader: one toggle, whole loop covered. Set =0 for BLOCK-MINIMAL
-// coverage — On(b)=HasNeed(b) only, so DIT wraps just the blocks that actually
+// coverage - On(b)=HasNeed(b) only, so DIT wraps just the blocks that actually
 // contain a secret instruction and a loop's public scaffolding (loop control,
 // index math) that shares no block with a secret op runs unprotected, at the
 // cost of a per-iteration enable/disable around a need-block reached by a
@@ -300,7 +300,7 @@ static cl::opt<bool> TaintDitLoopHoist(
     cl::desc(
         "Coarsen need-loops On and hoist the DIT enable to the loop preheader "
         "(default true: one toggle, whole loop covered). =0 selects "
-        "block-minimal coverage — only need-containing blocks are DIT-on, "
+        "block-minimal coverage - only need-containing blocks are DIT-on, "
         "with per-iteration toggles."),
     cl::init(true));
 
@@ -373,7 +373,7 @@ struct CellInfo {
 ///
 /// This is the capability P1b needs and the pass has never had.
 /// Post-prologepilog
-/// `&local` is `$x0 = ADDXri $sp, 232` — no FrameIndex operand, no MMO — so the
+/// `&local` is `$x0 = ADDXri $sp, 232` - no FrameIndex operand, no MMO - so the
 /// analysis could tell that a register held *a* frame address but not *which*
 /// object it pointed at. Everything downstream had to fall back to whole-frame
 /// reasoning, under which a callee's arg-pointee mod-set collapses to a
@@ -422,7 +422,7 @@ public:
     }
   }
 
-  /// The object containing Base+Off, or nullopt when nothing does — an offset
+  /// The object containing Base+Off, or nullopt when nothing does - an offset
   /// into padding, a spill area this pass does not model, or a frame whose
   /// objects were all skipped above. Callers MUST treat nullopt as "unknown" and
   /// fall back to their existing conservative behaviour.
@@ -451,7 +451,7 @@ matchAddImm(const MachineInstr &MI, const TargetInstrInfo *TII) {
 
 /// Find the frame object backing AI. Returns nullopt when the alloca has no
 /// frame object (promoted to registers, or optimized away), in which case the
-/// caller leaves the cell Unknown — the over-approximating direction.
+/// caller leaves the cell Unknown - the over-approximating direction.
 static std::optional<int> findFrameIndexForAlloca(const MachineFunction &MF,
                                                   const AllocaInst *AI) {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -482,7 +482,7 @@ static CellInfo getCellFromMMO(const MachineMemOperand &MMO,
   }
   // The OUTGOING argument area: `STRXui $x0, $sp, 0 :: (store (s64) into stack)`.
   // AAPCS64 passes arguments past the eighth (and large aggregates) here, and the
-  // argument registers are typically overwritten before the call — so a secret
+  // argument registers are typically overwritten before the call - so a secret
   // written here is invisible to any register-based test at the call site. It is
   // NOT a FixedStackPseudoSourceValue (that kind covers INCOMING args and spill
   // slots) and carries no IR Value, so before this case it fell through to
@@ -501,7 +501,7 @@ static CellInfo getCellFromMMO(const MachineMemOperand &MMO,
       return CI;
     }
     // A source-level local. These arrive as ordinary IR pointers (%ir.nonce,
-    // %ir.add.ptr6), NOT as FixedStackPseudoSourceValue — that pseudo-value
+    // %ir.add.ptr6), NOT as FixedStackPseudoSourceValue - that pseudo-value
     // covers spill slots and fixed (incoming-argument) objects. Without this
     // case every user local fell through to Unknown, so the "cell-level stack
     // precision" the design claims covered spills but not the buffers secrets
@@ -521,7 +521,7 @@ static CellInfo getCellFromMMO(const MachineMemOperand &MMO,
       // (Size = nullopt): the load path then reads it with
       // anyTaintedStackCellForFI and the store path records it under the size-0
       // sentinel. Keeping a bogus precise (offset,size) would let a store and a
-      // load of the same object miss each other — an UNDER-taint.
+      // load of the same object miss each other - an UNDER-taint.
       const DataLayout &DL = MF->getFunction().getDataLayout();
       APInt Off(DL.getIndexTypeSizeInBits(V->getType()), 0);
       const Value *Base =
@@ -589,7 +589,7 @@ static bool anyRegUseOfKind(TaintKind K, const MachineInstr &MI,
     // carry the $lr clobber). Counting those as uses made an instruction that
     // merely re-defines a tainted register look like it READ one: e.g.
     // `dead $w0 = MOVi32imm 1, implicit-def $x0` with $x0 tainted set its own
-    // defs as tainted instead of clearing them — a self-sustaining loop taint
+    // defs as tainted instead of clearing them - a self-sustaining loop taint
     // could never leave. taintedCallArguments already guards this way.
     if (!MO.isReg() || MO.isDef())
       continue;
@@ -602,8 +602,8 @@ static bool anyRegUseOfKind(TaintKind K, const MachineInstr &MI,
 /// A register represents a single physical register if all its
 /// non-artificial subregs share the same hardware encoding.
 /// True for $x0 (subregs: $w0 enc=0, $w0_hi enc=0xFFFF/artificial).
-/// False for $w8_w9 (subregs: $w8 enc=8, $w9 enc=9 — different regs).
-/// False for $x0_x1 (subregs: $x0 enc=0, $x1 enc=1 — different regs).
+/// False for $w8_w9 (subregs: $w8 enc=8, $w9 enc=9 - different regs).
+/// False for $x0_x1 (subregs: $x0 enc=0, $x1 enc=1 - different regs).
 static bool isSinglePhysReg(MCPhysReg R, const TargetRegisterInfo *TRI) {
   unsigned ParentEnc = TRI->getEncodingValue(R);
   for (MCPhysReg SR : TRI->subregs(R)) {
@@ -663,7 +663,7 @@ static std::optional<unsigned> getStoredValueRegCount(const MachineInstr &MI) {
 }
 
 /// True if the value MI stores to memory carries taint of kind K. Only the
-/// value operands are considered — the address operands are a different sink.
+/// value operands are considered - the address operands are a different sink.
 /// Anything we cannot classify is over-approximated: a spurious barrier costs
 /// performance, a missing one costs the secret.
 static bool anyTaintedStoreDataRegUse(TaintKind K, const MachineInstr &MI,
@@ -691,7 +691,7 @@ static bool anyTaintedStoreDataRegUse(TaintKind K, const MachineInstr &MI,
 
 /// Complement of anyTaintedStoreDataRegUse: is any ADDRESS operand of a store
 /// (the register uses AFTER the leading stored-value registers) tainted of kind
-/// K? Lets the G2 diagnostic tell a secret store ADDRESS (uncovered by DIT —
+/// K? Lets the G2 diagnostic tell a secret store ADDRESS (uncovered by DIT -
 /// cache/TLB timing) from secret store DATA (which DIT covers, and which is
 /// address-tainted by the over-approximation, so a naive whole-instruction check
 /// would false-positive on it). Returns false when the value/address split is
@@ -735,14 +735,14 @@ static bool isABIResultRegDef(const MachineOperand &MO,
 // A call "passes a secret" if any argument register holds a secret value
 // (data-tainted) OR points to secret memory (pointee-tainted). The pointee case
 // is essential: memcpy(dst, secret_src, n) passes a public pointer whose pointee
-// is secret — data taint alone misses it, so the callee could copy the secret
+// is secret - data taint alone misses it, so the callee could copy the secret
 // into caller-visible memory with no TOP mod-set applied (missing-barrier leak).
 // Fix B: a secret is *passed* to a callee only if a tainted register appears as
 // a genuine argument-register USE operand of the call. AAPCS64 passes arguments
 // in X0-X7 / V0-V7 (encodings 0-7); a register merely live across the call
 // (caller-saved) or the call's implicit-def LR clobber is NOT an argument an
 // ABI-compliant callee can read as input, so it must not count as a passed
-// secret. Pointee taint on an argument pointer DOES count — a public pointer to
+// secret. Pointee taint on an argument pointer DOES count - a public pointer to
 // secret memory is a real reach (channel 2). Soundness rests on the callee being
 // ABI-compliant; a callee that scavenges caller-saved registers would need
 // in-process code execution, which defeats DIT regardless. See
@@ -773,7 +773,7 @@ CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
   //
   // Reported as Data, not Pointee: what was stored is the argument value itself.
   // A pointer-to-secret stored there also lands here, which over-approximates
-  // Data for that case — the safe direction, and it still makes the call count
+  // Data for that case - the safe direction, and it still makes the call count
   // as secret-passing, which is what every consumer of this predicate asks.
   if (S.isOutgoingArgSecret())
     R.Data = true;
@@ -789,7 +789,7 @@ static bool anyTaintedCallArgument(const MachineInstr &MI, const TaintState &S,
 // passes no secret. Only a callee that has a tainted argument qualifies: if the
 // analysis never found a secret arriving through this function's parameters,
 // then whatever secret its mod-set records came from a global, from state it
-// carries across calls, or from a callee's return value — none of which this
+// carries across calls, or from a callee's return value - none of which this
 // caller's arguments can speak for. A PROXY, not a proof: a callee can take a
 // secret argument AND read a secret global, and this does not catch that. The
 // sound rule is an origin bit computed in the fixed point ("all of this
@@ -806,7 +806,7 @@ static bool calleeClobberIsGateable(const FunctionTaintSummary &S) {
   // passes no secret is valid only if the callee's secret could have come from
   // a caller at all. Two necessary conditions, both cheap:
   //
-  //   1. none of its recorded effects is non-argument-sourced — it did not read
+  //   1. none of its recorded effects is non-argument-sourced - it did not read
   //      the secret out of a global, out of another TU, or out of a call it
   //      made without passing a secret itself (transitively);
   //   2. it names at least one tainted parameter, so there is an argument for
@@ -814,7 +814,7 @@ static bool calleeClobberIsGateable(const FunctionTaintSummary &S) {
   //
   // (1) is the real condition and subsumes (2) in principle; (2) is retained
   // because it is free, independently sound, and catches a callee whose effects
-  // are empty-but-conservative — and it measured byte-identical on every
+  // are empty-but-conservative - and it measured byte-identical on every
   // library screened, so it costs nothing. Neither is per-effect: see
   // FunctionMemEffects::NonArgSourced for what that costs.
   if (S.MemEffects.NonArgSourced)
@@ -843,7 +843,7 @@ static void taintCallResultDefs(const MachineInstr &MI, TaintState &S,
   }
 }
 
-// Public: declared in TaintAnalysis.h — used by TaintInterprocPass
+// Public: declared in TaintAnalysis.h - used by TaintInterprocPass
 const Function *llvm::findCalledFunction(Module &M, const MachineInstr &MI) {
   if (!MI.isCall())
     return nullptr;
@@ -930,7 +930,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       // Write one cell. A known size means we know exactly what the store
       // overwrote, so the update is strong (taint or clear). An unknown size
       // proves nothing about what was overwritten, so it can only ever add
-      // taint — recorded under a size-0 sentinel cell.
+      // taint - recorded under a size-0 sentinel cell.
       auto storeCell = [&](bool Tainted, const char *Label, auto Set,
                            auto Clear) {
         if (!CI.Size && !Tainted)
@@ -977,7 +977,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // untainted store to the outgoing area does NOT disarm it, because the
         // area holds several arguments at different offsets and clearing on any
         // one of them would lose a secret written at another. The bit is cleared
-        // where it is consumed — at the call — so it cannot leak past it.
+        // where it is consumed - at the call - so it cannot leak past it.
         if (DataTainted || PointeeDataTainted) {
           S.setOutgoingArgSecret();
           LLVM_DEBUG(dbgs() << "      secret stored into the OUTGOING argument "
@@ -1026,7 +1026,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     bool ShouldPointeeTaint = false;
     // ExternalMemClobbered folds in here: after a call whose callee may have
     // written a secret to unknown memory (a mod-set TOP), every heap and global
-    // load is secret. Stack loads are handled separately below — the existing
+    // load is secret. Stack loads are handled separately below - the existing
     // heap poison never covered them, and that is exactly where the callee->
     // caller-through-memory leak lived (the reload of a buffer a callee wrote).
     // A load consumes CROSS-function memory poison as well as this function's
@@ -1048,7 +1048,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       CellInfo CI = getCellFromMMO(*MMO, MI.getMF());
       if (CI.K == CellInfo::Stack) {
         // A call that clobbered unknown memory (mod-set TOP) may have written
-        // through a pointer into this frame — blunt P0 poisons every stack load
+        // through a pointer into this frame - blunt P0 poisons every stack load
         // after such a call. Provenance-based escaped-object precision (only
         // poison stack objects whose address escaped) is the P1 refinement.
         bool Tainted =
@@ -1091,7 +1091,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
             // Source condition: this taint came out of a global, not out of a
             // parameter, so no caller's arguments can account for it. Applies
             // even when THIS function tainted the global from its own parameter
-            // — attributing that would need per-global source tracking, and the
+            // - attributing that would need per-global source tracking, and the
             // over-approximation errs toward applying the clobber.
             S.setNonArgSourcedTaint();
             LLVM_DEBUG(dbgs()
@@ -1161,12 +1161,12 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
 
       // If callee's summary says it returns tainted, taint the return register
       // unconditionally. The callee's ReturnsTainted already accounts for all
-      // taint sources (args, heap loads, globals) — no need to gate on whether
+      // taint sources (args, heap loads, globals) - no need to gate on whether
       // the caller is passing tainted args.
       // Does taint entering from THIS callee trace back to our own parameters?
       // Only if we handed it a secret AND its own taint is parameter-sourced.
       // Otherwise the secret originated below us and no caller of ours can
-      // account for it — the transitive half of the source condition.
+      // account for it - the transitive half of the source condition.
       // "We passed it a secret" is not by itself evidence that the taint coming
       // back is parameter-sourced: the secret WE passed may itself have reached
       // us from a global or from a call we did not supply. If this function
@@ -1179,7 +1179,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
 
       // A callee whose taint is argument-sourced can only hand back a secret to
       // a caller that gave it one. A non-argument-sourced callee returns taint
-      // regardless — its secret did not come through its parameters.
+      // regardless - its secret did not come through its parameters.
       const bool ReturnApplies =
           Summary.MemEffects.NonArgSourced || HasTaintedArg;
       if (Summary.ReturnsTainted && ReturnApplies) {
@@ -1201,8 +1201,8 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       //
       // The call-site gate makes the APPLICATION context-sensitive: the clobber
       // is suppressed at call sites that pass no secret. That deliberately
-      // reaches the transitive re-export too — a caller that absorbs no clobber
-      // re-exports none — which is what stops the false-positive cascade rather
+      // reaches the transitive re-export too - a caller that absorbs no clobber
+      // re-exports none - which is what stops the false-positive cascade rather
       // than merely hiding its last hop. Consequently the gate changes
       // SUMMARIES, not just codegen. WritesSecretToGlobal is never gated: it is
       // already per-global rather than a flood, and it is the "secret arrived
@@ -1293,7 +1293,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     } else {
       // External declaration or indirect call: the analysis cannot see what it
       // does to memory. If it receives a secret (in any argument register),
-      // assume TOP — it may have written that secret anywhere caller-visible.
+      // assume TOP - it may have written that secret anywhere caller-visible.
       // This is blunt-TOP P0; a libc model table and IR memory(...) attributes
       // would refine it (research §11 vii/viii), deferred pending measurement.
       if (HasTaintedArg) {
@@ -1343,7 +1343,7 @@ static bool hasTaintedRegDef(const MachineInstr &MI, const TaintState &S) {
   return false;
 }
 
-// Public: declared in TaintAnalysis.h — shared by the barrier and export paths.
+// Public: declared in TaintAnalysis.h - shared by the barrier and export paths.
 bool llvm::isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F) {
   bool IsMemAccess = MI.mayLoad() || MI.mayStore();
   bool LoadsSecretPointee = MI.mayLoad() && F.UsesPointee;
@@ -1353,13 +1353,13 @@ bool llvm::isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F) {
   // call is already covered by F.UsesData; a call that passes only a *pointer to
   // secret memory* (e.g. memcpy(dst, secret_src, n), where the pointer value is
   // public but its pointee is secret) is not, and would otherwise leave the
-  // enclosing function uninstrumented — so the callee would run with DIT off.
+  // enclosing function uninstrumented - so the callee would run with DIT off.
   bool PassesPointeeSecretToCall = MI.isCall() && F.UsesPointee;
   return F.UsesData || F.DefsData || LoadsSecretPointee || AddressSensitive ||
          PassesPointeeSecretToCall;
 }
 
-// Public: declared in TaintAnalysis.h — the G2 diagnostic classifier.
+// Public: declared in TaintAnalysis.h - the G2 diagnostic classifier.
 const char *llvm::classifyDITUncovered(const MachineInstr &MI,
                                        const TaintFacts &F, const TaintState &S,
                                        const TargetInstrInfo &TII) {
@@ -1370,10 +1370,10 @@ const char *llvm::classifyDITUncovered(const MachineInstr &MI,
   // they are orthogonal to whether the instruction's own data-value timing is in
   // the covered set (a load is data-value-covered yet its address still leaks; a
   // branch is not in the covered set at all but its hazard is the direction, not
-  // its latency — so it must be labelled secret-branch, not not-dit-covered).
+  // its latency - so it must be labelled secret-branch, not not-dit-covered).
 
   // Load: every register a pure load uses is an address operand (the loaded
-  // value is a def), so a secret in any of them is a secret ADDRESS — cache/TLB
+  // value is a def), so a secret in any of them is a secret ADDRESS - cache/TLB
   // timing, which DIT does not cover. A load of secret *data* through a clean
   // pointer is UsesPointee (not UsesData/UsesAddress) and IS covered.
   if (MI.mayLoad() && !MI.mayStore() && (F.UsesData || F.UsesAddress))
@@ -1381,7 +1381,7 @@ const char *llvm::classifyDITUncovered(const MachineInstr &MI,
 
   // Store: check ONLY the address operands. Secret store *data* is DIT-covered
   // (and is address-tainted by the over-approximation, so a whole-instruction
-  // UsesAddress check would false-positive on it — the reason this uses the
+  // UsesAddress check would false-positive on it - the reason this uses the
   // value/address split). A raw uncomputed secret used directly as a store
   // address is the one under-flagged case (getStoredValueRegCount unknown ->
   // not flagged); computed/address-tainted store addresses are caught.
@@ -1404,7 +1404,7 @@ const char *llvm::classifyDITUncovered(const MachineInstr &MI,
     return nullptr;
 
   // The instruction's own data-value timing: is it in the Arm DIT covered set?
-  // isDITProtected is a membership list (docs/reference/dit-spec.md) — false covers
+  // isDITProtected is a membership list (docs/reference/dit-spec.md) - false covers
   // the documented divide/sqrt exclusions AND anything not provably covered. The
   // printed opcode identifies which (e.g. SDIVXr).
   if (!TII.isDITProtected(MI))
@@ -1413,7 +1413,7 @@ const char *llvm::classifyDITUncovered(const MachineInstr &MI,
   return nullptr;
 }
 
-// Public: declared in TaintAnalysis.h — the single replay used by every
+// Public: declared in TaintAnalysis.h - the single replay used by every
 // consumer of a converged TaintResult, so none of them can drift out of step
 // with propagateTaintMI.
 void llvm::replayTaint(
@@ -1534,7 +1534,7 @@ collectTaintedRuns(MachineFunction &MF, const TaintResult &TR,
   return TaintedRuns;
 }
 
-// Public: declared in TaintAnalysis.h — same predicate insertTaintDITSwitches
+// Public: declared in TaintAnalysis.h - same predicate insertTaintDITSwitches
 // uses to decide whether a function gets DIT instrumentation.
 bool llvm::functionHasTaintedRuns(MachineFunction &MF, const TaintResult &TR,
                                   const TaintSummaryInfo *TSI, AAResults *AA) {
@@ -1593,7 +1593,7 @@ FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
           }
           CellInfo CI = getCellFromMMO(*MMO, MI.getMF());
           if (CI.K == CellInfo::Stack) {
-            // A non-fixed frame object is this function's own private stack —
+            // A non-fixed frame object is this function's own private stack -
             // the caller cannot see it, so it is NOT a caller-visible effect.
             // A fixed object is an incoming stack/byval argument slot, which
             // the caller CAN see; blunt P0 maps that to TOP (mapping it to the
@@ -1604,13 +1604,13 @@ FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
             ME.WritesSecretToGlobal.insert(CI.GV);
           } else if (CI.K == CellInfo::Arg) {
             // P1a: a store whose destination pointer bottoms out at pointer
-            // argument i — the canonical callee->caller-through-memory write.
+            // argument i - the canonical callee->caller-through-memory write.
             // Record the precise provenance instead of TOP. Soundness in P1a is
             // still guaranteed by the caller, which applies a non-empty arg-set
             // as a full clobber (blunt) until P1b consumes it precisely.
             ME.WritesSecretThroughArgPointee.insert(CI.ArgNo);
           } else {
-            // Unknown/heap — a store through a pointer the analysis cannot trace
+            // Unknown/heap - a store through a pointer the analysis cannot trace
             // to an argument or global. Sound direction: TOP.
             ME.WritesSecretToUnknown = true;
           }
@@ -1628,7 +1628,7 @@ FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
       llvm::sort(Args);
       for (unsigned A : Args)
         dbgs() << " arg" << A;
-      // SmallPtrSet iteration order is unspecified — sort by name so the dump is
+      // SmallPtrSet iteration order is unspecified - sort by name so the dump is
       // deterministic across runs (and lit-testable with multiple globals).
       SmallVector<StringRef, 4> Globals;
       for (const GlobalVariable *GV : ME.WritesSecretToGlobal)
@@ -1827,7 +1827,7 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
     }
   }
 
-  // Source 2: Interprocedural summaries — the module pass stores
+  // Source 2: Interprocedural summaries - the module pass stores
   // "identity arg 0 is tainted" in TSI when it sees caller_simple
   // passing a tainted register to identity's first argument.
   if (TSI && TSI->hasSummary(F)) {
@@ -1947,7 +1947,7 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
     unsigned ArgIdx = TRI->getEncodingValue(PhysReg);
     // Only real argument registers (X0-X7 / V0-V7, encodings 0-7) carry incoming
     // taint. x30/x29/sp are livein of every function but never argument-passing,
-    // so never seed them even if a stale index leaked into the summary — this
+    // so never seed them even if a stale index leaked into the summary - this
     // mirrors the producer-side guard in propagateArgTaintToCallees.
     if (ArgIdx > 7)
       continue;
@@ -2083,7 +2083,7 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
 }
 
 //===----------------------------------------------------------------------===//
-// exportTaintedInstructions — shared helper for writing results to file
+// exportTaintedInstructions - shared helper for writing results to file
 //===----------------------------------------------------------------------===//
 
 /// Replays taint propagation instruction-by-instruction using the per-BB
@@ -2330,7 +2330,7 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
 // policy, and the safe fallback when region placement cannot prove coverage.
 //
 // A TAIL CALL gets NEITHER switch. It is both isReturn() and isCall() (on
-// AArch64, TCRETURN*), so it is the function's exit — but control transfers to
+// AArch64, TCRETURN*), so it is the function's exit - but control transfers to
 // a callee that may consume this function's secret arguments, and the frame is
 // already gone, so there is no instruction after it at which DIT could be
 // restored. Clearing DIT here would disable protection exactly at the hand-off:
@@ -2339,7 +2339,7 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
 // operation with DIT=0. Leaving DIT set is the safe direction: an in-TU
 // instrumented callee re-asserts at its own entry and clears before its own
 // return, and an uninstrumented one at least inherits protection. The residual
-// is a DIT leak past an uninstrumented tail callee — a cost, not a hole.
+// is a DIT leak past an uninstrumented tail callee - a cost, not a hole.
 // See docs/design/dit-tailcall-gap.md.
 // Will this callee hand PSTATE.DIT back the way it received it? Two ways:
 // it never touches DIT at all (PreservesDIT), or it is entered with DIT already
@@ -2638,11 +2638,11 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
 }
 
 // An instruction that must execute with PSTATE.DIT=1. Coverable-tainted
-// data-processing / loads / stores (DIT protects their data-value timing —
+// data-processing / loads / stores (DIT protects their data-value timing -
 // including a secret-address load's data value, the LVP channel), PLUS any
-// secret-passing call (the callee inherits DIT — Scenario B; note isDITProtected
+// secret-passing call (the callee inherits DIT - Scenario B; note isDITProtected
 // is false for a call, so the call term is explicit). Divides/sqrt, secret
-// branches, and returns are NOT needs — DIT cannot protect them (they are
+// branches, and returns are NOT needs - DIT cannot protect them (they are
 // residuals, see classifyDITUncovered). §5.6 Correction 1.
 static bool needsDIT(const MachineInstr &MI, const TaintFacts &F,
                      const TargetInstrInfo &TII) {
@@ -2685,7 +2685,7 @@ static bool clobbersDIT(const MachineInstr &MI, const TaintSummaryInfo *TSI,
 // from every predecessor). Returns the on-entry state of each block.
 //
 // AND-meet ⇒ initialize OPTIMISTICALLY to true, else a loop whose DIT is carried
-// in (no enable inside the loop) would never converge to on — the backedge would
+// in (no enable inside the loop) would never converge to on - the backedge would
 // start false and the meet would pin it there, reporting a false "uncovered".
 // The entry boundary is off, enforced by `In = !pred_empty()`.
 //
@@ -2997,7 +2997,7 @@ struct DITAccounting {
   uint64_t Switches = 0;  // MSR DIT instructions emitted
   // Same three, weighted by 10^min(loop depth, 4). A block inside a hot loop
   // costs far more than a straight-line block, and the unweighted ratio hides
-  // exactly the case that matters — convolve's 14 toggles look cheap statically
+  // exactly the case that matters - convolve's 14 toggles look cheap statically
   // and cost 7.16x when executed per pixel.
   uint64_t WNeed = 0, WUnderDIT = 0, WTotal = 0;
 
@@ -3011,7 +3011,7 @@ struct DITAccounting {
 
 // Walk the emitted function once, tracking DIT-on state, and tally the four
 // counts. Runs AFTER placement so it measures what was actually emitted, and is
-// policy-agnostic — region and function granularity are directly comparable.
+// policy-agnostic - region and function granularity are directly comparable.
 static DITAccounting computeDITAccounting(MachineFunction &MF,
                                           const TaintResult &TR,
                                           const TaintSummaryInfo *TSI,
@@ -3114,7 +3114,7 @@ regionEntryInsertPt(MachineBasicBlock &MBB) {
 // True if MBB lies on a cycle (reachable from one of its own successors). Used
 // to detect an irreducible cycle MachineLoopInfo does not model: a plain
 // begin() enable there would be re-executed every iteration (per-iteration
-// toggle) — such a function falls back to whole-function granularity instead.
+// toggle) - such a function falls back to whole-function granularity instead.
 static bool blockInCycle(const MachineBasicBlock *MBB) {
   SmallPtrSet<const MachineBasicBlock *, 16> Seen;
   SmallVector<const MachineBasicBlock *, 16> WL(MBB->succ_begin(),
@@ -3162,8 +3162,8 @@ static void fallbackToFunctionGranularity(MachineFunction &MF,
 }
 
 // Increment (c): the admission test (docs/design/dit-placement.md §5.6). Given the
-// increment-(b) On/Off block partition, look at each interior Off *corridor* — a
-// maximal CFG-connected group of Off blocks flanked by On on both sides — and
+// increment-(b) On/Off block partition, look at each interior Off *corridor* - a
+// maximal CFG-connected group of Off blocks flanked by On on both sides - and
 // decide whether keeping it DIT-off is worth the toggle pair that bounds it, or
 // whether to merge it into coverage (extend `OnBlocks` over it). The comparison is
 // made emit-accurately: the placement below puts every switch at a block boundary,
@@ -3184,8 +3184,8 @@ static void fallbackToFunctionGranularity(MachineFunction &MF,
 // saves. This is the frequency-aware replacement for the static
 // `-taint-region-merge-gap`: cold/long gaps merge, hot/short gaps stay split, and
 // the P≈40-64 crossover falls out of the tunable. Merging only EXTENDS coverage, so
-// it can never leave a Need uncovered — the soundness verifier still passes.
-// One-sided corridors (a leading preamble or trailing epilogue — no toggle pair to
+// it can never leave a Need uncovered - the soundness verifier still passes.
+// One-sided corridors (a leading preamble or trailing epilogue - no toggle pair to
 // save) are left Off. A clobber inside a corridor no longer disqualifies it: its
 // re-assert is costed in ToggleAdded, so a corridor merges iff it is still a net
 // toggle win.
@@ -3195,7 +3195,7 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
                               const MachineLoopInfo &MLI) {
   auto On = [&](const MachineBasicBlock *B) { return OnBlocks.count(B) != 0; };
 
-  // Nothing to do unless some block is Off — skip the block-frequency dataflow in
+  // Nothing to do unless some block is Off - skip the block-frequency dataflow in
   // the degenerate whole-function-covered case (region == function granularity).
   if (llvm::all_of(MF, [&](const MachineBasicBlock &B) { return On(&B); }))
     return;
@@ -3214,7 +3214,7 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
 
   // Partition the Off blocks into maximal CFG-connected components. Two Off blocks
   // that are CFG-adjacent are in the same component, so distinct components are
-  // never adjacent — and every Off neighbor of a corridor block is in the same
+  // never adjacent - and every Off neighbor of a corridor block is in the same
   // corridor, so merging a corridor removes exactly its On<->corridor boundary
   // switches (no new On->Off boundary is created downstream). Evaluating each
   // component against the original On/Off partition and extending OnBlocks
@@ -3242,7 +3242,7 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
 
     // Switches removed by merging (the On<->corridor boundary), and switches added
     // inside the now-covered corridor (re-asserts after clobbers, disables before
-    // returns) — mirroring exactly what the emit loop below inserts.
+    // returns) - mirroring exactly what the emit loop below inserts.
     bool HasOnPred = false, HasOnSucc = false;
     double SavedFreq = 0.0, AddedFreq = 0.0, Dwell = 0.0;
     SmallPtrSet<const MachineBasicBlock *, 8> OnSuccs;
@@ -3338,7 +3338,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   // Need. This excludes a clean preamble (Off) and makes the WHOLE outermost
   // need-loop On, so the Off→On boundary is the loop preheader (enable executed
   // once) rather than the loop header (re-entered every iteration by the
-  // backedge). Loop info is built locally — no MFAM plumbing needed here.
+  // backedge). Loop info is built locally - no MFAM plumbing needed here.
   MachineDominatorTree MDT(MF);
   MachineLoopInfo MLI(MDT);
 
@@ -3428,7 +3428,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
             ++Toggles;
           } else {
             // No unique preheader (header reached from ≥2 external edges). Place
-            // the enable at the end of each external (non-loop) predecessor —
+            // the enable at the end of each external (non-loop) predecessor -
             // each is entered once, so still no per-iteration toggle, and no
             // whole-function fallback.
             for (MachineBasicBlock *P : MBB.predecessors())
@@ -3449,7 +3449,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
         } else {
           // Block entry. In block-minimal mode this is a need-block reached by a
           // backedge, so the enable (and the matching disable on the On→Off exit)
-          // is per-iteration — the deliberate cost of covering the fewest
+          // is per-iteration - the deliberate cost of covering the fewest
           // instructions. Sound either way: the verifier below is the hard gate.
           TII->insertTimingModeSwitch(MBB, regionEntryInsertPt(MBB), DebugLoc(),
                                       /*Enable=*/true);
@@ -3473,7 +3473,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                                     C->getDebugLoc(), /*Enable=*/true);
         ++Toggles;
       }
-      // Disable before the block's return (found by scan — it need not be the
+      // Disable before the block's return (found by scan - it need not be the
       // last slot). Skip if the return is itself a Need (a secret-passing tail
       // call): DIT must stay ON through it so the callee inherits it.
       for (MachineInstr &MI : MBB) {
@@ -3493,7 +3493,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       }
     } else {
       // Off block: disable on entering from an On predecessor. An On→Off edge's
-      // Off side is a loop exit (outside the loop), entered once per exit — no
+      // Off side is a loop exit (outside the loop), entered once per exit - no
       // hoisting needed.
       bool AnyPredOn = false;
       for (MachineBasicBlock *P : MBB.predecessors())
@@ -3523,7 +3523,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   // AND-meet (DIT-on required from every predecessor) ⇒ initialize the fixed
   // point OPTIMISTICALLY to true, else a loop whose DIT is carried in (no enable
   // inside the loop) would never converge to on (the backedge would start false
-  // and the meet would pin it there — a false "uncovered" report). The entry
+  // and the meet would pin it there - a false "uncovered" report). The entry
   // boundary is off, enforced by `In = !pred_empty()` below.
   DenseMap<const MachineBasicBlock *, bool> OnIn =
       computeDITOnEntry(MF, TSI, M, TII);
@@ -3575,7 +3575,7 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
       collectTaintedRuns(MF, TR, TSI, TaintedInstrCount, AA);
 
   // The runs no longer drive placement (DIT is function-granularity), but they
-  // still drive the region reports — and they are the input the cost-model-
+  // still drive the region reports - and they are the input the cost-model-
   // driven region placement will consume. See docs/results/dit-cost-model.md.
   if (RegionsOS)
     printTaintedRuns(MF, TaintedRuns, *RegionsOS);
@@ -3791,7 +3791,7 @@ llvm::openTaintReport(StringRef Path, StringRef What, bool Append) {
 }
 
 //===----------------------------------------------------------------------===//
-// TaintAnalysisPass — standalone MachineFunction pass (uses the helper above)
+// TaintAnalysisPass - standalone MachineFunction pass (uses the helper above)
 //===----------------------------------------------------------------------===//
 
 PreservedAnalyses TaintAnalysisPass::run(MachineFunction &MF,

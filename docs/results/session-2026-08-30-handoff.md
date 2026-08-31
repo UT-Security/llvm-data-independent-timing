@@ -19,7 +19,7 @@ Nothing is running. Driver scripts were in the session scratchpad (`measure_nra.
 ## 1. The headline finding
 
 Full-LTO Bitcoin Core with the pass: **127,740 switches across 3,773 functions,
-+25.9% on CoinSelection** — a benchmark where the pass otherwise beats blanket DIT 15/15.
++25.9% on CoinSelection** - a benchmark where the pass otherwise beats blanket DIT 15/15.
 
 The decomposition is the point:
 
@@ -34,7 +34,7 @@ not taint coverage.** It is `3,773 functions x ~34 switches each`.
 Two fixes were tried against the *3,773* and both were near-worthless:
 
 - `operator delete` + `doesNotReturn` + `getMemoryEffects` refinement: **-0.09%**
-  (127,793 -> 127,676). Clobber sites are not the unit of damage — one surviving
+  (127,793 -> 127,676). Clobber sites are not the unit of damage - one surviving
   clobber poisons a whole function, so retiring 38% of sites recovered 6 functions.
 - The `$dit`/verifier merge: **+64 switches**, i.e. nothing.
 
@@ -63,7 +63,7 @@ gem5 rig: `utils/dit_host_screening/btc/btc_gem5.py --bench sign|coinsel`.
 ## 3. Settled results worth keeping
 
 **gem5 is a valid instrument.** CoinSelection blanket DIT: **+11.06% gem5 vs +13.01%
-silicon** (85%). Mechanism isolated: **entirely EVES**, the value predictor — IPC
+silicon** (85%). Mechanism isolated: **entirely EVES**, the value predictor - IPC
 1.769 -> 1.960; DMP, comp-simp and SIP contribute nothing. This corrects
 `evaluation-framework.md` §5's "gem5 understated 4.6x", which came from one workload.
 Doc: `docs/results/dit-bitcoin-coinsel-gem5.md`.
@@ -75,7 +75,7 @@ itself** and +1.58% (noise) to layout. gem5: pass +0.32% serializing -> -0.59% r
 
 **Wallet secret-fraction sweep**, 8 knob points x 8 arms x 20 reps, closure check passes.
 **Crossover at f ~ 45%**, not the framework's ~20%. But the causal variable is region
-*count*, not fraction — each signature is one more region, so the two are confounded.
+*count*, not fraction - each signature is one more region, so the two are confounded.
 Doc: `docs/paper/bitcoin-secret-fraction-sweep.md`. Rig: `run_wallet_sweep.py`,
 `analyze_wallet_sweep.py`; knobs `BTC_BENCH_INPUTS` / `BTC_BENCH_CHAIN` / `BTC_BENCH_SIGN`
 in `~/Documents/bitcoin/src/bench/wallet_create_tx.cpp` (uncommitted).
@@ -165,14 +165,14 @@ My commit does three things:
 static switches vs 105 for the same input; `081f4f3b` independently measured the same
 effect (libsecp256k1 signing 26 -> 111) and rejects it as fragmentation.
 
-**`~/Documents/gem5-DIT`** — untracked `benchmarks/bitcoin/` (both gem5 drivers,
+**`~/Documents/gem5-DIT`** - untracked `benchmarks/bitcoin/` (both gem5 drivers,
 `build_btc_arms.sh`, `build_coinsel_arms.sh`, `coinsel_stubs.cpp`). Merged to
 `origin/master` earlier including the toggle-asymmetry fix; rebuilt.
 
-**This worktree (`dit-tainter`)** — 3 new results docs, 6 rig scripts, 4 CSVs, and an
+**This worktree (`dit-tainter`)** - 3 new results docs, 6 rig scripts, 4 CSVs, and an
 edited `evaluation-framework.md`. All uncommitted.
 
-**`~/Documents/bitcoin`** — `src/bench/wallet_create_tx.cpp` modified (the 3 sweep knobs).
+**`~/Documents/bitcoin`** - `src/bench/wallet_create_tx.cpp` modified (the 3 sweep knobs).
 
 ---
 
@@ -185,21 +185,21 @@ edited `evaluation-framework.md`. All uncommitted.
    gone), `dit-unconditional-design.md` §5.2 B1 (pre-RA vreg, the LLVM `PSTATE.SM`
    pattern), and the re-assert deletion. Build it once.
 3. **`disable-tail-calls` is now the applicable fix, not the cheaper one.** Its parked
-   condition was "if LTO devirtualizes the dispatch tables". Measured: it does not —
+   condition was "if LTO devirtualizes the dispatch tables". Measured: it does not -
    indirect tail branches 834 -> 799 (-4%), indirect calls 7,761 -> **8,477 (+9%)**. And
    the leak it fixes is 406x worse under LTO: functions that set DIT and never clear go
    **3 -> 1,218**, all of them exiting via a branch rather than `ret` (so not
    `AlwaysEnteredWithDIT`).
 4. **libsodium says do not use LTO.** doc.libsodium.org/installation: *"Since different
    files are compiled for different CPU classes, and to prevent unwanted optimizations,
-   link-time optimization (LTO) should not be used."* Corroborated in source — three weak
+   link-time optimization (LTO) should not be used."* Corroborated in source - three weak
    symbol barriers named `_sodium_dummy_symbol_to_prevent_{memcmp,compare,memzero}_lto`.
    Two consequences: our pass runs *after* the LTO IR pipeline, so LTO could weaken a
    constant-time construct before we ever see it and the verifier would not notice (it
    checks DIT placement, not constant-timeness); and those barriers are external calls,
    which in our taxonomy are both clobbers and re-assert sites. **Any paper claim resting
    on LTO needs a dynamic constant-time check (ct-fuzz/dudect-style) on an LTO build.**
-5. **Should the pass move later?** Answered no — see §5. But `docs/design/verification.md`
+5. **Should the pass move later?** Answered no - see §5. But `docs/design/verification.md`
    and the verifier are the reason it is safe to stop worrying about position.
 6. **`docs/results/dit-browser-filters.md` is still missing** and cited twice by
    `evaluation-framework.md` as the Skia negative control.
@@ -219,7 +219,7 @@ classifier time out, so **spot-check quotes against primary sources before citin
 - **Declassification is nearly absent in research tools** (Constantine, SC-Eliminator,
   Raccoon, dudect: none; ct-fuzz: input-only, paper says post-input declassification is
   unimplemented). Only ct-verif has `public_out()`/`declassified_out()`. But **BoringSSL
-  has 168 declassify sites against 27 secret-marking sites** — a 6:1 ratio suggesting the
+  has 168 declassify sites against 27 secret-marking sites** - a 6:1 ratio suggesting the
   "mark the secret and propagate" model is inherently declassification-heavy. Ours has none.
 - **Hand-written library models are the approach StubDroid (ICSE'16) criticises**;
   inferred summaries took one app from 41.7% -> 0% FPs and 7,309 MB -> 451 MB.
@@ -228,6 +228,6 @@ classifier time out, so **spot-check quotes against primary sources before citin
   bases, bounded per-function collapse. **IFDS cannot represent a memory TOP at all.**
 - **`FunctionSummary::ParamAccess`** (`ModuleSummaryIndex.h:840`) + `generateParamAccessSummary`
   (`StackSafetyAnalysis.cpp:1129`) is an in-tree template for carrying per-parameter
-  analysis facts through ThinLTO. **Nobody has expressed taint over ThinLTO summaries** —
+  analysis facts through ThinLTO. **Nobody has expressed taint over ThinLTO summaries** -
   searched Discourse, arXiv, DBLP. Publishable gap, but the analysis is MIR-level and the
   summary index is IR-level, which is the real obstacle.

@@ -12,7 +12,7 @@
 #
 # The soundness verifier cannot see this class. It asks only "does every Need run
 # with DIT=1", and an enable with no matching clear is precisely what makes that
-# pass — so the defect is invisible to it by construction. computeDITOnEntry is
+# pass - so the defect is invisible to it by construction. computeDITOnEntry is
 # equally blind: it is an intra-function dataflow that seeds the entry boundary
 # Off and never models the state a function hands back to its caller.
 #
@@ -21,7 +21,7 @@
 # could be restored, and clearing before the branch would strip protection from
 # the callee that is about to receive the secret (the libsodium `crypto_sign`
 # under-taint, taint-analysis-tailcall.mir). What was missing is that it was
-# SILENT — a function that never clears shows suppression coverage that placement
+# SILENT - a function that never clears shows suppression coverage that placement
 # did not earn. See docs/design/dit-tailcall-gap.md §3.
 #
 # Both placement modes must report it: region leaves DIT set because the tail
@@ -36,7 +36,7 @@
 # The direct case also pins a subtle ordering requirement. A non-preserving tail
 # call is BOTH a return and a DIT clobber, so a check that applied the clobber
 # before testing isReturn() would read the state as Off at the branch and report
-# nothing at all. It must read the state ENTERING the tail call — what the callee
+# nothing at all. It must read the state ENTERING the tail call - what the callee
 # inherits.
 #
 # All DITLEAK lines are contiguous: the ESCAPE audit writes during the interproc

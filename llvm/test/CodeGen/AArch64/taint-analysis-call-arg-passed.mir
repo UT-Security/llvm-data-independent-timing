@@ -3,13 +3,13 @@
 # RUN: FileCheck %s --input-file=%t --implicit-check-not=ext_noarg
 
 # Fix B: the call-site ESCAPE audit (and the interproc mem-clobber it shares a
-# trigger with) counts a secret only when it is *passed* to the callee — i.e. a
+# trigger with) counts a secret only when it is *passed* to the callee - i.e. a
 # tainted register appears as an argument-register USE operand (AAPCS64: X0-X7 /
 # V0-V7). A secret merely live/clobbered across the call is not something an
 # ABI-compliant callee can read, so it must not count.
 #
 #  * @live_not_passed: a secret (x9) is attached to the call but NOT in an
-#    argument position — modelling a caller-saved temporary live across the call
+#    argument position - modelling a caller-saved temporary live across the call
 #    (or the call's own implicit-def LR clobber, the ConvolvePixel/abort case).
 #    Before fix B this escaped ("any tainted use"); now it does not. Enforced by
 #    --implicit-check-not=ext_noarg (ext_noarg must appear NOWHERE in the report).

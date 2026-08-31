@@ -1,7 +1,7 @@
 # Stack-passed secrets: a leak in the shipped default, and the fix
 
 **Found and fixed 2026-08-19**, while checking whether the mod-set call-site gate
-could be made sound. It is not a gate problem — it is a pre-existing leak that the
+could be made sound. It is not a gate problem - it is a pre-existing leak that the
 gate would have widened.
 
 ## 1. The leak
@@ -11,7 +11,7 @@ argument area**: the caller stores them to `$sp + imm` and then loads the argume
 registers, typically **overwriting the register that held the secret**. By the time
 the call is reached, no register carries it.
 
-`taintedCallArguments` inspected only argument registers — it filtered on
+`taintedCallArguments` inspected only argument registers - it filtered on
 `TRI->getEncodingValue(reg) > 7`. So it reported the call as passing nothing
 secret, and:
 
@@ -42,20 +42,20 @@ The transfer is caller → summary → callee, and all three had to change.
 
 **(a) Recognise the store.** The outgoing-arg store carries a `PseudoSourceValue`
 of kind `Stack` (`:: (store (s64) into stack)`). That is **not** a
-`FixedStackPseudoSourceValue` — that kind covers *incoming* arguments and spill
-slots — and it has no IR `Value`, which is why it previously fell through to
+`FixedStackPseudoSourceValue` - that kind covers *incoming* arguments and spill
+slots - and it has no IR `Value`, which is why it previously fell through to
 Unknown. `getCellFromMMO` now returns a new `CellInfo::OutgoingArg` kind, and a
 tainted store to it sets `TaintState::OutgoingArgSecret`.
 
 The bit is **one-directional**: an untainted store to the area does not clear it,
 because the area holds several arguments at different offsets and clearing on any
-one would lose a secret written at another. It is cleared where it is *consumed* —
-at the call — so it cannot leak into the next call in the block.
+one would lose a secret written at another. It is cleared where it is *consumed* -
+at the call - so it cannot leak into the next call in the block.
 
 **(b) Report it at the call.** `taintedCallArguments` returns `Data = true` when
 the bit is set. Reported as Data rather than Pointee because what was stored is the
 argument value itself; a pointer-to-secret stored there also lands here, which
-over-approximates Data for that case — the safe direction, and every consumer of
+over-approximates Data for that case - the safe direction, and every consumer of
 this predicate is asking "does this call pass a secret at all".
 
 **(c) Seed the callee.** New summary flag `FunctionTaintSummary::StackArgTainted`.
@@ -74,7 +74,7 @@ Adding `StackArgTainted` made the fixed point **fail to converge**, hitting the
 
 `NewSummary` in `TaintFixedPointIteration.cpp` is default-constructed each visit
 and copies forward only a named subset of fields. `StackArgTainted` is set by
-`propagateArgTaintToCallees` — i.e. by the *caller*, on the callee — so each visit
+`propagateArgTaintToCallees` - i.e. by the *caller*, on the callee - so each visit
 of the callee wiped it, the next visit of the caller re-set it, and the summary
 reported "changed" forever.
 

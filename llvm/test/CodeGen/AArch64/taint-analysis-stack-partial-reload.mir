@@ -5,7 +5,7 @@
 #
 # Stack cells are keyed (FrameIndex, offset, size). The READ path used to require
 # an EXACT key match, so spilling 8 secret bytes with STRXui and reloading the low
-# 4 with LDRWui — same slot, same offset, different size — found no cell and handed
+# 4 with LDRWui - same slot, same offset, different size - found no cell and handed
 # the secret back as PUBLIC. That is an under-taint, i.e. a leaked secret: the
 # reloaded half would run outside any DIT region.
 #

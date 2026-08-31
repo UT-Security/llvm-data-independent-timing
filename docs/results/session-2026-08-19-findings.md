@@ -7,7 +7,7 @@ Apple M5 unless marked gem5.
 
 ## 1. The headline: secret fraction decides everything
 
-**Same pass, same crypto library, opposite verdicts — the denominator is the
+**Same pass, same crypto library, opposite verdicts - the denominator is the
 variable.**
 
 | workload | secret fraction | pass vs always-on |
@@ -26,7 +26,7 @@ low fraction the public work dominates and the pass recovers most of it.
 
 ---
 
-## 2. Host screening — where the prize is (`dit-host-screening.md`)
+## 2. Host screening - where the prize is (`dit-host-screening.md`)
 
 Same binary, DIT injected at load, 12 reps, controls in-band.
 
@@ -39,7 +39,7 @@ Same binary, DIT injected at load, 12 reps, controls in-band.
 | QuickJS | Octane subset | +1.08% |
 
 **Calibration: QuickJS read +1.08% against the project's own documented +1.05%**
-on an independent harness — the reason to believe the other four rows.
+on an independent harness - the reason to believe the other four rows.
 
 The old "+4.4% unencrypted SQLite" note was real and understated: **+6.09%**.
 
@@ -47,7 +47,7 @@ The old "+4.4% unencrypted SQLite" note was real and understated: **+6.09%**.
 Lua micro, 200M iterations: serial FP accumulator **+32.39%** vs the same work
 with four independent accumulators **+20.06%**; adding a float divide changes
 nothing (+33.93% / +19.53%). **The serial chain is worth 12–14 points, the
-divide zero — but parallel guest code still pays +20%**, which is the
+divide zero - but parallel guest code still pays +20%**, which is the
 interpreter's own dispatch loop, a chain the guest cannot break. Condition (d)
 is therefore a property of the HOST, not the guest workload.
 
@@ -75,8 +75,8 @@ Microbenchmark screen, 15 reps, control 3.87x:
 | SignTransactionSchnorr | secret | +1.93% | +43.49% | +40.18% |
 
 **The pass wins decisively where taint is correct and loses catastrophically
-where taint is wrong.** `ConnectBlockAllEcdsa` is signature *verification* —
-public data only — where blanket DIT costs −0.02% and the pass costs +51%,
+where taint is wrong.** `ConnectBlockAllEcdsa` is signature *verification* -
+public data only - where blanket DIT costs −0.02% and the pass costs +51%,
 because `secp256k1_ecdsa_verify` carries **17 switches** it should not have.
 
 **`-reindex-chainstate` over real mainnet (200k blocks, 7.3M txs) is
@@ -86,7 +86,7 @@ datadir to a RAM disk.
 
 ---
 
-## 4. Serializing vs renamed `MSR DIT` — both negatives are toggle-bound
+## 4. Serializing vs renamed `MSR DIT` - both negatives are toggle-bound
 
 The fork models `MSR DIT` two ways. Same binary, two machine configs (the
 trap-7b-immune measurement).
@@ -100,7 +100,7 @@ trap-7b-immune measurement).
 **Rule: renaming the switch rescues placements that over-toggle; it does not
 improve one that is already toggle-thin.**
 
-I initially asserted the precision cost would NOT be rescued. That was wrong —
+I initially asserted the precision cost would NOT be rescued. That was wrong -
 always-on on that code costs −0.02%, proving dwell was zero and toggles were the
 only remaining term. Do not extrapolate magnitudes between gem5 (Neoverse-like)
 and M5.
@@ -122,7 +122,7 @@ unchanged (gem5 `ditSuppressed` 101.2% of oracle) and no DIT leak
 (`dit_after=0`). Still loses to always-on, so not enabled by default.
 
 **Function cloning** (branch `dit-clone`). IR-level `CloneFunction` makes
-`foo.dit` copies that emit NO switches — the one place eliding the entry enable
+`foo.dit` copies that emit NO switches - the one place eliding the entry enable
 is safe, because nothing else can name the symbol. MIR pass redirects DIT-on
 call sites. Re-assert sites **48 → 6**; signing region **+45.18% → +9.82%**
 against the oracle's +6.50%.
@@ -132,7 +132,7 @@ build: `MIRPrinter::printStackObjectDbgInfo` concatenates multiple
 `VariableDbgInfo` entries for one frame index with no separator
 (`debug-info-variable: '!1335!1338'`), which its own parser rejects. Triggered by
 StackColoring merging slots with disjoint lifetimes. **This is upstream LLVM, not
-the fork** — reproduced under plain `llc -run-pass=none`, 15-line C repro. Fixed
+the fork** - reproduced under plain `llc -run-pass=none`, 15-line C repro. Fixed
 with comma-separated lists in printer and parser (120 insertions, 4 files, new
 lit test, no YAML schema change). Verified: failing command compiles, 148 `msr
 DIT` with `-g` == 148 without, dwarfdump clean, taint tests 28/28, CodeGen +
@@ -144,8 +144,8 @@ DebugInfo 4363 pass / 0 fail. Fixed clang at `~/Documents/llvm-project/build-gfi
 
 libsecp256k1's **constant-time** safegcd inversion costs **+23.3%** under DIT;
 its **variable-time** sibling costs **+0.24%**. Cause proven causally, not
-inferred: `modinv64_impl.h:176` declares `volatile uint64_t c1, c2` — the
-standard idiom for stopping the compiler re-introducing branches — which forces
+inferred: `modinv64_impl.h:176` declares `volatile uint64_t c1, c2` - the
+standard idiom for stopping the compiler re-introducing branches - which forces
 a store+reload every iteration, ~1180 per inversion, on the serial chain, from a
 fixed stack slot, returning one of two repeating values. The LVP was covering it;
 DIT switches the LVP off.
@@ -159,7 +159,7 @@ idiom that makes crypto constant-time manufactures exactly the value-predictable
 loads DIT de-optimizes, so the hardened implementation is penalised ~100x more
 than its unhardened sibling.
 
-**BEEA itself is NOT a DIT workload** — its leak is iteration count and branch
+**BEEA itself is NOT a DIT workload** - its leak is iteration count and branch
 direction (CVE-2016-7056), and ARM DIT's covered list contains only CFINV and NOP
 under "Branches". Third false-assurance case after SDIV/FP and AES T-tables.
 
@@ -176,24 +176,24 @@ under "Branches". Third false-assurance case after SDIV/FP and AES T-tables.
   designed to benefit"*, and *"performance impact may be significantly higher on
   future processors."* Dave Hansen: *"DOITM itself is dead."*
 - **OpenBSD forces DIT on for every process** claiming *"no measurable impact on
-  performance"*, with no data — contradicted by every number here.
+  performance"*, with no data - contradicted by every number here.
 - **Closest prior art: "Let's DOIT" (TCHES 2025).** But it enforces the
   instruction SUBSET, not the mode bit; its +65% ChaCha20-ref is subset cost, not
   toggle cost. Do not conflate.
 - **Selective-hardening analogues** (oo7 TSE'21 5.9% vs a **430%** global
   baseline; SpecFuzz USENIX'20 3% vs 22%, JSMN 5×/11×) argue exactly our thesis
-  — **but at 100x the headroom.** Ours is 1–15%.
+ - **but at 100x the headroom.** Ours is 1–15%.
 - **The project's `dit-cost-model.md` appears to be the only cycle-level
   measurement of DIT toggle cost in existence.** Everything public is qualitative.
 
 ---
 
-## 8. Methodology — traps hit and gates adopted
+## 8. Methodology - traps hit and gates adopted
 
 **Trap 8 (under-protecting oracle) bit THREE times**, each caught by an
 arithmetic inconsistency between region-level and whole-program numbers:
 1. Seeded `ecdsa_sign` when eth-keys uses `sign_recoverable`.
-2. Missed `ec_pubkey_create`/`keypair_create` — `eth_keys` rebuilds a
+2. Missed `ec_pubkey_create`/`keypair_create` - `eth_keys` rebuilds a
    `PrivateKey` per signature, so key derivation is ~half the secret work.
 3. Built a gem5 composite against the oracle-patched secp256k1 tree, so the
    "baseline" ran oracle placement (847,278 suppressions in an arm where DIT is
@@ -207,7 +207,7 @@ arithmetic inconsistency between region-level and whole-program numbers:
 demonstrated with a zero-switch arm). Rotate, and keep a duplicate baseline arm.
 
 **Two gem5 gates, both exact and free, both failed first time:**
-1. `simInsts` must be IDENTICAL across machine configs. It was not — the driver
+1. `simInsts` must be IDENTICAL across machine configs. It was not - the driver
    called `clock_gettime`, and gem5 SE returns *simulated* time, feeding cycle
    counts back into control flow.
 2. The unprotected arm must report ZERO `compSimplifier.ditSuppressed`.

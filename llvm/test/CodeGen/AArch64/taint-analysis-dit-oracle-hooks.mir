@@ -13,7 +13,7 @@
 # The sled saves only LR, because the trampoline preserves x0-x17, NZCV and
 # v0-v31 itself. That is what makes it safe to insert here, after register
 # allocation, without knowing what is live. The LR read is `undef` because the
-# sled stores whatever LR holds and puts the same bits back — after a call LR is
+# sled stores whatever LR holds and puts the same bits back - after a call LR is
 # defined-dead, and a plain read there is invalid MIR.
 
 # HOOK-LABEL: name: tainted_fn

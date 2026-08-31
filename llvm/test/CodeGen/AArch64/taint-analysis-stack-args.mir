@@ -5,14 +5,14 @@
 # AAPCS64 passes arguments past the eighth (and large aggregates) in the outgoing
 # argument area: the caller stores them to `$sp + imm` and then overwrites the
 # argument registers before the call. So at the call NO register holds the secret,
-# and a register-only test concludes the call passes nothing secret — leaving the
+# and a register-only test concludes the call passes nothing secret - leaving the
 # callee analysed as clean and emitting no DIT at all. That was a real leak in the
 # shipped default, not merely imprecision: the identical code receiving the secret
 # in x0 was fully covered.
 #
 # The transfer runs on three pieces, all of which this test exercises:
 #   1. the store into the outgoing area arms TaintState::OutgoingArgSecret
-#      (its MMO is `into stack` — a PseudoSourceValue::Stack, NOT a
+#      (its MMO is `into stack` - a PseudoSourceValue::Stack, NOT a
 #      FixedStackPseudoSourceValue, which is why it used to fall through to the
 #      opaque-clobber path),
 #   2. taintedCallArguments reports the call as secret-passing, which sets
@@ -28,7 +28,7 @@
 # CHECK: MSRpstateImm4 26, 0
 
 # The caller needs nothing itself: it only stores the secret and calls. A store is
-# not a DIT-relevant operation, so there is no Need to cover here — the point of
+# not a DIT-relevant operation, so there is no Need to cover here - the point of
 # the test is entirely that the taint REACHED the callee.
 # CHECK-LABEL: name: caller
 # CHECK-NOT: MSRpstateImm4

@@ -8,7 +8,7 @@
 # `dead $w0 = MOVi32imm 1, implicit-def $x0` has $x0 among the operands uses()
 # walks. anyRegUseOfKind used to count that as reading $x0: with $x0 tainted, an
 # instruction that merely OVERWRITES the register looked like it read a secret and
-# re-tainted its own defs — a self-sustaining loop taint could never leave, and a
+# re-tainted its own defs - a self-sustaining loop taint could never leave, and a
 # public value materialized into w0 stayed "secret" (making a public call look
 # like it passed a secret, which set ExternalMemClobbered and poisoned memory).
 #
@@ -19,7 +19,7 @@
 # CHECK:      clear $w0 (untainted def)
 # CHECK: Total tainted regs: 0
 
-# Positive control — the guard must not stop taint flowing through a REAL use.
+# Positive control - the guard must not stop taint flowing through a REAL use.
 # $x0 is a genuine use operand of the ADD, so the result is tainted.
 # CHECK: TaintAnalysis: analyzing function keep_through_real_use
 # CHECK:   Marked physical register $x0 as tainted (from arg 0)

@@ -1838,7 +1838,7 @@ public:
   virtual void pinToTimingMode(MachineInstr &MI) const {}
 
   /// If MI is a data-independent-timing mode switch (the instruction
-  /// insertTimingModeSwitch emits — e.g. AArch64 `MSR DIT, #imm`), return
+  /// insertTimingModeSwitch emits - e.g. AArch64 `MSR DIT, #imm`), return
   /// whether it ENABLES (true) or disables (false) the mode; otherwise
   /// std::nullopt. Lets a target-independent pass recognise its own emitted
   /// switches (e.g. the DIT-placement soundness verifier).
@@ -1860,13 +1860,13 @@ public:
   }
 
   /// Return true only when PSTATE.DIT (data-independent timing) guarantees this
-  /// instruction's timing is independent of its non-address operand values —
+  /// instruction's timing is independent of its non-address operand values -
   /// i.e. the instruction is in the target's DIT-covered set. The taint hardener
   /// uses this to diagnose tainted instructions it cannot actually protect (e.g.
   /// AArch64 integer/FP divide and square root are NOT in the covered set and
   /// stay data-value-timed even with DIT=1). Targets should implement this as a
   /// MEMBERSHIP list that defaults to false, so an instruction not provably in
-  /// the covered set is flagged rather than assumed protected — under-claiming
+  /// the covered set is flagged rather than assumed protected - under-claiming
   /// coverage is the safe direction. The generic default is false (unknown).
   virtual bool isDITProtected(const MachineInstr &MI) const { return false; }
 

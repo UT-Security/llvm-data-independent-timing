@@ -7,11 +7,11 @@ verified → 24 confirmed / 1 refuted). Motivating question: find real-world
 operations, such that an emerging hardware optimization (load value prediction,
 silent stores, computation simplification, operand-dependent multiplier/divider
 early-out, data memoization, DMP) would reintroduce a **data-operand timing**
-side channel — the channel ARM PSTATE.DIT / Intel DOIT suppress. Anchor: the
+side channel - the channel ARM PSTATE.DIT / Intel DOIT suppress. Anchor: the
 Firefox SVG-filter subnormal-FP pixel-stealing attack, "fixed" by switching to
 integer arithmetic.
 
-This is the literature backing for **why this project exists** — the taint+DIT
+This is the literature backing for **why this project exists** - the taint+DIT
 work is the mitigation for exactly this class of leak. Complements
 `docs/research/cio-and-ct-literature.md` (CIO, the closest prior tool) and
 `docs/results/dit-cost-model.md` (why we don't just DIT-everywhere).
@@ -23,13 +23,13 @@ work is the mitigation for exactly this class of leak. Complements
 **The thesis is well-grounded in mechanism, but no single source makes the exact
 "LVP reopens Firefox's integer convolution" argument end to end.** It is a valid
 synthesis of separate, individually-verified literatures. The load-bearing final
-step — *a value-predicting load makes the pixel-value-dependent load timing depend
-on the secret again, reopening the channel* — is **sound in mechanism but not
+step - *a value-predicting load makes the pixel-value-dependent load timing depend
+on the secret again, reopening the channel* - is **sound in mechanism but not
 demonstrated on the convolution**. That gap is the interesting result: a
 publishable, buildable "we did the thing the literature only hypothesized"
 opportunity, and this project is the tool to do it. **Crucially, the hypothesized
 hardware is no longer hypothetical: the Apple M4 has a Load Value Predictor and
-DIT disables it — see the FLOP/SLAP section immediately below.**
+DIT disables it - see the FLOP/SLAP section immediately below.**
 
 The one place the thesis's *shape* is already **demonstrated on real hardware,
 non-crypto**: **THOR / Intel AMX** (see catalog #2). That is the existence proof
@@ -41,17 +41,17 @@ application data today.
 ## ★ FLOP / SLAP (2025): the Apple LVP is real, it's on the M4, and DIT disables it
 
 Added 2026-07-15 after reading both papers (predictors.fail). **This is the
-strongest possible validation of the project — it puts the exact predictor the
+strongest possible validation of the project - it puts the exact predictor the
 thesis needs on the exact hardware we develop on, with DIT as the named
 mitigation.** Papers:
 
-- **FLOP** — Kim, Chuang, Genkin, Yarom, *Breaking the Apple M3 CPU via False
+- **FLOP** - Kim, Chuang, Genkin, Yarom, *Breaking the Apple M3 CPU via False
   Load Output Predictions*, USENIX Security 2025. The **Load Value Predictor (LVP)**.
-- **SLAP** — Kim, Genkin, Yarom, *Data Speculation Attacks via Load Address
+- **SLAP** - Kim, Genkin, Yarom, *Data Speculation Attacks via Load Address
   Prediction on Apple Silicon*, IEEE S&P 2025. The **Load Address Predictor (LAP)**,
   M2/A15+. **OUT OF SCOPE for this project.** The LAP predicts which *address* is
   accessed, not operand *values*; DIT's guarantee is value-domain (data-operand
-  instruction timing), not address-domain — address/cache/TLB timing is explicitly
+  instruction timing), not address-domain - address/cache/TLB timing is explicitly
   *not* what DIT covers (cf. §G2). So the LAP is neither our threat model nor
   something DIT is claimed to fix. Noted here only to disambiguate it from the LVP;
   no follow-up warranted.
@@ -61,12 +61,12 @@ What FLOP establishes (quotes verbatim from the PDF):
 1. **The M4 has an LVP.** Table 1: present on **M3, M4, A17 Pro**; absent on M2,
    A15, A16. *"Apple's M3, M4, and A17 Pro CPUs all optimize RAW dependencies via
    a load value predictor (LVP)."*
-2. **It is a NON-speculative, data-value-dependent TIMING channel** — our exact
+2. **It is a NON-speculative, data-value-dependent TIMING channel** - our exact
    threat model, no Spectre gadget needed. §4.1: *"the M3 CPU runs drastically
    faster when the data stored in our memory addresses is a constant, compared to
-   when it is randomly generated"* — **~2× at 500 iterations**. Mechanism: the LVP
+   when it is randomly generated"* - **~2× at 500 iterations**. Mechanism: the LVP
    predicts a load's value when it has been **constant**, forwarding it to
-   dependent instructions instead of waiting for the (cache-missing) load — so
+   dependent instructions instead of waiting for the (cache-missing) load - so
    load-dependent timing becomes a function of the loaded **value's**
    predictability. Activation (§4.2): trains on **constants** (not strides),
    per-**instruction-address** (≤72 sites), ~40 iterations to engage,
@@ -81,7 +81,7 @@ What FLOP establishes (quotes verbatim from the PDF):
 4. **FLOP recommends exactly this project, in their words:** *"we recommend that
    developers patch their software to include DIT on supported platforms,
    especially for code regions handling secrets or are untrusted."* Region-granular
-   DIT around secret-handling code — what the taint→DIT pass automates.
+   DIT around secret-handling code - what the taint→DIT pass automates.
 5. **The dwell number we were missing, on a real workload.** They patched Safari
    to set DIT process-wide: **4.5% overhead on Speedometer 3.0** (0.6% on BYTE).
    This is the *coarse* mitigation's cost on a real browser benchmark.
@@ -89,29 +89,29 @@ What FLOP establishes (quotes verbatim from the PDF):
 **Why this reframes the project's contribution:** FLOP/Apple's mitigation is
 **whole-process DIT at 4.5%**. The LVP accelerates *public* predictable-load code
 (RAW-dependency chains over stable/constant values). **Taint-driven fine-grained
-DIT is the cheap version of that mitigation** — it pays the ~4.5% only where
+DIT is the cheap version of that mitigation** - it pays the ~4.5% only where
 secrets flow and preserves the LVP everywhere else. This is the concrete
 fine-grain-necessary argument the whole "why not just wrap the module" objection
 needed, now backed by a shipping, exploited predictor.
 
 **Honest nuance (speculative vs timing).** FLOP's *own attack* exploits the LVP
-through **speculation** (mispredict → transient type confusion → cache leak) —
+through **speculation** (mispredict → transient type confusion → cache leak) -
 Spectre-class, and **out of this project's scope**. But the LVP creates *two*
 channels: (a) that speculative one, and (b) the non-speculative value-dependent
 timing of §4.1, which **is** our threat model. DIT closes both; the project's
 claim rests on (b), with shutting the misprediction window in covered regions as a
 bonus against (a). Note also: the **macOS kernel does not set DIT** (LVP enabled
-there) — §7.
+there) - §7.
 
 **Firefox-thesis connection.** The LVP is the concrete mechanism that reopens the
 integer-convolution channel: secret pixel values that are constant vs varying →
 predicted vs not → different load-dependent render timing, on the *integer* code.
 FLOP proved the LVP exists on M4 and creates the timing difference; it did not
-demonstrate it on convolution (they did the speculative exploit instead) — so the
+demonstrate it on convolution (they did the speculative exploit instead) - so the
 "reopen the integer pixel channel via the LVP timing side" demonstration remains
 open, and is now buildable on this M4.
 
-**On-M4 measurements — DONE, reproduced (`playground/dit_bench/`, `run_lvp.sh`).**
+**On-M4 measurements - DONE, reproduced (`playground/dit_bench/`, `run_lvp.sh`).**
 Userspace (no KDK), frequency-normalized cyc/hop, verified by re-running.
 
 - **LVP confirmed + isolated** (`lvp_dit.c`, self-dependent chase `x = arr[x]`,
@@ -119,11 +119,11 @@ Userspace (no KDK), frequency-normalized cyc/hop, verified by re-running.
   permutation **3.998 cyc/hop** = **4.00× value-dependent timing**. The LVP
   predicts the constant and breaks the load→address dependency.
 - **DIT disables the LVP** (the project's off-switch, on our hardware): on the
-  CONST chase, flipping DIT **0.999 → 3.999 cyc/hop** — it collapses exactly onto
+  CONST chase, flipping DIT **0.999 → 3.999 cyc/hop** - it collapses exactly onto
   the PERM line, and leaves PERM itself untouched (3.998 → 3.999). Because CONST
   DIT-off vs DIT-on is *identical code, data, and cache state*, this 4× is
   unambiguously the LVP, not caching. Matches FLOP §7 verbatim. **DIT-on costs up
-  to 4× on LVP-critical (predictable-pointer-chasing) code** — the largest dwell
+  to 4× on LVP-critical (predictable-pointer-chasing) code** - the largest dwell
   number measured for this project, and the per-region worst case (whole-program
   it dilutes to FLOP's 4.5% Safari / the ~15% SPEC).
 - **Fine-grain necessity, with a crossover** (`lvp_finegrain.c`, P public
@@ -136,7 +136,7 @@ Userspace (no KDK), frequency-normalized cyc/hop, verified by re-running.
   | 64 | fine 0.72× of coarse | **fine** |
   | 256 | fine 0.39× of coarse (≈ unprotected speed) | **fine** |
 
-  Crossover at **P ≈ 40–64 hops** — precisely the cost model's admission test
+  Crossover at **P ≈ 40–64 hops** - precisely the cost model's admission test
   (create a region only when LVP-saving > ~60-cyc toggle pair). At P=256 fine-grain
   nearly matches *unprotected* speed while still protecting the secret. This is the
   quantified answer to "why not just wrap the whole module": whole-process DIT
@@ -144,13 +144,13 @@ Userspace (no KDK), frequency-normalized cyc/hop, verified by re-running.
   fine-grain confines it and wins by up to ~2.6× once a region holds ≳40–64 hops
   of public work.
 - **Honest negative** (`lvp_gather.c`): the faithful FLOP Listing-1 *independent*
-  gather did **not** reproduce the value-timing gap from userspace (0.997×) —
+  gather did **not** reproduce the value-timing gap from userspace (0.997×) -
   memory-level parallelism overlaps the misses and the LVP-training warmup also
   warms the cache. That needs KDK clflush + cycle counters (as FLOP used); the
   self-dependent chase isolates the LVP cleanly instead.
 
 Reinforces the `convolve_pixel_int` finding (placement doc §4 P4): toggles must
-sit at coarse region/phase boundaries, never inside tight loops — here a
+sit at coarse region/phase boundaries, never inside tight loops - here a
 per-iteration toggle only pays off once the region holds ≳40–64 hops.
 
 Sources: predictors.fail; FLOP (USENIX Sec'25) predictors.fail/files/FLOP.pdf;
@@ -163,7 +163,7 @@ SLAP (IEEE S&P'25) predictors.fail/files/SLAP.pdf.
 1. **The anchor attack is real and non-crypto.** Andrysco, Kohlbrenner, Mowery,
    Jhala, Lerner, Shacham, *On Subnormal Floating Point and Abnormal Timing*
    (IEEE S&P 2015). FP add/multiply latency varies by **~2 orders of magnitude**
-   on operand values — Core i7/SSE: normal×normal ≈ **4 cycles**, subnormal input
+   on operand values - Core i7/SSE: normal×normal ≈ **4 cycles**, subnormal input
    **>200 cycles**; the slowdown also fires when the *result* is subnormal even
    with normal inputs. Firefox's SVG `feConvolveMatrix`/`feGaussianBlur`
    convolution multiplied secret cross-origin pixels by attacker-chosen subnormal
@@ -171,7 +171,7 @@ SLAP (IEEE S&P'25) predictors.fail/files/SLAP.pdf.
    black pixel → `0×subnormal = 0` (fast), ~20× per-pixel. Remote, from
    JavaScript via `feColorMatrix` thresholding + `performance.now()`, recovering
    cross-origin text at **~3.23 chars/sec** and history at 16.4 URLs/sec
-   (CVE-2017-5407). Also broke the **Fuzz differentially-private database** — a
+   (CVE-2017-5407). Also broke the **Fuzz differentially-private database** - a
    second non-crypto victim.
    *Sources:* cseweb.ucsd.edu/~dkohlbre/papers/subnormal.pdf ; hovav.net/ucsd/papers/akmjls15.html ; bugzilla.mozilla.org/show_bug.cgi?id=1336622
 
@@ -180,7 +180,7 @@ SLAP (IEEE S&P'25) predictors.fail/files/SLAP.pdf.
    floating-point timing channels* (USENIX Security 2017). Firefox rewrote the
    filters in **32-bit integer / fixed-point** arithmetic, and the authors
    **certify that fix as safe ONLY because** standard 32-bit integer
-   add/sub/multiply "have no known timing side channels based on operands" — they
+   add/sub/multiply "have no known timing side channels based on operands" - they
    condition safety *directly on integer-multiply constant-timeness*. They also
    note **integer division is already operand-timing-variable** (on the upper 32
    bits; the filters just never reach that regime), and that vendors refuse to
@@ -188,11 +188,11 @@ SLAP (IEEE S&P'25) predictors.fail/files/SLAP.pdf.
    multiplication**," asking "how much code conjectured to be constant-time is in
    fact unsafe?" This is precisely the assumption the LVP thesis attacks. They
    conclude only removing FP (going fixed-point) or removing data sensitivity is
-   *completely* effective — FTZ/DAZ, `-ffast-math`, and Escort merely reduce signal.
+   *completely* effective - FTZ/DAZ, `-ffast-math`, and Escort merely reduce signal.
    *Source:* usenix.org/system/files/conference/usenixsecurity17/sec17-kohlbrenner.pdf
 
 3. **The emerging-hardware half.**
-   - **Vicarte et al., *Opening Pandora's Box* (ISCA 2021)** — the seminal
+   - **Vicarte et al., *Opening Pandora's Box* (ISCA 2021)** - the seminal
      systematization: **seven classes** of non-speculative microarchitectural
      optimization with novel leakage implications (value prediction, computation
      simplification, silent stores, data memoization, …), "leak as much privacy
@@ -201,24 +201,24 @@ SLAP (IEEE S&P'25) predictors.fail/files/SLAP.pdf.
      *Caveat:* some of the seven are observed via cache/coherence side effects,
      so it is broader than strict per-instruction operand-latency.
    - **Yu, Hsiung, El Hajj, Fletcher, *Data-Oblivious ISA Extensions* (DOVE/OISA,
-     NDSS 2019)** — names value prediction and silent stores as optimizations
+     NDSS 2019)** - names value prediction and silent stores as optimizations
      that "**can undermine any data-oblivious code written in any style**" because
      they don't discriminate Public vs Confidential data; its "Vector 6:
      input-dependent arithmetic" names multiply/divide and FP sqrt as known
      operand-timing leaks. This is the "constant-time is not enough on future
      hardware" argument in the primary literature.
-   - **Seznec, EVES value predictor (CVP-1, 2018)** — LVP is a real, high-value
+   - **Seznec, EVES value predictor (CVP-1, 2018)** - LVP is a real, high-value
      proposal: **25–37% IPC**, and restricting to *loads only* costs just 1.3–2.7%
      ("most of the benefit … from predicting only load results"). Ships in no
      commercial CPU yet → genuinely "emerging," not present-tense. (Distinct from
-     Load Value *Injection* / LVI, which is Spectre-class — not this.)
+     Load Value *Injection* / LVI, which is Spectre-class - not this.)
    - **Barthe et al., *Testing side-channel security … against future
-     microarchitectures* (CCS 2024)** — the closest formal validation of the
+     microarchitectures* (CCS 2024)** - the closest formal validation of the
      mechanism: tested **18 proposed optimizations** against **25 implementations
      of 8 crypto primitives** and found **every one would leak** under some future
-     design — and crucially, *some leaks exist only because of the constant-time
+     design - and crucially, *some leaks exist only because of the constant-time
      coding idioms* added to be safe under today's model. Validates the mechanism,
-     but confined to **crypto** code — it does not extend the catalog to the
+     but confined to **crypto** code - it does not extend the catalog to the
      non-crypto sites we want.
 
 ---
@@ -229,46 +229,46 @@ SLAP (IEEE S&P'25) predictors.fail/files/SLAP.pdf.
 |---|---|---|---|
 | FP add/mul/div/sqrt on **subnormals** | microcode/assist path for denormals | already leaks *today* (no new HW needed) | yes (DIT lists FP) |
 | **Integer multiply** | *assumed* constant-time; undocumented | **load value prediction**, operand-dependent multiplier early-out, computation simplification (×0, ×1) | yes |
-| **Integer / FP divide** | already operand-variable on many µarch | present-day + amplified by simplification | **no** (SDIV/UDIV not DIT-listed — see placement doc G2) |
+| **Integer / FP divide** | already operand-variable on many µarch | present-day + amplified by simplification | **no** (SDIV/UDIV not DIT-listed - see placement doc G2) |
 | **Loads** (value, not address) | value predictor hits/misses depend on the loaded value's predictability | **load value prediction** | partial |
 | **Stores** | store elided when value unchanged | **silent stores** | yes |
 | Repeated computation | result cached/reused | **data memoization / computation reuse** | yes |
 | Pointer-chase / gather | prefetcher acts on loaded *values* | **data-memory-dependent prefetcher** (DMP; GoFetch mechanism) | partial |
-| Matrix-multiply / MAC with **zeros** | accelerator skips zero operands | **zero-skipping** (AMX/AVX/GPU) — *demonstrated* | yes (if DIT-listed) |
+| Matrix-multiply / MAC with **zeros** | accelerator skips zero operands | **zero-skipping** (AMX/AVX/GPU) - *demonstrated* | yes (if DIT-listed) |
 
 The rows that matter most for *this* project's threat model are integer
-multiply, silent stores, computation simplification, and zero-skipping — all
+multiply, silent stores, computation simplification, and zero-skipping - all
 DIT-coverable, all reachable by non-crypto application code.
 
 ---
 
 ## Catalog of non-crypto sites, ranked by how real they are
 
-**#1 — Firefox SVG filters (the anchor). DEMONSTRATED, remote, cross-origin.**
+**#1 - Firefox SVG filters (the anchor). DEMONSTRATED, remote, cross-origin.**
 Secret = cross-origin framebuffer pixels / visited-link colors. Op = FP subnormal
 multiply in `feConvolveMatrix`/`feGaussianBlur`/`feSpecularLighting`. Fixed by
 integer rewrite → *the* candidate for a "reopened by LVP/early-out" demonstration.
 This is the code in `playground/firefox_convolve_int.c`.
 
-**#2 — Intel AMX zero-skipping (THOR). DEMONSTRATED, non-crypto, TODAY.**
+**#2 - Intel AMX zero-skipping (THOR). DEMONSTRATED, non-crypto, TODAY.**
 *THOR: A Non-Speculative Value Dependent Timing Side Channel Attack Exploiting
 Intel AMX* (arXiv 2502.17658). The AMX `TMUL` matrix-multiply's execution time
-depends on the **sparsity of zeros in its operands** — a data-operand timing
+depends on the **sparsity of zeros in its operands** - a data-operand timing
 channel (not address, not control-flow, not speculative), exactly the DIT/DOIT
 target. The broader claim in the source set: **zero-skipping in commodity AI
 accelerators (Intel AVX, Intel AMX, NVIDIA A100) leaks private non-crypto backend
 features (medical, financial, socioeconomic) purely through end-to-end inference
 latency.** This is the strongest existence proof that the thesis's *shape* is
-real in a general arithmetic unit on shipping hardware — and it is an ML-inference
+real in a general arithmetic unit on shipping hardware - and it is an ML-inference
 site, one of the domains the question predicted. **Strongly recommended follow-up
 read** (was budget-dropped before final synthesis; verify the arXiv id/venue).
 
-**#3 — Fuzz differentially-private database. DEMONSTRATED (2015 paper).**
+**#3 - Fuzz differentially-private database. DEMONSTRATED (2015 paper).**
 Secret = private DB rows behind a DP query interface. Op = FP subnormal in query
 evaluation. Second victim in the anchor paper; shows the pattern is not
 browser-specific.
 
-**#4–N — Predicted-but-undemonstrated (the gap).** The mechanism papers assert
+**#4–N - Predicted-but-undemonstrated (the gap).** The mechanism papers assert
 these exist; **no primary source catalogs specific functions/files**:
 - **ML inference**: quantized int8/fp MAC, `softmax`/`exp` with subnormals,
   activation functions on private inputs. (#2 is the accelerator-level instance;
@@ -286,10 +286,10 @@ No verified source addressed the kernel domain at all.
 
 ## NOT our threat model (distinguish carefully)
 
-- **Pixel Thief (USENIX Security 2024)** — a *cache-based* SVG-filter attack
+- **Pixel Thief (USENIX Security 2024)** - a *cache-based* SVG-filter attack
   monitoring data-**dependent memory accesses**. That is the **address** channel,
   which DIT does **not** cover. Do not cite it as a value-latency instance.
-- **Load Value *Injection* (LVI)** — Spectre-class transient execution. Not this.
+- **Load Value *Injection* (LVI)** - Spectre-class transient execution. Not this.
 
 ---
 
@@ -299,12 +299,12 @@ No verified source addressed the kernel domain at all.
   fixed, v23–27 vulnerable, released 2014-03-18" did not survive verification;
   the 2015 paper contained a since-retracted GPU claim that the 2017 paper
   corrected to "switched to fixed-point." The *integer rewrite* is solid; the
-  *version numbers* are not — don't cite them precisely.
+  *version numbers* are not - don't cite them precisely.
 - CVE-2017-5407 specifically exploited `feSpecularLighting` `surfaceScale`; the
   2015 paper used `feConvolveMatrix`/`feGaussianBlur`. Same subnormal channel,
-  different filter — state which one you mean.
+  different filter - state which one you mean.
 - LVP ships in **no** commercial CPU; all IPC numbers assume idealized µarch.
-  "Emerging threat" is forward-looking (which is the whole point — this project
+  "Emerging threat" is forward-looking (which is the whole point - this project
   is 5+ year forward-looking; see `docs/handoff.md`).
 
 ---
@@ -313,7 +313,7 @@ No verified source addressed the kernel domain at all.
 
 1. **The demonstration nobody has done:** empirically show LVP or an
    operand-dependent integer-multiplier early-out reintroduces a timing signal in
-   Firefox's fixed-point `feConvolveMatrix` — or in *any* integer application
+   Firefox's fixed-point `feConvolveMatrix` - or in *any* integer application
    code. No such demonstration exists. This project (taint → DIT placement) is the
    defense; a gem5 + Pandora-artifact setup is the offense that would motivate it.
 2. **THOR/AMX is the model to generalize:** it converts the thesis from
@@ -321,7 +321,7 @@ No verified source addressed the kernel domain at all.
    methodology against the *software* int8/int-multiply kernels (not just the
    accelerator) is the concrete next study.
 3. **A good DIT-sensitive benchmark** (the `docs/results/dit-cost-model.md` gap) likely
-   lives in exactly these domains — ML int8 MAC, codec convolution — where the
+   lives in exactly these domains - ML int8 MAC, codec convolution - where the
    secret-bearing arithmetic is hot and, on zero-skipping/value-predicting
    hardware, genuinely value-dependent. Finding one closes both the "price the
    dwell term" gap and the "motivate the whole project" gap at once.

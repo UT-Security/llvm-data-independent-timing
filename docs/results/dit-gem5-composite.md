@@ -18,13 +18,13 @@ statistical:
 | `simInsts` identical across machine configs, all 5 arms | **OK** (135,121,192 etc.) |
 | `off` arm DIT activity (`compSimplifier.ditSuppressed`) | **0** |
 
-Both gates failed on the first attempt and caught two real defects — see §3.
+Both gates failed on the first attempt and caught two real defects - see §3.
 
 ## Results
 
 | arm | switches | serializing | speculative | spec − ser |
 |---|---|---|---|---|
-| `off` | 3 (never fire) | — | — | −0.04% |
+| `off` | 3 (never fire) | - | - | −0.04% |
 | **`always`** | 1 | **+3.23%** | +3.17% | −0.11% |
 | **`oracle`** | 2 / signature | **+0.17%** | +0.29% | +0.07% |
 | **`hoist`** | 128 | **+0.57%** | +0.47% | −0.15% |
@@ -42,7 +42,7 @@ Both gates failed on the first attempt and caught two real defects — see §3.
 
 The fork models `MSR DIT` two ways: serializing (matches Apple silicon) and a
 renamed CC-register write (essentially free). On this workload the difference is
-**−0.04% to −0.17% across every arm — inside the noise the `off` arm sets.**
+**−0.04% to −0.17% across every arm - inside the noise the `off` arm sets.**
 
 That is not a refutation of the mechanism, it is a statement about this
 placement: at 128 switches and a 2.23% secret fraction the toggle term is
@@ -85,7 +85,7 @@ back into control flow and `simInsts` differed between configs for an identical
 binary. Now compiled out under `-DGEM5_NO_SELF_TIMING`.
 
 The symptom that exposed both: **speculative appeared slower than serializing**,
-which is impossible — a renamed write is strictly cheaper than a serializing one
+which is impossible - a renamed write is strictly cheaper than a serializing one
 for the same instruction stream. Any such result means the comparison is broken.
 
 > **Adopt as standard for gem5 A/B work:** assert `simInsts` identical across

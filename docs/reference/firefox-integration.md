@@ -2,7 +2,7 @@
 
 Interprocedural taint analysis inserts PSTATE.DIT mode switches around secret-dependent
 code (AArch64). As of the `-ftaint-harden` work, a **single `clang -c` applies the
-whole transformation** — no more multi-tool `opt`/`llc` pipeline in the build. This
+whole transformation** - no more multi-tool `opt`/`llc` pipeline in the build. This
 doc is the integration guide; the legacy multi-step flow is kept at the end as a
 fallback.
 
@@ -17,7 +17,7 @@ clang -O2 -ftaint-harden=<taint-src-file> -c file.cpp -o file.o
 That's it. When `-ftaint-harden=<file>` is present, clang:
 1. runs the `taint-annotate` IR pass (marks tainted args from `<file>`), then
 2. lowers to post-prologepilog MIR, runs the interprocedural taint pass (inserts
-   PSTATE.DIT mode switches), and emits the object — all in one process.
+   PSTATE.DIT mode switches), and emits the object - all in one process.
 
 When the flag is **absent**, codegen is byte-for-byte unchanged. The produced `.o`
 is a normal object linked by Firefox's normal link step. **Only the compile of
@@ -26,7 +26,7 @@ chosen TUs changes; linking and everything else is untouched.**
 Internally the flag drives a legacy-PM → in-memory-MIR-round-trip → legacy-PM flow
 (equivalent to the old `llc -stop-after=prologepilog` / `-run-taint-interproc` /
 `-start-after=prologepilog` steps), because the interprocedural pass needs every
-MachineFunction of the TU resident at once. This is an implementation detail — the
+MachineFunction of the TU resident at once. This is an implementation detail - the
 build only sees one `clang -c`.
 
 ---
@@ -35,7 +35,7 @@ build only sees one `clang -c`.
 
 `-ftaint-harden` exists only in **this LLVM tree's clang** (`<repo>/build/bin/clang`).
 A stock/system clang does not have the flag. Firefox must use this clang as its
-compiler — via `mozconfig` (`CC`/`CXX`, or a compiler wrapper, Section 5).
+compiler - via `mozconfig` (`CC`/`CXX`, or a compiler wrapper, Section 5).
 
 Verify the flag exists:
 ```
@@ -79,12 +79,12 @@ _ZN7mozilla3gfx19FilterNodeSoftware18RenderConvolve...EPKhj,1,pointee
    `-O2`). Taint seeding runs at OptimizerLast so attributes survive the middle-end;
    still, compile the hardened TU at its real opt level.
 2. **Flags passthrough.** `-ftaint-harden` composes with all normal compile flags
-   (`-I`, `-D`, `--target=`, `-std=`, sysroot, …) — just add it to the existing
+   (`-I`, `-D`, `--target=`, `-std=`, sysroot, …) - just add it to the existing
    command line for that TU. Nothing else about the invocation changes.
 
 **Protection mode.** PSTATE.DIT is the only mode (the ISB/DSB speculation-barrier
 mode, and the `-taint-barrier-mode` selector that chose between them, were removed
-2026-07-14 — do not look for that flag). Placement granularity defaults to
+2026-07-14 - do not look for that flag). Placement granularity defaults to
 **`region`** (fine-grain: only the secret-dependent regions run with DIT on, clean
 preambles and public loop scaffolding stay DIT-off). Add
 `-mllvm -taint-dit-placement=function` for the coarse whole-function policy
@@ -95,9 +95,9 @@ the instruction SIGILLs.
 
 **Debug info (`-g`) is fully supported.** `-g -O2 -ftaint-harden` produces the same
 barriers as the non-debug build, `llvm-dwarfdump --verify` is clean, and call-site
-debug info (`DW_TAG_call_site`) is preserved — so Firefox's default debug-info
-builds need no special handling. (This required a MIR-parser fix in this tree —
-`callSites:` block-number resolution — one more reason the bundled clang from this
+debug info (`DW_TAG_call_site`) is preserved - so Firefox's default debug-info
+builds need no special handling. (This required a MIR-parser fix in this tree -
+`callSites:` block-number resolution - one more reason the bundled clang from this
 LLVM checkout is required, per Section 2.)
 
 ---
@@ -108,7 +108,7 @@ Set the wrapper as Firefox's `CC`/`CXX`. For each invocation:
 - If the TU is **not** a hardening target → `exec` the real clang unchanged.
 - If it **is** a target → append `-ftaint-harden=<file>` and `exec` the real clang.
 
-That's the entire change — one appended flag. Skeleton:
+That's the entire change - one appended flag. Skeleton:
 
 ```bash
 #!/usr/bin/env bash
@@ -150,7 +150,7 @@ Start narrow (the specific secret-handling TUs) and expand as needed.
 
 **One TU at a time.** The analysis is interprocedural *within a TU's module*.
 Cross-TU taint flow (secret defined in TU A, used in TU B) is not tracked across
-object boundaries — annotate the entry function in each TU that receives the secret.
+object boundaries - annotate the entry function in each TU that receives the secret.
 
 **Unified sources.** Firefox's `UNIFIED_SOURCES` concatenates several `.cpp` into one
 TU. To harden a single file precisely, move it to `SOURCES` so it's its own TU (as
@@ -165,7 +165,7 @@ for that subset.
 ## 7. Verifying the result
 
 ```
-# Barriers landed in the object (-i / uppercase DIT is REQUIRED — objdump prints
+# Barriers landed in the object (-i / uppercase DIT is REQUIRED - objdump prints
 # `msr DIT, #0x1`, so a lowercase case-sensitive match silently reports zero):
 <repo>/build/bin/llvm-objdump -d file.o | grep -iE '\bmsr\b.*\bdit\b'
 

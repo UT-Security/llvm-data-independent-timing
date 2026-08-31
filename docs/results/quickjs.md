@@ -179,9 +179,9 @@ chunk=65536, n=6 paired:
 
 | comparison | effect |
 |---|---|
-| `base -> rt` — round-trip codegen only, **zero DIT** | **+0.58% +/- 0.24** |
-| `rt -> fine` — DIT dwell + toggles, **isolated** | **+0.06% +/- 0.21** |
-| `base -> fine` — the two mixed (what was reported above) | +0.63% +/- 0.14 |
+| `base -> rt` - round-trip codegen only, **zero DIT** | **+0.58% +/- 0.24** |
+| `rt -> fine` - DIT dwell + toggles, **isolated** | **+0.06% +/- 0.21** |
+| `base -> fine` - the two mixed (what was reported above) | +0.63% +/- 0.14 |
 
 **Almost the entire "fine-grained cost" was the pipeline, not DIT.** At coarse
 granularity the round-trip artifact is ~10x the real DIT cost.

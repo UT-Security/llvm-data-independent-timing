@@ -8,7 +8,7 @@ is what produced three separate problems over the preceding day:
 - a callee's `WritesSecretThroughArgPointee{i}` collapsed to a whole-caller
   `ExternalMemClobbered` (P1a, "blunt clobber pending P1b");
 - `isFrameAddrToSecret` asked whether the **frame** held a secret, so one secret
-  anywhere made every frame address a secret pointer — which made
+  anywhere made every frame address a secret pointer - which made
   `-taint-frame-addr-args` antagonistic with the mod-set gate (+44 points);
 - `silentpayments_recipient_scan_outputs` passing unresolvable pointers to a
   seeded function made it non-argument-sourced, which cost the source condition
@@ -19,12 +19,12 @@ is what produced three separate problems over the preceding day:
 `FrameObjectMap` maps `(base register, byte offset)` back to a frame object. The
 frame layout is fixed by the time this pass runs, so it is built once per function
 from `MachineFrameInfo` plus `TargetFrameLowering::getFrameIndexReference`, and
-queried by range containment — an interior offset (`&buf[8]`) resolves to the
+queried by range containment - an interior offset (`&buf[8]`) resolves to the
 containing object, which is what a pointee query wants.
 
 `TaintState::FrameRefs` carries `Register -> FrameIndex` through the dataflow:
 every def kills the register's provenance, an add-immediate off SP/FP establishes
-it, a COPY inherits it. Deliberately narrow — arithmetic on an existing frame
+it, a COPY inherits it. Deliberately narrow - arithmetic on an existing frame
 pointer is **not** followed, because a computed offset can leave the object and
 mis-attributing provenance is the one direction that under-taints. On merge the
 map **intersects**: a register keeps provenance only if every incoming path agrees
@@ -34,7 +34,7 @@ which object, and disagreement drops to unknown.
 is never less conservative than P1a.
 
 Two guards worth knowing: `getFrameIndexReference` asserts on a frame that has not
-been finalised, so the map stays empty unless `MFI.isCalleeSavedInfoValid()` — MIR
+been finalised, so the map stays empty unless `MFI.isCalleeSavedInfoValid()` - MIR
 loaded directly by a lit test never ran prologue/epilogue insertion. And scalable
 (SVE) offsets are skipped, since they cannot be compared against a constant.
 
@@ -68,12 +68,12 @@ gem5, serializing, 40 iterations:
 
 | arm | signing coverage vs oracle | verify suppressions | verify cycles vs `off` |
 |---|---|---|---|
-| oracle | 100% | — | — |
+| oracle | 100% | - | - |
 | gate before P1b | 103.1% | 80 | +2.09% |
 | **gate after P1b** | **100.42%** | **80** | **+1.90%** |
 
 Coverage stays **above** the hand oracle, so there is no under-protection relative
-to the reference placement — but the margin narrows from +3.1% to +0.42%, which is
+to the reference placement - but the margin narrows from +3.1% to +0.42%, which is
 worth watching rather than celebrating. Verification is unchanged at its floor of
 2 switches per call.
 
@@ -98,7 +98,7 @@ configuration at 114 switches.
 | SignTransactionSchnorr | +2.54% | **+1.50%** | 15/15 | small loss |
 | WalletCreateTxUseOnlyPresetInputs | −2.46% | +6.12% | 11/15 | noisy (CoV 5.5%) |
 
-**5 wins, 1 tie, 2 losses — neither loss above 1.5%.** The sound configuration is
+**5 wins, 1 tie, 2 losses - neither loss above 1.5%.** The sound configuration is
 also the best one measured: it converts `SignTransactionECDSA` from a +6.34% loss
 into a tie and halves the Schnorr loss.
 
@@ -133,7 +133,7 @@ The mechanism: P1b now taints **specific stack cells** where P1a set an opaque
 and more frame addresses resolve to genuinely-secret objects. Precision in one
 direction created more (accurate) taint in the other.
 
-So the caller→callee half of the frame-address gap — passing `&secret_local` in —
+So the caller→callee half of the frame-address gap - passing `&secret_local` in -
 remains open, and the fallback remains the wrong instrument for it. P1b closed the
 callee→caller half (applying a callee's arg-pointee mod-set to the object actually
 passed) and that is what it should be credited with.

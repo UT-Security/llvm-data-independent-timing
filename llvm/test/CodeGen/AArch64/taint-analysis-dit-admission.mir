@@ -2,7 +2,7 @@
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=region -taint-dit-switch-cyc=30 -taint-dit-dwell-per-instr=1000 %s -o - | FileCheck %s --check-prefix=SPLIT
 
 # Track B increment (c): the admission test (docs/design/dit-placement.md §5.6).
-# @corridor has two DIT Needs — a tainted ADD in bb.0 and another in bb.2 —
+# @corridor has two DIT Needs - a tainted ADD in bb.0 and another in bb.2 -
 # separated by a clean public corridor (bb.1). Whether bb.1 is merged into the DIT
 # region is a cost decision driven by -taint-dit-dwell-per-instr: the toggle PAIR
 # bounding the corridor costs ~60 serializing cyc, the corridor DIT dwell costs
@@ -10,10 +10,10 @@
 # the static -taint-region-merge-gap proxy.
 #
 #  * dwell-per-instr=0 (MERGE): dwell is free, so the toggle pair is never worth
-#    paying — bb.1 is merged, DIT stays on straight through. ONE enable at entry,
+#    paying - bb.1 is merged, DIT stays on straight through. ONE enable at entry,
 #    ONE disable before the return, and nothing in between.
 #  * dwell-per-instr=1000 (SPLIT): dwell dominates, so the corridor stays DIT-off
-#    (recovers pure increment-(b) placement) — disable at bb.1's entry, re-enable
+#    (recovers pure increment-(b) placement) - disable at bb.1's entry, re-enable
 #    at bb.2: two toggle pairs.
 #
 # Merging only EXTENDS coverage, so both builds pass the soundness verifier. 26 is
@@ -33,15 +33,15 @@
 # SPLIT: MSRpstateImm4 26, 0
 # SPLIT-NEXT: RET_ReallyLR
 
-# @clobber_corridor — the corridor (bb.1) contains a non-preserving external call
+# @clobber_corridor - the corridor (bb.1) contains a non-preserving external call
 # (BL @ext, a DIT clobber) between two Needs (bb.0/bb.2 tainted ADDs; the secret
 # survives the call in callee-saved $w19). A clobber no longer blanket-disqualifies
 # a corridor from merging (that was the increment (c) review's finding [0]): its
 # re-assert is COSTED, so the merge is a decision, not a veto. Merging still saves a
 # net toggle here (removes the entry disable + exit enable, adds one re-assert), so
-# at dwell=0 the corridor merges — DIT is NOT disabled before the BL, and a re-assert
+# at dwell=0 the corridor merges - DIT is NOT disabled before the BL, and a re-assert
 # MSR DIT #1 lands right AFTER it (soundness: the callee may clear DIT). At dwell=1000
-# the corridor splits — DIT is disabled at bb.1's entry, before the BL. Either way
+# the corridor splits - DIT is disabled at bb.1's entry, before the BL. Either way
 # the soundness verifier passes (bb.2's Need stays covered).
 # MERGE-LABEL: name: clobber_corridor
 # MERGE: MSRpstateImm4 26, 1

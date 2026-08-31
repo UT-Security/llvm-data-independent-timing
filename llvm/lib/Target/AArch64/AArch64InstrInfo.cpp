@@ -7504,7 +7504,7 @@ AArch64InstrInfo::getNumStoredValueRegs(const MachineInstr &MI) const {
 
   // Store-pair forms write two registers before naming the address. Beware the
   // mnemonics: STGPi is a pair, while STGPostIndex is a *single* tag store
-  // (STG + PostIndex) — which is why this is an opcode switch and not a name
+  // (STG + PostIndex) - which is why this is an opcode switch and not a name
   // prefix test.
   case AArch64::STPWi:
   case AArch64::STPXi:
@@ -7565,7 +7565,7 @@ bool AArch64InstrInfo::isDITProtected(const MachineInstr &MI) const {
   // assumed protected. Under-approximating coverage is the safe direction.
   switch (MI.getOpcode()) {
   // --- Documented EXCLUSIONS: divide & square root (integer and FP/SIMD) are
-  // NOT in the covered set — they stay data-value-timed even with DIT=1. Listed
+  // NOT in the covered set - they stay data-value-timed even with DIT=1. Listed
   // first so the FP-class fallback below does not sweep the FP forms back in. ---
   case AArch64::SDIVWr: case AArch64::SDIVXr:
   case AArch64::UDIVWr: case AArch64::UDIVXr:

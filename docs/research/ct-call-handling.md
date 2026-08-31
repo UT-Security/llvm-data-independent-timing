@@ -1,4 +1,4 @@
-# What the Spectre / constant-time hardening tools do AT A CALL — and where our design sits
+# What the Spectre / constant-time hardening tools do AT A CALL - and where our design sits
 
 **Date:** 2026-07-14
 **Companion to:** `docs/research/memory-summaries.md` (general taint literature),
@@ -11,7 +11,7 @@ fan-outs missed entirely.
 
 > **READ §5 AND §6 BEFORE WRITING ANY CODE OR ANY NOVELTY CLAIM.**
 > §5 asks whether secret-awareness pays for itself at all (it may not, in DIT mode).
-> §6 lists the prior art that a reviewer will raise — including a pass already in our own tree.
+> §6 lists the prior art that a reviewer will raise - including a pass already in our own tree.
 
 ---
 
@@ -21,44 +21,44 @@ fan-outs missed entirely.
 
 | System | Verdict |
 |---|---|
-| **LLVM SLH (x86 + AArch64SpeculationHardening)** | **PARTIALLY OVERLAPS** — same level (AArch64 pass is post-RA MIR), same barrier (DSB SYS+ISB fallback), same vocabulary ("taint register") — but secret-agnostic, no static IPA, **no per-function summary of any kind**. |
-| **Ultimate SLH (USENIX Sec '23)** | **DOES NOT TOUCH** — secret-agnostic, pre-RA x86 MIR, no summary, no memory abstraction. Canonical instance of the *opposite* design. |
-| **Blade (POPL '21)** | **DOES NOT TOUCH** — secret-agnostic, pre-RA Cranelift SSA, and its formal calculus **has no call construct at all**. |
-| **Pitchfork (PLDI '20)** | **DOES NOT TOUCH** — binary symbolic-execution *verifier*, emits nothing, no summary (executes through calls). |
-| **ct-verif (USENIX Sec '16)** | **DOES NOT TOUCH** — LLVM-IR verifier; dissolves the problem by **inlining all procedures**. |
-| **Binsec/Rel + Binsec/Haunted** | **DOES NOT TOUCH** — binary verifier, no summary; unseen callees are a *hard error* (stub or static link required), not an approximation. |
-| **Vale (USENIX Sec '17)** | **DOES NOT TOUCH** — verified code AST has no call node; alias reasoning pushed onto the human. |
-| **Jasmin CCS'17** | **DOES NOT TOUCH** — sidesteps calls entirely by always-inlining. |
-| **FaCT (PLDI '19)** | **PARTIALLY OVERLAPS** — real modular calls; callee memory effects live **in the type signature** (secrecy label + `R`/`RW` mutability). |
-| **Modern Jasmin / selSLH (S&P '23)** | **OCCUPIES the summary question** (not the AArch64/MIR/DIT point) — per-function inferred **security effect ℓ** = "an upper bound for the speculative stores potentially performed by the function outside its expected memory scope," applied at call sites; **TOP for the one opaque callee (syscall)**. |
+| **LLVM SLH (x86 + AArch64SpeculationHardening)** | **PARTIALLY OVERLAPS** - same level (AArch64 pass is post-RA MIR), same barrier (DSB SYS+ISB fallback), same vocabulary ("taint register") - but secret-agnostic, no static IPA, **no per-function summary of any kind**. |
+| **Ultimate SLH (USENIX Sec '23)** | **DOES NOT TOUCH** - secret-agnostic, pre-RA x86 MIR, no summary, no memory abstraction. Canonical instance of the *opposite* design. |
+| **Blade (POPL '21)** | **DOES NOT TOUCH** - secret-agnostic, pre-RA Cranelift SSA, and its formal calculus **has no call construct at all**. |
+| **Pitchfork (PLDI '20)** | **DOES NOT TOUCH** - binary symbolic-execution *verifier*, emits nothing, no summary (executes through calls). |
+| **ct-verif (USENIX Sec '16)** | **DOES NOT TOUCH** - LLVM-IR verifier; dissolves the problem by **inlining all procedures**. |
+| **Binsec/Rel + Binsec/Haunted** | **DOES NOT TOUCH** - binary verifier, no summary; unseen callees are a *hard error* (stub or static link required), not an approximation. |
+| **Vale (USENIX Sec '17)** | **DOES NOT TOUCH** - verified code AST has no call node; alias reasoning pushed onto the human. |
+| **Jasmin CCS'17** | **DOES NOT TOUCH** - sidesteps calls entirely by always-inlining. |
+| **FaCT (PLDI '19)** | **PARTIALLY OVERLAPS** - real modular calls; callee memory effects live **in the type signature** (secrecy label + `R`/`RW` mutability). |
+| **Modern Jasmin / selSLH (S&P '23)** | **OCCUPIES the summary question** (not the AArch64/MIR/DIT point) - per-function inferred **security effect ℓ** = "an upper bound for the speculative stores potentially performed by the function outside its expected memory scope," applied at call sites; **TOP for the one opaque callee (syscall)**. |
 
-**Is the design point occupied?** No — nobody has *summary-based static secret taint over post-prologepilog AArch64 MIR driving ISB/DSB regions or PSTATE.DIT*. But every individual axis is taken (see §6), and the specific *fix* you are contemplating is already published art.
+**Is the design point occupied?** No - nobody has *summary-based static secret taint over post-prologepilog AArch64 MIR driving ISB/DSB regions or PSTATE.DIT*. But every individual axis is taken (see §6), and the specific *fix* you are contemplating is already published art.
 
 ---
 
-## 2. WHAT HAPPENS AT A CALL — and the structural point
+## 2. WHAT HAPPENS AT A CALL - and the structural point
 
 **The structural point holds, and it is the whole story.** Every system in this set avoids the callee-memory problem by one of exactly three escapes, and *none* of them is "a precise interprocedural taint summary." Camps:
 
-**CAMP A — SECRET-AGNOSTIC (harden everything ⇒ no taint needs to cross the call).**
+**CAMP A - SECRET-AGNOSTIC (harden everything ⇒ no taint needs to cross the call).**
 - **SLH / USLH**: the call carries only a *dynamic misspeculation predicate*, smuggled through the high bits of `%rsp` (x86) or X16→SP (AArch64). Nothing static about the callee is propagated. The callee-writes-secret-to-memory problem **literally cannot arise**: the caller's later reload is hardened *at the load*, regardless of who wrote the memory or whether the value is secret. SLH's own headline property: *"It does not require programmers to identify all possible secret data using static source code annotations."*
-  - Caveat (verified, and it matters): SLH is **not** uniform. It is opt-in per function, and x86 **skips loads at compile-time-constant addresses** — spill reloads and fixed-offset globals go unhardened, with the burden pushed onto the programmer: *"Code which needs this protection and intentionally stores secret data must ensure the memory regions used for secret data are necessarily dynamic mappings or heap allocations."* AArch64 has **not** implemented those skips and masks all GPR loads.
+  - Caveat (verified, and it matters): SLH is **not** uniform. It is opt-in per function, and x86 **skips loads at compile-time-constant addresses** - spill reloads and fixed-offset globals go unhardened, with the burden pushed onto the programmer: *"Code which needs this protection and intentionally stores secret data must ensure the memory regions used for secret data are necessarily dynamic mappings or heap allocations."* AArch64 has **not** implemented those skips and masks all GPR loads.
 - **Blade**: every memory read is a transient source in the *calculus* (`T → a[i1]`), so a reload is re-tainted no matter who wrote it. (Verified caveat: the *implementation* exempts constant-address loads in v1 mode, re-enabling them only for v1.1.)
 
-**CAMP B — INLINING / WHOLE-PROGRAM (no callee abstraction exists).**
-- **ct-verif**: *"we instruct Boogie to inline all procedures during verification. This avoids the need for manually written procedure contracts, or for sophisticated procedure specification inference tools."* That sentence is the literature's most explicit statement of your dilemma: once you refuse to inline, the contract is the acknowledged alternative — not an optional refinement.
+**CAMP B - INLINING / WHOLE-PROGRAM (no callee abstraction exists).**
+- **ct-verif**: *"we instruct Boogie to inline all procedures during verification. This avoids the need for manually written procedure contracts, or for sophisticated procedure specification inference tools."* That sentence is the literature's most explicit statement of your dilemma: once you refuse to inline, the contract is the acknowledged alternative - not an optional refinement.
 - **Jasmin CCS'17**: *"Functions are always inlined and must explicitly return all changed values."*
 - **Pitchfork / Binsec**: symbolically execute *through* the callee; the body must be present. Binsec: *"binaries must be statically linked or stubs must be provided for external function calls."*
 
-**CAMP C — LANGUAGE RESTRICTION.**
-- **Vale**: the verified `code` datatype is `Ins | Block | IfElse | While` — **no call node**. Aliasing is discharged by the developer's own correctness proof via the `pubaddrs` ghost set: *"she must perform her own alias analysis."*
+**CAMP C - LANGUAGE RESTRICTION.**
+- **Vale**: the verified `code` datatype is `Ins | Block | IfElse | While` - **no call node**. Aliasing is discharged by the developer's own correctness proof via the `pubaddrs` ghost set: *"she must perform her own alias analysis."*
 - **FaCT**: no pointers, only arrays/views/refs; aliasing restricted by construction.
 
-**CAMP D — the only systems that kept real calls AND secret labels: FaCT and modern Jasmin.** Both re-invented exactly the summary you are being told to add.
+**CAMP D - the only systems that kept real calls AND secret labels: FaCT and modern Jasmin.** Both re-invented exactly the summary you are being told to add.
 - **FaCT** threads the caller's secret control predicate *into* the callee and predicates the callee's writes: *"if a procedure takes a mutable parameter, the procedure may update that parameter's value in a way that is visible to the caller ... using a call-context parameter passed to callee foo."* Its `T-Call` rule reasons about *"procedures that (1) modify public parameters ... (2) are externally defined and so possibly have publicly visible side-effects."*
 - **Modern Jasmin** applies a per-function security effect at the call site *"to update the speculative type of the local variables of the caller, in a similar fashion to what is done by the STORE rule."*
 
-**Bottom line for you:** you are in Camp D and you have no summary. That is not a design point — it is the hole.
+**Bottom line for you:** you are in Camp D and you have no summary. That is not a design point - it is the hole.
 
 ---
 
@@ -66,16 +66,16 @@ fan-outs missed entirely.
 
 | System | Memory-effects summary? | Evidence |
 |---|---|---|
-| SLH (x86/AArch64) | **NO** — no per-function summary at all | Nothing in the doc or either `.cpp` computes/stores/consumes any per-callee fact. Substitute = the dynamic `%rsp`/X16 predicate. Only per-function granularity contemplated is opt-in/opt-out *compilation*, and it is future work. |
+| SLH (x86/AArch64) | **NO** - no per-function summary at all | Nothing in the doc or either `.cpp` computes/stores/consumes any per-callee fact. Substitute = the dynamic `%rsp`/X16 predicate. Only per-function granularity contemplated is opt-in/opt-out *compilation*, and it is future work. |
 | USLH | **NO** | Same mechanism as SLH; the paper's only taint-like component (`X86MIRanalyze.cpp`) is a *diagnostic gadget finder*, not part of the mitigation. |
 | Blade | **NO** (no calls in the calculus) | For the store-then-reload case (v1.1) it goes maximally blunt instead: *"our SLH implementation marks all stored values as sinks, essentially preventing any transient data from being stored to memory."* |
 | Pitchfork | **NO** | Calls are decomposed into transient micro-ops and executed; RSB is state, not a summary. |
-| ct-verif | **NO procedure contracts** (but it *does* have a memory model: SMACK/**DSA points-to partition into disjoint Boogie maps**) | *"This avoids the need for manually written procedure contracts, or for sophisticated procedure specification inference tools."* For un-inlined libc it uses **optimistic assumptions**, not TOP: *"ct-verif assumes that the leakage trace produced by standard library functions memcpy and memset depends only on their arguments."* (Note: that assumption is about the callee's **leakage trace**, not its **data effects** — it says nothing about whether `memcpy`'s `dst` becomes secret. ct-verif never has to ask, because it inlines.) |
+| ct-verif | **NO procedure contracts** (but it *does* have a memory model: SMACK/**DSA points-to partition into disjoint Boogie maps**) | *"This avoids the need for manually written procedure contracts, or for sophisticated procedure specification inference tools."* For un-inlined libc it uses **optimistic assumptions**, not TOP: *"ct-verif assumes that the leakage trace produced by standard library functions memcpy and memset depends only on their arguments."* (Note: that assumption is about the callee's **leakage trace**, not its **data effects** - it says nothing about whether `memcpy`'s `dst` becomes secret. ct-verif never has to ask, because it inlines.) |
 | Binsec/Rel, Binsec/Haunted | **NO** | Precise byte-level symbolic memory array; unseen callee ⇒ hand-written stub or refuse to run. |
 | Vale | **NO** taint summary | Per-load/store developer annotations + `pubaddrs` ghost set discharged by the correctness proof. |
-| Jasmin CCS'17 | **NO** (inlined) | — |
-| **FaCT** | **YES — in the type signature** | `Mutability m ::= R \| RW`; `T-Call` blocks calling, in a secret context, *"procedures that (1) modify public parameters, i.e., take mutable public references as input parameters; (2) are externally defined and so possibly have publicly visible side-effects."* |
-| **Modern Jasmin (selSLH)** | **YES — verbatim what you need** | *"our implementation infers the security levels for function's inputs and outputs together with a security effect ℓ. This level is an upper bound for the speculative stores potentially performed by the function outside its expected memory scope. The security effect is used in the rule for function calls to update the speculative type of the local variables of the caller, in a similar fashion to what is done by the STORE rule. This is similar to the handling of effectful functions in information-flow type systems."* And for the opaque callee: *"The type system assumes that the stack effect of the system call is high, which has the effect of setting to secret H the speculative types of all arrays—similar to a speculatively unsafe store."* |
+| Jasmin CCS'17 | **NO** (inlined) | - |
+| **FaCT** | **YES - in the type signature** | `Mutability m ::= R \| RW`; `T-Call` blocks calling, in a secret context, *"procedures that (1) modify public parameters, i.e., take mutable public references as input parameters; (2) are externally defined and so possibly have publicly visible side-effects."* |
+| **Modern Jasmin (selSLH)** | **YES - verbatim what you need** | *"our implementation infers the security levels for function's inputs and outputs together with a security effect ℓ. This level is an upper bound for the speculative stores potentially performed by the function outside its expected memory scope. The security effect is used in the rule for function calls to update the speculative type of the local variables of the caller, in a similar fashion to what is done by the STORE rule. This is similar to the handling of effectful functions in information-flow type systems."* And for the opaque callee: *"The type system assumes that the stack effect of the system call is high, which has the effect of setting to secret H the speculative types of all arrays - similar to a speculatively unsafe store."* |
 
 ---
 
@@ -83,15 +83,15 @@ fan-outs missed entirely.
 
 *(coarse mod-set: `{writes-secret-through-arg i / to-global g / to-unknown-memory}`, TOP for external decls and unresolved indirect calls)*
 
-**CONFIRMED — and confirmed by the only two systems in the entire comparison set that kept both secrets and non-inlined calls.**
+**CONFIRMED - and confirmed by the only two systems in the entire comparison set that kept both secrets and non-inlined calls.**
 
-- **Jasmin selSLH confirms it almost verbatim.** It abandoned inlining precisely because *"such inlining is not appropriate for implementations with a non-trivial call-graph"* — your exact constraint — and immediately introduced a per-function effect bounding the callee's stores outside its scope, plus **TOP for the one callee it cannot see**. Your proposal is a re-derivation of their design.
+- **Jasmin selSLH confirms it almost verbatim.** It abandoned inlining precisely because *"such inlining is not appropriate for implementations with a non-trivial call-graph"* - your exact constraint - and immediately introduced a per-function effect bounding the callee's stores outside its scope, plus **TOP for the one callee it cannot see**. Your proposal is a re-derivation of their design.
 - **FaCT confirms the arg-indexed half**, encoding pointee secrecy + `RW` mutability in the signature, and it **excludes `extern` callees from its security theorem** rather than silently assuming they are effect-free. That is a TOP-adjacent posture: don't pretend, refuse.
-- **Binsec independently confirms the negative half**: the only two coherent treatments of an unseen callee are (a) see its body, or (b) supply a model. **Never "ignore it"** — which is exactly your current silent-missing-barrier behavior.
+- **Binsec independently confirms the negative half**: the only two coherent treatments of an unseen callee are (a) see its body, or (b) supply a model. **Never "ignore it"** - which is exactly your current silent-missing-barrier behavior.
 - **NOT CONTRADICTED anywhere.** SLH/USLH/Blade/Pitchfork/Vale are **silent**: they have no summary, so they can neither support nor refute. Do not cite them for or against.
-- **One useful refinement from ct-verif**: for a small, closed, *curated* set of libc routines (`memcpy`/`memmove`/`strcpy`-class), a documented per-function mod-set beats TOP — under your semantics that is *"writes-secret-through-arg 0 if arg 1's pointee is tainted"*, not TOP. ct-verif does exactly this (optimistic, hand-checked, documented assumptions) and treats it as a soundness caveat it names openly. Pair that with TOP-by-default for everything else.
+- **One useful refinement from ct-verif**: for a small, closed, *curated* set of libc routines (`memcpy`/`memmove`/`strcpy`-class), a documented per-function mod-set beats TOP - under your semantics that is *"writes-secret-through-arg 0 if arg 1's pointee is tainted"*, not TOP. ct-verif does exactly this (optimistic, hand-checked, documented assumptions) and treats it as a soundness caveat it names openly. Pair that with TOP-by-default for everything else.
 
-**But — critical — the recommendation is a bug fix, not a contribution.** The prior-art hunt is unambiguous: mod-ref/taint-transfer summaries are textbook compositional IFDS/IDE (SVF, ICSE'23 compositional taint), and **DECLASSIFLOW (CCS'23) publishes both the summary idea (argument-indexed "pseudo transmitter" summaries hoisting barriers over call chains) and your exact limitation: *"our current analysis does not model the contents of memory."*** Your verified missing-barrier is a **known-class soundness hole**. Ship the fix; do not sell it.
+**But - critical - the recommendation is a bug fix, not a contribution.** The prior-art hunt is unambiguous: mod-ref/taint-transfer summaries are textbook compositional IFDS/IDE (SVF, ICSE'23 compositional taint), and **DECLASSIFLOW (CCS'23) publishes both the summary idea (argument-indexed "pseudo transmitter" summaries hoisting barriers over call chains) and your exact limitation: *"our current analysis does not model the contents of memory."*** Your verified missing-barrier is a **known-class soundness hole**. Ship the fix; do not sell it.
 
 ---
 
@@ -111,11 +111,11 @@ State the numbers honestly.
 
 **So the honest answer for your ISB/DSB mode: yes, the performance case for secret-awareness is real and large (1–2 orders of magnitude), and it is exactly the case Blade and Jasmin make.** But it is *conditional on two things you have not established*:
 
-1. **Soundness is non-negotiable, and TOP is not free.** A missing barrier is a security failure, not a precision loss. The moment you add TOP-for-external-decls, ask the empirical question the literature never had to: **on real C (Firefox convolve, libc-heavy code), how much taint survives?** If every `memcpy`/`memset`/indirect call raises everything to TOP, your region count collapses *toward* whole-program hardening — and you will have paid for an unsound-by-default interprocedural analysis and gotten SLH's cost anyway. **Measure region count and barrier count before/after adding TOP.** That number, not the design argument, decides this.
+1. **Soundness is non-negotiable, and TOP is not free.** A missing barrier is a security failure, not a precision loss. The moment you add TOP-for-external-decls, ask the empirical question the literature never had to: **on real C (Firefox convolve, libc-heavy code), how much taint survives?** If every `memcpy`/`memset`/indirect call raises everything to TOP, your region count collapses *toward* whole-program hardening - and you will have paid for an unsound-by-default interprocedural analysis and gotten SLH's cost anyway. **Measure region count and barrier count before/after adding TOP.** That number, not the design argument, decides this.
 
-2. **For DIT mode, the secret-agnostic baseline is nearly free — and you have not benchmarked against it.** This is the uncomfortable one. SLH/USLH/Blade **explicitly disclaim** the non-speculative timing channel DIT targets (*"It does not defend against secret data already loaded from memory and residing in registers or leaked through other side-channels in non-speculative execution"*), so they are not your competition there. Your real competition is the **trivial** secret-agnostic DIT policy that everyone already ships: `MSR DIT, #1` at every function entry (or program-wide, as the Linux arm64 kernel and Go/BoringSSL do by hand). DIT is a mode bit, not a pipeline flush. If setting DIT unconditionally costs ~0 on FEAT-DIT hardware, **your entire interprocedural taint analysis buys nothing in DIT mode** and adds an unsound failure mode. Measure this. If DIT-everywhere is free, the honest scope for the taint analysis is ISB/DSB only, and the DIT contribution reduces to the *placement-correctness* work (re-assert after calls, `PreservesDIT`) rather than the analysis.
+2. **For DIT mode, the secret-agnostic baseline is nearly free - and you have not benchmarked against it.** This is the uncomfortable one. SLH/USLH/Blade **explicitly disclaim** the non-speculative timing channel DIT targets (*"It does not defend against secret data already loaded from memory and residing in registers or leaked through other side-channels in non-speculative execution"*), so they are not your competition there. Your real competition is the **trivial** secret-agnostic DIT policy that everyone already ships: `MSR DIT, #1` at every function entry (or program-wide, as the Linux arm64 kernel and Go/BoringSSL do by hand). DIT is a mode bit, not a pipeline flush. If setting DIT unconditionally costs ~0 on FEAT-DIT hardware, **your entire interprocedural taint analysis buys nothing in DIT mode** and adds an unsound failure mode. Measure this. If DIT-everywhere is free, the honest scope for the taint analysis is ISB/DSB only, and the DIT contribution reduces to the *placement-correctness* work (re-assert after calls, `PreservesDIT`) rather than the analysis.
 
-**The tradeoff in one sentence:** secret-awareness is worth ~10–100× on speculation barriers *if and only if* taint stays precise under a sound TOP policy; it is worth approximately nothing on DIT unless DIT-everywhere is measurably expensive — and you currently have neither measurement.
+**The tradeoff in one sentence:** secret-awareness is worth ~10–100× on speculation barriers *if and only if* taint stays precise under a sound TOP policy; it is worth approximately nothing on DIT unless DIT-everywhere is measurably expensive - and you currently have neither measurement.
 
 ---
 
@@ -123,20 +123,20 @@ State the numbers honestly.
 
 **What a reviewer attacks first, in order:**
 
-1. **SERBERUS/LLSCT (S&P '24)** — an LLVM fork that infers public/secret typing without annotations, models secret flow *interprocedurally through arguments, the stack, and globals* (exactly your hole), and **runs post-register-allocation MIR passes** (Function-Private Stacks, Register Cleaning) for the same reason you do. x86-only, no ARM/ISB/DSB/DIT. This is the first citation, and it is close.
-2. **DECLASSIFLOW (CCS '23)** — publishes both the argument-indexed secret-flow summary *and* the memoryless limitation. Your bug is their stated future work.
-3. **oo7 (TSE '19)** — interprocedural taint on binaries (so post-RA by construction) driving selective fence insertion. Kills "interprocedural taint at machine level + barriers" as a novelty claim.
-4. **LightSLH (USENIX '25)** — already publishes your *motivation* ("IR-level hardening is unsound because the backend spills secrets").
+1. **SERBERUS/LLSCT (S&P '24)** - an LLVM fork that infers public/secret typing without annotations, models secret flow *interprocedurally through arguments, the stack, and globals* (exactly your hole), and **runs post-register-allocation MIR passes** (Function-Private Stacks, Register Cleaning) for the same reason you do. x86-only, no ARM/ISB/DSB/DIT. This is the first citation, and it is close.
+2. **DECLASSIFLOW (CCS '23)** - publishes both the argument-indexed secret-flow summary *and* the memoryless limitation. Your bug is their stated future work.
+3. **oo7 (TSE '19)** - interprocedural taint on binaries (so post-RA by construction) driving selective fence insertion. Kills "interprocedural taint at machine level + barriers" as a novelty claim.
+4. **LightSLH (USENIX '25)** - already publishes your *motivation* ("IR-level hardening is unsound because the backend spills secrets").
 5. **The embarrassing one: `AArch64SpeculationHardening.cpp`, already in your tree.** AArch64 + post-RA + a literal "taint register" + DSB SYS/ISB fallback + cross-call state propagation. Dynamic, not static; no summaries. But the vocabulary, ISA, pipeline position, and barrier are all taken. Have the "how is this different?" paragraph ready.
 6. **Your 3-phase serialize/reparse architecture is not load-bearing.** `MachineOutliner` is an in-tree `ModulePass` that holds every `MachineFunction` of the TU via `MachineModuleInfo`, no MIR round-trip. Do not present the round-trip as a necessity or a contribution.
 
-**What survives as defensible:** (a) **automatic compiler-inferred PSTATE.DIT placement** — no compiler does this; all existing DIT use is manual/global; the re-assert-after-call rule and the `PreservesDIT` bit look unoccupied (but see §5.2 — prove the baseline isn't free); (b) the specific artifact: annotation-driven summary-based taint fixed point over **post-prologepilog AArch64 MIR with concrete stack-offset and global cells**.
+**What survives as defensible:** (a) **automatic compiler-inferred PSTATE.DIT placement** - no compiler does this; all existing DIT use is manual/global; the re-assert-after-call rule and the `PreservesDIT` bit look unoccupied (but see §5.2 - prove the baseline isn't free); (b) the specific artifact: annotation-driven summary-based taint fixed point over **post-prologepilog AArch64 MIR with concrete stack-offset and global cells**.
 
-**Unverified / unread — flagging honestly:**
+**Unverified / unread - flagging honestly:**
 - **Serberus, DECLASSIFLOW, oo7, LightSLH, Janus, SplittingSecrets were surfaced by the prior-art hunt but NOT read in full and NOT adversarially verified.** The DECLASSIFLOW *"does not model the contents of memory"* line and the Serberus post-RA-MIR quote are single-source and unchecked. **Read Serberus and DECLASSIFLOW end-to-end before writing any novelty claim.** No Serberus overhead number is in hand.
 - **No overhead figure exists anywhere in the retrieved literature for your design point** (secret-aware barriers on AArch64). Blade/Jasmin numbers are crypto-only, on different ISAs and IRs; they are suggestive, not transferable to Firefox-scale C.
 - Not retrieved: eprint 2020/1104 (High-Assurance Crypto in the Spectre Era), Vale POPL'19, the USLH full version's formal proof and per-benchmark SPEC tables.
-- **Several source claims in the dissections were adversarially refuted and are excluded above** — notably: SLH does *not* harden loads uniformly (opt-in per function; x86 skips fixed-address loads); SLH *does* propagate predicate state through indirect calls and hardens their target registers (the unmitigated gap is detecting misprediction of the indirect edge at callee entry); the x86 `-x86-slh-fence-call-and-ret` mode fences *after each call*, not before returns; ct-verif *does* have a memory model (DSA); ct-verif §5.5 is a **limitations** section conceding machine-level modeling is needed, **not** an argument against post-RA placement — do not cite it as support for either side.
+- **Several source claims in the dissections were adversarially refuted and are excluded above** - notably: SLH does *not* harden loads uniformly (opt-in per function; x86 skips fixed-address loads); SLH *does* propagate predicate state through indirect calls and hardens their target registers (the unmitigated gap is detecting misprediction of the indirect edge at callee entry); the x86 `-x86-slh-fence-call-and-ret` mode fences *after each call*, not before returns; ct-verif *does* have a memory model (DSA); ct-verif §5.5 is a **limitations** section conceding machine-level modeling is needed, **not** an argument against post-RA placement - do not cite it as support for either side.
 
 ---
 

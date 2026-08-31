@@ -48,13 +48,13 @@ From the Arm ARM (DDI 0487), PSTATE.DIT / FEAT_DIT (Armv8.4; ID_AA64PFR0_EL1.DIT
    execute with timing (and asynchronous-exception response) **independent of
    their operand data values**. The listed set covers the bulk of A64 integer
    data-processing, most Advanced SIMD/NEON data-processing, and the crypto
-   extensions (AES/SHA — constant-time crypto is the headline use case).
+   extensions (AES/SHA - constant-time crypto is the headline use case).
 2. **Exclusions that matter to us.**
    - **`SDIV`/`UDIV` are not DIT-listed.** A divide on a secret operand stays
      data-dependent-timed with DIT=1.
    - FP `FDIV`/`FSQRT` are likewise not guaranteed.
    - **Loads/stores:** DIT guarantees independence from the *data values*
-     transferred, **not** from the *address* — cache/TLB timing remains
+     transferred, **not** from the *address* - cache/TLB timing remains
      address-dependent. DIT is not a defense for secret-indexed accesses.
    - Branches: DIT does nothing for secret-dependent control flow (branch
      predictor/fetch timing).
@@ -64,7 +64,7 @@ From the Arm ARM (DDI 0487), PSTATE.DIT / FEAT_DIT (Armv8.4; ID_AA64PFR0_EL1.DIT
    dataflow problem (no barrier-ordering interactions).
 4. **State propagation.** PSTATE.DIT is per-thread state: it survives calls,
    returns, and (via SPSR save/restore) exceptions and signal delivery. Nothing
-   restores it around a call — **whatever the callee leaves behind is what the
+   restores it around a call - **whatever the callee leaves behind is what the
    caller continues with**. There is no callee-saved convention for DIT in
    AAPCS64.
 5. **Runtime requirement.** Executing `MSR DIT` on a core without FEAT_DIT is
@@ -83,28 +83,28 @@ fact; (b) toggles are cheap but not free, so the objective is minimizing
 
 Ranked by severity.
 
-### G1 (unsound) — **FIXED (P0)**: a tainted callee's exit switch clears the caller's DIT
+### G1 (unsound) - **FIXED (P0)**: a tainted callee's exit switch clears the caller's DIT
 `f` tainted → entry sets DIT=1. `f` calls `g`; `g` is also tainted → `g` sets
 DIT=1 at entry and **DIT=0 before its return**. Back in `f`, every tainted
 instruction after the call executes with **DIT=0**. The function-granularity
 choice avoided *region*-level nesting but recreated the same hole at call
 boundaries within the TU. Any caller→callee pair that are both instrumented is
 affected; deeper chains lose protection after the first callee returns.
-*Status:* **fixed** — `insertTaintDITSwitches` re-asserts `MSR DIT, #1` immediately
+*Status:* **fixed** - `insertTaintDITSwitches` re-asserts `MSR DIT, #1` immediately
 after every non-tail call site inside instrumented functions (cheap, always
 sound; lit-covered by `caller_fn` in `taint-analysis-dit.mir`). Eliding
 provably-redundant re-asserts is the P3 summary work (§5.3).
 
-### G2 (unsound in principle) — **DIAGNOSED (2026-07-16)**: tainted instructions the spec does not cover
+### G2 (unsound in principle) - **DIAGNOSED (2026-07-16)**: tainted instructions the spec does not cover
 The run collector treats all tainted instructions alike, but per §2.2 a tainted
 `SDIV`/`UDIV` (or FP div/sqrt) is *not* protected by DIT=1. Silent false
 assurance. Similarly, runs include **address-sensitive loads/stores** (a
-secret-dependent address leaks via cache/TLB timing — DIT covers the loaded data
+secret-dependent address leaks via cache/TLB timing - DIT covers the loaded data
 *value*, not the address) and **branches on tainted flags** (control-flow timing)
-— DIT provides no guarantee for either. These hazards are NOT COVERED by this
+ - DIT provides no guarantee for either. These hazards are NOT COVERED by this
 project (speculation is out of scope; the ISB/DSB placeholder for it was removed
 2026-07-14).
-*Status:* **diagnosed** — a new `TargetInstrInfo::isDITProtected(MI)` hook drives
+*Status:* **diagnosed** - a new `TargetInstrInfo::isDITProtected(MI)` hook drives
 a `-taint-uncovered-report=<file>` report that emits an `UNCOVERED
 <not-dit-covered|secret-address|secret-branch>` line per tainted-but-unprotected
 instruction, instead of silently counting them protected. The hook is a
@@ -118,23 +118,23 @@ direction). Lit: `taint-analysis-dit-uncovered.mir`. Known limitations: a *raw*
 computed/address-tainted store addresses are caught; loads catch it via the
 all-uses-are-address rule); and an unrecognised-but-actually-covered opcode
 produces a spurious audit line until the covered switch is extended. Actually
-*protecting* these (constant-time rewrite / substitution) remains out of scope —
+*protecting* these (constant-time rewrite / substitution) remains out of scope -
 the report is for audit.
 
-### G3 (leak-adjacent) — **PARTIALLY ADDRESSED**: exceptional exits, unknown callees
+### G3 (leak-adjacent) - **PARTIALLY ADDRESSED**: exceptional exits, unknown callees
 Unwinds/`longjmp` out of an instrumented function leave DIT=1 in the unwinder and
-beyond — *safe* direction (over-protection), only a perf leak (still open,
+beyond - *safe* direction (over-protection), only a perf leak (still open,
 accepted). The **caller-side** hazard of external callees toggling DIT off is
 covered by the unconditional/summary-gated after-call re-assert (P0 + elision).
 
-**Protection *inside* an external/indirect callee is NOT out of reach — DIT is
+**Protection *inside* an external/indirect callee is NOT out of reach - DIT is
 inherited.** `PSTATE.DIT` is per-thread state with no callee-saved convention
 (§2.4), so a callee entered with DIT=1 executes with DIT=1: `memcpy`, an indirect
 target, a closed-source blob all inherit our mode. Under function granularity
 every call from inside a tainted function is by construction made with DIT=1, so
-a secret handed to an unknown callee **is** covered — to the same standard as our
+a secret handed to an unknown callee **is** covered - to the same standard as our
 own code (DIT-listed instructions only; an `SDIV` on the secret inside libc is no
-more protected than one in our own function — that's G2, not a call problem).
+more protected than one in our own function - that's G2, not a call problem).
 
 This is a real asymmetry vs. the deleted ISB/DSB model, where a barrier had to be
 *inside* the callee, so an uninstrumented callee was genuinely unprotected. The
@@ -143,12 +143,12 @@ be protected by placement") is inherited from that threat model and is now
 **misleading**; `-taint-callsite-report` should be read as an *audit list of
 secret-carrying call sites*, not a list of unprotected ones.
 
-Two genuine residuals: (a) an instrumented callee runs `MSR DIT, #0` on its exit —
+Two genuine residuals: (a) an instrumented callee runs `MSR DIT, #0` on its exit -
 but only after its own protected work, and the post-call re-assert restores our
 mode; (b) **this ambient coverage is automatic ONLY under function granularity.**
 See the "Scenario B invariant" box below.
 
-> **DESIGN DECISIONS (2026-07-15) — memory-effects soundness fix.** Discussed and
+> **DESIGN DECISIONS (2026-07-15) - memory-effects soundness fix.** Discussed and
 > locked; see `docs/research/memory-summaries.md` for the domain design.
 >
 > - **Unknown callees (external decl / indirect `BLR`) get blunt TOP in P0.** Any
@@ -156,7 +156,7 @@ See the "Scenario B invariant" box below.
 >   stack object, every address-taken global, and unknown memory. No refinement
 >   in P0. The libc model table and `memory(argmem: write)` narrowing
 >   (research §11 vii/viii) are **deferred until we measure** how much blunt TOP
->   over-instruments — the honest baseline first, then decide if the table earns
+>   over-instruments - the honest baseline first, then decide if the table earns
 >   its maintenance. Indirect calls also get blunt TOP in P0; the address-taken-
 >   target join (which would also close the "reached-only-indirectly, never
 >   instrumented" sub-case) is a later precision option, not P0.
@@ -167,14 +167,14 @@ See the "Scenario B invariant" box below.
 >   invariant is currently true *by accident of granularity*. Add a verification
 >   pass: for every call site with a tainted/pointee-tainted argument, assert the
 >   enclosing function is DIT-instrumented (and, once regions exist, that the call
->   lies inside an enabled region). A violation is a leaked secret — report it,
+>   lies inside an enabled region). A violation is a leaked secret - report it,
 >   and under an assertions build, assert. This turns an implicit invariant into a
 >   guardrail the future region work cannot silently break.
 
 ### G4 (correctness of scope): protection starts at entry, but secrets may
 pre-exist in memory
 Function granularity protects everything the function executes, so this is
-currently moot; it becomes real once placement is narrowed (§5) — the enable must
+currently moot; it becomes real once placement is narrowed (§5) - the enable must
 dominate *every* tainted instruction on *every* path, including paths through
 landing pads and split cold blocks. Any optimal-placement rework must prove
 domination, not assume block layout.
@@ -183,17 +183,17 @@ domination, not assume block layout.
 
 ## 4. Performance gaps
 
-### P1: redundant toggles across the call graph (**the** cost — measured)
+### P1: redundant toggles across the call graph (**the** cost - measured)
 In a tainted call chain `f → g → h`, today each function executes 2+ toggles per
-activation. A toggle is **~30 cycles and fully serializing** — about **30× a
-`bl`+`ret` pair (2.03 cyc)** — so a tainted leaf called per row/pixel (the
+activation. A toggle is **~30 cycles and fully serializing** - about **30× a
+`bl`+`ret` pair (2.03 cyc)** - so a tainted leaf called per row/pixel (the
 Firefox convolve kernels do exactly this) pays ~60 cyc/activation for protection
 that costs nothing to *keep* once set. If every call site of `g` already
 guarantees DIT=1, `g` needs **zero** toggles. Note even a redundant same-value
-`MSR DIT, #1` (the post-call re-assert) costs **12 cycles** — cheaper than a real
+`MSR DIT, #1` (the post-call re-assert) costs **12 cycles** - cheaper than a real
 toggle, but not free, so the `PreservesDIT` elision is worth real cycles.
 
-### P2: whole-function dwell when taint is localized — **REAL, and the reason for §5**
+### P2: whole-function dwell when taint is localized - **REAL, and the reason for §5**
 This section used to hypothesize that dwell is near-free pending measurement on
 FEAT_DIT hardware. **The hypothesis was wrong.** With DIT fully on, **some SPEC
 2026 benchmarks lose ~15%** (measured by the project owner). Dwell is real,
@@ -215,7 +215,7 @@ Consequences for this document:
   hoisting a toggle out of a hot leaf removes toggles *without* extending dwell
   over extra secret-free code, so it pays regardless of the dwell number.
 - ⚠️ Do not re-derive "dwell ≈ 0" from a microbenchmark. The M4 microkernels in
-  `playground/dit_bench/` show ~0 and are **not representative** — see the cost-
+  `playground/dit_bench/` show ~0 and are **not representative** - see the cost-
   model doc's "History" section.
 
 ### P3: one disable per return
@@ -223,28 +223,28 @@ Functions with many exit blocks execute at most one, so the *static* count is
 harmless; but disables in cold exit blocks are pure code-size. Post-dominator
 placement (§5) subsumes this.
 
-### P4: measured region structure of `convolve_pixel_int` — why §5 must be loop-aware
+### P4: measured region structure of `convolve_pixel_int` - why §5 must be loop-aware
 Characterized 2026-07-15 from the taint report + region report + MIR CFG
 (`-taint-output`, `-taint-regions-output` on the reference workload).
 
 **Taint is sparse and clustered, not uniform.** Of 298 instructions in
 `convolve_pixel_int`, only **85 (28.5%) are tainted**. The public part is
-dominated by a large clean preamble — `entry` (35 instrs, 0 tainted) and
-`for.body.lr.ph` (30 instrs, 0 tainted) — i.e. ~65 instructions of pure setup
+dominated by a large clean preamble - `entry` (35 instrs, 0 tainted) and
+`for.body.lr.ph` (30 instrs, 0 tainted) - i.e. ~65 instructions of pure setup
 that function granularity wraps in DIT for nothing.
 
 **Static region count bottoms out at 9** (the taint forms 9 CFG-separated
 clusters; `-taint-region-merge-gap` sweeps 24→15→9 as gap 0→2→≥16, then
-plateaus — cross-block gaps never coalesce). Naive per-region placement =
+plateaus - cross-block gaps never coalesce). Naive per-region placement =
 2×count = 18–48 static toggles.
 
 **But static count is the wrong cost metric, and this function proves it.** Five
-of the tainted regions sit inside **self-looping inner-loop blocks** — `bb.12`/
+of the tainted regions sit inside **self-looping inner-loop blocks** - `bb.12`/
 `bb.14` (`vector.body`), `bb.16`/`bb.18` (`vec.epilog.vector.body`), `bb.21`
-(`for.body7`) — whose backedges are weighted `0x7c...` vs `0x04...`, i.e. taken
+(`for.body7`) - whose backedges are weighted `0x7c...` vs `0x04...`, i.e. taken
 ~97% of iterations. A toggle placed *inside* such a block executes **once per
 loop iteration**; `convolve_pixel_int` runs per output pixel, so "18 static
-toggles" becomes thousands-to-millions of *dynamic* ~30-cyc toggles —
+toggles" becomes thousands-to-millions of *dynamic* ~30-cyc toggles -
 **strictly, catastrophically worse than function granularity's 2.** This is why
 `-taint-region-merge-gap` (run coalescing) is the wrong knob: it shrinks the
 static count but cannot move a toggle out of a loop.
@@ -264,7 +264,7 @@ added toggles = ~2 × 30 cyc ≈ 60 cyc               (one-time per call)
 **Design consequence for §5:** the objective is *executed* (frequency-weighted)
 toggles, and the enable must be **hoisted out of loops** (LICM-style), not merely
 placed at region boundaries. This is a lazy-code-motion / partial-redundancy
-problem over the machine CFG with block frequencies — the merge-gap proxy does
+problem over the machine CFG with block frequencies - the merge-gap proxy does
 not model it. `convolve_pixel_int` is the canonical test case: a small secret
 kernel inside a hot loop nest behind a large public preamble.
 
@@ -276,12 +276,12 @@ Treat "PSTATE.DIT == 1" as a dataflow fact and place toggles by lazy-code-motion
 over the machine CFG, extended interprocedurally by the existing fixed-point
 framework.
 
-### 5.1 Instruction classifier — **BUILT (Track C, 2026-07-16); it gates placement**
+### 5.1 Instruction classifier - **BUILT (Track C, 2026-07-16); it gates placement**
 The classifier is the already-shipped `TargetInstrInfo::isDITProtected(MI)`
 membership hook (`docs/reference/dit-spec.md`, `classifyDITUncovered`,
-`-taint-uncovered-report`). §5 does **not** re-implement it — it *consumes* it.
+`-taint-uncovered-report`). §5 does **not** re-implement it - it *consumes* it.
 
-**Coverability gates region creation — the load-bearing rule for §5.** A tainted
+**Coverability gates region creation - the load-bearing rule for §5.** A tainted
 instruction DIT cannot protect must never cause a DIT region to exist or grow:
 wrapping a secret `SDIV` in DIT pays a ~30-cyc toggle for zero protection (the
 divide stays data-value-timed regardless). So the placement "need" set is
@@ -294,13 +294,13 @@ Residual(MI) = isTainted(MI) && !isDITProtected(MI)    // -> -taint-uncovered-re
 
 Consequences the placement pass must honour:
 - **Uncoverable tainted instructions do not anticipate/require DIT.** They are
-  excluded from down-safety and availability entirely — they can sit inside a DIT
+  excluded from down-safety and availability entirely - they can sit inside a DIT
   region (harmless) or outside it (also harmless: DIT wouldn't protect them
   either way), but they must never be the *reason* a toggle is inserted or a
   region extended. A function whose *only* tainted instructions are uncoverable
   needs **zero** toggles (and just emits residual-report lines).
 - **`secret-address` and `secret-branch` are residual too**, not just
-  divide/sqrt — DIT covers neither, so neither belongs in the Need set.
+  divide/sqrt - DIT covers neither, so neither belongs in the Need set.
 - **Fixes the current over-count:** today (function granularity) uncoverable
   instructions are swept into the wrapped region and counted as "protected". §5's
   Need/Residual split is what stops the region reports overstating coverage.
@@ -318,7 +318,7 @@ Standard two-pass formulation over MachineBasicBlocks:
   inside a loop when the preheader/exit edges dominate/post-dominate the needs
   (hoist out of hot loops for free).
 - Function-granularity remains the degenerate result when needs span the whole
-  body — so this strictly generalizes the current behavior.
+  body - so this strictly generalizes the current behavior.
 - The existing `TaintedRun`/merge-gap machinery reduces to the seed set; the gap
   parameter becomes irrelevant for DIT (dataflow subsumes gap merging).
 
@@ -327,16 +327,16 @@ Extend `TaintSummaryInfo` (fixed-point already walks the TU call graph) with two
 bits per function:
 - `EntryDIT`: all *internal* call sites of F occur at program points where DIT=1
   is available (external/address-taken/indirect ⇒ false). **Not yet implemented.**
-- `PreservesDIT` — **implemented**: F is not DIT-instrumented itself and every
+- `PreservesDIT` - **implemented**: F is not DIT-instrumented itself and every
   call it makes is direct to a preserving in-TU callee (externals/indirect ⇒
   false). Computed as a greatest fixed point after taint convergence in
   `TaintFixedPointIteration.cpp`; tail calls count as calls.
 Placement rules:
 - If `EntryDIT(F)`: omit F's entry enable **and all exit disables** (the caller
-  owns the state) — zero toggles in interior functions of tainted chains. (Not
+  owns the state) - zero toggles in interior functions of tainted chains. (Not
   yet implemented.)
 - At a call site inside a DIT-live region: if `!PreservesDIT(callee)`, re-assert
-  `MSR DIT, #1` after the call — **implemented** in `insertTaintDITSwitches`
+  `MSR DIT, #1` after the call - **implemented** in `insertTaintDITSwitches`
   (re-asserts by default, elides when the callee's summary proves preservation).
 - Disables move to the *outermost* frontier: functions whose callers don't need
   DIT. (Not yet implemented.)
@@ -349,92 +349,92 @@ via spill slot like `AArch64SpeculationHardening` does). Only worth it where the
 protocol bits come back unknown; default to the caller-side re-assert otherwise.
 
 ### 5.5 Diagnostics & reports
-- **Implemented:** call-site escape report — `-taint-callsite-report=<file>`
+- **Implemented:** call-site escape report - `-taint-callsite-report=<file>`
   emits `ESCAPE external|indirect callee=<name> caller=<fn> bb=<n> [line=<l>]
   tainted-args|pointee-tainted-args` for secrets handed to uninstrumentable
   callees. Lit:
   `taint-analysis-callsite-report.mir`.
-- Residual-hazard report (§5.1) — per instruction: opcode, reason
+- Residual-hazard report (§5.1) - per instruction: opcode, reason
   (`non-DIT-op`, `tainted-address`, `tainted-branch`), source line. (Pending,
   with P1.)
 - Extend `-taint-regions-output` to print DIT scopes (enable/disable points +
   frequency estimates) so `taint_region_distance.py`-style tooling can audit.
 
-### 5.6 Refined implementation design (Track B, 2026-07-16) — the plan of record
+### 5.6 Refined implementation design (Track B, 2026-07-16) - the plan of record
 
 Design pass over the three in-tree mode-switch idioms (§5 named them). Base
 structure is `RISCVInsertVSETVLI`'s (a boolean mode). **Two corrections found
-while implementing increment (a) (2026-07-16), before any code — read these; they
+while implementing increment (a) (2026-07-16), before any code - read these; they
 change the formulation:**
 
-**Correction 1 (soundness — the `Need` set).** `isDITProtected(call)` is *false*
+**Correction 1 (soundness - the `Need` set).** `isDITProtected(call)` is *false*
 (a call is not in the DIT covered set), so the original
 `Need = isTainted && isDITProtected && classifyDITUncovered==null` would DROP
-secret-passing calls — breaking Scenario B (the callee must run with DIT on to
+secret-passing calls - breaking Scenario B (the callee must run with DIT on to
 inherit it). Corrected definition:
 ```
 Need(MI) = isTaintedInstruction(MI, F) && (isDITProtected(MI) || MI.isCall())
 ```
 This also (correctly) keeps a **secret-address load** in the Need set: its data
 *value* is DIT-covered (the LVP channel) even though its address is not, so it
-must run under DIT — the `classifyDITUncovered != null` test would have wrongly
+must run under DIT - the `classifyDITUncovered != null` test would have wrongly
 excluded it and under-protected the exact value-timing channel the project
-targets. (The load is *also* a residual for its address — an instruction can be
+targets. (The load is *also* a residual for its address - an instruction can be
 both a Need and a residual; the two are not mutually exclusive.)
 
-**Correction 2 (objective — dwell is the live range; earliest ≠ minimal).** The
+**Correction 2 (objective - dwell is the live range; earliest ≠ minimal).** The
 original "enable at *earliest* anticipated" is anticipation/down-safe placement,
 which enables as early as `ANTIN` holds. But `ANTIN` is *true in a clean preamble
 that flows into a need* (a need is coming on all paths), so earliest placement
-**covers the public preamble** — the exact thing we narrow (convolve's
+**covers the public preamble** - the exact thing we narrow (convolve's
 `entry → for.body.lr.ph → loop`: `ANTIN` true from `entry`). Loop-hoisting cannot
 fix it (the enable is already *before* the loop). Root cause: **dwell IS the live
 range of the `DIT==1` fact**, so minimizing dwell needs LCM's *lateness/latest*
 (sink the enable down to just-before-need), which the "no live range" dismissal
 missed. Corrected objective and staging:
 - The dwell-minimal seed is the **minimal need-region** (just-before-first-need to
-  just-after-last-need) — which the existing `collectTaintedRuns` already computes
+  just-after-last-need) - which the existing `collectTaintedRuns` already computes
   per block. Coarsen *upward* from there (loop-hoist + admission-merge), rather
   than start maximal (earliest) and fail to shrink.
 - **Increment (a) = anticipation-coarse scaffolding**, deliberately: it builds the
   `ANTIN` backward lattice + availability + the emit + the verifier, degenerating
   to function granularity (byte-identical when whole-function tainted) and
   narrowing only the *trailing* clean epilogue (`¬ANTIN` blocks). It does NOT
-  narrow the preamble — that is (b). This is sound and never worse than function
+  narrow the preamble - that is (b). This is sound and never worse than function
   granularity (coarse ⇒ toggles at coarse boundaries, never per-iteration), and
   the `ANTIN` lattice it builds is the first LCM pass, reused by (b).
 - **Increment (b) = lateness + loop-hoist together** (they are coupled: you sink
   the enable to the latest safe point, which is the loop *preheader* for a
   loop-resident need, never *into* the loop). This is where the preamble is
   excluded and the real dwell win lands.
-- (c) admission-merge, (d) interproc — unchanged.
+- (c) admission-merge, (d) interproc - unchanged.
 
-**(b) as implemented (2026-07-16) — the `On(b)` set, simpler than a general
+**(b) as implemented (2026-07-16) - the `On(b)` set, simpler than a general
 lateness dataflow but capturing the two wins directly.** Rather than the LCM
 latest pass, (b) defines the DIT-on block set as
 ```
 On(b) = HasNeed(b)  OR  (b is in a loop that (transitively) contains a Need)
 ```
 computed from a locally-built `MachineLoopInfo` (`MachineDominatorTree MDT(MF);
-MachineLoopInfo MLI(MDT)` — no MFAM plumbing). Two consequences:
+MachineLoopInfo MLI(MDT)` - no MFAM plumbing). Two consequences:
 - **Preamble excluded:** a clean preamble block (no need, not in a need-loop) is
-  Off, so DIT is not enabled over it — the (a) gap closed.
+  Off, so DIT is not enabled over it - the (a) gap closed.
 - **Loop-hoist for free:** the *whole* outermost need-loop is On, so the Off→On
   boundary is the loop *preheader*, and the enable is placed at the preheader's
-  end (executed once) — never at the loop header (which the backedge re-enters
+  end (executed once) - never at the loop header (which the backedge re-enters
   every iteration). Loop nests hoist to the outermost preheader because a need in
   an inner loop marks every enclosing loop as a need-loop.
-Emit: enable at each Off→On boundary — hoisted to the preheader when the On-entry
+Emit: enable at each Off→On boundary - hoisted to the preheader when the On-entry
 is a natural loop header; when the header has no unique preheader (≥2 external
 entry edges), placed at the end of *each external predecessor* (each entered
 once, so still no per-iteration toggle and no whole-function fallback); disable at
 each On→Off boundary (the Off side is a loop exit, outside the loop, entered once
-— no hoist needed); re-assert after non-terminator clobbers; the (a) return/
+ - no hoist needed); re-assert after non-terminator clobbers; the (a) return/
 tail-call rules unchanged. Insertions at a block start go PAST leading EH labels
 / CFI (`regionEntryInsertPt`) so they cannot displace a landing-pad `EH_LABEL`. A
 Need in an **irreducible** cycle (which `MachineLoopInfo` does not model, so it
 cannot be hoisted) triggers the graceful fallback to function granularity for
-that function — detected by `blockInCycle` on a non-header On-entry. The
+that function - detected by `blockInCycle` on a non-header On-entry. The
 soundness verifier (unchanged) validates every emit and is the last-resort net.
 
 **Not** byte-identical to (a) on loop-free code: (a)'s backward `ANTIN` marked a
@@ -461,16 +461,16 @@ template for disables.)
 **Dataflow (two boolean fixed points over the machine CFG, seeded by one
 `replayTaint` walk).** Local facts per block: `NEED(b)` = ∃ MI with
 `isTaintedInstruction(MI,F) && isDITProtected(MI) && classifyDITUncovered(...)==
-nullptr` (the §5.1 coverability gate — *reuse `classifyDITUncovered`, do not
+nullptr` (the §5.1 coverability gate - *reuse `classifyDITUncovered`, do not
 re-derive*); `CLOBBER` = each call with `!PreservesDIT(callee)`.
 
 - **Anticipation** (backward, AND-meet = down-safe): `ANTIN(b)=NEED(b) ∨ ANTOUT(b)`;
   `ANTOUT(b)=⋀_{s} ANTIN(s)` (a return/exit successor contributes false). No kill
-  term — a clobber does not remove a *future* need.
+  term - a clobber does not remove a *future* need.
 - **Availability** (forward, AND-meet = domination): `AVIN(b)=⋀_{p} AVOUT(p)` (entry:
   `EntryDIT(F)`); `AVOUT(b)=enableAfterLastClobber(b) ∨ (AVIN(b) ∧ ¬hasClobber(b))`.
   GEN depends on where enables are placed ⇒ availability and the enable frontier
-  are mutually dependent — resolve with VSETVLI's worklist (`computeIncomingVLVTYPE`
+  are mutually dependent - resolve with VSETVLI's worklist (`computeIncomingVLVTYPE`
   pattern), recomputing to a per-function fixed point.
 - **Frontier:** enable `MSR DIT #1` where `ANTIN(b) ∧ ¬AVOUT(p)` (earliest
   anticipated ∧ ¬available), or after a clobber that a Need follows; disable
@@ -493,7 +493,7 @@ frequency-weighted cost compare is not a lattice meet), analogous to
 `60cyc·max(freq(d),freq(e)) ≥ Σ_{b∈corridor} freq(b)·|b|·c_dwell`. This is the
 *derived* merge-gap: static "≤N clean instrs" → "toggle pair costs more than the
 dwell saved," frequency built in (cold long gaps merge, hot short gaps split; the
-P≈40-64 crossover falls out). **Never merge across a clobber-driven re-assert** —
+P≈40-64 crossover falls out). **Never merge across a clobber-driven re-assert** -
 tag dwell-motivated toggles at creation so the post-pass can tell them from
 correctness toggles. `-taint-region-merge-gap` becomes a transitional override
 (threshold→∞ recovers pre-admission behavior).
@@ -506,12 +506,12 @@ internal ∧ ¬address-taken ∧ every call site direct in-TU ∧ DIT available 
 call site ⇒ F omits its entry enable and exit disables (caller owns the state; the
 P1 zero-toggle interior). Because availability-at-call-site is a placement result
 that feeds `AVIN(entry)`, `{placement, EntryDIT}` is a **coupled greatest fixed
-point** — seed true, retract (monotone; retraction only adds toggles) when a
+point** - seed true, retract (monotone; retraction only adds toggles) when a
 caller leaves DIT unavailable at a call site or F becomes externally reachable,
 bounded like the existing `MaxIterations=100`. External/indirect ⇒ false (sound:
 whatever the callee leaves is what the caller continues with).
 
-**G4 domination — discharged structurally.** Availability's AND-over-preds meet
+**G4 domination - discharged structurally.** Availability's AND-over-preds meet
 means `AVIN(b)=true` ⟺ DIT established and unclobbered on *every* incoming path =
 the domination obligation, no block-layout assumptions. EH/landing-pad/cold-split
 edges are ordinary CFG edges and participate in the meet automatically. Critical
@@ -552,10 +552,10 @@ non-convergence (mitigate: VSETVLI worklist pattern); the Need-gate must match
 | G2 ✅ done (Track C) | `isDITProtected` membership hook + `-taint-uncovered-report` (`classifyDITUncovered`) | closes G2 (no false assurance) |
 | B(a) ✅ done | region placement scaffold behind `-taint-dit-placement=region`; Need set + soundness verifier + graceful fallback | machinery; narrows trailing epilogue |
 | B(b) ✅ done | loop-aware `On(b)` placement: preamble excluded, enable hoisted to loop preheader / multi-entry pred edges; irreducible→fallback | the dwell win (convolve: 67-instr preamble now DIT-off, no per-iteration toggle) |
-| B(c) ✅ done | admission test (`admitOffCorridors`): merge an interior Off corridor between two On regions when the **emit-accurate net toggle saving** beats the dwell — `c_sw·(Σ removed boundary switches − Σ re-asserts/disable-before-return emit adds inside the merged corridor) ≥ dwell_per_instr·Σ freq(b)·\|b\|`, all MBFI block-frequency weighted; tunable `-taint-dit-dwell-per-instr` (default 1.0 ⇒ ~60-instr static crossover). Purely a perf optimization — merging only EXTENDS `OnBlocks`, so it CANNOT leak (verifier always passes). On a dwell≈0 core it coarsens toward function granularity; on DIT-sensitive cores it stays narrow. | cost-model-driven placement |
+| B(c) ✅ done | admission test (`admitOffCorridors`): merge an interior Off corridor between two On regions when the **emit-accurate net toggle saving** beats the dwell - `c_sw·(Σ removed boundary switches − Σ re-asserts/disable-before-return emit adds inside the merged corridor) ≥ dwell_per_instr·Σ freq(b)·\|b\|`, all MBFI block-frequency weighted; tunable `-taint-dit-dwell-per-instr` (default 1.0 ⇒ ~60-instr static crossover). Purely a perf optimization - merging only EXTENDS `OnBlocks`, so it CANNOT leak (verifier always passes). On a dwell≈0 core it coarsens toward function granularity; on DIT-sensitive cores it stays narrow. | cost-model-driven placement |
 | **B(d) ← NEXT** | `EntryDIT` summary (coupled greatest fixed point with placement), entry/exit toggle elision for internal tainted chains; fixes the deferred residual-only-callee `PreservesDIT` spurious re-assert | P1 interior-zero-toggle perf |
 
-**Update (2026-07-23): `-taint-dit-loop-hoist=0` (block-minimal) is now the DEFAULT** (finest placement — public loop scaffolding peeled off, per-iteration toggles; set `=1` for serializing-switch hardware). dit-region.mir REGION and dit-loop-hoist.mir HOIST run lines pinned to `-taint-dit-loop-hoist=1`.
+**Update (2026-07-23): `-taint-dit-loop-hoist=0` (block-minimal) is now the DEFAULT** (finest placement - public loop scaffolding peeled off, per-iteration toggles; set `=1` for serializing-switch hardware). dit-region.mir REGION and dit-loop-hoist.mir HOIST run lines pinned to `-taint-dit-loop-hoist=1`.
 
 **Impl state as of 2026-07-21** (historical snapshot; the lit suite is 29 tests
 today): all of the above through B(c) are committed and pushed (on
@@ -566,7 +566,7 @@ to whole-function coverage make the default safe. All 19 lit tests pass
 (`taint-analysis-*.mir`); `taint-analysis-dit-region.mir`'s FUNC run line was pinned to
 explicit `-taint-dit-placement=function` when the default flipped. Reviews (workflow
 `/code-review high`) run per increment have each caught real bugs (P0: 4 leaks;
-B(a): tail-call crash; B(b): EH-label/irreducible/multi-entry) — all fixed.
+B(a): tail-call crash; B(b): EH-label/irreducible/multi-entry) - all fixed.
 
 **B(c) implementation notes.** The admission test is a pre-emit post-pass on the
 increment-(b) `OnBlocks` partition (`admitOffCorridors` in `TaintAnalysis.cpp`), not
@@ -576,17 +576,17 @@ CFG-connected corridors, and for each *interior* corridor (has both an On-pred e
 change against the frequency-weighted dwell and, if merging wins, folds the
 corridor's blocks into `OnBlocks` before the existing sound emit + verify run.
 Because it only grows coverage, the single sound emit path and the verifier are
-reused unchanged. Leading preambles / trailing epilogues (bounded on one side only —
+reused unchanged. Leading preambles / trailing epilogues (bounded on one side only -
 no pair to save) are never merged. `-taint-region-merge-gap` still feeds the *report*
 files (per `CLAUDE.md`) but no longer has any bearing on placement;
 `-taint-dit-dwell-per-instr` is its frequency-aware placement replacement (set it
 very large to recover pure (b)).
 
-*Loop hoisting is toggleable — block-minimal coverage first (2026-07-17).*
+*Loop hoisting is toggleable - block-minimal coverage first (2026-07-17).*
 `-taint-dit-loop-hoist` (default **true** = increment (b)) gates the loop
 coarsening. Set it **false** for BLOCK-MINIMAL coverage: `On(b) = HasNeed(b)` only,
 so DIT wraps just the blocks that actually contain a secret instruction and
-everything else — including a loop's non-secret body blocks — runs unprotected. The
+everything else - including a loop's non-secret body blocks - runs unprotected. The
 cost is a per-iteration enable/disable around a need-block reached by a backedge
 (the enable lands at the need-block's entry instead of the preheader; the
 irreducible-cycle fallback is skipped because per-iteration toggling is now the
@@ -597,32 +597,32 @@ drops from 78% → **66%** of instructions covered (100 vs 67 DIT-off) as the in
 non-need blocks flip off; 0 fallbacks; checksum unchanged vs unhardened. This is the
 current finest granularity (block-level); protecting only the Need *instructions*
 within a block would need a sub-block (instruction-level) emit, not yet built.
-Test: `taint-analysis-dit-loop-hoist.mir` (`@loop_public` — hoist covers the public
+Test: `taint-analysis-dit-loop-hoist.mir` (`@loop_public` - hoist covers the public
 loop body, block-minimal leaves it DIT-off).
 
-*Switch cost defaults to 0 — finest grain first (2026-07-17).* `-taint-dit-switch-cyc`
+*Switch cost defaults to 0 - finest grain first (2026-07-17).* `-taint-dit-switch-cyc`
 (cycles per `MSR DIT`) defaults to **0**, so toggles are free and the admission test
 never merges (any positive `-taint-dit-dwell-per-instr` wins): region mode then emits
-the smallest DIT groups increment (b) can produce — each `On…Off…On` corridor stays
+the smallest DIT groups increment (b) can produce - each `On…Off…On` corridor stays
 split, DIT wrapping only the minimal Need regions. This is the deliberate starting
 point for exploring placement; dial `switch-cyc` up toward the measured ~30 cyc/switch
 (pair ≈ 60) to watch groups coalesce (crossover `switch-cyc·2 ≥ dwell_per_instr·N` at
 freq 1). The admission lit test pins `-taint-dit-switch-cyc=30` so its "60-cyc pair"
 narrative is independent of the default.
 
-*Cost model — emit-accurate (post-review, 2026-07-16).* The first cut scored a
+*Cost model - emit-accurate (post-review, 2026-07-16).* The first cut scored a
 corridor as `60·max(freq(disable),freq(enable))` and blanket-refused any corridor
-containing a clobber. A `/code-review high` found (no soundness bugs — every defect
+containing a clobber. A `/code-review high` found (no soundness bugs - every defect
 was safe-direction over-approximation, but) a cluster of *precision* defects that
 could make region mode emit **more** toggles than it saves (defeating the feature):
 `max` instead of summing the two boundary sides over-credited savings; a single
 clobber anywhere in a flooded component vetoed the whole merge; and the model never
 counted the re-asserts / disable-before-return that emit inserts *inside* a merged
-corridor. Fixed by scoring exactly what emit does — every switch sits at a block
+corridor. Fixed by scoring exactly what emit does - every switch sits at a block
 boundary, so block (not edge) frequency is the true per-switch cost:
 `ToggleNet = c_sw·[ Σ_{b∈C,On-pred} freq(b) + Σ_{s∉C,On-succ of C} freq(s) − Σ_{non-term clobber∈C} freq(blk) − Σ_{b∈C w/ return} freq(b) ]`,
 merge iff `ToggleNet ≥ dwell_per_instr·Σ freq(b)·|b|`. A clobber-bearing corridor is
-now a *decision* (its re-assert is costed), not a veto — it merges only when still a
+now a *decision* (its re-assert is costed), not a veto - it merges only when still a
 net win, which the flood guarantees is well-defined because every Off neighbor of a
 corridor block is in the same corridor (merging removes exactly the On↔corridor
 boundary switches, creating no new downstream On→Off boundary). Tests
@@ -643,7 +643,7 @@ correctly, but true per-sub-gap decisions would need to decompose the component.
   or reported).
 - **Soundness check (automatable in lit):** a verifier pass asserting that on
   every CFG path each `Need` instruction is dominated by an enable with no
-  intervening disable/`!PreservesDIT` call — this is cheap to check per-function
+  intervening disable/`!PreservesDIT` call - this is cheap to check per-function
   and should gate P2/P3.
 - **Dynamic:** needs FEAT_DIT hardware (Graviton3/Apple M/N2); `qemu-aarch64
   -cpu max` validates functional behavior only, not timing. Until then report
@@ -656,7 +656,7 @@ correctly, but true per-sub-gap decisions would need to decompose the component.
 **Measured 2026-08-19.** Prompted by a comparison with LLVM's other mode-switch
 placers: AMDGPU's `SIModeRegister` (FP rounding mode, three-phase dataflow with a
 `Status{Mask,Mode}` lattice) and AArch64's `MachineSMEABIPass` (PSTATE.ZA, one
-state per **edge bundle**). Both are worth citing — a compiler reviewer will find
+state per **edge bundle**). Both are worth citing - a compiler reviewer will find
 them, and GCC's `optimize_mode_switching` (lazy code motion) besides.
 
 ## 7.1 The structural gap
@@ -669,7 +669,7 @@ for (auto *P : MBB.predecessors()) OnAtEntry &= On(P);
 if (!OnAtEntry) { ...enable at MBB's start... }
 ```
 
-At a **mixed join** — some predecessors On, some Off — that enable then executes
+At a **mixed join** - some predecessors On, some Off - that enable then executes
 on *every* incoming path, redundantly on the already-on ones. `EdgeBundles`
 exists to avoid exactly this: all edges entering a block share one bundle, so a
 block is always entered in one state and no edge needs splitting.
@@ -691,7 +691,7 @@ models do not need different settings here.
 ## 7.3 Verdict: neither bundling nor splitting
 
 **Bundling is the wrong tool.** It forces a bundle to one state, i.e. promotes Off
-predecessors to On — trading switches for dwell. `admitOffCorridors` already does
+predecessors to On - trading switches for dwell. `admitOffCorridors` already does
 that, and does it on a measured cost model rather than a transition-count
 heuristic. SME needs bundling because ZA state is *mandatory* and it has no dwell
 to trade; DIT is optional, so a cost model strictly dominates.
@@ -701,19 +701,19 @@ merging removes the switch by adding dwell, splitting removes the redundant
 execution without adding dwell. Which wins is set by the ratio, and ours is
 lopsided (§7.4): ~10-23 cyc/switch against 0.0039 cyc per suppressed op. At
 `switch-cyc=10` only **10 mixed joins remain in the whole TU, every one at
-frequency 1.00**, all on seeded entry points — roughly 100 cycles per signing
+frequency 1.00**, all on seeded entry points - roughly 100 cycles per signing
 operation against a ~10.9 µs signature.
 
 Note the hot mixed joins that survive at `cyc=12` in the *hoist* build
 (`musig_pubkey_agg` freq 15.5, `ge_set_all_gej_var` 12.5) are all inside
 false-positive functions. **Fix the taint and the placement problem largely
-evaporates** — the precision fix subsumes the placement fix here.
+evaporates** - the precision fix subsumes the placement fix here.
 
 ## 7.4 What one switch actually costs (derived from our own gem5 runs)
 
 Method: cycles above the `off` arm, minus the dwell its `ditSuppressed` count
 implies, over the switch instructions it executed. Use `ver_base` (20,240 switch
-instructions) — with a small denominator, cross-binary codegen noise swamps the
+instructions) - with a small denominator, cross-binary codegen noise swamps the
 result and the same arithmetic returns nonsense (670 cyc/switch on `ver_gated`'s
 80 switches).
 
@@ -741,7 +741,7 @@ noise floor −0.09%). `build-gated10` (133 switches) vs `build-gated` (178):
 
 Only the first two are results; the next two are the high-CoV benchmarks (6.2%,
 8.2%) with IQRs spanning ±5-9 points. The small regressions are on benchmarks that
-execute essentially no switches, so switch count cannot be their cause — they are
+execute essentially no switches, so switch count cannot be their cause - they are
 codegen lottery between two builds.
 
 **Conclusion: keep `switch-cyc=0` as the default.** The cost model demonstrably

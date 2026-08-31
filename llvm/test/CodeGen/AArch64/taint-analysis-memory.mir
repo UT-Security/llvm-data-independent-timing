@@ -9,7 +9,7 @@
 # underlying object is the alloca, which getCellFromMMO resolves to its frame
 # object (MachineFrameInfo::getObjectAllocation). So this is tracked as a precise
 # stack CELL, not the blunt unknown-memory set. Before that case existed, every
-# source-level local fell through to Unknown — the expectations below used to read
+# source-level local fell through to Unknown - the expectations below used to read
 # "taint unknown mem value %slot" / "load from tainted unknown/heap mem".
 # CHECK: TaintAnalysis: analyzing function store_load
 # CHECK:   IR arg 0 has 'tainted' attribute

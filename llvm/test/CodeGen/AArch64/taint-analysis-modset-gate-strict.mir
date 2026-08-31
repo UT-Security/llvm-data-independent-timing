@@ -6,7 +6,7 @@
 # suppressed. This is the shape the source condition exists for.
 #
 # `seeder` stores its parameter into the global @g, so its summary records
-# WritesSecretToGlobal(@g) — which is deliberately NEVER gated, being per-global
+# WritesSecretToGlobal(@g) - which is deliberately NEVER gated, being per-global
 # rather than a flood and the very "secret arrived through a global" case the gate
 # is unsound for. `middle` calls `seeder` (passing a CONSTANT, so nothing about
 # this depends on the caller), then LOADS @g and writes it through its own pointer
@@ -16,15 +16,15 @@
 #
 # `public_caller` passes `middle` no secret. A gate that asked only "did this call
 # site pass a secret?" would suppress `middle`'s clobber and leave the reload of
-# %buf untainted — but the secret is real, and no caller's arguments can account
+# %buf untainted - but the secret is real, and no caller's arguments can account
 # for it. That is the unsound shape, and it occurs in libsecp256k1 (9 of 26
 # suppressed sites, e.g. secp256k1_ecmult_gen_blind <-
 # secp256k1_context_preallocated_create).
 #
 # The source condition declines to gate `middle` precisely because it has no
 # tainted argument for a caller's arguments to speak for, so `public_caller` keeps
-# its protection. It is unconditional — the permissive rule that would drop this
-# secret is not reachable from the command line — and it measured byte-identical on
+# its protection. It is unconditional - the permissive rule that would drop this
+# secret is not reachable from the command line - and it measured byte-identical on
 # every library screened, so it costs nothing. If this test ever reports
 # `public_caller` clean, the gate has started swallowing secrets.
 
