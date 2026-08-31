@@ -1,0 +1,227 @@
+# The llc entry point has no pre-PEI carrier reservation, so -taint-dit-abi must
+# fall back safely rather than delete protection it cannot replace.
+#
+# RUN: llc -mtriple=aarch64-unknown-linux-gnu -enable-new-pm -run-taint-interproc \
+# RUN:     -taint-insert-dit -taint-dit-abi -taint-nonlocal-report=%t %s -o - \
+# RUN:   | FileCheck %s --check-prefix=ABI
+# RUN: FileCheck %s --check-prefix=REPORT < %t
+#
+# `setPrePrologEpilogCallback` is wired only when the post-PEI taint callback is
+# set, which only the clang driver does (CodeGenTargetMachineImpl.cpp). Under
+# `llc -run-taint-interproc` no slot is ever reserved.
+#
+# Before `canCarryTimingMode`, the ABI deleted the after-call re-asserts AND the
+# region emitter's exit clears on the strength of the contract, and only then
+# tried to establish the carrier. On this path it always failed, leaving the
+# function with an interior `msr DIT, #0` and nothing to undo it - so it returned
+# DIT LOWER than it entered, stripping any caller that was mid-region. That is
+# the one failure docs/design/dit-abi.md §1 forbids, and §1.3 wrongly claimed
+# could not happen.
+#
+# The fallback is whole-function coverage that never clears: DIT is left SET,
+# which satisfies the guarantee at the cost of dwell.
+#
+# Exactly one switch, the entry enable, and no clear anywhere.
+# ABI:     MSRpstateImm4 26, 1
+# ABI-NOT: MSRpstateImm4 26, 0
+#
+# REPORT: NONLOCAL nocarrier caller=vv
+#
+# Control: without the ABI the same input narrows normally and DOES clear, so
+# this is a fallback and not an accidental loss of the clears.
+# RUN: llc -mtriple=aarch64-unknown-linux-gnu -enable-new-pm -run-taint-interproc \
+# RUN:     -taint-insert-dit %s -o - | FileCheck %s --check-prefix=NOABI
+# NOABI: MSRpstateImm4 26, 0
+
+--- |
+  ; ModuleID = 'llctest.ll'
+  source_filename = "llctest.c"
+  target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32"
+  target triple = "aarch64-unknown-linux-gnu"
+  
+  ; Function Attrs: nounwind uwtable
+  define dso_local i64 @vv(i64 noundef "tainted" %secret, i32 noundef %n) local_unnamed_addr #0 {
+  entry:
+    %call = tail call i64 @sink(i64 noundef %secret) #2
+    %cmp4.not = icmp eq i32 %n, 0
+    br i1 %cmp4.not, label %for.cond.cleanup, label %for.body.preheader
+  
+  for.body.preheader:                               ; preds = %entry
+    br label %for.body
+  
+  for.cond.cleanup:                                 ; preds = %for.body, %entry
+    %mul = mul i64 %secret, 7
+    %xor = xor i64 %call, %mul
+    ret i64 %xor
+  
+  for.body:                                         ; preds = %for.body.preheader, %for.body
+    %i.05 = phi i32 [ %inc, %for.body ], [ 0, %for.body.preheader ]
+    tail call void @pubwork(i32 noundef %i.05) #2
+    %inc = add nuw i32 %i.05, 1
+    %exitcond.not = icmp eq i32 %n, %inc
+    br i1 %exitcond.not, label %for.cond.cleanup, label %for.body, !llvm.loop !10
+  }
+  
+  declare i64 @sink(i64 noundef) local_unnamed_addr #1
+  
+  declare void @pubwork(i32 noundef) local_unnamed_addr #1
+  
+  attributes #0 = { nounwind uwtable "frame-pointer"="non-leaf-no-reserve" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="generic" "target-features"="+fp-armv8,+neon,+v8a,-fmv" }
+  attributes #1 = { "frame-pointer"="non-leaf-no-reserve" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="generic" "target-features"="+fp-armv8,+neon,+v8a,-fmv" }
+  attributes #2 = { nounwind }
+  
+  !llvm.module.flags = !{!0, !1, !2, !3, !4}
+  !llvm.ident = !{!5}
+  !llvm.errno.tbaa = !{!6}
+  
+  !0 = !{i32 1, !"wchar_size", i32 4}
+  !1 = !{i32 8, !"PIC Level", i32 2}
+  !2 = !{i32 7, !"PIE Level", i32 2}
+  !3 = !{i32 7, !"uwtable", i32 2}
+  !4 = !{i32 7, !"frame-pointer", i32 4}
+  !5 = !{!"clang version 23.0.0git (https://github.com/UT-Security/llvm-data-independent-timing.git dc52710d358971f9e12b77badcd07d34ba7928b6)"}
+  !6 = !{!7, !7, i64 0}
+  !7 = !{!"int", !8, i64 0}
+  !8 = !{!"omnipotent char", !9, i64 0}
+  !9 = !{!"Simple C/C++ TBAA"}
+  !10 = distinct !{!10, !11, !12}
+  !11 = !{!"llvm.loop.mustprogress"}
+  !12 = !{!"llvm.loop.unroll.disable"}
+...
+---
+name:            vv
+alignment:       4
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          true
+isSSA:           false
+noVRegs:         true
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: true
+registers:       []
+liveins:
+  - { reg: '$x0', virtual-reg: '' }
+  - { reg: '$w1', virtual-reg: '' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       48
+  offsetAdjustment: 0
+  maxAlignment:    8
+  adjustsStack:    true
+  hasCalls:        true
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: true
+  localFrameSize:  0
+fixedStack:      []
+stack:
+  - { id: 0, name: '', type: spill-slot, offset: -8, size: 8, alignment: 8, 
+      stack-id: default, callee-saved-register: '$x19', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 1, name: '', type: spill-slot, offset: -16, size: 8, alignment: 8, 
+      stack-id: default, callee-saved-register: '$x20', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 2, name: '', type: spill-slot, offset: -24, size: 8, alignment: 8, 
+      stack-id: default, callee-saved-register: '$x21', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 3, name: '', type: spill-slot, offset: -32, size: 8, alignment: 8, 
+      stack-id: default, callee-saved-register: '$x22', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 4, name: '', type: spill-slot, offset: -40, size: 8, alignment: 8, 
+      stack-id: default, callee-saved-register: '$lr', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 5, name: '', type: spill-slot, offset: -48, size: 8, alignment: 8, 
+      stack-id: default, callee-saved-register: '$fp', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  hasRedZone:      false
+  stackSizeZPR:    0
+  stackSizePPR:    0
+  hasStackFrame:   true
+body:             |
+  bb.0.entry:
+    successors: %bb.2(0x30000000), %bb.1(0x50000000)
+    liveins: $w1, $x0, $lr, $x21, $x22, $x19, $x20
+  
+    early-clobber $sp = frame-setup STPXpre killed $fp, killed $lr, $sp, -6 :: (store (s64) into %stack.5), (store (s64) into %stack.4)
+    frame-setup CFI_INSTRUCTION def_cfa_offset 48
+    frame-setup STPXi killed $x22, killed $x21, $sp, 2 :: (store (s64) into %stack.3), (store (s64) into %stack.2)
+    frame-setup STPXi killed $x20, killed $x19, $sp, 4 :: (store (s64) into %stack.1), (store (s64) into %stack.0)
+    $fp = frame-setup ADDXri $sp, 0, 0
+    frame-setup CFI_INSTRUCTION def_cfa $w29, 48
+    frame-setup CFI_INSTRUCTION offset $w19, -8
+    frame-setup CFI_INSTRUCTION offset $w20, -16
+    frame-setup CFI_INSTRUCTION offset $w21, -24
+    frame-setup CFI_INSTRUCTION offset $w22, -32
+    frame-setup CFI_INSTRUCTION offset $w30, -40
+    frame-setup CFI_INSTRUCTION offset $w29, -48
+    renamable $w20 = COPY $w1
+    renamable $x19 = COPY $x0
+    BL @sink, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit $x0, implicit-def $sp, implicit-def $x0
+    renamable $x21 = COPY $x0
+    CBZW renamable $w20, %bb.2
+    B %bb.1
+  
+  bb.1.for.body.preheader:
+    successors: %bb.3(0x80000000)
+    liveins: $w20, $x19, $x21
+  
+    renamable $w22 = COPY $wzr
+    B %bb.3
+  
+  bb.2.for.cond.cleanup:
+    liveins: $x19, $x21
+  
+    renamable $x8 = UBFMXri renamable $x19, 61, 60
+    renamable $x8 = SUBXrr killed renamable $x8, killed renamable $x19
+    $x0 = EORXrr killed renamable $x21, killed renamable $x8
+    frame-destroy CFI_INSTRUCTION def_cfa $wsp, 48
+    $x20, $x19 = frame-destroy LDPXi $sp, 4 :: (load (s64) from %stack.1), (load (s64) from %stack.0)
+    $x22, $x21 = frame-destroy LDPXi $sp, 2 :: (load (s64) from %stack.3), (load (s64) from %stack.2)
+    early-clobber $sp, $fp, $lr = frame-destroy LDPXpost $sp, 6 :: (load (s64) from %stack.5), (load (s64) from %stack.4)
+    frame-destroy CFI_INSTRUCTION def_cfa_offset 0
+    frame-destroy CFI_INSTRUCTION restore $w19
+    frame-destroy CFI_INSTRUCTION restore $w20
+    frame-destroy CFI_INSTRUCTION restore $w21
+    frame-destroy CFI_INSTRUCTION restore $w22
+    frame-destroy CFI_INSTRUCTION restore $w30
+    frame-destroy CFI_INSTRUCTION restore $w29
+    RET_ReallyLR implicit $x0
+  
+  bb.3.for.body:
+    successors: %bb.2(0x04000000), %bb.3(0x7c000000)
+    liveins: $w20, $w22, $x19, $x21
+  
+    $w0 = COPY renamable $w22
+    BL @pubwork, csr_aarch64_aapcs, implicit-def dead $lr, implicit $sp, implicit $w0, implicit-def $sp
+    renamable $w22 = nuw ADDWri killed renamable $w22, 1, 0
+    dead $wzr = SUBSWrr renamable $w20, renamable $w22, implicit-def $nzcv
+    Bcc 0, %bb.2, implicit killed $nzcv
+    B %bb.3
+...
