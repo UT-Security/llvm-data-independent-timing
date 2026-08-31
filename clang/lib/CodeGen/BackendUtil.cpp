@@ -1581,8 +1581,26 @@ void clang::emitBackendOutput(CompilerInstance &CI, CodeGenOptions &CGOpts,
   //
   // Set here rather than in RunTaintHardenCodegen because THAT is the non-LTO
   // path; with -flto clang emits bitcode without going through it.
-  if (CGOpts.TaintDITAbi && M && !M->getModuleFlag("taint-dit-abi"))
-    M->addModuleFlag(llvm::Module::Override, "taint-dit-abi", 1);
+  if (CGOpts.TaintDITAbi && M) {
+    if (!M->getModuleFlag("taint-dit-abi"))
+      M->addModuleFlag(llvm::Module::Override, "taint-dit-abi", 1);
+
+    // Apply the tail-call disable HERE, not only in CGCall's IR generation.
+    //
+    // CGCall adds "disable-tail-calls" as it emits each function, so it never
+    // runs for input that is ALREADY IR - `clang -x ir foo.bc`, which is how the
+    // libsodium sweep builds every arm from whole-library bitcode. The ABI then
+    // silently ran without its tail-call disable, every tail call survived and
+    // leaked DIT on, and the arm degenerated to blanket. Measured on that rig:
+    // five surviving tail calls through crypto_onetimeauth, all reported
+    // `tailcall-ungated`.
+    //
+    // Setting it here covers source and bitcode input alike, and runs before the
+    // optimizer, so TailRecursionElimination sees it too.
+    for (llvm::Function &F : *M)
+      if (!F.isDeclaration() && !F.hasFnAttribute("disable-tail-calls"))
+        F.addFnAttr("disable-tail-calls", "true");
+  }
 
   std::unique_ptr<llvm::Module> EmptyModule;
   if (!CGOpts.ThinLTOIndexFile.empty()) {

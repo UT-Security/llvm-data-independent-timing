@@ -7057,17 +7057,40 @@ void AArch64InstrInfo::pinToTimingMode(MachineInstr &MI) const {
 /// misaligned one, or one past the 12-bit scaled range. The caller then treats
 /// the carrier as unavailable, which leaves DIT set rather than clearing it: the
 /// safe direction under docs/design/dit-abi.md §1.
+/// Resolve the carrier slot to a base register, an offset, and the load/store
+/// opcodes that can reach it.
+///
+/// Two addressing forms, because one is not enough. The scaled unsigned-immediate
+/// LDRXui/STRXui covers 0..32760 in steps of 8 - but `getFrameIndexReference`
+/// returns a NEGATIVE offset whenever it picks FP as the base, which it does for
+/// any frame with a dynamic alloca. Rejecting those outright cost four argon2
+/// functions their carrier on libsodium, and a function without a carrier
+/// silently reverts to whole-function coverage, i.e. blanket.
+///
+/// The unscaled LDURXi/STURXi takes a signed 9-bit byte offset (-256..255) and
+/// covers exactly that case.
 static bool resolveTimingModeSlot(MachineFunction &MF, int FrameIndex,
-                                  Register &Base, int64_t &ScaledOffset) {
+                                  Register &Base, int64_t &Offset,
+                                  unsigned &LoadOpc, unsigned &StoreOpc) {
   const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
   StackOffset Off = TFI->getFrameIndexReference(MF, FrameIndex, Base);
   if (Off.getScalable())
     return false;
   int64_t Bytes = Off.getFixed();
-  if (Bytes < 0 || (Bytes % 8) != 0 || (Bytes / 8) > 4095)
-    return false;
-  ScaledOffset = Bytes / 8;
-  return true;
+
+  if (Bytes >= 0 && (Bytes % 8) == 0 && (Bytes / 8) <= 4095) {
+    Offset = Bytes / 8; // scaled
+    LoadOpc = AArch64::LDRXui;
+    StoreOpc = AArch64::STRXui;
+    return true;
+  }
+  if (Bytes >= -256 && Bytes <= 255) {
+    Offset = Bytes; // unscaled, signed 9-bit
+    LoadOpc = AArch64::LDURXi;
+    StoreOpc = AArch64::STURXi;
+    return true;
+  }
+  return false;
 }
 
 static MachineMemOperand *timingModeSlotMMO(MachineFunction &MF, int FrameIndex,
@@ -7182,8 +7205,9 @@ AArch64InstrInfo::timingModeCarrierBlocker(const MachineFunction &MF) const {
 
   int64_t Offset;
   Register Base;
+  unsigned LoadOpc, StoreOpc;
   if (!resolveTimingModeSlot(const_cast<MachineFunction &>(MF), *Slot, Base,
-                             Offset)) {
+                             Offset, LoadOpc, StoreOpc)) {
     const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
     Register B2;
     StackOffset Off =
@@ -7215,8 +7239,9 @@ bool AArch64InstrInfo::canCarryTimingMode(const MachineFunction &MF) const {
   // offset, which is the normal answer for any function with a VLA.
   int64_t Offset;
   Register Base;
+  unsigned LoadOpc, StoreOpc;
   if (!resolveTimingModeSlot(const_cast<MachineFunction &>(MF), *Slot, Base,
-                             Offset))
+                             Offset, LoadOpc, StoreOpc))
     return false;
 
   // The store goes after the prologue and the reload before each epilogue, so a
@@ -7259,13 +7284,14 @@ bool AArch64InstrInfo::insertTimingModeSave(MachineBasicBlock &MBB,
   // with "unknown operand type".
   int64_t Offset;
   Register Base;
-  if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset))
+  unsigned LoadOpc, StoreOpc;
+  if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset, LoadOpc, StoreOpc))
     return false;
 
   const AArch64SysReg::SysReg *DIT = AArch64SysReg::lookupSysRegByName("DIT");
   assert(DIT && "DIT system register not registered");
   BuildMI(MBB, ReadAt, DL, get(AArch64::MRS), Scratch).addImm(DIT->Encoding);
-  BuildMI(MBB, StoreAt, DL, get(AArch64::STRXui))
+  BuildMI(MBB, StoreAt, DL, get(StoreOpc))
       .addReg(Scratch, RegState::Kill)
       .addReg(Base)
       .addImm(Offset)
@@ -7287,10 +7313,11 @@ bool AArch64InstrInfo::insertTimingModeRestoreExact(
 
   int64_t Offset;
   Register Base;
-  if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset))
+  unsigned LoadOpc, StoreOpc;
+  if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset, LoadOpc, StoreOpc))
     return false;
 
-  BuildMI(MBB, LoadAt, DL, get(AArch64::LDRXui), Scratch)
+  BuildMI(MBB, LoadAt, DL, get(LoadOpc), Scratch)
       .addReg(Base)
       .addImm(Offset)
       .addMemOperand(
@@ -7326,11 +7353,12 @@ bool AArch64InstrInfo::insertTimingModeRestore(
 
   int64_t Offset;
   Register Base;
-  if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset))
+  unsigned LoadOpc, StoreOpc;
+  if (!resolveTimingModeSlot(MF, FrameIndex, Base, Offset, LoadOpc, StoreOpc))
     return false;
 
   // Reload while the frame is still up.
-  BuildMI(MBB, LoadAt, DL, get(AArch64::LDRXui), Scratch)
+  BuildMI(MBB, LoadAt, DL, get(LoadOpc), Scratch)
       .addReg(Base)
       .addImm(Offset)
       .addMemOperand(
