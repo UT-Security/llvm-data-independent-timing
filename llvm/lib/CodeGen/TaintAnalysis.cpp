@@ -2604,6 +2604,24 @@ static bool needsDIT(const MachineInstr &MI, const TaintFacts &F,
                      const TargetInstrInfo &TII) {
   if (!isTaintedInstruction(MI, F))
     return false;
+
+  // A PLAIN return is never a Need. It transfers control and computes nothing:
+  // its register operands are ABI markers for a value some earlier instruction
+  // already produced, and THAT instruction is separately a Need if it qualifies.
+  //
+  // Without this, `isDITProtected`'s FP-class fallback sweeps in any return of a
+  // floating-point value - `RET undef $lr, implicit $d0` matches on the implicit
+  // return-value register - so a function returning a tainted double had its RET
+  // pinned. That was a harmless over-approximation until the ABI's guarded clear
+  // arrived: the guard deliberately leaves the return reachable with DIT clear on
+  // one path, so a pinned return can NEVER verify. Found by the final-MIR
+  // verifier on a full-LTO build, in four functions returning double.
+  //
+  // A TAIL CALL is both isReturn() and isCall() and stays a Need: it hands this
+  // function's secret arguments to the callee, so DIT must be on through it.
+  if (MI.isReturn() && !MI.isCall())
+    return false;
+
   return TII.isDITProtected(MI) || MI.isCall();
 }
 
@@ -2754,9 +2772,10 @@ static void emitDITExitRestores(MachineFunction &MF, const TaintSummaryInfo *TSI
 //    rather than merely documented. See docs/design/dit-tailcall-gap.md §3.
 //
 //  - `return`: a PLACEMENT BUG. A plain return should always be reachable with
-//    DIT off, because needsDIT() is `isDITProtected(MI) || MI.isCall()` and a
-//    RET is neither, so a return is never a Need and the disable-before-return
-//    always fires for a function that owns DIT. Currently unreachable; reported
+//    DIT off, because needsDIT() excludes plain returns explicitly, so a return
+//    is never a Need and the disable-before-return always fires for a function
+//    that owns DIT. (That exclusion is explicit for a reason: isDITProtected's
+//    FP-class fallback would otherwise make a return of a double a Need.) Currently unreachable; reported
 //    on errs() as well as to the file so a regression that makes it reachable is
 //    loud instead of buried in an optional report.
 //
