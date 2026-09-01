@@ -1,0 +1,13 @@
+# gem5 shadow-taint oracle on libsecp256k1 ECDSA signing, 20 signatures.
+# Compiler 3ab5812f6207 (dit-tainter), re-run 2026-09-01 because the pass changed
+# materially that day (meta-instruction fix, module-wide secret globals).
+# The oracle propagates taint at COMMIT, so it sees the real dynamic trace, and
+# flags any DIT-covered instruction that consumed a secret with the mode clear.
+metric,value
+secret_ops_protected,4647778
+secret_ops_dit_clear,40
+secret_ops_dit_clear_no_hardening,4647818
+fraction_protected_pct,99.99914
+undertaint_sites_inside_libsecp256k1,0
+undertaint_sites_total,2
+undertaint_location,"main() secp_gem5.c:53 - the harness consuming the signature"

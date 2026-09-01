@@ -1,0 +1,16 @@
+# flowprobe: constructed channels from a seeded secret to a consumer that
+# computes on it, under the same oracle. Ground truth is stated per channel.
+# P1/P2 are positive controls - if they came out clean the harness is broken.
+# C5/C6/C7 are the heap variants of C1/C3/C4, added 2026-08-31 after the
+# module-wide secret-global rule closed all four by covering their shared
+# delivery route rather than their mechanisms.
+channel,storage,mechanism,undertaint_ops,status
+P1,argument,secret passed directly - positive control,0,protected
+P2,argument,four-level call chain - positive control,0,protected
+C1,global,callee returns a POINTER into a secret buffer,63,OPEN
+C2,global,secret global read by a sibling with no call edge,0,FIXED 2026-08-31
+C3,global,inline asm stores the secret through a pointer,63,OPEN
+C4,global,secret moved through a NEON register tuple,63,OPEN
+C5,heap,C1's mechanism with the bytes on the heap,63,OPEN
+C6,heap,C3's mechanism with the bytes on the heap,63,OPEN
+C7,heap,C4's mechanism with the bytes on the heap,63,OPEN

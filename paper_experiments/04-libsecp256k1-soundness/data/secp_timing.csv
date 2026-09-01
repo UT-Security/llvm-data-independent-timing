@@ -1,0 +1,9 @@
+# Same run. 8 argv[0] lengths [18..46] because in gem5 SE mode argv[0] sits on
+# the initial process stack and its LENGTH moves the initial SP - one path proves
+# nothing. The no-DIT baseline alone spans 2.41% across those paths.
+# 'layout only' is the NOP arm: identical placement, every MSR DIT as HINT #0.
+term,median_pct,mean_pct,ci95_low,ci95_high,positive_of_8,verdict
+blanket vs no-DIT,0.167,0.360,-0.17,0.89,7,not resolved (CI spans 0)
+layout only (NOPed) vs no-DIT,-0.124,-0.319,-0.95,0.31,3,not resolved (CI spans 0)
+our placement vs no-DIT,1.963,1.886,1.19,2.58,8,RESOLVED
+our placement vs blanket,1.935,1.526,0.53,2.52,7,RESOLVED

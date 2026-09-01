@@ -1,0 +1,8 @@
+# Validity gates on the NOP control. If any fails the layout term is meaningless
+# - an inert NOP control does not fail loudly, it silently reads as "layout is
+# everything", which is how an earlier result had to be retracted.
+gate,required,measured,pass
+msr DIT sites in NOP arm,0,0,yes
+static instructions equal hardened,117874,117874,yes
+ditSuppressed in NOP arm,0,0,yes
+simInsts spread across all arms,<1%,5317567..5318047 (0.009%),yes
