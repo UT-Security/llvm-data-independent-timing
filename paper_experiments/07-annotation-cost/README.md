@@ -3,6 +3,11 @@
 **Status: complete on silicon.** Measured 2026-08-31/09-01, libsodium 1.0.21 on
 Apple M5, with SQLCipher as a second data point.
 
+**Published artifact:** https://claude.ai/code/artifact/ac6058f5-25ba-4a38-bf2e-6a385652ffb3
+Source: `figures/annotation.html`. To update the page, republish **that URL**
+(`Artifact` with `url=...`); publishing the file without it creates a second
+artifact instead of updating this one.
+
 ---
 
 ## The claim
@@ -121,3 +126,4 @@ was. That is the case the information-loss report exists for.
 | `data/seed_depth_cost.csv` | what the extra precision cost, per secret fraction |
 | `data/report_burden.csv` | how many records the developer actually has to read |
 | `data/coverage_gain.csv` | SQLCipher: a missing seed, and why propagation could not find it |
+| `figures/annotation.html` | source of the published artifact |

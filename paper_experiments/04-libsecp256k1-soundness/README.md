@@ -5,6 +5,11 @@
 fix, module-wide secret globals, record dedupe) and the earlier figures were
 taken before all three.
 
+**Published artifact:** https://claude.ai/code/artifact/f8e0b663-444d-450b-ad3c-1b31cffe44f0
+Source: `figures/soundness.html`. To update the page, republish **that URL**
+(`Artifact` with `url=...`); publishing the file without it creates a second
+artifact instead of updating this one.
+
 ---
 
 ## The claim
@@ -133,3 +138,4 @@ than a single number.
 | `data/secp_timing.csv` | cost, with the layout term separated and CIs |
 | `data/nop_gates.csv` | the four gates that make the layout term trustworthy |
 | `data/flowprobe_channels.csv` | the six channels that do leak, and the two controls |
+| `figures/soundness.html` | source of the published artifact |

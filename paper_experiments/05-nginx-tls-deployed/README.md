@@ -3,6 +3,11 @@
 **Status: complete on silicon.** Measured 2026-08-31 on Apple M5, nginx 1.28.0
 against OpenSSL 3.5.4.
 
+**Published artifact:** https://claude.ai/code/artifact/dc90173e-f6f9-431e-8b11-e34321eb2dd7
+Source: `figures/reach.html`. To update the page, republish **that URL**
+(`Artifact` with `url=...`); publishing the file without it creates a second
+artifact instead of updating this one.
+
 ---
 
 ## The claim
@@ -98,3 +103,4 @@ mechanism is worth **5.3 points**.
 | `data/nginx_cost.csv` | server-CPU cost, three comparisons, with sign tests |
 | `data/nginx_reach.csv` | where the switches land, and where they do not |
 | `data/openssl_asm_limit.csv` | the 19 perlasm generators, and what each one is |
+| `figures/reach.html` | source of the published artifact |

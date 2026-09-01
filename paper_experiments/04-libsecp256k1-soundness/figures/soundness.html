@@ -1,0 +1,256 @@
+<title>Soundness Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+  :root {
+    --ground:      #F1F4F7;
+    --surface:     #FFFFFF;
+    --surface-alt: #E7ECF1;
+    --ink:         #161A20;
+    --ink-soft:    #4B5563;
+    --ink-faint:   #7C8794;
+    --rule:        #D2DBE3;
+    --rule-soft:   #E4EAEF;
+    --public:      #0E6F78;
+    --public-bg:   #DFF0F1;
+    --secret:      #A03257;
+    --secret-bg:   #F7E3EA;
+    --warn:        #9A5B12;
+    --code-bg:     #EDF1F5;
+    --shadow:      0 1px 2px rgba(22,26,32,.06), 0 8px 24px -16px rgba(22,26,32,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #11151A;
+      --surface:     #1A1F26;
+      --surface-alt: #222831;
+      --ink:         #DEE4EB;
+      --ink-soft:    #A3AEBB;
+      --ink-faint:   #7A8593;
+      --rule:        #2C333C;
+      --rule-soft:   #232A32;
+      --public:      #5CC7CE;
+      --public-bg:   #113035;
+      --secret:      #EF8CA9;
+      --secret-bg:   #381F29;
+      --warn:        #D9A441;
+      --code-bg:     #151A20;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #11151A;
+    --surface:     #1A1F26;
+    --surface-alt: #222831;
+    --ink:         #DEE4EB;
+    --ink-soft:    #A3AEBB;
+    --ink-faint:   #7A8593;
+    --rule:        #2C333C;
+    --rule-soft:   #232A32;
+    --public:      #5CC7CE;
+    --public-bg:   #113035;
+    --secret:      #EF8CA9;
+    --secret-bg:   #381F29;
+    --warn:        #D9A441;
+    --code-bg:     #151A20;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 96px; }
+  .col  { max-width: 68ch; }
+
+  h1, h2, h3 { font-family: "IBM Plex Serif", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 4.4vw, 3.05rem); font-weight: 600; letter-spacing: -.021em; line-height: 1.12; }
+  h2 { font-size: 1.44rem; font-weight: 600; letter-spacing: -.012em; }
+  h3 { font-size: 1.05rem; font-weight: 600; }
+  p  { margin: 0 0 1.05em; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--public); }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .705rem; font-weight: 500; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+
+  header.masthead { padding: 76px 0 40px; border-bottom: 1px solid var(--rule); margin-bottom: 44px; }
+  .lede { font-size: 1.16rem; color: var(--ink-soft); margin-top: 18px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+  }
+  .chip {
+    padding: 4px 10px; border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--surface); color: var(--ink-soft);
+  }
+  .chip.live { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  .chip.open { border-color: var(--warn); color: var(--warn); }
+
+  section { margin: 0 0 60px; }
+  section > h2 { margin-bottom: 6px; }
+  section > .eyebrow { display: block; margin-bottom: 10px; }
+  .sub { color: var(--ink-faint); margin: 0 0 26px; font-size: .95rem; }
+
+  /* two-lane panel: the colours encode the experiment's real dichotomy */
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 26px 0; }
+  @media (max-width: 720px) { .lanes { grid-template-columns: 1fr; } }
+  .lane {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-top: 3px solid var(--public); border-radius: 4px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .lane.secret { border-top-color: var(--secret); }
+  .lane h3 { margin-bottom: 4px; }
+  .lane.public h3 { color: var(--public); }
+  .lane.secret h3 { color: var(--secret); }
+  .lane .what { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .81rem; color: var(--ink); margin: 8px 0 12px; }
+  .lane p { margin: 0; font-size: .93rem; }
+  .lane .ipc {
+    margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--rule-soft);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .8rem;
+    color: var(--ink-faint); display: flex; justify-content: space-between; gap: 10px;
+  }
+  .lane .ipc b { font-weight: 600; font-size: 1.18rem; font-variant-numeric: tabular-nums; }
+  .lane.public .ipc b { color: var(--public); }
+  .lane.secret .ipc b { color: var(--secret); }
+
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 18px 20px; overflow-x: auto; margin: 20px 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .82rem;
+    line-height: 1.68; color: var(--ink);
+  }
+  code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .875em; }
+  p code, li code, td code { background: var(--surface-alt); padding: 1px 5px; border-radius: 3px; color: var(--ink); }
+  .c  { color: var(--ink-faint); font-style: italic; }
+  .kw { color: var(--secret); }
+  .fn { color: var(--public); }
+  .filename {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .72rem;
+    color: var(--ink-faint); margin-bottom: -12px; padding-left: 2px;
+  }
+
+  .scroll { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .87rem; }
+  th, td { padding: 9px 15px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule-soft); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .69rem;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);
+    font-weight: 500; border-bottom: 1px solid var(--rule); background: var(--surface-alt);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  td.cost { color: var(--secret); font-weight: 600; }
+  td.free { color: var(--ink-faint); }
+  td.tag  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .78rem; color: var(--ink-faint); }
+  tr.rule-lane td { background: var(--public-bg); }
+
+  .callout {
+    border-left: 3px solid var(--warn); background: var(--surface);
+    padding: 18px 22px; border-radius: 0 4px 4px 0; margin: 24px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout h3 { margin-bottom: 6px; color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  ol.gates { list-style: none; counter-reset: g; padding: 0; margin: 22px 0; }
+  ol.gates li {
+    counter-increment: g; position: relative; padding: 0 0 16px 46px;
+    border-left: 1px solid var(--rule); margin-left: 13px;
+  }
+  ol.gates li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.gates li::before {
+    content: counter(g); position: absolute; left: -13px; top: 0;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--rule); color: var(--ink-faint);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+    display: grid; place-items: center;
+  }
+  ol.gates li.pass::before { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  ol.gates li.todo::before { border-color: var(--warn); color: var(--warn); }
+  ol.gates b { display: block; color: var(--ink); }
+  ol.gates span { font-size: .93rem; color: var(--ink-soft); }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 22px; color: var(--ink-faint); font-size: .84rem; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+<div class="wrap">
+<header class="masthead"><div class="col">
+  <span class="eyebrow">Paper experiment 04 &middot; libsecp256k1</span>
+  <h1>Soundness Ledger</h1>
+  <p class="lede">Experiments 01&ndash;03 measure what the pass <em>costs</em>. This measures what it <strong>protects</strong> &mdash; the only reason to pay anything. On production crypto, <strong>4,647,778 of 4,647,818</strong> secret operations execute with the mode set, and <strong>zero</strong> under-taints lie inside the library.</p>
+  <div class="meta">
+    <span class="chip live">99.99914% protected</span>
+    <span class="chip">gem5 shadow-taint oracle</span>
+    <span class="chip">20 signatures &middot; 8 argv[0] lengths</span>
+    <span class="chip open">6 channels still leak by design</span>
+  </div>
+</div></header>
+
+<section>
+  <span class="eyebrow">Result</span>
+  <h2>What the oracle sees</h2>
+  <div class="col"><p>Taint is seeded on the key with an <code>m5</code> op and propagated <strong>at commit</strong>, so the oracle sees the real dynamic trace rather than speculation, and flags any DIT-covered instruction that consumed a secret with the mode clear.</p></div>
+  <div class="scroll"><table><tbody>
+    <tr><td>secret ops <strong>protected</strong></td><td class="num"><strong>4,647,778</strong></td></tr>
+    <tr><td>secret ops with DIT clear</td><td class="num">40</td></tr>
+    <tr><td>same, unhardened control</td><td class="num">4,647,818</td></tr>
+    <tr class="rule-lane"><td>under-taint sites <strong>inside libsecp256k1</strong></td><td class="num"><strong>0</strong></td></tr>
+    <tr><td>where the 40 are</td><td class="tag">main(), consuming the signature</td></tr>
+  </tbody></table></div>
+  <div class="col"><p>The unhardened control is what makes this meaningful: it registers <strong>4,647,818</strong> secret ops running clear, so the oracle demonstrably can see them and the hardened arm&rsquo;s 40 is not an instrumentation failure. Those 40 are a declassification point &mdash; the harness consuming the signature &mdash; not a leak.</p></div>
+</section>
+
+<section>
+  <span class="eyebrow">Cost, with the layout term separated</span>
+  <h2>Here, coarse beats fine</h2>
+  <p class="sub">8 <code>argv[0]</code> lengths, because in gem5 SE mode <code>argv[0]</code> sits on the initial process stack and its <em>length</em> moves the initial SP. The no-DIT baseline alone spans 2.41% across those paths, so one path proves nothing.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>term</th><th>median</th><th>95% CI</th><th>verdict</th></tr></thead><tbody>
+    <tr><td>blanket vs no-DIT</td><td class="num">+0.167%</td><td class="num">[&minus;0.17, +0.89]</td><td class="tag">not resolved</td></tr>
+    <tr><td>layout only (NOPed)</td><td class="num">&minus;0.124%</td><td class="num">[&minus;0.95, +0.31]</td><td class="tag">not resolved</td></tr>
+    <tr><td>our placement vs no-DIT</td><td class="num cost">+1.963%</td><td class="num">[+1.19, +2.58]</td><td class="tag">RESOLVED</td></tr>
+    <tr class="rule-lane"><td>our placement vs blanket</td><td class="num cost">+1.935%</td><td class="num">[+0.53, +2.52]</td><td class="tag">RESOLVED</td></tr>
+  </tbody></table></div>
+  <div class="col">
+    <p>The layout term <em>not</em> resolving is load-bearing: the cost here is DIT actually running, not the code-shape change of inserting switches. All four NOP gates pass &mdash; an inert NOP control does not fail loudly, it silently reads as &ldquo;layout is everything&rdquo;, which is how an earlier result in this project had to be retracted.</p>
+    <p>Note the direction: <strong>coarse beats fine</strong>, +0.167% against +1.963%. Signing is secret work end to end, so there is no public lane to uncover and narrowing pays its toggles for nothing. Consistent with experiment 03&rsquo;s floor.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Scope</span>
+  <h2>Where it does break</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>channel</th><th>mechanism</th><th>storage</th><th>status</th></tr></thead><tbody>
+    <tr><td>P1, P2</td><td>direct argument; four-level chain</td><td class="tag">control</td><td class="tag">protected</td></tr>
+    <tr class="rule-lane"><td>C2</td><td>secret global read by a sibling</td><td class="tag">global</td><td><strong>FIXED</strong></td></tr>
+    <tr><td>C1 / C5</td><td>callee returns a pointer into a secret buffer</td><td class="tag">global / heap</td><td class="num cost">63 ops each</td></tr>
+    <tr><td>C3 / C6</td><td>inline asm stores the secret through a pointer</td><td class="tag">global / heap</td><td class="num cost">63 ops each</td></tr>
+    <tr><td>C4 / C7</td><td>secret moved through a NEON register tuple</td><td class="tag">global / heap</td><td class="num cost">63 ops each</td></tr>
+  </tbody></table></div>
+  <div class="col">
+    <p>The heap variants exist because the module-wide secret-global rule closed C1/C3/C4 by covering their shared <em>delivery route</em> &mdash; all four probe buffers were <code>static</code> globals &mdash; rather than their mechanisms. On the heap they fail identically, which is how we know the three defects are storage-independent.</p>
+    <p><strong>So the soundness claim is a property of libsecp256k1, not of the analysis.</strong> Six mechanisms leak by construction; that library contains none of them.</p>
+  </div>
+  <div class="callout">
+    <h3>Two ways this probe misled, both now guarded</h3>
+    <p>Its <code>consume_all</code> accumulated every consumer&rsquo;s secret-derived return into one local, so once <em>one</em> channel started working the first call tainted it and placement blanketed all seven &mdash; reporting everything clean. Note the direction: <strong>fixing C2 is what broke the harness.</strong> While every channel was broken no return was recognised as secret, and it discriminated by accident.</p>
+    <p>And <code>ditseen[]</code> samples DIT at <em>entry</em>, which cannot separate &ldquo;unprotected&rdquo; from &ldquo;self-instrumented, enable comes later&rdquo;. Read the oracle&rsquo;s per-PC list.</p>
+  </div>
+</section>
+
+<footer><div class="col">Rig: <code>benchmarks/taint_oracle/</code> in gem5-DIT &middot; <code>ROUNDS=20 run_secp_gem5.sh</code> &middot; re-measured 2026&#8209;09&#8209;01 against compiler 3ab5812f</div></footer>
+</div>

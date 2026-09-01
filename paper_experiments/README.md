@@ -27,6 +27,21 @@ were run.
 | 06 | [switch-model generality](06-switch-model-generality/) | - | experiments 02 and 03's workloads | **MSR DIT implementation - measures TRANSFERABILITY** | **complete, gem5** |
 | 07 | [annotation cost](07-annotation-cost/) | - | libsodium signing path | **seed DEPTH - measures DEVELOPER cost** | **complete, silicon** |
 
+## Published pages
+
+One artifact per experiment. Republish through the recorded URL (`Artifact` with
+`url=...`); publishing the source file without it creates a second artifact.
+
+| # | page | url |
+|---|---|---|
+| 01 | The Secret-Fraction Crossover | https://claude.ai/code/artifact/692f3b7d-18fe-4707-ab8a-3d5b84478c12 |
+| 02 | Signed-Lookup Crossover | https://claude.ai/code/artifact/52f2f6b1-8324-4907-a6d0-a3548558a895 |
+| 03 | Fine Grain Crossover | https://claude.ai/code/artifact/a7949ca8-dba2-48c8-b583-9fdad41d8f8f |
+| 04 | Soundness Ledger | https://claude.ai/code/artifact/f8e0b663-444d-450b-ad3c-1b31cffe44f0 |
+| 05 | The Reach Limit | https://claude.ai/code/artifact/dc90173e-f6f9-431e-8b11-e34321eb2dd7 |
+| 06 | Switch Model Transfer | https://claude.ai/code/artifact/b6c89530-d27f-455c-a7bc-e93b3ab7c952 |
+| 07 | The Annotation Loop | https://claude.ai/code/artifact/ac6058f5-25ba-4a38-bf2e-6a385652ffb3 |
+
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6
 
 | workload | public lane | secret lane | knob | state |

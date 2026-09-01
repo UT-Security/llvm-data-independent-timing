@@ -1,0 +1,256 @@
+<title>Switch Model Transfer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+  :root {
+    --ground:      #F1F4F7;
+    --surface:     #FFFFFF;
+    --surface-alt: #E7ECF1;
+    --ink:         #161A20;
+    --ink-soft:    #4B5563;
+    --ink-faint:   #7C8794;
+    --rule:        #D2DBE3;
+    --rule-soft:   #E4EAEF;
+    --public:      #0E6F78;
+    --public-bg:   #DFF0F1;
+    --secret:      #A03257;
+    --secret-bg:   #F7E3EA;
+    --warn:        #9A5B12;
+    --code-bg:     #EDF1F5;
+    --shadow:      0 1px 2px rgba(22,26,32,.06), 0 8px 24px -16px rgba(22,26,32,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #11151A;
+      --surface:     #1A1F26;
+      --surface-alt: #222831;
+      --ink:         #DEE4EB;
+      --ink-soft:    #A3AEBB;
+      --ink-faint:   #7A8593;
+      --rule:        #2C333C;
+      --rule-soft:   #232A32;
+      --public:      #5CC7CE;
+      --public-bg:   #113035;
+      --secret:      #EF8CA9;
+      --secret-bg:   #381F29;
+      --warn:        #D9A441;
+      --code-bg:     #151A20;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #11151A;
+    --surface:     #1A1F26;
+    --surface-alt: #222831;
+    --ink:         #DEE4EB;
+    --ink-soft:    #A3AEBB;
+    --ink-faint:   #7A8593;
+    --rule:        #2C333C;
+    --rule-soft:   #232A32;
+    --public:      #5CC7CE;
+    --public-bg:   #113035;
+    --secret:      #EF8CA9;
+    --secret-bg:   #381F29;
+    --warn:        #D9A441;
+    --code-bg:     #151A20;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 96px; }
+  .col  { max-width: 68ch; }
+
+  h1, h2, h3 { font-family: "IBM Plex Serif", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 4.4vw, 3.05rem); font-weight: 600; letter-spacing: -.021em; line-height: 1.12; }
+  h2 { font-size: 1.44rem; font-weight: 600; letter-spacing: -.012em; }
+  h3 { font-size: 1.05rem; font-weight: 600; }
+  p  { margin: 0 0 1.05em; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--public); }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .705rem; font-weight: 500; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+
+  header.masthead { padding: 76px 0 40px; border-bottom: 1px solid var(--rule); margin-bottom: 44px; }
+  .lede { font-size: 1.16rem; color: var(--ink-soft); margin-top: 18px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+  }
+  .chip {
+    padding: 4px 10px; border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--surface); color: var(--ink-soft);
+  }
+  .chip.live { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  .chip.open { border-color: var(--warn); color: var(--warn); }
+
+  section { margin: 0 0 60px; }
+  section > h2 { margin-bottom: 6px; }
+  section > .eyebrow { display: block; margin-bottom: 10px; }
+  .sub { color: var(--ink-faint); margin: 0 0 26px; font-size: .95rem; }
+
+  /* two-lane panel: the colours encode the experiment's real dichotomy */
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 26px 0; }
+  @media (max-width: 720px) { .lanes { grid-template-columns: 1fr; } }
+  .lane {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-top: 3px solid var(--public); border-radius: 4px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .lane.secret { border-top-color: var(--secret); }
+  .lane h3 { margin-bottom: 4px; }
+  .lane.public h3 { color: var(--public); }
+  .lane.secret h3 { color: var(--secret); }
+  .lane .what { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .81rem; color: var(--ink); margin: 8px 0 12px; }
+  .lane p { margin: 0; font-size: .93rem; }
+  .lane .ipc {
+    margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--rule-soft);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .8rem;
+    color: var(--ink-faint); display: flex; justify-content: space-between; gap: 10px;
+  }
+  .lane .ipc b { font-weight: 600; font-size: 1.18rem; font-variant-numeric: tabular-nums; }
+  .lane.public .ipc b { color: var(--public); }
+  .lane.secret .ipc b { color: var(--secret); }
+
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 18px 20px; overflow-x: auto; margin: 20px 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .82rem;
+    line-height: 1.68; color: var(--ink);
+  }
+  code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .875em; }
+  p code, li code, td code { background: var(--surface-alt); padding: 1px 5px; border-radius: 3px; color: var(--ink); }
+  .c  { color: var(--ink-faint); font-style: italic; }
+  .kw { color: var(--secret); }
+  .fn { color: var(--public); }
+  .filename {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .72rem;
+    color: var(--ink-faint); margin-bottom: -12px; padding-left: 2px;
+  }
+
+  .scroll { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .87rem; }
+  th, td { padding: 9px 15px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule-soft); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .69rem;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);
+    font-weight: 500; border-bottom: 1px solid var(--rule); background: var(--surface-alt);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  td.cost { color: var(--secret); font-weight: 600; }
+  td.free { color: var(--ink-faint); }
+  td.tag  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .78rem; color: var(--ink-faint); }
+  tr.rule-lane td { background: var(--public-bg); }
+
+  .callout {
+    border-left: 3px solid var(--warn); background: var(--surface);
+    padding: 18px 22px; border-radius: 0 4px 4px 0; margin: 24px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout h3 { margin-bottom: 6px; color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  ol.gates { list-style: none; counter-reset: g; padding: 0; margin: 22px 0; }
+  ol.gates li {
+    counter-increment: g; position: relative; padding: 0 0 16px 46px;
+    border-left: 1px solid var(--rule); margin-left: 13px;
+  }
+  ol.gates li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.gates li::before {
+    content: counter(g); position: absolute; left: -13px; top: 0;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--rule); color: var(--ink-faint);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+    display: grid; place-items: center;
+  }
+  ol.gates li.pass::before { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  ol.gates li.todo::before { border-color: var(--warn); color: var(--warn); }
+  ol.gates b { display: block; color: var(--ink); }
+  ol.gates span { font-size: .93rem; color: var(--ink-soft); }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 22px; color: var(--ink-faint); font-size: .84rem; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+<div class="wrap">
+<header class="masthead"><div class="col">
+  <span class="eyebrow">Paper experiment 06 &middot; gem5 Neoverse-V2</span>
+  <h1>Switch Model Transfer</h1>
+  <p class="lede">Every silicon number in this series is Apple M5, whose <code>MSR DIT</code> is cheap. Do the results survive a core where it is not? <strong>Only where the toggle rate is low</strong> &mdash; and the penalty tracks the <em>committed</em> toggle rate almost linearly.</p>
+  <div class="meta">
+    <span class="chip live">+15.80 pp vs +0.66 pp</span>
+    <span class="chip">~34 cycles per mode write</span>
+    <span class="chip">experiments 02 and 03's workloads</span>
+    <span class="chip open">32 KB ROIs</span>
+  </div>
+</div></header>
+
+<section>
+  <span class="eyebrow">Result</span>
+  <h2>205&times; the writes, 24&times; the penalty</h2>
+  <p class="sub">Experiment 03's workload &mdash; one seeded function holding public bookkeeping and an mbedTLS HMAC &mdash; at the two extremes of its region-size sweep. <code>serialising</code> is <code>--no-speculative-dit</code>.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>chunk</th><th>switch model</th><th>region</th><th>function</th><th>committed DIT writes</th></tr></thead><tbody>
+    <tr><td class="num">64 B</td><td>renamed</td><td class="num">+1.64%</td><td class="num">+18.93%</td><td class="num">19,065</td></tr>
+    <tr class="rule-lane"><td class="num">64 B</td><td><strong>serialising</strong></td><td class="num cost"><strong>+17.44%</strong></td><td class="num cost"><strong>+35.04%</strong></td><td class="num">19,065</td></tr>
+    <tr><td class="num">16 KB</td><td>renamed</td><td class="num">&minus;1.60%</td><td class="num">+36.90%</td><td class="num">93</td></tr>
+    <tr><td class="num">16 KB</td><td><strong>serialising</strong></td><td class="num">&minus;0.94%</td><td class="num">+36.87%</td><td class="num">93</td></tr>
+  </tbody></table></div>
+
+  <div class="scroll"><table>
+    <thead><tr><th>chunk</th><th>writes / Mcycle</th><th>region penalty</th><th>function penalty</th><th>cycles per write</th></tr></thead><tbody>
+    <tr><td class="num">64 B</td><td class="num">4,601</td><td class="num cost">+15.80 pp</td><td class="num cost">+16.11 pp</td><td class="num"><strong>34.3</strong></td></tr>
+    <tr class="rule-lane"><td class="num">16 KB</td><td class="num">86</td><td class="num free">+0.66 pp</td><td class="num free">&minus;0.03 pp</td><td class="num">76.3</td></tr>
+  </tbody></table></div>
+
+  <div class="col">
+    <p>At the low-toggle end the two models are <strong>indistinguishable</strong> &mdash; 0.03 to 0.66 points, inside the noise. The per-write cost of ~34 cycles is the same range as the <strong>24.0 cycles</strong> measured directly on silicon in experiment 02, with gem5 inflating as it does throughout this series.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Why 02 is insensitive and 03 is not</span>
+  <h2>Ask how often a write executes, not how many exist</h2>
+  <div class="col">
+    <p>Experiment 02 commits <strong>exactly 49 DIT writes per signature</strong> at every knob point &mdash; a toggle rate roughly 50&times; lower &mdash; and the switch model costs it only +0.38 to +1.54 points. Experiment 03 at chunk=64 commits 19,065 writes in 4.1M cycles: one per ~217 cycles.</p>
+    <p>That is the general rule, and it is the same predictor the callee-saved ABI work arrived at from a completely different direction. <strong>Static switch counts do not predict it</strong>; committed ones do, which is why those counters were added to the simulator.</p>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>result</th><th>survives a serialising core?</th></tr></thead><tbody>
+    <tr><td>02's crossover at f* = 59%</td><td><strong>yes</strong> &mdash; 49 writes/signature, far below threshold</td></tr>
+    <tr><td>03's fine-grain win at large regions</td><td><strong>yes</strong> &mdash; 93 writes, models within 0.66 pp</td></tr>
+    <tr class="rule-lane"><td>03's small-region floor</td><td><strong>no</strong> &mdash; region +1.64% becomes +17.44%</td></tr>
+    <tr><td>04's &ldquo;coarse beats fine&rdquo; on libsecp256k1</td><td><strong>yes, more so</strong> &mdash; 20 static sites</td></tr>
+  </tbody></table></div>
+  <div class="col">
+    <p>The practical reading: <strong>the region-size threshold moves up.</strong> Fine grain was already the wrong choice below ~2.5&nbsp;&micro;s per region on the M5; where a mode write costs ~34 cycles it is wrong over a wider range still.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Limits</span>
+  <h2>What these numbers are not</h2>
+  <div class="col">
+    <p><strong>32 KB ROIs, not the native 8 MB.</strong> The hardened arms are pathologically slow to simulate at full size &mdash; one run exceeded 15 minutes where the base arm took seconds. Worth recording as a property of simulating high toggle rates, but it means these regions are small.</p>
+    <p><strong>Two workloads, two extremes.</strong> The middle of experiment 03's sweep was not run under both models.</p>
+    <p><strong>gem5 magnitudes are inflated</strong> throughout, consistently ~3&times; against silicon elsewhere in this series. <em>The ordering and the proportionality are the transferable parts</em>, not the absolute percentages.</p>
+    <p><strong>&ldquo;Serialising&rdquo; is gem5's model, not a specific shipping core.</strong> It is the conservative end; a real core may sit anywhere between.</p>
+  </div>
+</section>
+
+<footer><div class="col">Rig: <code>benchmarks/record_mac/build_gem5.sh</code> in gem5-DIT &middot; measured 2026&#8209;09&#8209;01</div></footer>
+</div>

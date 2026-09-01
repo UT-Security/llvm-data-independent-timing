@@ -1,0 +1,260 @@
+<title>The Reach Limit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+  :root {
+    --ground:      #F1F4F7;
+    --surface:     #FFFFFF;
+    --surface-alt: #E7ECF1;
+    --ink:         #161A20;
+    --ink-soft:    #4B5563;
+    --ink-faint:   #7C8794;
+    --rule:        #D2DBE3;
+    --rule-soft:   #E4EAEF;
+    --public:      #0E6F78;
+    --public-bg:   #DFF0F1;
+    --secret:      #A03257;
+    --secret-bg:   #F7E3EA;
+    --warn:        #9A5B12;
+    --code-bg:     #EDF1F5;
+    --shadow:      0 1px 2px rgba(22,26,32,.06), 0 8px 24px -16px rgba(22,26,32,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #11151A;
+      --surface:     #1A1F26;
+      --surface-alt: #222831;
+      --ink:         #DEE4EB;
+      --ink-soft:    #A3AEBB;
+      --ink-faint:   #7A8593;
+      --rule:        #2C333C;
+      --rule-soft:   #232A32;
+      --public:      #5CC7CE;
+      --public-bg:   #113035;
+      --secret:      #EF8CA9;
+      --secret-bg:   #381F29;
+      --warn:        #D9A441;
+      --code-bg:     #151A20;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #11151A;
+    --surface:     #1A1F26;
+    --surface-alt: #222831;
+    --ink:         #DEE4EB;
+    --ink-soft:    #A3AEBB;
+    --ink-faint:   #7A8593;
+    --rule:        #2C333C;
+    --rule-soft:   #232A32;
+    --public:      #5CC7CE;
+    --public-bg:   #113035;
+    --secret:      #EF8CA9;
+    --secret-bg:   #381F29;
+    --warn:        #D9A441;
+    --code-bg:     #151A20;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 96px; }
+  .col  { max-width: 68ch; }
+
+  h1, h2, h3 { font-family: "IBM Plex Serif", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 4.4vw, 3.05rem); font-weight: 600; letter-spacing: -.021em; line-height: 1.12; }
+  h2 { font-size: 1.44rem; font-weight: 600; letter-spacing: -.012em; }
+  h3 { font-size: 1.05rem; font-weight: 600; }
+  p  { margin: 0 0 1.05em; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--public); }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .705rem; font-weight: 500; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+
+  header.masthead { padding: 76px 0 40px; border-bottom: 1px solid var(--rule); margin-bottom: 44px; }
+  .lede { font-size: 1.16rem; color: var(--ink-soft); margin-top: 18px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+  }
+  .chip {
+    padding: 4px 10px; border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--surface); color: var(--ink-soft);
+  }
+  .chip.live { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  .chip.open { border-color: var(--warn); color: var(--warn); }
+
+  section { margin: 0 0 60px; }
+  section > h2 { margin-bottom: 6px; }
+  section > .eyebrow { display: block; margin-bottom: 10px; }
+  .sub { color: var(--ink-faint); margin: 0 0 26px; font-size: .95rem; }
+
+  /* two-lane panel: the colours encode the experiment's real dichotomy */
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 26px 0; }
+  @media (max-width: 720px) { .lanes { grid-template-columns: 1fr; } }
+  .lane {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-top: 3px solid var(--public); border-radius: 4px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .lane.secret { border-top-color: var(--secret); }
+  .lane h3 { margin-bottom: 4px; }
+  .lane.public h3 { color: var(--public); }
+  .lane.secret h3 { color: var(--secret); }
+  .lane .what { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .81rem; color: var(--ink); margin: 8px 0 12px; }
+  .lane p { margin: 0; font-size: .93rem; }
+  .lane .ipc {
+    margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--rule-soft);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .8rem;
+    color: var(--ink-faint); display: flex; justify-content: space-between; gap: 10px;
+  }
+  .lane .ipc b { font-weight: 600; font-size: 1.18rem; font-variant-numeric: tabular-nums; }
+  .lane.public .ipc b { color: var(--public); }
+  .lane.secret .ipc b { color: var(--secret); }
+
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 18px 20px; overflow-x: auto; margin: 20px 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .82rem;
+    line-height: 1.68; color: var(--ink);
+  }
+  code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .875em; }
+  p code, li code, td code { background: var(--surface-alt); padding: 1px 5px; border-radius: 3px; color: var(--ink); }
+  .c  { color: var(--ink-faint); font-style: italic; }
+  .kw { color: var(--secret); }
+  .fn { color: var(--public); }
+  .filename {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .72rem;
+    color: var(--ink-faint); margin-bottom: -12px; padding-left: 2px;
+  }
+
+  .scroll { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .87rem; }
+  th, td { padding: 9px 15px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule-soft); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .69rem;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);
+    font-weight: 500; border-bottom: 1px solid var(--rule); background: var(--surface-alt);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  td.cost { color: var(--secret); font-weight: 600; }
+  td.free { color: var(--ink-faint); }
+  td.tag  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .78rem; color: var(--ink-faint); }
+  tr.rule-lane td { background: var(--public-bg); }
+
+  .callout {
+    border-left: 3px solid var(--warn); background: var(--surface);
+    padding: 18px 22px; border-radius: 0 4px 4px 0; margin: 24px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout h3 { margin-bottom: 6px; color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  ol.gates { list-style: none; counter-reset: g; padding: 0; margin: 22px 0; }
+  ol.gates li {
+    counter-increment: g; position: relative; padding: 0 0 16px 46px;
+    border-left: 1px solid var(--rule); margin-left: 13px;
+  }
+  ol.gates li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.gates li::before {
+    content: counter(g); position: absolute; left: -13px; top: 0;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--rule); color: var(--ink-faint);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+    display: grid; place-items: center;
+  }
+  ol.gates li.pass::before { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  ol.gates li.todo::before { border-color: var(--warn); color: var(--warn); }
+  ol.gates b { display: block; color: var(--ink); }
+  ol.gates span { font-size: .93rem; color: var(--ink-soft); }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 22px; color: var(--ink-faint); font-size: .84rem; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+<div class="wrap">
+<header class="masthead"><div class="col">
+  <span class="eyebrow">Paper experiment 05 &middot; nginx 1.28 &middot; OpenSSL 3.5.4</span>
+  <h1>The Reach Limit</h1>
+  <p class="lede">On a deployed TLS server, hardening the code the pass <em>can</em> reach costs <strong>+0.65% of server CPU</strong>. But it reaches only the C key schedule &mdash; every primitive TLS actually spends time in is hand-written aarch64 assembly, and <code>libcrypto.a</code> carries <strong>zero</strong> switches in every arm.</p>
+  <div class="meta">
+    <span class="chip live">+0.65% server CPU</span>
+    <span class="chip">TLS 1.3 &middot; 600 handshakes &times; 15 reps</span>
+    <span class="chip open">0 switches in libcrypto</span>
+  </div>
+</div></header>
+
+<section>
+  <span class="eyebrow">Why this experiment exists</span>
+  <h2>The workload was chosen first</h2>
+  <div class="col">
+    <p>Every other experiment here picks a workload the pass can instrument. That is the right way to measure a cost model and the wrong way to estimate what deployment looks like. Here the workload came first &mdash; the most widely deployed TLS server there is &mdash; and <strong>the reach limit is the finding rather than a caveat</strong>.</p>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>comparison</th><th>server CPU</th><th>sign test</th></tr></thead><tbody>
+    <tr><td>hardening cost</td><td class="num cost">+0.65%</td><td class="tag">14/15 slower</td></tr>
+    <tr><td>with the callee-saved ABI</td><td class="num">+0.21%</td><td class="tag">11/15 slower</td></tr>
+    <tr class="rule-lane"><td>what the ABI recovers</td><td class="num">&minus;0.41%</td><td class="tag">13/15 faster</td></tr>
+  </tbody></table></div>
+  <div class="col"><p>Under 1% of server CPU, about two thirds of it removable. For a deployment already paying for TLS that is close to free &mdash; but read the next section before taking it as a security result.</p></div>
+</section>
+
+<section>
+  <span class="eyebrow">Where the switches land</span>
+  <h2>All 48 in one object, none in the crypto</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>arm</th><th>libssl.a</th><th>carriers</th><th>guarded exits</th><th>libcrypto.a</th></tr></thead><tbody>
+    <tr><td>plain</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num free">0</td></tr>
+    <tr><td>base</td><td class="num">48</td><td class="num">0</td><td class="num">0</td><td class="num free"><strong>0</strong></td></tr>
+    <tr class="rule-lane"><td>abi</td><td class="num">15</td><td class="num">6</td><td class="num">10</td><td class="num free"><strong>0</strong></td></tr>
+  </tbody></table></div>
+  <div class="col">
+    <p>All 48 are in <code>tls13_enc.o</code> and nowhere else. <strong><code>libcrypto.a</code> has zero in every arm</strong> &mdash; the assembly limit appearing as a measurement rather than an argument.</p>
+    <p>OpenSSL 3.5.4 ships <strong>19 aarch64 perlasm generators</strong> covering exactly what TLS spends time in:</p>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>primitive</th><th>generator</th><th>role</th></tr></thead><tbody>
+    <tr><td>AES</td><td class="tag">aesv8-armx, vpaes-armv8, bsaes-armv8</td><td>bulk record cipher</td></tr>
+    <tr><td>AES-GCM</td><td class="tag">aes-gcm-armv8_64, ghashv8-armx</td><td>default TLS 1.3 AEAD</td></tr>
+    <tr><td>ChaCha20-Poly1305</td><td class="tag">chacha-armv8, poly1305-armv8</td><td>the other AEAD</td></tr>
+    <tr><td>P-256</td><td class="tag">ecp_nistz256-armv8</td><td>ECDHE and ECDSA</td></tr>
+    <tr><td>bignum</td><td class="tag">armv8-mont</td><td>RSA, DH, Montgomery ladder</td></tr>
+    <tr class="rule-lane"><td>SHA-1/256/512</td><td class="tag">sha*-armv8</td><td>transcript and HKDF</td></tr>
+  </tbody></table></div>
+  <div class="col">
+    <p><strong>Building from source does not help</strong>, because the assembly <em>is</em> the source &mdash; and <code>no-asm</code> is a strawman: the C AES is the T-table version whose real leak is cache timing, which DIT does not cover at all.</p>
+    <p>This is the third and worst of the pass&rsquo;s reach limits. Cross-TU is fixable with a seed; a prebuilt library is fixable by building from source; hand-written assembly is fixable by neither.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Reading it honestly</span>
+  <h2>Cheap, and not &ldquo;hardened TLS&rdquo;</h2>
+  <div class="col">
+    <p><strong>It does show</strong> that on a real server, hardening the reachable secret-handling code costs under 1% of server CPU.</p>
+    <p><strong>It does not show</strong> that TLS is hardened. The bulk record path runs with DIT off. A complete answer needs a crypto library written in C &mdash; libsodium&rsquo;s primitives are, which is exactly why experiments 02 and 03 work &mdash; or a pass operating below the IR level.</p>
+    <p>It also does not settle whether the effect scales. <strong>+0.65% is small because the reachable slice is small</strong>, so the ABI&rsquo;s two-thirds recovery is two thirds of a small number. On libsodium, where the whole primitive is reachable, the same mechanism is worth 5.3 points.</p>
+  </div>
+  <div class="callout">
+    <h3>Two traps the method walked into</h3>
+    <p><strong>Server CPU, not throughput.</strong> The client verifies the certificate and burns <strong>7&times;</strong> the server&rsquo;s CPU &mdash; 2211 ms against 278 ms per 600 handshakes. Wall-clock throughput would have buried a server-side effect entirely.</p>
+    <p><strong><code>ps -o time=</code> is too coarse.</strong> At 10 ms granularity, 280 ms is 28 ticks; the first attempt returned a per-rep spread of exactly one tick and a median difference of 0.00%. That was not &ldquo;no effect&rdquo;, it was no resolution. <code>getrusage(RUSAGE_CHILDREN)</code> gives microseconds, and the client&rsquo;s own CPU is measured separately and subtracted.</p>
+  </div>
+</section>
+
+<footer><div class="col">nginx byte-identical across arms; only the linked OpenSSL differs &middot; TLS 1.3, session cache and tickets off &middot; measured 2026&#8209;08&#8209;31 on Apple M5</div></footer>
+</div>

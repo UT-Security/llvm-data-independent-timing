@@ -3,6 +3,11 @@
 **Status: complete on gem5.** Measured 2026-09-01, Neoverse-V2 FDP, experiments
 02 and 03's workloads under both `MSR DIT` implementations.
 
+**Published artifact:** https://claude.ai/code/artifact/b6c89530-d27f-455c-a7bc-e93b3ab7c952
+Source: `figures/transfer.html`. To update the page, republish **that URL**
+(`Artifact` with `url=...`); publishing the file without it creates a second
+artifact instead of updating this one.
+
 ---
 
 ## The claim
@@ -87,3 +92,4 @@ still.
 | `data/record_mac_switch_model.csv` | experiment 03's workload, both models, 3 arms x 2 region sizes |
 | `data/sensitivity.csv` | the penalty as a function of committed toggle rate, and cycles per write |
 | `data/signed_lookup_switch_model.csv` | experiment 02's workload for contrast - 50x lower toggle rate |
+| `figures/transfer.html` | source of the published artifact |
