@@ -80,6 +80,16 @@ cl::opt<bool> llvm::TaintInsertDIT(
     cl::desc("Insert PSTATE.DIT mode switches around tainted code"),
     cl::init(false));
 
+cl::opt<std::string> llvm::TaintInfoLossReportFile(
+    "taint-info-loss-report", cl::Hidden, cl::init(""),
+    cl::desc("Write every site where taint analysis lost information about the "
+             "secret: what was lost, what the pass did instead, what that cost, "
+             "and the seed line that would restore precision. Severe losses "
+             "(DIT enabled and never cleared) also warn on stderr, because a "
+             "silent degeneration to blanket coverage is not discoverable. "
+             "APPENDS: a build is many clang invocations, so remove the file "
+             "before building or records from earlier builds will mix in."));
+
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
     "taint-callsite-report",
     cl::desc("Output file for call sites passing secret data to callees the "
@@ -760,10 +770,15 @@ CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
       continue;
     if (TRI->getEncodingValue(MO.getReg()) > 7)
       continue; // not an argument-passing register
-    if (S.test(TaintKind::Data, MO.getReg()))
+    const unsigned Idx = TRI->getEncodingValue(MO.getReg());
+    if (S.test(TaintKind::Data, MO.getReg())) {
       R.Data = true;
-    if (S.test(TaintKind::Pointee, MO.getReg()))
+      R.DataMask |= uint8_t(1u << Idx);
+    }
+    if (S.test(TaintKind::Pointee, MO.getReg())) {
       R.Pointee = true;
+      R.PointeeMask |= uint8_t(1u << Idx);
+    }
     // Fallback (-taint-frame-addr-args): the argument is an address into a
   }
   // Stack-passed arguments. AAPCS64 puts arguments past the eighth (and large
@@ -2977,6 +2992,29 @@ static void reportUnbalancedDITExits(MachineFunction &MF,
         continue; // balanced exit
 
       const bool TailCall = MI.isCall();
+      // The severe information-loss case, and the reason this report exists.
+      // DIT is on entering a tail call, and a tail call has no epilogue, so it
+      // is never cleared: every instruction executed after this point runs
+      // protected. On libsodium that is `crypto_sign`, a two-instruction
+      // forwarder, and it silently turned selective placement into blanket for
+      // the whole process. Reported loudly because nobody discovers it
+      // otherwise - the binary looks hardened and the counters look right.
+      if (TailCall) {
+        auto LossOS = openTaintReport(TaintInfoLossReportFile,
+                                      "taint information-loss report",
+                                      /*Append=*/true);
+        const Function *C = findCalledFunction(M, MI);
+        reportInfoLoss(
+            LossOS.get(), TaintLossSeverity::Severe, "leak-tailcall",
+            MF.getFunction(), C ? C->getName() : StringRef("<indirect>"),
+            MI.getDebugLoc(),
+            "DIT was enabled here and this exit is a tail call, which has no "
+            "epilogue to restore it",
+            "DIT stays SET past this call: all later code runs protected, so "
+            "selective placement degenerates to blanket coverage from here on",
+            "rebuild this TU with -ftaint-dit-abi, which disables tail calls "
+            "TU-wide and restores DIT at every exit");
+      }
       if (OS) {
         const Function *Callee = TailCall ? findCalledFunction(M, MI) : nullptr;
         *OS << "DITLEAK " << (TailCall ? "tailcall" : "return");
@@ -3584,6 +3622,58 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   for (const MachineInstr *C : PendingReassertSites)
     reportDITReassert(ReassertOS, MF, *C, findCalledFunction(M, *C), TSI);
   return NeedCount;
+}
+
+// One record per site where the analysis lost the secret's trail.
+//
+// The three existing reports (ESCAPE, DITLEAK, NONLOCAL) each already know a
+// piece of this, but they are opt-in, split across three flags, and phrased as
+// audit records of what happened rather than as consequences. "covered by
+// inherited DIT" reads as reassurance; on libsodium it meant every instruction
+// after crypto_sign ran protected and selective placement had silently become
+// blanket. The user was told nothing, and the repair was one seed line.
+//
+// So each record carries what the others do not: what it COST, and what to do
+// about it. Severity is judged by consequence, not cause.
+void llvm::reportInfoLoss(raw_ostream *OS, TaintLossSeverity Sev,
+                          StringRef Kind, const Function &Where,
+                          StringRef CalleeName, const DebugLoc &DL,
+                          StringRef Action, StringRef Cost, StringRef Repair) {
+  const char *SevStr = Sev == TaintLossSeverity::Severe     ? "SEVERE"
+                       : Sev == TaintLossSeverity::Moderate ? "moderate"
+                                                            : "info";
+  if (OS) {
+    // Name the source file in every record. The report APPENDS (a build is many
+    // clang invocations and a truncating open leaves only the last TU's
+    // records - which on libsodium meant an empty file while seven functions
+    // had warned), so each line has to stand on its own.
+    StringRef Src = Where.getParent() ? StringRef(Where.getParent()->getSourceFileName())
+                                      : StringRef();
+    *OS << "taint-stop " << Kind << "  in=" << Where.getName();
+    if (!Src.empty())
+      *OS << " src=" << sys::path::filename(Src);
+    if (!CalleeName.empty())
+      *OS << " callee=" << CalleeName;
+    if (DL)
+      *OS << " line=" << DL.getLine();
+    *OS << "\n  severity  " << SevStr << "\n";
+    if (!Action.empty())
+      *OS << "  action    " << Action << "\n";
+    if (!Cost.empty())
+      *OS << "  cost      " << Cost << "\n";
+    if (!Repair.empty())
+      *OS << "  repair    " << Repair << "\n";
+  }
+
+  // Loud by default for the severe class only. A report file nobody passes a
+  // flag for cannot warn anyone, and this is the one failure that deletes the
+  // entire benefit of the pass while looking like success.
+  if (Sev == TaintLossSeverity::Severe)
+    errs() << "taint: " << Where.getName() << ": " << Cost
+           << (Repair.empty() ? StringRef("")
+                                : StringRef(" [-taint-info-loss-report for the "
+                                            "suggested annotation]"))
+           << "\n";
 }
 
 unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,

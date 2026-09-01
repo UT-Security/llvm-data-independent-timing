@@ -73,6 +73,9 @@ extern cl::opt<bool> TaintDITAbi;
 /// passing tainted/pointee-tainted arguments to callees the analysis cannot
 /// instrument (external declarations, indirect calls).
 extern cl::opt<std::string> TaintCallsiteReportFile;
+/// Every site where the analysis LOST information about the secret, what it did
+/// about it, what that cost, and the annotation that would restore precision.
+extern cl::opt<std::string> TaintInfoLossReportFile;
 
 /// Command-line option for the DIT-uncovered report (gap G2): tainted
 /// instructions PSTATE.DIT does not actually protect - divide/sqrt (not
@@ -574,8 +577,30 @@ const char *classifyDITUncovered(const MachineInstr &MI, const TaintFacts &F,
 struct CallArgTaint {
   bool Data = false;    ///< a secret passed by value in an argument register
   bool Pointee = false; ///< an argument pointer whose pointee is secret
+  /// WHICH argument registers carried it, as a bit per x0..x7. Only used to
+  /// print an actionable seed line in the information-loss report - a report
+  /// that says "annotate this" is worth little if the user has to work out the
+  /// index themselves. Stack-passed secrets set no bit (their index is not
+  /// recoverable here), so a repair suggestion is omitted rather than guessed.
+  uint8_t DataMask = 0;
+  uint8_t PointeeMask = 0;
   bool any() const { return Data || Pointee; }
 };
+
+/// How badly a loss of taint information hurts, judged by CONSEQUENCE rather
+/// than by cause: the same "we cannot see the callee" fact is a footnote at an
+/// ordinary call and a disaster at a tail call.
+enum class TaintLossSeverity {
+  Info,     ///< precision lost, no coverage consequence
+  Moderate, ///< over-approximated, but DIT stays scoped to this function
+  Severe,   ///< DIT enabled and provably never cleared - degenerates to blanket
+};
+
+/// One record in the information-loss report. See `-taint-info-loss-report`.
+void reportInfoLoss(raw_ostream *OS, TaintLossSeverity Sev, StringRef Kind,
+                    const Function &Where, StringRef CalleeName,
+                    const DebugLoc &DL, StringRef Action, StringRef Cost,
+                    StringRef Repair);
 
 /// Compute which kinds of secret a call passes to its callee. Empty for
 /// non-calls. This is the "secret is *passed*" test (fix B): a secret merely

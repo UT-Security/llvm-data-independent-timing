@@ -659,6 +659,15 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
     auto CallsiteOSPtr =
         openTaintReport(TaintCallsiteReportFile, "taint callsite report");
     raw_fd_ostream *CallsiteOS = CallsiteOSPtr.get();
+    // APPEND, unlike the callsite report above. That one truncates per clang
+    // invocation, which is why a whole-library build leaves only the last TU's
+    // lines - on libsodium, an empty file while seven functions had warned on
+    // stderr. This report is a build-wide worklist, so it accumulates and each
+    // record names its source file.
+    auto LossOSPtr =
+        openTaintReport(TaintInfoLossReportFile, "taint information-loss report",
+                        /*Append=*/true);
+    raw_fd_ostream *LossOS = LossOSPtr.get();
     forEachAnalyzed(M, Ctx, Results,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
@@ -691,21 +700,66 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
 
                 // (A) ESCAPE audit - only callees we cannot instrument.
                 const Function *Callee = findCalledFunction(M, MI);
-                if ((Callee && !Callee->isDeclaration()) || !CallsiteOS)
+                // An in-TU callee is reachable by the analysis - nothing lost.
+                // The two writers below are gated SEPARATELY: this test used to
+                // also bail when the callsite report was unrequested, which
+                // silenced the information-loss record too and made the loudest
+                // failure on libsodium depend on an unrelated flag.
+                if (Callee && !Callee->isDeclaration())
                   return true;
 
-                *CallsiteOS << "ESCAPE "
-                            << (Callee ? "external" : "indirect") << " callee="
-                            << (Callee ? Callee->getName() : "<indirect>")
-                            << " caller=" << F.getName()
-                            << " bb=" << MI.getParent()->getNumber();
-                if (const DebugLoc &DL = MI.getDebugLoc())
-                  *CallsiteOS << " line=" << DL.getLine();
-                if (Arg.Data)
-                  *CallsiteOS << " tainted-args";
-                if (Arg.Pointee)
-                  *CallsiteOS << " pointee-tainted-args";
-                *CallsiteOS << " (covered by inherited DIT)\n";
+                if (CallsiteOS) {
+                  *CallsiteOS << "ESCAPE "
+                              << (Callee ? "external" : "indirect") << " callee="
+                              << (Callee ? Callee->getName() : "<indirect>")
+                              << " caller=" << F.getName()
+                              << " bb=" << MI.getParent()->getNumber();
+                  if (const DebugLoc &DL = MI.getDebugLoc())
+                    *CallsiteOS << " line=" << DL.getLine();
+                  if (Arg.Data)
+                    *CallsiteOS << " tainted-args";
+                  if (Arg.Pointee)
+                    *CallsiteOS << " pointee-tainted-args";
+                  *CallsiteOS << " (covered by inherited DIT)\n";
+                }
+
+                // Same site, stated as a consequence with a repair. The seed
+                // index comes from the argument register that actually carried
+                // the secret, so the line can be pasted straight into the
+                // taint-source file; a stack-passed secret sets no bit and gets
+                // no suggestion rather than a guessed one.
+                // Emit EVERY argument that carried taint, not just the first.
+                // crypto_sign passes four pointee-tainted arguments and the key
+                // is the LAST of them; suggesting only the lowest index points
+                // the user at the output buffer and silently omits the secret.
+                std::string Repair;
+                if (Callee) {
+                  SmallString<160> R("seed the TU that defines it:");
+                  for (unsigned i = 0; i < 8; ++i) {
+                    const bool P = Arg.PointeeMask & (1u << i);
+                    const bool D = Arg.DataMask & (1u << i);
+                    if (!P && !D)
+                      continue;
+                    R += "\n              ";
+                    R += Callee->getName();
+                    R += ",";
+                    R += Twine(i).str();
+                    if (P)
+                      R += ",pointee";
+                  }
+                  if (R.size() > 28)   // something was appended
+                    Repair = std::string(R);
+                }
+                reportInfoLoss(
+                    LossOS, TaintLossSeverity::Moderate,
+                    Callee ? "cross-tu" : "indirect", F,
+                    Callee ? Callee->getName() : StringRef("<indirect>"),
+                    MI.getDebugLoc(),
+                    "the secret is passed to a callee this pass cannot see; DIT "
+                    "is enabled so the callee inherits protection",
+                    "no placement happens inside the callee - it runs entirely "
+                    "protected, and any narrowing it could have done is lost",
+                    Repair);
                 return true;
               });
         });

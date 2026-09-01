@@ -213,6 +213,51 @@ New report: **`-taint-nonlocal-report=<file>`** lists the sites where the obliga
 degrades to the guarantee and DIT is simply left set - `setjmp`, `musttail`, `unwind`,
 and `noscratch`. All are dwell, never exposure.
 
+### When the analysis loses the secret, it SAYS so
+
+**A severe information loss warns on stderr by default - no flag.** Over-approximating
+is safe for the secret but it is not free, and the expensive case is invisible:
+`crypto_sign` is a two-instruction forwarder that enables DIT and tail-calls
+`crypto_sign_ed25519` in another TU. A tail call has no epilogue, so DIT is never
+cleared and **every instruction afterwards runs protected** - measured at 100% of the
+public lane on the signed-lookup workload, i.e. selective placement had silently
+become blanket, with the binary looking hardened and the counters looking right.
+
+```
+taint: crypto_sign: DIT stays SET past this call: all later code runs protected,
+       so selective placement degenerates to blanket coverage from here on
+```
+
+**`-taint-info-loss-report=<file>`** is the detail: one record per site, with two
+fields the older reports do not carry - what the loss COST, and the annotation that
+repairs it. Severity is judged by consequence, not cause (the same "cannot see the
+callee" fact is a footnote at an ordinary call and a disaster at a tail call).
+
+```
+taint-stop cross-tu  in=crypto_sign callee=crypto_sign_ed25519
+  severity  moderate
+  action    the secret is passed to a callee this pass cannot see; DIT is
+            enabled so the callee inherits protection
+  cost      no placement happens inside the callee - it runs entirely protected
+  repair    seed the TU that defines it:
+              crypto_sign_ed25519,4,pointee
+```
+
+The repair line is pasteable and the loop closes: adding it took `ref10/sign.c` from
+**0 to 24** `msr DIT`, and the report then named the next wall
+(`crypto_sign_ed25519_detached` -> `crypto_hash_sha512`). That is the intended
+workflow - the compiler reports where it stopped, you annotate, it goes deeper.
+
+Noise is low because the criterion is consequence: a whole libsodium build produces
+**7 warnings on 7 functions**, all of them genuine thin forwarders (`crypto_sign`,
+the `crypto_onetimeauth*` family, `poly1305_finish`). A file with no losses produces
+no records.
+
+The three older reports (`ESCAPE`, `DITLEAK`, `NONLOCAL`) still exist and each knows
+a piece of this; they are opt-in, split across three flags, and phrased as audit
+records rather than consequences - `ESCAPE`'s "(covered by inherited DIT)" reads as
+reassurance for the exact site that destroyed the measurement.
+
 ### Reach limits: what the pass CANNOT instrument
 
 Three, and they compound. The third has no workaround inside the compiler.
@@ -252,7 +297,7 @@ bug), `llc -enable-new-pm -run-taint-interproc -taint-insert-dit`, then
 files: `-taint-output`, `-taint-regions-output`, `-taint-source-regions-output`,
 `-taint-nonlocal-report` (DIT obligation degrades to the guarantee),
 `-taint-callsite-report` (secret-escape call sites; the clang flag does not emit
-these), `-taint-dit-precision-report` (DIT accounting - need/underdit/collateral/
+these), **`-taint-info-loss-report`** (see below), `-taint-dit-precision-report` (DIT accounting - need/underdit/collateral/
 switches per function; reachable from clang as `-mllvm
 -taint-dit-precision-report=`). Region spacing:
 `utils/taint_region_distance.py OUT.hardened.mir`.
