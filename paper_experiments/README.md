@@ -1,19 +1,27 @@
 # Paper experiments
 
-**Every experiment here is the same experiment on a different workload:** a
+**Experiments 01 and 02 are the same experiment on different workloads:** a
 secret-fraction crossover. Each one holds the public lane and the secret lane of
 a real application inside one call, varies a knob that moves only the ratio
 between them, and asks where selective `PSTATE.DIT` placement stops beating
 blanket DIT.
 
-So the directory name is the **workload**, never the phenomenon - the phenomenon
-is the constant. Numbered prefixes follow the order the experiments appear in
-the paper, not the order they were run.
+**Experiment 03 asks a different question.** It sweeps REGION SIZE with the
+secret fraction held roughly constant, and its headline is **region vs
+whole-function placement** rather than pass vs blanket - a comparison 01 and 02
+structurally could not make, because in both the public and secret work live in
+different functions and `-taint-dit-placement=function` would have produced
+identical coverage. 03 puts both in one function so the two policies diverge.
+
+So the directory name is the **workload**, never the phenomenon. Numbered
+prefixes follow the order the experiments appear in the paper, not the order they
+were run.
 
 | # | workload | public lane | secret lane | knob | status |
 |---|---|---|---|---|---|
 | 01 | [Bitcoin Core wallet](01-bitcoin-core-wallet/) | coin selection, 4 solvers | `CKey::Sign` per input | inputs per tx | **complete, both instruments** |
 | 02 | [libsodium signed lookup](02-libsodium-signed-lookup/) | table lookups, value-dependent chain | `crypto_sign_ed25519` per request | lookups per signature | **complete, both instruments** |
+| 03 | [mbedTLS record MAC](03-mbedtls-record-mac/) | per-record bookkeeping, in the SAME function | `mbedtls_md_hmac` per record | **bytes per record (region SIZE)** | **complete, silicon** |
 
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6
 

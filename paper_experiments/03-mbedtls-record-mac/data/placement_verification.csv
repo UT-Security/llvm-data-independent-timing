@@ -1,0 +1,10 @@
+# Structural verification, not inferred: each arm reads PSTATE.DIT inside the
+# mixed function, before the public work. region must read 0 (public work
+# uncovered), function 1 (whole body covered). Checked on every run; the runner
+# aborts on a mismatch.
+arm,msr_dit_in_binary,pub_dit_fraction,meaning
+base,1,0.000,unhardened; the 1 is the harness's own --blanket MSR
+blanket,1,1.000,DIT set before the loop and never cleared
+region,46,0.000,public work runs uncovered - narrows
+function,42,1.000,whole mixed function covered
+nop,1,0.000,same placement as region with switches as HINT #0

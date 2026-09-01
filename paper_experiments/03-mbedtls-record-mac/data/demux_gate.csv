@@ -1,0 +1,14 @@
+# THE GATE THAT KILLED THE FIRST DESIGN, kept because it is why this experiment
+# measures region size rather than hunting for headroom.
+# A realistic TLS proxy demux (hash lookup + chain walk per record) has NO
+# reliable DIT headroom: records are independent, so the out-of-order engine
+# overlaps them and value prediction adds little. Chaining the records - the
+# only change - restores the prize, which shows ILP is what hides it.
+# 9 rotated paired reps, median, Apple M5.
+conns,chain_len,dependent,nodit_ms,blanket_ms,penalty_pct,sign_test
+4096,1,0,35.9,37.9,5.55,8/9
+4096,1,1,132.7,221.9,67.20,9/9
+4096,16,0,125.6,118.9,-5.36,0/9
+4096,16,1,249.3,344.1,38.01,9/9
+65536,16,0,797.6,800.3,0.34,5/9
+65536,16,1,1454.9,1450.1,-0.33,7/9

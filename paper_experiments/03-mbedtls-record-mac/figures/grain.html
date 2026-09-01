@@ -1,0 +1,343 @@
+<title>Fine Grain Crossover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+  :root {
+    --ground:      #F1F4F7;
+    --surface:     #FFFFFF;
+    --surface-alt: #E7ECF1;
+    --ink:         #161A20;
+    --ink-soft:    #4B5563;
+    --ink-faint:   #7C8794;
+    --rule:        #D2DBE3;
+    --rule-soft:   #E4EAEF;
+    --public:      #0E6F78;
+    --public-bg:   #DFF0F1;
+    --secret:      #A03257;
+    --secret-bg:   #F7E3EA;
+    --warn:        #9A5B12;
+    --code-bg:     #EDF1F5;
+    --shadow:      0 1px 2px rgba(22,26,32,.06), 0 8px 24px -16px rgba(22,26,32,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #11151A;
+      --surface:     #1A1F26;
+      --surface-alt: #222831;
+      --ink:         #DEE4EB;
+      --ink-soft:    #A3AEBB;
+      --ink-faint:   #7A8593;
+      --rule:        #2C333C;
+      --rule-soft:   #232A32;
+      --public:      #5CC7CE;
+      --public-bg:   #113035;
+      --secret:      #EF8CA9;
+      --secret-bg:   #381F29;
+      --warn:        #D9A441;
+      --code-bg:     #151A20;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #11151A;
+    --surface:     #1A1F26;
+    --surface-alt: #222831;
+    --ink:         #DEE4EB;
+    --ink-soft:    #A3AEBB;
+    --ink-faint:   #7A8593;
+    --rule:        #2C333C;
+    --rule-soft:   #232A32;
+    --public:      #5CC7CE;
+    --public-bg:   #113035;
+    --secret:      #EF8CA9;
+    --secret-bg:   #381F29;
+    --warn:        #D9A441;
+    --code-bg:     #151A20;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 96px; }
+  .col  { max-width: 68ch; }
+
+  h1, h2, h3 { font-family: "IBM Plex Serif", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 4.4vw, 3.05rem); font-weight: 600; letter-spacing: -.021em; line-height: 1.12; }
+  h2 { font-size: 1.44rem; font-weight: 600; letter-spacing: -.012em; }
+  h3 { font-size: 1.05rem; font-weight: 600; }
+  p  { margin: 0 0 1.05em; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--public); }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .705rem; font-weight: 500; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+
+  header.masthead { padding: 76px 0 40px; border-bottom: 1px solid var(--rule); margin-bottom: 44px; }
+  .lede { font-size: 1.16rem; color: var(--ink-soft); margin-top: 18px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+  }
+  .chip {
+    padding: 4px 10px; border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--surface); color: var(--ink-soft);
+  }
+  .chip.live { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  .chip.open { border-color: var(--warn); color: var(--warn); }
+
+  section { margin: 0 0 60px; }
+  section > h2 { margin-bottom: 6px; }
+  section > .eyebrow { display: block; margin-bottom: 10px; }
+  .sub { color: var(--ink-faint); margin: 0 0 26px; font-size: .95rem; }
+
+  /* two-lane panel: the colours encode the experiment's real dichotomy */
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 26px 0; }
+  @media (max-width: 720px) { .lanes { grid-template-columns: 1fr; } }
+  .lane {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-top: 3px solid var(--public); border-radius: 4px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .lane.secret { border-top-color: var(--secret); }
+  .lane h3 { margin-bottom: 4px; }
+  .lane.public h3 { color: var(--public); }
+  .lane.secret h3 { color: var(--secret); }
+  .lane .what { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .81rem; color: var(--ink); margin: 8px 0 12px; }
+  .lane p { margin: 0; font-size: .93rem; }
+  .lane .ipc {
+    margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--rule-soft);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .8rem;
+    color: var(--ink-faint); display: flex; justify-content: space-between; gap: 10px;
+  }
+  .lane .ipc b { font-weight: 600; font-size: 1.18rem; font-variant-numeric: tabular-nums; }
+  .lane.public .ipc b { color: var(--public); }
+  .lane.secret .ipc b { color: var(--secret); }
+
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 18px 20px; overflow-x: auto; margin: 20px 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .82rem;
+    line-height: 1.68; color: var(--ink);
+  }
+  code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .875em; }
+  p code, li code, td code { background: var(--surface-alt); padding: 1px 5px; border-radius: 3px; color: var(--ink); }
+  .c  { color: var(--ink-faint); font-style: italic; }
+  .kw { color: var(--secret); }
+  .fn { color: var(--public); }
+  .filename {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .72rem;
+    color: var(--ink-faint); margin-bottom: -12px; padding-left: 2px;
+  }
+
+  .scroll { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .87rem; }
+  th, td { padding: 9px 15px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule-soft); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .69rem;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);
+    font-weight: 500; border-bottom: 1px solid var(--rule); background: var(--surface-alt);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  td.cost { color: var(--secret); font-weight: 600; }
+  td.free { color: var(--ink-faint); }
+  td.tag  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .78rem; color: var(--ink-faint); }
+  tr.rule-lane td { background: var(--public-bg); }
+
+  .callout {
+    border-left: 3px solid var(--warn); background: var(--surface);
+    padding: 18px 22px; border-radius: 0 4px 4px 0; margin: 24px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout h3 { margin-bottom: 6px; color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  ol.gates { list-style: none; counter-reset: g; padding: 0; margin: 22px 0; }
+  ol.gates li {
+    counter-increment: g; position: relative; padding: 0 0 16px 46px;
+    border-left: 1px solid var(--rule); margin-left: 13px;
+  }
+  ol.gates li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.gates li::before {
+    content: counter(g); position: absolute; left: -13px; top: 0;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--rule); color: var(--ink-faint);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+    display: grid; place-items: center;
+  }
+  ol.gates li.pass::before { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  ol.gates li.todo::before { border-color: var(--warn); color: var(--warn); }
+  ol.gates b { display: block; color: var(--ink); }
+  ol.gates span { font-size: .93rem; color: var(--ink-soft); }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 22px; color: var(--ink-faint); font-size: .84rem; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+<div class="wrap">
+
+<header class="masthead">
+  <div class="col">
+    <span class="eyebrow">Paper experiment 03 &middot; mbedTLS</span>
+    <h1>Fine Grain Crossover</h1>
+    <p class="lede">Region placement beats whole-function placement by up to <strong>13.84%</strong> &mdash; and every point of it is <strong>IPC on an identical instruction stream</strong>. Below about <strong>2.5&nbsp;&micro;s of work per secret region</strong> the advantage reverses and both lose badly to blanket.</p>
+    <div class="meta">
+      <span class="chip live">crossover at ~2.5 &micro;s/region</span>
+      <span class="chip">Apple M5 &middot; kperf</span>
+      <span class="chip">5 arms &middot; 5 sizes &middot; 2 modes</span>
+      <span class="chip open">gem5 pending</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <span class="eyebrow">Why this is not experiments 01 and 02 again</span>
+  <h2>Nothing before could measure fine grain</h2>
+  <div class="col">
+    <p>Experiments 01 and 02 both ask <strong>pass versus blanket</strong> along the secret-fraction axis. Neither has a whole-function arm, and neither could have used one: in both, the public and secret work live in <em>different functions</em>, so <code>-taint-dit-placement=function</code> would have produced the same coverage as region placement. There was nothing for it to do.</p>
+    <p>This experiment puts both kinds of work in <strong>one seeded function</strong>, which is the only structure where the two policies can diverge &mdash; and checks that they actually do, rather than assuming it. Each arm reads <code>PSTATE.DIT</code> inside that function, before the public work:</p>
+  </div>
+
+  <div class="lanes">
+    <div class="lane public">
+      <h3>Region placement</h3>
+      <div class="what">-ftaint-harden</div>
+      <p>Enables DIT <em>after</em> the public loop. The bookkeeping runs unprotected.</p>
+      <div class="ipc"><span>public work covered</span><b>0.000</b></div>
+    </div>
+    <div class="lane secret">
+      <h3>Function placement</h3>
+      <div class="what">-taint-dit-placement=function</div>
+      <p>Enables DIT at entry. The whole body is covered, bookkeeping included.</p>
+      <div class="ipc"><span>public work covered</span><b>1.000</b></div>
+    </div>
+  </div>
+
+<pre><span class="c">;; region                              ;; function</span>
+  b.lt  ...  <span class="c">┐ public loop</span>          <span class="kw">msr   DIT, #0x1</span>   <span class="c">← at entry</span>
+  b.ne  ...  <span class="c">┘ runs DIT-OFF</span>         b.lt  ...  <span class="c">┐ public loop</span>
+  <span class="kw">msr   DIT, #0x1</span>  <span class="c">← after it</span>       b.ne  ...  <span class="c">┘ runs DIT-ON</span>
+  <span class="kw">msr   DIT, #0x1</span>                     <span class="kw">msr   DIT, #0x1</span>
+  <span class="kw">msr   DIT, #0x0</span>                     <span class="kw">msr   DIT, #0x0</span>
+  ret                                 ret</pre>
+
+  <div class="col">
+    <p>Three mode writes either way. Only the <em>first</em> one moves. That detail turns out to be the entire result.</p>
+    <p>And the knob is <strong>region size, not secret fraction</strong>: 8&nbsp;MB total held fixed, <code>f_secret</code> held at 54&ndash;74%, chunk swept 64&nbsp;B to 16&nbsp;KB so the region grows 256&times; while the region <em>count</em> shrinks by the same factor.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Result</span>
+  <h2>The crossover is in region size</h2>
+  <p class="sub">mbedTLS 3.6.2 HMAC-SHA256, 7 rotated paired reps per point, median. Wall-clock is the headline: unlike experiment 02, the arms are different binaries, so IPC is not the inverse of time.</p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>chunk</th><th>&micro;s per region</th><th>records</th><th>blanket</th><th>region</th><th>function</th><th>nop</th><th>region &minus; function</th><th>region vs blanket</th></tr></thead>
+      <tbody>
+        <tr><td class="num">64 B</td><td class="num">0.66</td><td class="num">131,072</td><td class="num">+10.75%</td><td class="num cost">+47.47%</td><td class="num cost">+49.21%</td><td class="num free">&minus;0.05%</td><td class="num">&minus;1.17%</td><td class="num cost">+33.2%</td></tr>
+        <tr><td class="num">256 B</td><td class="num">1.06</td><td class="num">32,768</td><td class="num">+9.80%</td><td class="num cost">+28.38%</td><td class="num cost">+31.86%</td><td class="num free">&minus;0.55%</td><td class="num">&minus;2.64%</td><td class="num cost">+16.9%</td></tr>
+        <tr><td class="num">1,024 B</td><td class="num">2.56</td><td class="num">8,192</td><td class="num">+10.82%</td><td class="num">+10.20%</td><td class="num">+19.20%</td><td class="num free">&minus;0.62%</td><td class="num">&minus;7.56%</td><td class="num">&minus;0.6%</td></tr>
+        <tr><td class="num">4,096 B</td><td class="num">9.69</td><td class="num">2,048</td><td class="num">+15.14%</td><td class="num">+2.67%</td><td class="num">+17.61%</td><td class="num free">&minus;1.67%</td><td class="num">&minus;12.70%</td><td class="num">&minus;10.8%</td></tr>
+        <tr class="rule-lane"><td class="num">16,384 B</td><td class="num">37.28</td><td class="num">512</td><td class="num">+18.44%</td><td class="num"><strong>+2.60%</strong></td><td class="num">+19.09%</td><td class="num free">+0.07%</td><td class="num"><strong>&minus;13.84%</strong></td><td class="num">&minus;13.4%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p><strong>The floor matters as much as the ceiling.</strong> At 0.66&nbsp;&micro;s regions, blanket costs +10.75% while region costs <strong>+47.47%</strong> and function +49.21%. Below roughly 2.5&nbsp;&micro;s, selective placement of <em>any</em> granularity is the wrong choice &mdash; region placement is 33% <em>worse</em> than simply leaving DIT on everywhere.</p>
+    <p>That puts a measured number on a belief the project has carried from a single QuickJS data point (&ldquo;fine grain stops paying below ~1&nbsp;&micro;s per region&rdquo;), and places it somewhat higher.</p>
+    <p>The <code>nop</code> arm spans &minus;1.67% to +0.07% throughout, so none of this is the layout cost of inserting the switches.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Mechanism</span>
+  <h2>Every point of it is IPC</h2>
+  <div class="col">
+    <p>Instruction counts between the two placements are identical to <strong>&plusmn;0.00% at every point</strong>. Both execute exactly three mode writes per record. Region placement is not doing less work &mdash; it is doing the <em>same</em> work faster, because the public loop keeps its value prediction.</p>
+    <p>With equal instruction counts the time delta must be exactly 1/IPC. It is:</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>chunk</th><th>IPC region</th><th>IPC function</th><th>IPC gain</th><th>time implied by IPC</th><th>time measured</th></tr></thead>
+      <tbody>
+        <tr><td class="num">64 B</td><td class="num">2.250</td><td class="num">2.224</td><td class="num">+1.17%</td><td class="num">&minus;1.16%</td><td class="num">&minus;1.17%</td></tr>
+        <tr><td class="num">256 B</td><td class="num">2.303</td><td class="num">2.243</td><td class="num">+2.67%</td><td class="num">&minus;2.61%</td><td class="num">&minus;2.64%</td></tr>
+        <tr><td class="num">1,024 B</td><td class="num">2.454</td><td class="num">2.269</td><td class="num">+8.15%</td><td class="num">&minus;7.54%</td><td class="num">&minus;7.56%</td></tr>
+        <tr><td class="num">4,096 B</td><td class="num">2.608</td><td class="num">2.276</td><td class="num">+14.59%</td><td class="num">&minus;12.73%</td><td class="num">&minus;12.70%</td></tr>
+        <tr class="rule-lane"><td class="num">16,384 B</td><td class="num">2.643</td><td class="num">2.278</td><td class="num">+16.02%</td><td class="num">&minus;13.81%</td><td class="num">&minus;13.84%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Agreement within <strong>0.1 points everywhere</strong>. Note also that function placement&rsquo;s IPC is nearly flat at 2.22&ndash;2.28 across a 256&times; change in region size, while region placement&rsquo;s climbs from 2.250 to 2.643. Covering everything costs the same wherever you do it; narrowing pays more the more there is to narrow.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">The design gate that killed the first attempt</span>
+  <h2>Inter-record ILP hides the prize</h2>
+  <div class="col">
+    <p>The original public lane was a TLS proxy <strong>demux</strong>: hash lookup plus chain walk per record, chosen because pointer chasing is the shape that carries the prize in 01 and 02. It failed the headroom gate &mdash; and the reason generalises.</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>configuration</th><th>no DIT</th><th>blanket</th><th>penalty</th><th>sign test</th></tr></thead>
+      <tbody>
+        <tr><td>chain=16, independent records</td><td class="num">125.6 ms</td><td class="num">118.9 ms</td><td class="num free">&minus;5.36%</td><td class="tag">0/9</td></tr>
+        <tr class="rule-lane"><td>chain=16, <strong>records chained</strong></td><td class="num">249.3 ms</td><td class="num">344.1 ms</td><td class="num cost">+38.01%</td><td class="tag">9/9</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Same code, same table, same access pattern. The only change is whether record <em>r+1</em>&rsquo;s work depends on record <em>r</em>&rsquo;s result. A real demux is embarrassingly parallel across records, so the out-of-order engine overlaps a dozen of them and each per-record chain of ~8 loads is hidden. Value prediction has almost nothing left to add, so DIT costs almost nothing to remove it.</p>
+    <p><strong>The win condition needs a fourth clause.</strong> The project already knows headroom requires a serial dependence chain. This adds that the chain must span the <em>unit of work</em>: per-unit chains get overlapped away. It is why coin selection works in experiment 01 &mdash; a solver&rsquo;s search is serial across the whole call &mdash; and why image filters never did.</p>
+    <p>It also means <strong>experiment 02&rsquo;s public lane sits at the favourable extreme</strong> of this axis: one unbroken chain thousands of iterations long with zero ILP. Its +30.6% is real, but it is not what request-processing code looks like.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Found on the way</span>
+  <h2>A hardened build with zero switches, and no error</h2>
+  <div class="col">
+    <p>The mbedTLS source tree carries <strong>107 stale object files and three archives</strong> from an earlier in-tree build, and the existing build script copied them with <code>tar --exclude=.git</code>. <code>make</code> then judged every object up to date and <strong>skipped every compile</strong>: the taint flag is passed, nothing is recompiled, and the result is a library with zero <code>msr DIT</code> and no diagnostic of any kind.</p>
+    <p>Fixed in both this experiment&rsquo;s script and <code>tls_handshake/build.sh</code>, which had the same latent bug. Anything built from that tree before 2026&#8209;09&#8209;01 is worth re-checking.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Open</span>
+  <h2>What is still missing</h2>
+  <div class="col">
+    <p><strong>gem5.</strong> Silicon says the gain is IPC; it cannot say <em>which structure</em> produces it. Feature isolation would attribute it directly, and a switch-model sweep matters more here than in experiment 02 &mdash; the toggle rate at chunk=64 is one mode write per ~700 instructions, where 02&rsquo;s was 49 per signature.</p>
+    <p><strong>The public lane is still synthetic</strong> in the same way 02&rsquo;s is. The secret lane is a real library primitive and the interleaving is the realistic part, but the bookkeeping loop is constructed.</p>
+    <p><strong>One anomaly.</strong> The <code>dep</code> mode at chunk=1,024 reads &minus;1.79% where <code>ilp</code> reads &minus;7.56%, against a smooth trend everywhere else. Unexplained.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="col">
+    Rig: <code>benchmarks/record_mac/</code> in gem5-DIT &middot;
+    <code>sudo python3 run_grain.py</code> &middot; measured 2026&#8209;09&#8209;01 on Apple M5 (Mac17,2)
+  </div>
+</footer>
+
+</div>

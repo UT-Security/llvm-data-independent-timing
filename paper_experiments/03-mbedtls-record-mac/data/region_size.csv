@@ -1,0 +1,10 @@
+# Converting the chunk knob to TIME per secret region, which is the unit the
+# "fine grain stops paying below ~1us per region" claim is stated in.
+# us_secret is (full - --nomac) per record, i.e. the DIT region's own duration.
+# region_vs_blanket is the ratio, not the difference of the two percentages.
+chunk_bytes,us_per_record,us_secret_region,region_vs_function_pct,region_vs_blanket_pct
+64,1.06,0.66,-1.14,33.3
+256,1.85,1.06,-2.80,16.7
+1024,4.90,2.56,-8.12,-1.2
+4096,16.98,9.69,-12.71,-10.8
+16384,64.87,37.28,-13.49,-13.1

@@ -1,0 +1,19 @@
+# Apple M5 (Mac17,2), mbedTLS 3.6.2 HMAC-SHA256, 7 rotated paired reps, median.
+# 8 MB total per run; pub_div=1 so public work tracks the HMAC's actual cost
+# (chunk+128 bytes - payload plus two pad blocks).
+# Wall-clock is the headline: the arms are DIFFERENT BINARIES (base 1 switch,
+# region 46, function 42), so IPC is not the inverse of time the way it is in
+# experiment 02 where blanket and base were one binary.
+# ipc_* and insts_delta are kperf fixed counters, root-armed.
+# region = -ftaint-harden (default placement); function = ... -taint-dit-placement=function
+mode,chunk_bytes,records,f_secret_pct,blanket_pct,region_pct,function_pct,nop_pct,region_vs_function_pct,ipc_region,ipc_function,ipc_delta_pct,insts_delta_pct
+ilp,64,131072,64.7,10.75,47.47,49.21,-0.05,-1.17,2.250,2.224,1.19,0.00
+ilp,256,32768,57.4,9.80,28.38,31.86,-0.55,-2.64,2.303,2.243,2.70,0.00
+ilp,1024,8192,53.6,10.82,10.20,19.20,-0.62,-7.56,2.454,2.269,8.18,0.00
+ilp,4096,2048,55.6,15.14,2.67,17.61,-1.67,-12.70,2.608,2.276,14.56,0.00
+ilp,16384,512,61.8,18.44,2.60,19.09,0.07,-13.84,2.643,2.278,16.06,0.00
+dep,64,131072,73.9,10.57,48.03,49.13,-0.31,-0.74,2.231,2.214,0.76,0.00
+dep,256,32768,70.5,9.71,28.25,31.68,-0.42,-2.60,2.302,2.242,2.67,0.00
+dep,1024,8192,66.8,11.70,17.88,20.03,-0.40,-1.79,2.312,2.271,1.81,0.00
+dep,4096,2048,63.1,19.35,6.45,21.84,-0.89,-12.63,2.606,2.277,14.45,0.00
+dep,16384,512,62.9,18.81,2.85,19.36,-0.16,-13.83,2.642,2.277,16.05,0.00
