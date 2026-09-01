@@ -7,12 +7,35 @@ gem5-btc/coinsel_repro/`. Regenerate with `ipc_wallet_sweep.py` and
 
 ---
 
-## 1. Absolute IPC is not measurable on this machine
+## 1. Absolute IPC IS measurable on this machine - corrected 2026-09-01
 
-macOS exposes no usable PMU: no `perf`; `kpc`/`kperf` are private and root-only;
-this box has Command Line Tools, so no `xctrace`. Retired-instruction and cycle
-counts cannot be read on the M5, so **absolute silicon IPC is unavailable**. Any
-absolute IPC figure in this project comes from gem5.
+This section previously said absolute silicon IPC was unavailable and that every
+absolute IPC figure in the project came from gem5. **That was wrong**, and
+experiment 02 measures absolute IPC on the M5 directly.
+
+What is genuinely unavailable is real: there is no `perf`, this box has Command
+Line Tools so no `xctrace`, and `/usr/lib/libkperf.dylib` **does not exist**.
+That last fact is what the original claim rested on. But the PRIVATE FRAMEWORK
+loads and exposes the `kpc_*` API:
+
+    /System/Library/PrivateFrameworks/kperf.framework/kperf
+
+`kpc_get_counter_count(KPC_CLASS_FIXED_MASK)` reports **2 fixed counters**, which
+on Apple silicon are core cycles and instructions retired - exactly what IPC
+needs, with no event encodings to guess. Arming requires root:
+`kpc_force_all_ctrs_set(1)` returns -1 otherwise.
+
+Working implementation:
+`gem5-DIT/benchmarks/signed_lookup/kperf_ipc.h`. It degrades to `ipc=na` when
+unarmed rather than silently falling back to timing, and the runner treats that
+as fatal. Measured IPC across that experiment's arms spans 0.50 to 3.88, which is
+the plausibility check on the fixed-counter ordering.
+
+**None of the numbers below change.** They are IPC *changes* derived by the
+identity in §2, which needs no counter and is exact under the stated assumption.
+What changes is that the assumption can now be checked directly rather than
+bounded - see the end of §2 - and that a future re-take of this experiment could
+report absolute IPC instead of only the ratio.
 
 ## 2. The IPC *change* is exact anyway, with no counter
 
@@ -30,6 +53,19 @@ and blanket, at both switch models.
 The one assumption is equal clock between arms. The duplicate-baseline arm
 bounds it: two instruction-identical arms read -0.00%..+0.30% across this run,
 which is the uncertainty on each figure below.
+
+**That assumption is now independently confirmed, not just bounded.** Experiment
+02 ran the same workload under wall-clock and under kperf cycle counters and
+compared the two deltas directly:
+
+| point | wall-clock delta | kperf cycle delta |
+|---|---|---|
+| public lane, L = 20,000 | +11.92% | **+11.92%** |
+| full flow, L = 20,000 | +9.15% | **+8.84%** |
+
+Agreement to 0.3 points, i.e. inside the drift bound above. Time really is
+standing in for cycles on this machine, so the identity holds and every IPC
+figure in this file derived through it is sound.
 
 ## 3. Silicon: blanket DIT costs 3.7-4.0% of IPC, flat in secret fraction
 

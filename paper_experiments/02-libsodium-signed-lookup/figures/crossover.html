@@ -488,11 +488,12 @@
   <span class="eyebrow">Instrument note</span>
   <h2>Absolute silicon IPC is measurable after all</h2>
   <div class="col">
-    <p>Experiment 01 records that the M5 exposes no usable PMU, so every absolute IPC figure in the project comes from gem5. That holds for <code>/usr/lib/libkperf.dylib</code>, which does not exist on this machine &mdash; but the private framework loads and exposes the <code>kpc_*</code> API:</p>
+    <p>Experiment 01 recorded that the M5 exposes no usable PMU, so every absolute IPC figure in the project came from gem5. That holds for <code>/usr/lib/libkperf.dylib</code>, which does not exist on this machine &mdash; but the private framework loads and exposes the <code>kpc_*</code> API:</p>
   </div>
 <pre>/System/Library/PrivateFrameworks/kperf.framework/kperf   <span class="c">→ 2 FIXED counters</span></pre>
   <div class="col">
     <p>On Apple silicon those two are core cycles and instructions retired &mdash; exactly IPC, with no event encodings to guess. Arming needs root (<code>kpc_force_all_ctrs_set</code> returns &minus;1 otherwise), so the harness degrades to <code>ipc=na</code> and refuses to report rather than quietly falling back to timing.</p>
+    <p>Experiment 01&rsquo;s <code>ipc.md</code> has been corrected accordingly. None of its numbers change &mdash; they are IPC <em>ratios</em> derived from timing under an equal-clock assumption, and the cross-instrument agreement below turns that assumption from bounded into confirmed.</p>
     <p>The two instruments agree closely, which independently validates the equal-clock assumption experiment 01&rsquo;s derived IPC figures rest on:</p>
   </div>
 
