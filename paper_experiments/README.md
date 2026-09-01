@@ -13,6 +13,7 @@ the paper, not the order they were run.
 | # | workload | public lane | secret lane | knob | status |
 |---|---|---|---|---|---|
 | 01 | [Bitcoin Core wallet](01-bitcoin-core-wallet/) | coin selection, 4 solvers | `CKey::Sign` per input | inputs per tx | **complete, both instruments** |
+| 02 | [libsodium signed lookup](02-libsodium-signed-lookup/) | table lookups, value-dependent chain | `crypto_sign_ed25519` per request | lookups per signature | **complete, both instruments** |
 
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6
 
@@ -22,9 +23,16 @@ the paper, not the order they were run.
 | SQLite + ECDSA | SQLite queries | libsecp256k1 sign | signatures per batch | one gem5 point at f = 2.23%; curve missing |
 | CPython + coincurve | interpreter + Django | libsecp256k1 via coincurve | signatures per request | both endpoints measured; middle missing |
 
-Skia filters and libsodium are **not** crossover experiments - they are controls
-that fail the framework's first question (blanket DIT is already free on them),
-and they stay in `docs/results/`.
+Skia filters are **not** a crossover experiment - a control that fails the
+framework's first question (blanket DIT is already free on it), kept in
+`docs/results/`.
+
+**libsodium is BOTH**, which is worth stating rather than filing under one
+heading. Its own primitives fail the first question - blanket is free on aead,
+x25519, sha512, salsa20 and hmac_sha512, and on ed25519 it is a *speedup*
+(-2.96%), so no placement can win. But libsodium *inside a flow with a public
+lane* is experiment 02, where blanket reaches +32.64% and the pass beats it by
+21%. The library is not the workload; the flow is.
 
 ## Conventions
 

@@ -1,0 +1,550 @@
+<title>Signed-Lookup Crossover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground:      #F1F4F7;
+    --surface:     #FFFFFF;
+    --surface-alt: #E7ECF1;
+    --ink:         #161A20;
+    --ink-soft:    #4B5563;
+    --ink-faint:   #7C8794;
+    --rule:        #D2DBE3;
+    --rule-soft:   #E4EAEF;
+    --public:      #0E6F78;
+    --public-bg:   #DFF0F1;
+    --secret:      #A03257;
+    --secret-bg:   #F7E3EA;
+    --warn:        #9A5B12;
+    --code-bg:     #EDF1F5;
+    --shadow:      0 1px 2px rgba(22,26,32,.06), 0 8px 24px -16px rgba(22,26,32,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #11151A;
+      --surface:     #1A1F26;
+      --surface-alt: #222831;
+      --ink:         #DEE4EB;
+      --ink-soft:    #A3AEBB;
+      --ink-faint:   #7A8593;
+      --rule:        #2C333C;
+      --rule-soft:   #232A32;
+      --public:      #5CC7CE;
+      --public-bg:   #113035;
+      --secret:      #EF8CA9;
+      --secret-bg:   #381F29;
+      --warn:        #D9A441;
+      --code-bg:     #151A20;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #11151A;
+    --surface:     #1A1F26;
+    --surface-alt: #222831;
+    --ink:         #DEE4EB;
+    --ink-soft:    #A3AEBB;
+    --ink-faint:   #7A8593;
+    --rule:        #2C333C;
+    --rule-soft:   #232A32;
+    --public:      #5CC7CE;
+    --public-bg:   #113035;
+    --secret:      #EF8CA9;
+    --secret-bg:   #381F29;
+    --warn:        #D9A441;
+    --code-bg:     #151A20;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 96px; }
+  .col  { max-width: 68ch; }
+
+  h1, h2, h3 { font-family: "IBM Plex Serif", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 4.4vw, 3.05rem); font-weight: 600; letter-spacing: -.021em; line-height: 1.12; }
+  h2 { font-size: 1.44rem; font-weight: 600; letter-spacing: -.012em; }
+  h3 { font-size: 1.05rem; font-weight: 600; }
+  p  { margin: 0 0 1.05em; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--public); }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .705rem; font-weight: 500; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+
+  header.masthead { padding: 76px 0 40px; border-bottom: 1px solid var(--rule); margin-bottom: 44px; }
+  .lede { font-size: 1.16rem; color: var(--ink-soft); margin-top: 18px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+  }
+  .chip {
+    padding: 4px 10px; border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--surface); color: var(--ink-soft);
+  }
+  .chip.live { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  .chip.open { border-color: var(--warn); color: var(--warn); }
+
+  section { margin: 0 0 60px; }
+  section > h2 { margin-bottom: 6px; }
+  section > .eyebrow { display: block; margin-bottom: 10px; }
+  .sub { color: var(--ink-faint); margin: 0 0 26px; font-size: .95rem; }
+
+  /* two-lane panel: the colours encode the experiment's real dichotomy */
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 26px 0; }
+  @media (max-width: 720px) { .lanes { grid-template-columns: 1fr; } }
+  .lane {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-top: 3px solid var(--public); border-radius: 4px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .lane.secret { border-top-color: var(--secret); }
+  .lane h3 { margin-bottom: 4px; }
+  .lane.public h3 { color: var(--public); }
+  .lane.secret h3 { color: var(--secret); }
+  .lane .what { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .81rem; color: var(--ink); margin: 8px 0 12px; }
+  .lane p { margin: 0; font-size: .93rem; }
+  .lane .ipc {
+    margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--rule-soft);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .8rem;
+    color: var(--ink-faint); display: flex; justify-content: space-between; gap: 10px;
+  }
+  .lane .ipc b { font-weight: 600; font-size: 1.18rem; font-variant-numeric: tabular-nums; }
+  .lane.public .ipc b { color: var(--public); }
+  .lane.secret .ipc b { color: var(--secret); }
+
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 18px 20px; overflow-x: auto; margin: 20px 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .82rem;
+    line-height: 1.68; color: var(--ink);
+  }
+  code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .875em; }
+  p code, li code, td code { background: var(--surface-alt); padding: 1px 5px; border-radius: 3px; color: var(--ink); }
+  .c  { color: var(--ink-faint); font-style: italic; }
+  .kw { color: var(--secret); }
+  .fn { color: var(--public); }
+  .filename {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .72rem;
+    color: var(--ink-faint); margin-bottom: -12px; padding-left: 2px;
+  }
+
+  .scroll { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .87rem; }
+  th, td { padding: 9px 15px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule-soft); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .69rem;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);
+    font-weight: 500; border-bottom: 1px solid var(--rule); background: var(--surface-alt);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  td.cost { color: var(--secret); font-weight: 600; }
+  td.free { color: var(--ink-faint); }
+  td.tag  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .78rem; color: var(--ink-faint); }
+  tr.rule-lane td { background: var(--public-bg); }
+
+  .callout {
+    border-left: 3px solid var(--warn); background: var(--surface);
+    padding: 18px 22px; border-radius: 0 4px 4px 0; margin: 24px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout h3 { margin-bottom: 6px; color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  ol.gates { list-style: none; counter-reset: g; padding: 0; margin: 22px 0; }
+  ol.gates li {
+    counter-increment: g; position: relative; padding: 0 0 16px 46px;
+    border-left: 1px solid var(--rule); margin-left: 13px;
+  }
+  ol.gates li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.gates li::before {
+    content: counter(g); position: absolute; left: -13px; top: 0;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--rule); color: var(--ink-faint);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+    display: grid; place-items: center;
+  }
+  ol.gates li.pass::before { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  ol.gates li.todo::before { border-color: var(--warn); color: var(--warn); }
+  ol.gates b { display: block; color: var(--ink); }
+  ol.gates span { font-size: .93rem; color: var(--ink-soft); }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 22px; color: var(--ink-faint); font-size: .84rem; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="col">
+    <span class="eyebrow">Paper experiment 02 &middot; libsodium</span>
+    <h1>Signed-Lookup Crossover</h1>
+    <p class="lede">Selective <code>PSTATE.DIT</code> placement beats blanket DIT below a secret fraction of <strong>59%</strong>, by up to <strong>21.7%</strong>. One request, two lanes &mdash; public table lookups and one ed25519 signature &mdash; with a single integer moving the ratio between them.</p>
+    <div class="meta">
+      <span class="chip live">crossover measured, f* = 59%</span>
+      <span class="chip">Apple M5 &middot; kperf &middot; 4 runs</span>
+      <span class="chip">4 arms &middot; 5 knob points &middot; 9 reps</span>
+      <span class="chip live">gem5: 4 arms, both switch models</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <span class="eyebrow">The shape</span>
+  <h2>Two lanes inside one call</h2>
+  <p class="sub">The same experiment as the Bitcoin Core wallet, on a different workload. The knob direction is inverted: the secret lane is fixed at one signature and the public lane grows, so <code>f_secret</code> <em>falls</em> as L rises.</p>
+
+  <div class="lanes">
+    <div class="lane public">
+      <h3>Public lane</h3>
+      <div class="what">lookup_lane(reqid, L)</div>
+      <p>L value-dependent loads into a hot 4&nbsp;KB table. Each address depends on the previous load, so the chain is serial &mdash; the shape EVES and the data-memory prefetcher exist for. Never touches the key.</p>
+      <div class="ipc"><span>measured IPC</span><b>0.75</b></div>
+    </div>
+    <div class="lane secret">
+      <h3>Secret lane</h3>
+      <div class="what">crypto_sign(...)</div>
+      <p>One ed25519 signature over the gathered digest. Seeded through the project&rsquo;s existing CIO-parity seed set rather than a seed file invented for this experiment.</p>
+      <div class="ipc"><span>measured IPC</span><b>3.33</b></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <p>A 4.4&times; IPC gap between the lanes is what makes the knob work: moving L moves the mix between two microarchitecturally distinct regimes, not between two flavours of the same one.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">The code</span>
+  <h2>What the two lanes actually are</h2>
+
+  <p class="filename">benchmarks/signed_lookup/signed_lookup_gem5.c</p>
+<pre><span class="c">/* PUBLIC. Serial, value-dependent: the next address cannot be formed
+   until the previous load returns. */</span>
+<span class="kw">static</span> uint64_t <span class="fn">lookup_lane</span>(uint64_t reqid, <span class="kw">int</span> L) {
+    uint64_t acc = reqid * 0x9E3779B97F4A7C15ULL;
+    <span class="kw">for</span> (<span class="kw">int</span> j = 0; j &lt; L; j++) {
+        acc += tbl[acc &amp; tbl_mask];   <span class="c">/* value-dependent load address */</span>
+        acc = acc * 5 + 1;            <span class="c">/* keeps the chain serial */</span>
+    }
+    <span class="kw">return</span> acc;
+}</pre>
+
+  <p class="filename">the measured region &mdash; identical under gem5 and on silicon</p>
+<pre><span class="fn">roi_begin</span>();
+<span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; iter; i++) {
+    uint64_t d = <span class="fn">lookup_lane</span>((uint64_t)i + 1000000, L);
+    <span class="kw">if</span> (dosign) <span class="fn">crypto_sign</span>(sm, &amp;smlen, (<span class="kw">const unsigned char</span> *)&amp;d, 8, sk);
+    sink += d + sm[0];
+}
+<span class="fn">roi_end</span>();</pre>
+
+  <div class="col">
+    <p><code>roi_begin</code> and <code>roi_end</code> compile to gem5 pseudo-ops under <code>-DGEM5_BUILD</code> and to a monotonic clock plus kperf counters natively, so both instruments measure the same region of the same source.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">A false start worth keeping</span>
+  <h2>The first public lane had no prize</h2>
+  <div class="col">
+    <p>The first version hashed the accumulator to pick the index, over a 512&nbsp;KB table. The reasoning was to avoid the <code>lvp_chase</code> trap, where a fixed traversal order is memorised by the value predictor after one pass and reports a 4.0&times; prize against 1&ndash;2% on real code.</p>
+    <p>That over-corrected. A hashed index into a large table is unpredictable <em>by construction</em>, and the result was a pure memory-latency benchmark:</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>first design</th><th>IPC</th><th>value predictions</th><th>blanket DIT costs</th></tr></thead>
+      <tbody>
+        <tr><td>512&nbsp;KB, hashed index</td><td class="num">0.235</td><td class="num">2,824 in 56M insts</td><td class="num free">+0.01%</td></tr>
+        <tr class="rule-lane"><td>4&nbsp;KB, hot table</td><td class="num">0.826</td><td class="num">&mdash;</td><td class="num cost">+11.92%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Real lookup tables are small and hot, and that is exactly what makes them predictable. Table size turned out to matter little across 4&nbsp;KB, 32&nbsp;KB and 512&nbsp;KB once the index stopped being hashed &mdash; the prize lives in the serial dependence chain, not in cache behaviour.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Result</span>
+  <h2>The crossover</h2>
+  <p class="sub">Mean of two kperf runs with tail calls disabled, 9 rotated paired reps per point. Two earlier runs with tail calls enabled agree to within 0.4 points at every column. Negative <em>pass &minus; blanket</em> means selective placement wins.</p>
+
+  <div class="col">
+    <p><strong>L is the knob</strong> &mdash; table lookups in the public lane per request. The secret lane is fixed at exactly one signature, so L alone sets the ratio: each request does L dependent lookups (~7 instructions each) and then one ed25519 signature that never changes size.</p>
+    <p><strong>f_secret is a fraction of cycles, not instructions</strong>, measured per point by re-running with <code>--nosign</code> and taking (full &minus; public) / full. That distinction matters here because the lanes sit at very different IPC &mdash; 0.75 against 3.3 &mdash; so the two fractions would not agree. Experiment 01 measures it the same way, which keeps them comparable.</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>L</th><th>f_secret</th><th>base IPC</th><th>blanket</th><th>pass</th><th>nop (layout)</th><th>pass &minus; blanket</th><th>spread</th></tr></thead>
+      <tbody>
+        <tr><td class="num">500</td><td class="num">88.2%</td><td class="num">3.88</td><td class="num">+0.78%</td><td class="num">+6.94%</td><td class="num free">+0.06%</td><td class="num cost">+6.11%</td><td class="tag">0.09</td></tr>
+        <tr><td class="num">2,000</td><td class="num">64.2%</td><td class="num">3.05</td><td class="num">+1.36%</td><td class="num">+2.53%</td><td class="num free">&minus;0.65%</td><td class="num cost">+1.16%</td><td class="tag">0.29</td></tr>
+        <tr><td class="num">5,000</td><td class="num">41.1%</td><td class="num">2.29</td><td class="num">+3.77%</td><td class="num">&minus;0.61%</td><td class="num free">&minus;0.94%</td><td class="num">&minus;4.22%</td><td class="tag">0.03</td></tr>
+        <tr><td class="num">20,000</td><td class="num">13.9%</td><td class="num">1.45</td><td class="num">+13.79%</td><td class="num">&minus;1.58%</td><td class="num free">&minus;1.50%</td><td class="num">&minus;13.51%</td><td class="tag">0.05</td></tr>
+        <tr class="rule-lane"><td class="num">60,000</td><td class="num">4.0%</td><td class="num">1.24</td><td class="num">+32.64%</td><td class="num">+4.70%</td><td class="num free">+1.01%</td><td class="num">&minus;21.07%</td><td class="tag">0.27</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p><strong>f* = 59%.</strong> Below it selective placement wins, and the margin grows as the public lane grows: &minus;4.1% at f=41%, &minus;13.5% at f=13%, <strong>&minus;21.5%</strong> at f=4%. Worst disagreement between the three runs is 0.46 points, and the unprivileged wall-clock run lands inside the two counter runs at every point.</p>
+    <p>The mechanism is experiment 01&rsquo;s, mirrored. There the public lane is fixed and the secret lane grows, so blanket is flat and the pass&rsquo;s toggle bill climbs &mdash; crossover as f <em>rises</em>. Here the secret lane is fixed and the public lane grows, so <strong>the pass is roughly flat</strong> (+1.1% to +4.5%) while <strong>blanket scales with the public lane</strong>, +0.74% to +32.05% &mdash; a 43&times; range. Crossover as f <em>falls</em>. Two workloads, opposite parameterizations, both finding a crossover.</p>
+    <p>The <code>nop</code> arm spans only &minus;0.92% to +0.67% across every point, so none of this is the cost of restructuring the code &mdash; it is DIT. And at f=41% the pass runs <em>faster than baseline</em>, the same effect ed25519 shows: DIT gates optimizations that were net harmful on that code.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">The same experiment on gem5</span>
+  <h2>Four arms, and the switch model barely registers</h2>
+  <p class="sub">Silicon gives magnitude, the simulator gives mechanism &mdash; and two things silicon cannot supply: the pass under both <code>MSR DIT</code> models, and a count of the mode writes that actually commit.</p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>L</th><th>f_secret</th><th>arm</th><th>IPC</th><th>vs base</th><th>committed DIT writes</th></tr></thead>
+      <tbody>
+        <tr><td class="num">500</td><td class="num">95.7%</td><td>no DIT</td><td class="num">2.264</td><td class="num">&mdash;</td><td class="num free">0</td></tr>
+        <tr><td></td><td></td><td>blanket</td><td class="num">2.135</td><td class="num cost">+6.07%</td><td class="num free">0</td></tr>
+        <tr><td></td><td></td><td>pass, renamed</td><td class="num">2.200</td><td class="num">+2.96%</td><td class="num">1,813</td></tr>
+        <tr><td></td><td></td><td>pass, serialising</td><td class="num">2.168</td><td class="num">+4.50%</td><td class="num">1,813</td></tr>
+
+        <tr><td class="num">5,000</td><td class="num">70.7%</td><td>no DIT</td><td class="num">1.927</td><td class="num">&mdash;</td><td class="num free">0</td></tr>
+        <tr><td></td><td></td><td>blanket</td><td class="num">1.415</td><td class="num cost">+36.13%</td><td class="num free">0</td></tr>
+        <tr><td></td><td></td><td>pass, renamed</td><td class="num">1.922</td><td class="num">+0.30%</td><td class="num">1,568</td></tr>
+        <tr><td></td><td></td><td>pass, serialising</td><td class="num">1.897</td><td class="num">+1.62%</td><td class="num">1,568</td></tr>
+
+        <tr><td class="num">20,000</td><td class="num">36.9%</td><td>no DIT</td><td class="num">1.589</td><td class="num">&mdash;</td><td class="num free">0</td></tr>
+        <tr><td></td><td></td><td>blanket</td><td class="num">0.869</td><td class="num cost">+82.77%</td><td class="num free">0</td></tr>
+        <tr><td></td><td></td><td>pass, renamed</td><td class="num">1.561</td><td class="num">+1.79%</td><td class="num">1,127</td></tr>
+        <tr><td></td><td></td><td>pass, serialising</td><td class="num">1.549</td><td class="num">+2.58%</td><td class="num">1,127</td></tr>
+
+        <tr class="rule-lane"><td class="num">60,000</td><td class="num">17.3%</td><td>no DIT</td><td class="num">1.335</td><td class="num">&mdash;</td><td class="num free">0</td></tr>
+        <tr class="rule-lane"><td></td><td></td><td>blanket</td><td class="num">0.642</td><td class="num cost">+107.76%</td><td class="num free">0</td></tr>
+        <tr class="rule-lane"><td></td><td></td><td>pass, renamed</td><td class="num">1.332</td><td class="num"><strong>+0.22%</strong></td><td class="num">637</td></tr>
+        <tr class="rule-lane"><td></td><td></td><td>pass, serialising</td><td class="num">1.327</td><td class="num">+0.60%</td><td class="num">637</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p><strong>The pass beats blanket at every point</strong> &mdash; by 2.9%, 26.3%, 44.3% and 51.8% respectively. There is no crossover anywhere in this range.</p>
+    <p><strong>The switch model barely registers.</strong> Serialising costs the pass between +0.38 and +1.54 points over renamed. The committed-write counter explains it: <strong>exactly 49 writes per signature at every L</strong>. A toggle bill that small does not care much what a toggle costs. That is the same conclusion the callee-saved ABI work reached, now from a direct count rather than an inference.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Where gem5 and silicon disagree, and it is not just magnitude</h3>
+    <p>At high secret fraction silicon has the pass <strong>losing</strong> (+6.94% against blanket&rsquo;s +0.78%); gem5 has it <strong>winning</strong> (+2.96% against +6.07%). The cause is visible in the table: gem5&rsquo;s blanket costs <strong>+6.07% when 95.7% of the work is signing</strong>, so its model finds prediction opportunity inside ed25519 that the real M5 does not. On silicon, DIT over signing is roughly free.</p>
+    <p>Magnitudes are inflated about 3.3&times; throughout &mdash; blanket reaches +107.76% here against silicon&rsquo;s +32.64% &mdash; which is the split this project sees everywhere: the simulator answers <em>which structure</em>, silicon answers <em>how much</em>.</p>
+    <p><strong>The two tables also sit at different points on the f axis.</strong> gem5 reads f=17.3% at L=60,000 where silicon reads 4.0%, because the machines weight the lanes differently. Same knob, different f &mdash; so <code>f* = 59%</code> from silicon and &ldquo;no crossover below 95.7%&rdquo; from gem5 cannot be compared without matching on f first.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Mechanism</span>
+  <h2>Blanket does not get slower. The baseline gets faster.</h2>
+  <div class="col">
+    <p>Blanket&rsquo;s cost climbs from +0.78% to +32.64% as the secret fraction falls, which reads like DIT becoming more expensive. It is the opposite. Normalise to the cost of a single lookup:</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>L</th><th>lookups measured</th><th>no DIT</th><th>blanket</th><th>penalty</th></tr></thead>
+      <tbody>
+        <tr><td class="num">500</td><td class="num">10,000,000</td><td class="num">1.957 ns</td><td class="num">1.960 ns</td><td class="num free">+0.15%</td></tr>
+        <tr><td class="num">2,000</td><td class="num">12,000,000</td><td class="num">2.019 ns</td><td class="num">2.040 ns</td><td class="num free">+1.03%</td></tr>
+        <tr><td class="num">5,000</td><td class="num">12,500,000</td><td class="num">2.001 ns</td><td class="num">2.056 ns</td><td class="num">+2.76%</td></tr>
+        <tr><td class="num">20,000</td><td class="num">13,000,000</td><td class="num">1.845 ns</td><td class="num">2.065 ns</td><td class="num cost">+11.93%</td></tr>
+        <tr class="rule-lane"><td class="num">60,000</td><td class="num">13,200,000</td><td class="num"><strong>1.582 ns</strong></td><td class="num">2.066 ns</td><td class="num cost">+30.60%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p><strong>Blanket is flat at ~2.06 ns per lookup at every L. The baseline falls from 1.96 to 1.58 ns.</strong> ~2.06 ns is what one iteration costs when it must execute serially &mdash; each address depends on the previous load, so the chain is pure latency. The only way to beat it is to break the dependence, which is what value prediction does: guess the loaded value, run ahead, verify later. DIT switches that off, so the serial latency is always paid.</p>
+    <p>The baseline improves with L because the predictor has to observe a pattern before exploiting it. At L=500 a request ends before much is learned, so DIT costs 0.15% &mdash; free. At L=60,000 the predictor is in steady state for tens of thousands of iterations and delivers a 19% speedup, all of which blanket surrenders.</p>
+  </div>
+
+  <h3 style="margin-top:34px">gem5 confirms it, on the counter silicon cannot expose</h3>
+  <div class="col">
+    <p>Wall-clock cannot see a predictor. Running the same public lane under gem5 does:</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>L</th><th>arm</th><th>IPC</th><th>value predictions</th><th>per 1k instructions</th></tr></thead>
+      <tbody>
+        <tr><td class="num">500</td><td>no DIT</td><td class="num">1.090</td><td class="num">3,594,253</td><td class="num">254.9</td></tr>
+        <tr><td class="num">500</td><td>blanket</td><td class="num">0.527</td><td class="num">11,998</td><td class="num">0.85</td></tr>
+        <tr><td class="num">20,000</td><td>no DIT</td><td class="num">1.152</td><td class="num">3,998,592</td><td class="num">285.6</td></tr>
+        <tr><td class="num">20,000</td><td>blanket</td><td class="num">0.501</td><td class="num">297</td><td class="num">0.02</td></tr>
+        <tr><td class="num">60,000</td><td>no DIT</td><td class="num">1.152</td><td class="num">3,959,291</td><td class="num">285.7</td></tr>
+        <tr class="rule-lane"><td class="num">60,000</td><td>blanket</td><td class="num">0.500</td><td class="num"><strong>59</strong></td><td class="num">0.00</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>DIT annihilates the predictor &mdash; <strong>3,959,291 predictions to 59</strong> &mdash; and IPC halves. Prediction activity also rises with chain length (254.9 to 285.7 per 1k instructions), the same direction silicon shows as falling per-lookup time.</p>
+    <p><strong>gem5 overstates the magnitude</strong>: +130% cycles against silicon&rsquo;s +30.6%. That split is consistent across this project &mdash; the simulator answers <em>which structure</em>, silicon answers <em>how much</em>. Neither alone is enough.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">A result that runs against intuition</span>
+  <h2>More precise seeding made the pass slower</h2>
+  <div class="col">
+    <p>The first crossover used a secret lane covered by <em>inherited</em> DIT: one enable at the entry to signing and no switches inside it, because <code>crypto_sign_ed25519</code> and SHA-512 were in translation units the seed set never named. Following the information-loss report to a fixpoint added five seed lines and gave the secret lane real placement &mdash; 64 to 82 switches in the binary, with SHA-512 going from 0 to 14 and the curve arithmetic from 0 to 4.</p>
+    <p>That made the pass <strong>worse</strong> where the secret dominates, and moved the crossover down:</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>f_secret</th><th>secret lane inherited<br>(64 switches)</th><th>secret lane placed<br>(82 switches)</th><th>change</th></tr></thead>
+      <tbody>
+        <tr><td class="num">88.2%</td><td class="num">+2.96%</td><td class="num cost">+6.23%</td><td class="num cost">+3.27</td></tr>
+        <tr><td class="num">64.1%</td><td class="num">&minus;0.24%</td><td class="num cost">+1.03%</td><td class="num cost">+1.27</td></tr>
+        <tr><td class="num">41.1%</td><td class="num">&minus;5.60%</td><td class="num">&minus;4.06%</td><td class="num cost">+1.54</td></tr>
+        <tr class="rule-lane"><td class="num">13.2%</td><td class="num">&minus;8.64%</td><td class="num">&minus;13.51%</td><td class="num">&minus;4.87</td></tr>
+        <tr><td class="num">4.4%</td><td class="num">&minus;21.70%</td><td class="num">&minus;21.46%</td><td class="num">+0.24</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>The mechanism is the toggle-versus-coverage tradeoff appearing <em>inside</em> the secret lane rather than between the two lanes. Real placement in SHA-512 and the curve arithmetic means switches inside signing; where signing is 88% of the work those are pure added cost, and the pass&rsquo;s bill more than doubles. <strong>f* moves 66% &rarr; 59%.</strong></p>
+    <p>The one band it helps is the middle-low: &minus;4.9 points at f=13%, where the pass now beats the unhardened baseline outright (&minus;0.63%).</p>
+    <p>So a more faithful analysis is the more expensive one. That is worth stating plainly, because the instinct when a report says &ldquo;taint stopped here&rdquo; is that following it can only improve matters.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">The measurement that nearly did not happen</span>
+  <h2>The pass arm was blanket in disguise</h2>
+  <div class="col">
+    <p>The first <code>pass</code> arm entered the public lane with DIT already set on <strong>100% of requests</strong>. It was byte-for-byte blanket, and every number it produced would have looked entirely plausible.</p>
+    <p>libsodium&rsquo;s public <code>crypto_sign</code> is a two-instruction forwarder:</p>
+  </div>
+<pre>_crypto_sign:
+  msr   DIT, #0x1
+  b     _crypto_sign_ed25519      <span class="c">; tail call - no epilogue, nothing ever clears</span></pre>
+  <div class="col">
+    <p>A tail call has no epilogue, so the mode is never restored and every instruction afterwards runs protected. The fix needed no compiler change: call <code>crypto_sign_ed25519</code> directly. Same key, same algorithm, but it does real work after its own inner call, so it returns normally and placement can clear there.</p>
+    <p>The compiler now says this at build time rather than leaving it to be discovered:</p>
+  </div>
+<pre>taint: crypto_sign: DIT stays SET past this call: all later code runs
+       protected, so selective placement degenerates to blanket coverage</pre>
+  <div class="col">
+    <p>And <code>pub_dit</code> &mdash; the fraction of requests entering the public lane with DIT set &mdash; is now a fatal gate in the runner, so this class of error aborts a sweep instead of producing a table.</p>
+    <p><strong>The general fix costs nothing.</strong> Building the library with <code>-fno-optimize-sibling-calls</code> &mdash; a plain compiler flag, not the callee-saved ABI: no carrier, no frame slot, no <code>mrs</code> &mdash; removes every tail call, so placement has a real return to clear at. On libsodium that took the information-loss report from <strong>7 severe leaks to 0</strong>, and the crossover moved by less than the run-to-run spread. Correctness for free. The ABI&rsquo;s other half, which removes after-call re-asserts, is a separate and much more expensive proposition.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Supporting &middot; Apple M5, kperf fixed counters</span>
+  <h2>Blanket DIT costs, measured in IPC</h2>
+  <p class="sub">11 rotated paired reps per point. Both arms are the same binary; blanket is one <code>MSR DIT</code> executed before the region, so no instruction inside it differs.</p>
+
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>configuration</th><th>L</th><th>IPC, no DIT</th><th>IPC, blanket</th><th>IPC change</th><th>cycles</th><th>sign test</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>public lane only</td><td class="num">2,000</td><td class="num">0.755</td><td class="num">0.747</td><td class="num">&minus;0.99%</td><td class="num cost">+1.02%</td><td class="tag">11/11</td></tr>
+        <tr><td>public lane only</td><td class="num">5,000</td><td class="num">0.761</td><td class="num">0.741</td><td class="num">&minus;2.68%</td><td class="num cost">+2.76%</td><td class="tag">11/11</td></tr>
+        <tr><td>public lane only</td><td class="num">20,000</td><td class="num">0.826</td><td class="num">0.738</td><td class="num">&minus;10.65%</td><td class="num cost">+11.92%</td><td class="tag">11/11</td></tr>
+        <tr><td>full flow</td><td class="num">2,000</td><td class="num">3.330</td><td class="num">3.301</td><td class="num">&minus;0.88%</td><td class="num free">+0.87%</td><td class="tag">11/11</td></tr>
+        <tr><td>full flow</td><td class="num">5,000</td><td class="num">2.480</td><td class="num">2.432</td><td class="num">&minus;1.92%</td><td class="num cost">+1.95%</td><td class="tag">11/11</td></tr>
+        <tr><td>full flow</td><td class="num">20,000</td><td class="num">1.487</td><td class="num">1.366</td><td class="num">&minus;8.12%</td><td class="num cost">+8.84%</td><td class="tag">11/11</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>The full flow moves from <strong>+0.87%</strong> when signing dominates to <strong>+8.84%</strong> when lookups do. That span is the crossover axis: blanket&rsquo;s cost is bounded by the size of the public lane, because that is where the prize lives.</p>
+    <p>These numbers are also the ceiling on what any placement policy can recover. A pass that removes every toggle it possibly could still cannot beat blanket by more than the blanket cost itself.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Instrument note</span>
+  <h2>Absolute silicon IPC is measurable after all</h2>
+  <div class="col">
+    <p>Experiment 01 records that the M5 exposes no usable PMU, so every absolute IPC figure in the project comes from gem5. That holds for <code>/usr/lib/libkperf.dylib</code>, which does not exist on this machine &mdash; but the private framework loads and exposes the <code>kpc_*</code> API:</p>
+  </div>
+<pre>/System/Library/PrivateFrameworks/kperf.framework/kperf   <span class="c">→ 2 FIXED counters</span></pre>
+  <div class="col">
+    <p>On Apple silicon those two are core cycles and instructions retired &mdash; exactly IPC, with no event encodings to guess. Arming needs root (<code>kpc_force_all_ctrs_set</code> returns &minus;1 otherwise), so the harness degrades to <code>ipc=na</code> and refuses to report rather than quietly falling back to timing.</p>
+    <p>The two instruments agree closely, which independently validates the equal-clock assumption experiment 01&rsquo;s derived IPC figures rest on:</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>point</th><th>wall-clock delta</th><th>kperf cycle delta</th></tr></thead>
+      <tbody>
+        <tr><td>public lane, L = 20,000</td><td class="num">+11.92%</td><td class="num">+11.92%</td></tr>
+        <tr><td>full flow, L = 20,000</td><td class="num">+9.15%</td><td class="num">+8.84%</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Method</span>
+  <h2>Gates, in the order they run</h2>
+  <p class="sub">Each one is fatal. The sequence is real: a workload that fails an early gate is not worth the next instrument.</p>
+
+  <ol class="gates">
+    <li class="pass"><b>Blanket DIT costs something &mdash; natively, first</b>
+      <span>Answered on silicon in seconds. If blanket is free the workload is a control, not a crossover, and no gem5 arms get built. <strong>Passed:</strong> up to +11.92%.</span></li>
+    <li class="pass"><b>Counters are armed</b>
+      <span>Any run reporting <code>ipc=na</code> aborts the sweep instead of silently reporting timing as IPC.</span></li>
+    <li class="pass"><b>Each arm ran in the mode it claims</b>
+      <span>The binary reads <code>PSTATE.DIT</code> back and prints it; a mismatch is fatal. <code>sudo</code> sanitises <code>DYLD_*</code>, so the blanket arm sets the bit in-process rather than by library injection &mdash; otherwise it would have become a second baseline.</span></li>
+    <li class="pass"><b>Retired instructions match between arms</b>
+      <span>Blanket changes no instruction, so the counts must agree. <strong>Measured:</strong> &plusmn;0.01%.</span></li>
+    <li class="pass"><b>Arm order rotates every rep</b>
+      <span>A fixed order lets frequency drift masquerade as an effect.</span></li>
+    <li class="pass"><b>Layout is separated from DIT</b>
+      <span>The <code>nop</code> arm emits every switch as <code>HINT #0</code> at the same address. <strong>Measured:</strong> &minus;0.92% to +0.67% across all points, so restructuring is not the effect.</span></li>
+    <li class="pass"><b>Every arm actually narrows</b>
+      <span><code>pub_dit</code> must be 0 for every arm but blanket. It read <strong>1.000</strong> on the first pass arm, which was blanket in disguise. Now fatal.</span></li>
+  </ol>
+</section>
+
+<section>
+  <span class="eyebrow">Open</span>
+  <h2>What is still missing</h2>
+  <div class="col">
+    <p><strong>Matching the two instruments on f.</strong> The gem5 and silicon tables are indexed by the same knob but land on different secret fractions, so no crossover point can be compared between them yet. Sweeping L on gem5 until its f matches silicon&rsquo;s would settle whether the disagreement at high f is a model artefact or a real property of the machines.</p>
+    <p><strong>The public lane is synthetic.</strong> It is a dependence chain built to have the right shape, not a real application&rsquo;s public code the way coin selection is in experiment 01. That makes the mechanism clean to read and the absolute numbers less transferable.</p>
+    <p><strong>The secret lane is one layer deep.</strong> Seeding <code>crypto_sign_ed25519</code> gave it real placement, and the report immediately named the next wall &mdash; <code>crypto_hash_sha512</code> and the <code>ge25519_*</code> group. Going further would widen placement inside the signing; where to stop is a choice, not an oversight.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="col">
+    Rig: <code>benchmarks/signed_lookup/</code> in gem5-DIT &middot; run with
+    <code>sudo python3 run_crossover.py</code> &middot; measured 2026&#8209;08&#8209;31 on Apple M5 (Mac17,2)
+  </div>
+</footer>
+
+</div>

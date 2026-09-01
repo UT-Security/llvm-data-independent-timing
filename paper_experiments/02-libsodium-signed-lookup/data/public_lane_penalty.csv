@@ -1,0 +1,9 @@
+# C_public: what blanket DIT costs the PUBLIC lane alone (--nosign), Apple M5,
+# 7 reps, median. Iterations scaled to hold total work ~constant, so ns_per_lookup
+# is comparable down the column.
+L,lookups,nodit_ms,blanket_ms,penalty_pct,nodit_ns_per_lookup,blanket_ns_per_lookup
+500,10000000,19.57,19.60,0.15,1.957,1.960
+2000,12000000,24.23,24.48,1.03,2.019,2.040
+5000,12500000,25.01,25.70,2.76,2.001,2.056
+20000,13000000,23.98,26.84,11.93,1.845,2.065
+60000,13200000,20.88,27.27,30.60,1.582,2.066
