@@ -1,0 +1,7 @@
+# Where the switches land. All 48 are in ONE object - the C TLS 1.3 key schedule.
+# libcrypto.a has zero in every arm, which is the assembly limit showing up as a
+# measurement rather than an argument.
+arm,libssl_msr_dit,carriers,guarded_exits,libcrypto_msr_dit
+plain,0,0,0,0
+base,48,0,0,0
+abi,15,6,10,0

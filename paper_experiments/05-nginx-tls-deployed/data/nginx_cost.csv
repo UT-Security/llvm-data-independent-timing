@@ -1,0 +1,11 @@
+# nginx 1.28.0 + OpenSSL 3.5.4, TLS 1.3 full handshakes, Apple M5.
+# 600 handshakes x 15 reps, arm order rotated every rep.
+# SERVER CPU, not throughput: the client verifies the certificate and burns 7x
+# the server's CPU (2211 ms vs 278 ms per 600 handshakes), so wall-clock
+# throughput would bury a server-side effect entirely. Measured with
+# getrusage(RUSAGE_CHILDREN); `ps -o time=` at 10 ms granularity returned a
+# median difference of exactly 0.00% and was not resolution, it was no signal.
+comparison,server_cpu_pct,sign_test
+hardening cost (base vs unhardened),0.65,14/15 slower
+hardening cost with the callee-saved ABI,0.21,11/15 slower
+what the ABI recovers,-0.41,13/15 faster
