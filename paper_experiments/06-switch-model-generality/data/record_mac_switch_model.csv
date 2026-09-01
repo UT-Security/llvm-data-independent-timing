@@ -1,0 +1,18 @@
+# Experiment 03's workload under both gem5 MSR DIT models.
+# gem5 Neoverse-V2 FDP, --eves --dmp --comp-simp. serialising = --no-speculative-dit.
+# dit_writes is commit.ditWrites - mode writes that COMMIT, not static sites.
+# 32 KB total per run: the hardened arms are pathologically slow to simulate at
+# the native experiment's 8 MB, which is itself worth knowing.
+chunk_bytes,switch_model,arm,cycles,insts_per_cycle,vs_base_pct,dit_writes
+64,renamed,base,4143394,2.431,0.00,0
+64,renamed,region,4211148,2.396,1.64,19065
+64,renamed,function,4927573,2.048,18.93,20295
+64,serialising,base,4015120,2.508,0.00,0
+64,serialising,region,4715269,2.140,17.44,19065
+64,serialising,function,5422130,1.861,35.04,20295
+16384,renamed,base,1075691,2.238,0.00,0
+16384,renamed,region,1058515,2.275,-1.60,93
+16384,renamed,function,1472574,1.635,36.90,99
+16384,serialising,base,1074365,2.241,0.00,0
+16384,serialising,region,1064263,2.262,-0.94,93
+16384,serialising,function,1470481,1.637,36.87,99

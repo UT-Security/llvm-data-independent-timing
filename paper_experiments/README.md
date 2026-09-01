@@ -24,6 +24,7 @@ were run.
 | 03 | [mbedTLS record MAC](03-mbedtls-record-mac/) | per-record bookkeeping, in the SAME function | `mbedtls_md_hmac` per record | **bytes per record (region SIZE)** | **complete, silicon** |
 | 04 | [libsecp256k1 soundness](04-libsecp256k1-soundness/) | - | ECDSA signing, key seeded | **none - measures PROTECTION, not cost** | **complete, gem5** |
 | 05 | [nginx TLS 1.3](05-nginx-tls-deployed/) | request handling, cert verify | TLS 1.3 key schedule | **none - a DEPLOYED server, measures REACH** | **complete, silicon** |
+| 06 | [switch-model generality](06-switch-model-generality/) | - | experiments 02 and 03's workloads | **MSR DIT implementation - measures TRANSFERABILITY** | **complete, gem5** |
 | 07 | [annotation cost](07-annotation-cost/) | - | libsodium signing path | **seed DEPTH - measures DEVELOPER cost** | **complete, silicon** |
 
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6

@@ -1,0 +1,6 @@
+# The switch model's cost, as a function of the COMMITTED toggle rate.
+# cyc_per_write is the serialising penalty divided by the committed writes -
+# a direct measurement of what one extra-expensive mode write costs.
+chunk_bytes,dit_writes,writes_per_Mcycle,region_penalty_pp,function_penalty_pp,cyc_per_write
+64,19065,4601,15.80,16.11,34.3
+16384,93,86,0.66,-0.03,76.3

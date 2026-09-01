@@ -1,0 +1,12 @@
+# Experiment 02's workload, same two models, for contrast: it commits exactly 49
+# DIT writes per signature at every knob point, so its toggle rate is ~50x lower
+# and the switch model barely registers.
+L,f_secret_pct,arm,switch_model,vs_base_pct,dit_writes
+500,95.7,pass,renamed,2.96,1813
+500,95.7,pass,serialising,4.50,1813
+5000,70.7,pass,renamed,0.30,1568
+5000,70.7,pass,serialising,1.62,1568
+20000,36.9,pass,renamed,1.79,1127
+20000,36.9,pass,serialising,2.58,1127
+60000,17.3,pass,renamed,0.22,637
+60000,17.3,pass,serialising,0.60,637
