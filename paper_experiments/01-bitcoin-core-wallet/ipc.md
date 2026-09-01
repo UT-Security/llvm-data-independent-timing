@@ -64,6 +64,23 @@ Coin-selection kernel, Neoverse-V2 FDP, `--iter 1 --warmup 1 --targets 1`,
 
 **IPC -9.31% (spec) / -9.34% (serdit); cycles +10.27%.**
 
+### Work-scaling control: the same measurement at four selections
+
+`coinsel4` is the identical benchmark with `--targets 4` - four coin selections
+per run instead of one, same 400-coin pool, 3.68x the cycles. It answers whether
+the prize is an artifact of measuring a single one-shot selection with its
+warmup and cold caches folded in. It is not:
+
+| run | selections | base IPC | blanket IPC | IPC change | cycles |
+|---|---|---|---|---|---|
+| `coinsel` | 1 | 1.955873 | 1.773742 | -9.31% | +10.27% |
+| `coinsel4` | 4 | 1.949240 | 1.757778 | **-9.82%** | **+10.89%** |
+
+The effect holds at 4x the work and grows slightly, consistent with the prize
+living in the selection loop: more iterations means a larger share of runtime
+inside the DIT-sensitive dependence chain and proportionally less fixed setup
+diluting it. Both rows are gate-compliant, so they are comparable to each other.
+
 Switch model is a no-op here (+0.034% between spec and serdit) because the
 blanket arm takes its switch from a constructor before `main`, never inside the
 measured region. That is by design, and gate 3 confirms it on the base arm at
@@ -88,8 +105,23 @@ stack alignment for the whole run, worth up to 0.84% on a byte-identical binary.
 
 The base arm moved +0.30%; blanket was unchanged. The finding survives easily
 (the effect is 30x the confound), but **quote -9.31% / +10.27%, not -9.59% /
-+10.60%.** `coinsel4` (IPC 1.9518 -> 1.7572) was produced the same way and has
-not been re-taken.
++10.60%.**
+
+`coinsel4` was produced the same way and has now also been re-taken
+(`coinsel4_repro`, 2026-08-31):
+
+| quantity | old (unequal paths) | new (equal paths) | shift |
+|---|---|---|---|
+| base cycles | 112,257,299 | 112,404,358 | +0.131% |
+| blanket cycles (spec) | 124,671,686 | 124,647,767 | -0.019% |
+| blanket vs base | +11.06% | **+10.89%** | -0.17 pp |
+| IPC change | -9.97% | **-9.82%** | -0.15 pp |
+
+Same signature - the base arm absorbs the shift, blanket barely moves - but a
+**different magnitude** (-0.17 pp here against -0.33 pp on `coinsel`). That is
+the point: `argv[0]` alignment has no consistent size or sign, it depends on the
+specific path length, so an affected run must be re-measured and cannot be
+corrected by applying another run's offset.
 
 ## 5. Two rig gaps found while doing this
 
