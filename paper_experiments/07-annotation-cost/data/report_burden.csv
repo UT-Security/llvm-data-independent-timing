@@ -1,0 +1,8 @@
+# What the developer actually has to read. Whole-libsodium build, one report.
+# The "already seeded" row is the one that mattered: those records told the user
+# to do something they had done, on every rebuild, forever - which is what made
+# the report look like it never converged.
+state,total_records,severe,cross_tu_actionable,indirect_unseedable,already_seeded_noise
+before per-argument suppression,41,7,10,15,9
+after per-argument suppression,32,7,10,15,0
+after also disabling tail calls,19,0,9,10,0

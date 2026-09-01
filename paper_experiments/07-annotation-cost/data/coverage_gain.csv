@@ -1,0 +1,10 @@
+# SQLCipher, from docs/results/sqlcipher.md: the same annotation axis on a
+# different library, and the clearest case of a MISSING seed being invisible.
+# The tell was exact: hmac_init.o and sha512.o were BYTE-IDENTICAL between the
+# plain and instrumented builds - the pass had nothing to do in them.
+# libtomcrypt calls the hash through hash_descriptor[].process, a function
+# POINTER TABLE, so hmac_* -> sha512_* could never have been reached by
+# propagation. It needed its own seed line.
+seed_set,coverage_vs_oracle_pct,note
+"cipher entry points only",94.4,"per-page HMAC ran with DIT off"
+"cipher + kdf + hmac",98.4,"one added seed line"

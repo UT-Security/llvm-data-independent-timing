@@ -1,0 +1,9 @@
+# Following -taint-info-loss-report to a fixpoint on libsodium's signing path.
+# Each round: build, read the report's repair suggestions, paste the ones whose
+# enclosing function is already reachable, rebuild. Scoped to the signing path -
+# AEAD/argon2/poly1305 are in the same library but this workload never calls
+# them, so seeding them would add switches to dead code.
+round,seeds_total,seeds_added,library_switches,sign_c_switches,sha512_switches,ed25519_ref10_switches,new_repairs_offered
+0,68,0,146,0,0,0,5
+1,73,5,164,26,14,4,0
+2,73,0,164,26,14,4,0

@@ -1,0 +1,11 @@
+# What the extra annotation COST, from experiment 02's crossover re-run.
+# "inherited" = secret lane covered by one enable at the entry to signing, with
+# no switches inside it, because crypto_sign_ed25519 and SHA-512 were in TUs the
+# seed set never named. "placed" = the fixpoint seed set, real region placement
+# inside the secret lane. Same workload, same instruments, 2 kperf runs each.
+f_secret_pct,pass_vs_blanket_inherited_pct,pass_vs_blanket_placed_pct,change_pp
+88.2,2.96,6.23,3.27
+64.1,-0.24,1.03,1.27
+41.1,-5.60,-4.06,1.54
+13.2,-8.64,-13.51,-4.87
+4.4,-21.70,-21.46,0.24
