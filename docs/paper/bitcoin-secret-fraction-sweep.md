@@ -1,7 +1,10 @@
 # Benchmark design: the secret-fraction sweep inside one Bitcoin Core wallet call
 
-**Status: the design, with the knob measured working.** Written 2026-08-26.
-The sweep itself has not been run under the full rig; §7 says what that requires.
+**Status: RUN, both instruments.** Design written 2026-08-26; the sweep was run
+under the full rig on 2026-08-30 (8 knob points x 8 arms x 20 reps) and again on
+2026-08-31 (4 points x 8 arms x 10 reps). Results, data and caveats live in
+`paper_experiments/01-bitcoin-core-wallet/`. This file remains the design
+rationale; §7 records what the run took and what it found.
 
 This is benchmark 4 of `evaluation-framework.md` §6, made into a curve. It is the
 exemplar the framework asks for -- a real public lane, a real secret lane, and a
@@ -149,13 +152,19 @@ about -- the ~3% below which nearly all of always-on is recoverable, and the ~20
 above which the prize collapses. Transactions with 100-400 inputs are ordinary;
 consolidation sweeps routinely have more.
 
-Expected shape, for the sweep to confirm or refute:
+Expected shape, since confirmed:
 
     C_blanket(f) ~= (1 - f)*C_public + f*C_secret
 
 with C_public ~ +6% (this call's selection-dominated end) and C_secret ~ +3%
 (`SignTransactionECDSA`, itself only marginally resolvable at 26/40). The three-
-rep series is consistent with that and far too noisy to claim it.
+rep series was consistent with that and far too noisy to claim it.
+
+**The full rig closed the arithmetic.** Solving for C_secret at the knob points
+where the 1/f amplification is tolerable (f >= 25%) gives a median **+4.52%**
+against the independently measured +3.39%, spread 0.60 pp across points. The
+prediction held; C_public measured +3.1..+4.1% rather than ~+6%, because the
++6% figure came from the K=4 end alone.
 
 ---
 
@@ -192,23 +201,39 @@ magnitude and on gem5 for the renamed-switch counterfactual, per
 
 ---
 
-## 7. Running it
+## 7. Running it, and what it found
 
-Not yet run under the full rig. A real sweep needs the six-arm treatment already
-built for the other two Bitcoin benchmarks -- round-trip baseline, null arm,
-rotated arm order, duplicate baseline, in-band `lvp_chase` -- at every knob
-setting, and both `sign` values at every point:
+Run under the full rig by `utils/dit_host_screening/btc/run_wallet_sweep.py`,
+which implements the eight-arm treatment this section originally specified: the
+six arms used for the other two Bitcoin benchmarks (round-trip baseline, null
+arm, rotated arm order, duplicate baseline, in-band `lvp_chase`) plus the two
+`BTC_BENCH_SIGN=0` arms that make f_secret a measurement rather than a model.
 
 ```
-for K in 4 25 100 400; do
-  for S in 1 0; do
-    BTC_BENCH_INPUTS=$K BTC_BENCH_SIGN=$S \
-    BTC_BENCH=WalletCreateTxUsePresetInputsAndCoinSelection \
-    BTC_OUT=wallet_K${K}_S${S}.csv \
-      python3 utils/dit_host_screening/btc/run_sign_ecdsa.py 25 1
-  done
-done
+BTC_SWEEP_INPUTS=1,4,10,25,50,100,200,400 \
+  python3 utils/dit_host_screening/btc/run_wallet_sweep.py 20 1
+python3 utils/dit_host_screening/btc/table_wallet_sweep.py [csv]   # + --latex
+python3 utils/dit_host_screening/btc/ipc_wallet_sweep.py   [csv]
 ```
+
+**Result.** The crossover exists and is where the framework broadly said it
+would be. Against blanket DIT the pass wins significantly through f = 29.8%
+(-1.93%, 1/20), is statistically indistinguishable at f = 45%, and loses
+significantly from f = 61.2%. Both runs agree at every shared point, and
+f_secret itself reproduces to within 0.3 pp.
+
+Two corrections the run forced on this document's expectations:
+
+- **The framework's ~20% threshold is too pessimistic.** The pass still wins
+  significantly at f = 29.8%.
+- **f ~ 45% is a tie, not a loss.** Its median reads -0.48% at 8/20, which with
+  N = 20 is a coin flip; only n <= 5 or n >= 15 reaches p < 0.05. Reporting the
+  median alone would have put the crossover in the wrong place.
+
+The causal variable remains confounded: each signature adds both secret work and
+one DIT region, so this curve cannot separate fraction from region count.
+`BTC_BENCH_CHAIN` moves the public lane at a fixed signature count and would
+separate them; that axis has not been run.
 
 Budget, measured rather than feared: one invocation at `-min-time=2000` costs
 **2.7 s** at K=4 and 2.7 s at K=400, of which the 5000-block chain regeneration
