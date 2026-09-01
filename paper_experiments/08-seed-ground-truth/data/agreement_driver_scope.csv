@@ -1,0 +1,11 @@
+# Same comparison, restricted to the primitives their two drivers actually
+# invoke. Their set can only contain what their driver reaches, so the raw
+# totals conflate scope with precision. The exclusion is by public primitive
+# family, not by hand: hydro_kx_*, _hydro_pwhash_*, hydro_kdf_* are separate
+# entry points that neither libhydrogen_sign.c nor libhydrogen_enc.c calls
+# (verified against the relocation call graph: 28 reachable functions, zero
+# kx and zero pwhash among them). Everything else is kept.
+granularity,seed_set,scope,cryptompk,ours,agree,recall_pct,precision_pct
+function,create_only,driver-reachable,34,16,11,32.4,68.8
+function,keygen_only,driver-reachable,34,45,26,76.5,57.8
+function,both,driver-reachable,34,46,27,79.4,58.7

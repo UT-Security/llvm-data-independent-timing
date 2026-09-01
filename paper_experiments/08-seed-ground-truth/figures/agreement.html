@@ -1,0 +1,285 @@
+<title>Two Analyses, One Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+  :root {
+    --ground:      #F1F4F7;
+    --surface:     #FFFFFF;
+    --surface-alt: #E7ECF1;
+    --ink:         #161A20;
+    --ink-soft:    #4B5563;
+    --ink-faint:   #7C8794;
+    --rule:        #D2DBE3;
+    --rule-soft:   #E4EAEF;
+    --public:      #0E6F78;
+    --public-bg:   #DFF0F1;
+    --secret:      #A03257;
+    --secret-bg:   #F7E3EA;
+    --warn:        #9A5B12;
+    --code-bg:     #EDF1F5;
+    --shadow:      0 1px 2px rgba(22,26,32,.06), 0 8px 24px -16px rgba(22,26,32,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #11151A;
+      --surface:     #1A1F26;
+      --surface-alt: #222831;
+      --ink:         #DEE4EB;
+      --ink-soft:    #A3AEBB;
+      --ink-faint:   #7A8593;
+      --rule:        #2C333C;
+      --rule-soft:   #232A32;
+      --public:      #5CC7CE;
+      --public-bg:   #113035;
+      --secret:      #EF8CA9;
+      --secret-bg:   #381F29;
+      --warn:        #D9A441;
+      --code-bg:     #151A20;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #11151A;
+    --surface:     #1A1F26;
+    --surface-alt: #222831;
+    --ink:         #DEE4EB;
+    --ink-soft:    #A3AEBB;
+    --ink-faint:   #7A8593;
+    --rule:        #2C333C;
+    --rule-soft:   #232A32;
+    --public:      #5CC7CE;
+    --public-bg:   #113035;
+    --secret:      #EF8CA9;
+    --secret-bg:   #381F29;
+    --warn:        #D9A441;
+    --code-bg:     #151A20;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 96px; }
+  .col  { max-width: 68ch; }
+
+  h1, h2, h3 { font-family: "IBM Plex Serif", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 4.4vw, 3.05rem); font-weight: 600; letter-spacing: -.021em; line-height: 1.12; }
+  h2 { font-size: 1.44rem; font-weight: 600; letter-spacing: -.012em; }
+  h3 { font-size: 1.05rem; font-weight: 600; }
+  p  { margin: 0 0 1.05em; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--public); }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .705rem; font-weight: 500; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+
+  header.masthead { padding: 76px 0 40px; border-bottom: 1px solid var(--rule); margin-bottom: 44px; }
+  .lede { font-size: 1.16rem; color: var(--ink-soft); margin-top: 18px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+  }
+  .chip {
+    padding: 4px 10px; border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--surface); color: var(--ink-soft);
+  }
+  .chip.live { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  .chip.open { border-color: var(--warn); color: var(--warn); }
+
+  section { margin: 0 0 60px; }
+  section > h2 { margin-bottom: 6px; }
+  section > .eyebrow { display: block; margin-bottom: 10px; }
+  .sub { color: var(--ink-faint); margin: 0 0 26px; font-size: .95rem; }
+
+  /* two-lane panel: the colours encode the experiment's real dichotomy */
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 26px 0; }
+  @media (max-width: 720px) { .lanes { grid-template-columns: 1fr; } }
+  .lane {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-top: 3px solid var(--public); border-radius: 4px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .lane.secret { border-top-color: var(--secret); }
+  .lane h3 { margin-bottom: 4px; }
+  .lane.public h3 { color: var(--public); }
+  .lane.secret h3 { color: var(--secret); }
+  .lane .what { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .81rem; color: var(--ink); margin: 8px 0 12px; }
+  .lane p { margin: 0; font-size: .93rem; }
+  .lane .ipc {
+    margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--rule-soft);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .8rem;
+    color: var(--ink-faint); display: flex; justify-content: space-between; gap: 10px;
+  }
+  .lane .ipc b { font-weight: 600; font-size: 1.18rem; font-variant-numeric: tabular-nums; }
+  .lane.public .ipc b { color: var(--public); }
+  .lane.secret .ipc b { color: var(--secret); }
+
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 18px 20px; overflow-x: auto; margin: 20px 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .82rem;
+    line-height: 1.68; color: var(--ink);
+  }
+  code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .875em; }
+  p code, li code, td code { background: var(--surface-alt); padding: 1px 5px; border-radius: 3px; color: var(--ink); }
+  .c  { color: var(--ink-faint); font-style: italic; }
+  .kw { color: var(--secret); }
+  .fn { color: var(--public); }
+  .filename {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .72rem;
+    color: var(--ink-faint); margin-bottom: -12px; padding-left: 2px;
+  }
+
+  .scroll { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .87rem; }
+  th, td { padding: 9px 15px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule-soft); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .69rem;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);
+    font-weight: 500; border-bottom: 1px solid var(--rule); background: var(--surface-alt);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  td.cost { color: var(--secret); font-weight: 600; }
+  td.free { color: var(--ink-faint); }
+  td.tag  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .78rem; color: var(--ink-faint); }
+  tr.rule-lane td { background: var(--public-bg); }
+
+  .callout {
+    border-left: 3px solid var(--warn); background: var(--surface);
+    padding: 18px 22px; border-radius: 0 4px 4px 0; margin: 24px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout h3 { margin-bottom: 6px; color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  ol.gates { list-style: none; counter-reset: g; padding: 0; margin: 22px 0; }
+  ol.gates li {
+    counter-increment: g; position: relative; padding: 0 0 16px 46px;
+    border-left: 1px solid var(--rule); margin-left: 13px;
+  }
+  ol.gates li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.gates li::before {
+    content: counter(g); position: absolute; left: -13px; top: 0;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--rule); color: var(--ink-faint);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .74rem;
+    display: grid; place-items: center;
+  }
+  ol.gates li.pass::before { border-color: var(--public); color: var(--public); background: var(--public-bg); }
+  ol.gates li.todo::before { border-color: var(--warn); color: var(--warn); }
+  ol.gates b { display: block; color: var(--ink); }
+  ol.gates span { font-size: .93rem; color: var(--ink-soft); }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 22px; color: var(--ink-faint); font-size: .84rem; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+<div class="wrap">
+<header class="masthead"><div class="col">
+  <span class="eyebrow">Paper experiment 08 &middot; libhydrogen &middot; CryptoMPK S&amp;P 2022</span>
+  <h1>Two Analyses, One Library</h1>
+  <p class="lede">Every other experiment here picks its own seeds, which makes &ldquo;you chose the annotations that flatter your pass&rdquo; a fair objection that no internal measurement can answer. CryptoMPK's artifact ships an <strong>independent group's derived taint set</strong>. Run our pass on their exact source and compare.</p>
+  <div class="meta">
+    <span class="chip live">79.4% of their functions</span>
+    <span class="chip">seed point: 32.4% &rarr; 79.4%</span>
+    <span class="chip open">7 we never mark</span>
+    <span class="chip open">our report: silent</span>
+  </div>
+</div></header>
+
+<section>
+  <span class="eyebrow">The positive result</span>
+  <h2>Independent agreement</h2>
+  <p class="sub">Restricted to the primitives their two drivers actually invoke - excluded by public primitive family, confirmed against the relocation call graph, not chosen by hand.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>seed set</th><th>ours</th><th>theirs</th><th>agree</th><th>recall</th><th>precision</th></tr></thead><tbody>
+    <tr><td class="fn">hydro_sign_create,4,pointee</td><td class="num">16</td><td class="num">34</td><td class="num">11</td><td class="num cost">32.4%</td><td class="num">68.8%</td></tr>
+    <tr><td class="fn">hydro_sign_keygen,0,pointee</td><td class="num">45</td><td class="num">34</td><td class="num">26</td><td class="num">76.5%</td><td class="num">57.8%</td></tr>
+    <tr class="rule-lane"><td><strong>both</strong></td><td class="num">46</td><td class="num">34</td><td class="num"><strong>27</strong></td><td class="num free"><strong>79.4%</strong></td><td class="num">58.7%</td></tr>
+  </tbody></table></div>
+  <div class="col">
+    <p>Their build is x86&#8209;64 <code>-O0</code> LLVM IR; ours is aarch64 <code>-O2</code> post-register-allocation MIR, so <em>line</em>-level agreement is noisy for reasons unrelated to either being wrong. The enclosing function is the stable unit.</p>
+  </div>
+  <div class="callout"><p><strong>Why libhydrogen, and only libhydrogen.</strong> Of their seven targets it is the one where the whole library is a <strong>single translation unit</strong>, so our per-TU analysis and their whole-program LTO analysis see the same code. On libsodium the eight relevant TUs mean our cross-TU limit would dominate and the number would measure that instead of precision.</p></div>
+</section>
+
+<section>
+  <span class="eyebrow">The finding</span>
+  <h2>The seed point decides, not the seed count</h2>
+  <p class="sub">Both annotations say &ldquo;the signing key is secret&rdquo;. One names the <code>sk</code> argument; the other names the keypair buffer, which is the form CryptoMPK's own <code>#pragma tainter taint(&amp;key_pair)</code> takes.</p>
+  <div class="scroll"><table>
+    <thead><tr><th></th><th>argument seed</th><th>buffer seed</th></tr></thead><tbody>
+    <tr><td><code>msr DIT</code> in the library</td><td class="num">27</td><td class="num">298</td></tr>
+    <tr><td><code>hydro_sign_final_create</code> need</td><td class="num">27</td><td class="num">264</td></tr>
+    <tr class="rule-lane"><td>coverage of that function</td><td class="num cost"><strong>12.0%</strong></td><td class="num free">99.2%</td></tr>
+    <tr><td>curve ladder marked</td><td class="num cost"><strong>no</strong></td><td class="num free">yes</td></tr>
+  </tbody></table></div>
+  <div class="col">
+    <p><strong>The argument seed is the one a developer writes first</strong>, and it leaves 88% of the seeded function and the entire scalar multiply unmarked.</p>
+    <p><strong>Why.</strong> <code>hydro_sign_prehash</code> derives the ephemeral secret by hashing the long-term key - <code>hydro_hash_init(&amp;st, zero, sk)</code>, then <code>hydro_hash_final(&amp;st, eph_sk, ...)</code>. That last call writes a secret <em>through an argument pointer</em>, and our P0 mod-set summary carries no argument provenance, so the caller never learns <code>eph_sk</code> became secret.</p>
+    <p>Confirmed by repair. One line:</p>
+  </div>
+<pre>hydro_hash_final,1,pointee</pre>
+  <div class="col">
+    <p>takes <code>hydro_sign_final_create</code> from need=27 / coverage 12.0% to need=265 / <strong>99.2%</strong>, pulls <code>hydro_x25519_scalarmult</code> (need=43) and <code>hydro_x25519_core</code> (need=170) into the analysis, and the library from 27 to 304 switches.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">The gap</span>
+  <h2>Seven functions we never mark</h2>
+  <p class="sub">At any seed set. <code>AlwaysEnteredWithDIT = 0</code> for each, so the pass is not claiming inherited coverage either - an analysis gap, not a reporting artifact.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>function</th><th>their locations</th><th>ours</th><th>standalone at -O2</th></tr></thead><tbody>
+    <tr class="rule-lane"><td class="fn">hydro_x25519_sc_montmul</td><td class="num">6</td><td class="num cost">0</td><td>yes</td></tr>
+    <tr class="rule-lane"><td class="fn">hydro_x25519_mul</td><td class="num">3</td><td class="num cost">0</td><td>yes</td></tr>
+    <tr><td class="fn">hydro_hash_final</td><td class="num">3</td><td class="num cost">0</td><td>yes</td></tr>
+    <tr><td class="fn">hydro_secretbox_setup</td><td class="num">3</td><td class="num cost">0</td><td>yes</td></tr>
+    <tr><td class="fn">hydro_sign_p2</td><td class="num">2</td><td class="num cost">0</td><td>inlined</td></tr>
+    <tr><td class="fn">hydro_sign_verify_p2</td><td class="num">2</td><td class="num cost">0</td><td>inlined</td></tr>
+    <tr><td class="fn">hydro_x25519_add</td><td class="num">1</td><td class="num cost">0</td><td>inlined</td></tr>
+  </tbody></table></div>
+  <div class="col">
+    <p><strong>Two of them are the X25519 field and scalar multiplies</strong> - the arithmetic that actually carries the secret. Taint reaches <code>hydro_x25519_core</code> (need=170) and stops at its call into <code>hydro_x25519_mul</code>. Both are in-TU direct calls, so this is not the cross-TU limit; the suspected mechanism is pointee taint through frame-address arguments.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">The actionable part</span>
+  <h2>Our own report says nothing</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>seed set</th><th>info-loss records</th><th>SEVERE warnings</th><th>ESCAPE records</th><th>coverage of the seeded function</th></tr></thead><tbody>
+    <tr class="rule-lane"><td class="fn">create_only</td><td class="num cost"><strong>0</strong></td><td class="num cost"><strong>0</strong></td><td class="num cost"><strong>0</strong></td><td class="num cost"><strong>12.0%</strong></td></tr>
+    <tr><td class="fn">keygen_only</td><td class="num">6</td><td class="num">1</td><td class="num">-</td><td class="num free">99.2%</td></tr>
+  </tbody></table></div>
+  <div class="col">
+    <p>The whole premise of experiment 07 is that the compiler tells you where it lost the secret. Under the seed a developer would actually write, <strong>it does not</strong>.</p>
+    <p>The report's severity criterion is consequence at a <em>call boundary</em> - cross-TU, tail call, indirect. A secret lost to an imprecise mod-set <em>inside one TU</em> crosses no boundary it watches, so nothing fires. It should: the repair line above is exactly the kind the report already knows how to print.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Limits</span>
+  <h2>What this is not</h2>
+  <div class="col">
+    <p><strong>Static evidence only for the seven.</strong> That they are unmarked and not <code>AlwaysEnteredWithDIT</code> is our pass's own accounting; that they are secret-dependent is CryptoMPK's finding plus the source. Confirming they <em>execute</em> with DIT off needs the gem5 shadow-taint oracle, not run here.</p>
+    <p><strong>Their ground truth is imperfect too.</strong> Their <code>mxor</code> declassification is unsound at object granularity. Read 79% as agreement between two imperfect analyses, never as a score against truth.</p>
+    <p><strong>The &ldquo;ours only&rdquo; set is not simply over-taint.</strong> Outside driver scope it is dominated by 17 <code>hydro_kx_*</code> and 8 <code>_hydro_pwhash_*</code> functions their drivers never call, reached by the module-wide secret-global rule on the RNG state. That rule is also the only route by which any seed reaches the <em>ephemeral</em> signing key, which is fresh randomness.</p>
+    <p><strong>No timing.</strong> Experiment 04 already measured blanket DIT as free on libhydrogen, so there is no cost question to ask of this workload.</p>
+  </div>
+</section>
+
+<footer><div class="col">libhydrogen as shipped in CryptoMPK's <code>dataset.tar.gz</code> (sha256 <code>ab8125b6&hellip;</code>) &middot; compiler <code>890af850b255</code> &middot; measured 2026&#8209;09&#8209;01</div></footer>
+</div>

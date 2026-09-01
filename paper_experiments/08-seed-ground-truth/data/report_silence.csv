@@ -1,0 +1,8 @@
+# Does our own tooling tell the developer about the gap? Under the natural
+# argument seed it does not: every report is empty while 88% of the seeded
+# function and the whole curve ladder go unmarked. This is the actionable
+# follow-up from the comparison.
+seed_set,info_loss_records,severe_stderr_warnings,escape_records,final_create_coverage_pct
+create_only,0,0,0,12.0
+keygen_only,6,1,,99.2
+both,6,1,,99.2

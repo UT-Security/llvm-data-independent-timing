@@ -1,0 +1,13 @@
+# Functions CryptoMPK's analysis marks secret-dependent that ours never marks,
+# at ANY seed set. AlwaysEnteredWithDIT=0 means our pass is not claiming
+# inherited coverage for them either, so this is an analysis gap and not a
+# reporting artifact. Three of the seven are X25519 field arithmetic, including
+# both multiplies - the operations that actually carry the secret.
+function,cryptompk_locations,our_locations,always_entered_with_dit,standalone_symbol_at_O2
+hydro_x25519_sc_montmul,6,0,0,yes
+hydro_x25519_mul,3,0,0,yes
+hydro_hash_final,3,0,0,yes
+hydro_secretbox_setup,3,0,0,yes
+hydro_sign_p2,2,0,inlined,no
+hydro_sign_verify_p2,2,0,inlined,no
+hydro_x25519_add,1,0,inlined,no

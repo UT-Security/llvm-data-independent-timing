@@ -1,0 +1,14 @@
+# Agreement between our taint set and CryptoMPK's, per seed set. libhydrogen,
+# their exact shipped source, their exact shipped taint report as ground truth.
+# 'line' rows compare (file,line) directly. 'function' rows aggregate to the
+# enclosing C function, which is the honest unit: they analyse -O0 LLVM IR and
+# we analyse -O2 post-register-allocation MIR, so line attribution differs
+# systematically for reasons unrelated to either analysis being wrong.
+# recall = share of THEIR set we also mark. precision = share of OURS they also mark.
+granularity,seed_set,cryptompk,ours,agree,recall_pct,precision_pct
+line,create_only,97,38,21,21.6,55.3
+function,create_only,34,16,11,32.4,68.8
+line,keygen_only,97,208,44,45.4,21.2
+function,keygen_only,34,75,26,76.5,34.7
+line,both,97,210,44,45.4,21.0
+function,both,34,76,27,79.4,35.5

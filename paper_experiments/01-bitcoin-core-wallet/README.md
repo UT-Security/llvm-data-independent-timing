@@ -58,6 +58,30 @@ dependence chain, and DIT switches the predictor off.
 | `data/wallet_m5_ipc.csv` | 320 rows = 4 knob points x 8 arms x 10 reps (M5) |
 | `data/wallet_sweep_20rep.csv` | 1280 rows = 8 knob points x 8 arms x 20 reps (M5) |
 | `figures/crossover.html` | source of the published artifact above |
+| `figures/plot_crossover.py` | **Figure 1** generator; asserts its numbers against `table1.md` |
+| `figures/crossover.pdf` | Figure 1, vector, for `\includegraphics` |
+| `figures/crossover.png` | Figure 1, 300 dpi raster preview |
+| `figures/crossover.tex` | the `figure*` block and caption, ready to `\input` |
+
+## Figure 1
+
+Two panels sharing the x-axis: **(a)** the result, selective placement against
+blanket DIT crossing zero at $f \approx 51\%$ with the sign test unable to
+resolve $f = 45\%$; **(b)** the mechanism, a flat public-lane prize meeting a
+linearly growing toggle bill, crossing at $f \approx 43\%$. Panel (b) is the
+argument for panel (a) - the claim is drawn, not asserted.
+
+    python3 paper_experiments/01-bitcoin-core-wallet/figures/plot_crossover.py
+
+Regenerating writes `crossover.pdf` and `crossover.png`. The script recomputes
+every cell with the same definitions `table_wallet_sweep.py` uses and **asserts
+them against the values committed in `table1.md`**, so the figure cannot drift
+from the table; a mismatch is a failed assertion, not a wrong plot. Error bars
+are the order-statistic confidence interval for the median implied by the same
+sign test the table reports, so bars and stars cannot disagree. Colors are the
+validated categorical slots 1-2 (blue/orange, worst-pair CVD $\Delta E$ 24.7),
+and the two series in (b) also differ by dash pattern, so the panel survives
+grayscale printing.
 
 ## Reproducing
 

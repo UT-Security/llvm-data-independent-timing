@@ -26,6 +26,7 @@ were run.
 | 05 | [nginx TLS 1.3](05-nginx-tls-deployed/) | request handling, cert verify | TLS 1.3 key schedule | **none - a DEPLOYED server, measures REACH** | **complete, silicon** |
 | 06 | [switch-model generality](06-switch-model-generality/) | - | experiments 02 and 03's workloads | **MSR DIT implementation - measures TRANSFERABILITY** | **complete, gem5** |
 | 07 | [annotation cost](07-annotation-cost/) | - | libsodium signing path | **seed DEPTH - measures DEVELOPER cost** | **complete, silicon** |
+| 08 | [seed ground truth](08-seed-ground-truth/) | - | libhydrogen signing, their exact source | **none - compares our taint set against an INDEPENDENT one** | **complete** |
 
 ## Published pages
 
@@ -41,6 +42,7 @@ One artifact per experiment. Republish through the recorded URL (`Artifact` with
 | 05 | The Reach Limit | https://claude.ai/code/artifact/dc90173e-f6f9-431e-8b11-e34321eb2dd7 |
 | 06 | Switch Model Transfer | https://claude.ai/code/artifact/b6c89530-d27f-455c-a7bc-e93b3ab7c952 |
 | 07 | The Annotation Loop | https://claude.ai/code/artifact/ac6058f5-25ba-4a38-bf2e-6a385652ffb3 |
+| 08 | Two Analyses, One Library | https://claude.ai/code/artifact/2a789196-2274-42fc-9922-b624f0808762 |
 
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6
 

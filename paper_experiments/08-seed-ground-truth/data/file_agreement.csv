@@ -1,0 +1,15 @@
+file,cryptompk_lines,our_lines,agree,cryptompk_only,ours_only
+impl/common.h,8,7,5,3,2
+impl/core.h,0,5,0,0,5
+impl/gimli-core.h,1,1,0,1,1
+impl/gimli-core/portable.h,19,7,7,12,0
+impl/hash.h,14,16,7,7,9
+impl/hydrogen_p.h,4,4,4,0,0
+impl/kdf.h,0,2,0,0,2
+impl/kx.h,0,74,0,0,74
+impl/pwhash.h,0,32,0,0,32
+impl/random.h,1,13,1,0,12
+impl/secretbox.h,11,11,5,6,6
+impl/sign.h,8,13,2,6,11
+impl/x25519.h,31,25,13,18,12
+TOTAL,97,210,44,53,166

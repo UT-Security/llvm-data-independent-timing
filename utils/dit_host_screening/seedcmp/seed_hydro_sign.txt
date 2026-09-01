@@ -1,0 +1,8 @@
+# Our translation of CryptoMPK's annotation for their libhydrogen_sign director:
+#     #pragma tainter taint(&key_pair)
+#     #pragma tainter sinktaint(signature)
+# They mark the KEYPAIR BUFFER. We have no buffer tags, only parameter
+# attributes, so the equivalent is every library entry point that receives or
+# produces that buffer.
+hydro_sign_keygen,0,pointee
+hydro_sign_create,4,pointee
