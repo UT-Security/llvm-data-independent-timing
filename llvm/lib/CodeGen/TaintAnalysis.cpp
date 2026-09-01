@@ -17,6 +17,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -3649,26 +3650,42 @@ void llvm::reportInfoLoss(raw_ostream *OS, TaintLossSeverity Sev,
     // had warned), so each line has to stand on its own.
     StringRef Src = Where.getParent() ? StringRef(Where.getParent()->getSourceFileName())
                                       : StringRef();
-    // Number the records so they can be referred to. The counter is per clang
-    // INVOCATION (both writers - the fixed point and placement - share it), so a
-    // build of many TUs restarts at [1] for each. That is deliberate: the report
-    // appends, and a run of numbers restarting partway down the file is exactly
-    // how you spot a stale file left over from a previous build.
-    static unsigned Seq = 0;
-    *OS << "[" << ++Seq << "] taint-stop " << Kind << "  in=" << Where.getName();
+
+    std::string Buf;
+    raw_string_ostream RS(Buf);
+    RS << "taint-stop " << Kind << "  in=" << Where.getName();
     if (!Src.empty())
-      *OS << " src=" << sys::path::filename(Src);
+      RS << " src=" << sys::path::filename(Src);
     if (!CalleeName.empty())
-      *OS << " callee=" << CalleeName;
+      RS << " callee=" << CalleeName;
     if (DL)
-      *OS << " line=" << DL.getLine();
-    *OS << "\n      severity  " << SevStr << "\n";
+      RS << " line=" << DL.getLine();
+    RS << "\n      severity  " << SevStr << "\n";
     if (!Action.empty())
-      *OS << "      action    " << Action << "\n";
+      RS << "      action    " << Action << "\n";
     if (!Cost.empty())
-      *OS << "      cost      " << Cost << "\n";
+      RS << "      cost      " << Cost << "\n";
     if (!Repair.empty())
-      *OS << "      repair    " << Repair << "\n";
+      RS << "      repair    " << Repair << "\n";
+
+    // Collapse byte-identical records. Several call sites in one function share
+    // a callee - ed25519 signing calls crypto_hash_sha512_update three times,
+    // one AES routine makes four indirect calls - and the REPAIR is the same for
+    // every one of them, so repeating it only pads the worklist. Measured on
+    // libsodium: 32 records of which 26 were distinct.
+    //
+    // Keyed on the WHOLE record rather than caller+callee, so that under -g the
+    // `line=` field keeps genuinely separate sites separate. (-g on vector code
+    // used to abort the compiler, which is part of why these had never been seen
+    // distinguished.)
+    static llvm::StringSet<> Seen;
+    // Number the records so they can be referred to. Per clang INVOCATION, and
+    // shared by both writers, so a multi-TU build restarts at [1] for each
+    // source file: the report appends, and a run of numbers restarting partway
+    // down the file is how a stale file from an earlier build shows itself.
+    static unsigned Seq = 0;
+    if (Seen.insert(Buf).second)
+      *OS << "[" << ++Seq << "] " << Buf;
   }
 
   // Loud by default for the severe class only. A report file nobody passes a
