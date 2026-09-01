@@ -247,11 +247,27 @@ Three further blockers, in order of how much they cost to work around:
 - **OpenSMTPD and vsftpd need a Linux target** (`glibc-2.27` libcrypt). The gem5
   rig can run those; the M5 silicon rig cannot.
 
-**What does transfer is the annotation set**, and it is the most useful thing
-here: their 39 `#pragma tainter` tags are a *third-party* ground truth for
-"where does the secret enter", which is exactly what experiment 07 measures and
-exactly the axis on which "you chose your own seeds" is a fair objection. Their
-`sinktaint` declassification marker is the analogue we already noted we lack.
+**What transfers is their taint output, and it is the most useful thing here** -
+better than the tags. The artifact ships each target's **derived** taint set as
+`(file, line)` pairs, so the comparison is not "did we write the same
+annotations" but "did two independent analyses find the same secret-dependent
+code". That is a third-party answer to "you chose your own seeds", which no
+internal measurement can give. Their `sinktaint` declassification marker is the
+analogue we already noted we lack.
+
+**Done: `paper_experiments/08-seed-ground-truth/`.** On libhydrogen - the only
+target whose whole library is a single TU, so our per-TU analysis and their
+whole-program LTO analysis see the same code - we agree on **79.4%** of the
+functions they mark, at 58.7% precision, aggregated to functions because they
+analyse `-O0` IR and we analyse `-O2` post-RA MIR. Three findings came out of
+it, two against us: the seed *point* moves recall 32.4% -> 76.5% (an argument
+seed covers 12.0% of the seeded function, a buffer seed 99.2%, because
+`hydro_hash_final` writes a secret through an argument pointer the P0 mod-set
+cannot attribute); seven functions including both X25519 multiplies are never
+marked at any seed and are not `AlwaysEnteredWithDIT` either; and our
+information-loss report emits **zero** records for all of it, because its
+severity criterion watches call boundaries and this secret is lost inside one
+TU.
 
 **Two defects in the shipped artifact**, found while checking the above:
 
