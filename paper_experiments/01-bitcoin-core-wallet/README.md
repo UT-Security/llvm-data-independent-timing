@@ -28,6 +28,7 @@ in the order the wallet runs them, with one integer varying the ratio.
 | verdict flips | **f ~ 45%** (indistinguishable), blanket wins outright by f = 61% |
 | blanket DIT costs, silicon | **-3.7% to -4.0% of IPC**, flat across f = 3.5%..75.2% |
 | blanket DIT costs, gem5 | IPC **1.9559 -> 1.7737**, cycles **+10.27%** on the coin-selection kernel |
+| the same at 4x the work | IPC **1.9492 -> 1.7578**, cycles **+10.89%** - the prize is not a one-shot artifact |
 
 **The mechanism**: blanket's cost is flat in f because it protects everything
 either way; what grows is the pass's toggle bill (+0.20% -> +6.08% switch cost).
@@ -99,4 +100,5 @@ across switch models, `ditSuppressed = 0` in base · equal-length `argv[0]`.
 3. **Closure is acceptable, not tight** (+4.52% vs +3.39%).
 4. **gem5 cannot confirm magnitude here** - it reads ~zero on ECDSA signing.
 5. **Older `coinsel` / `coinsel4` gem5 stats predate the equal-length-path
-   gate** and read 0.28 pp high. Quote the gated numbers in `ipc.md`.
+   gate.** Both have been re-taken (`coinsel_repro`, `coinsel4_repro`); quote
+   the gated numbers in `ipc.md`, not the originals in `gem5-btc/coinsel*/`.
