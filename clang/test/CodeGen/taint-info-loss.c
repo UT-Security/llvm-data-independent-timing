@@ -7,11 +7,31 @@
 // crypto_sign_ed25519 in another TU. DIT is never cleared, so every instruction
 // afterwards runs protected and selective placement silently becomes blanket -
 // measured at 100% of the public lane. Nothing in the output said so, and the
-// repair was one seed line.
+// repair was one seed line - and, since 2026-09-01, is the shipped default
+// (docs/design/dit-tailcall-gap.md).
 //
-// So a severe loss WARNS ON STDERR BY DEFAULT, with no flag:
+// THE TAIL-CALL LEAK IS NO LONGER REACHABLE BY DEFAULT (2026-09-01). `-ftaint-harden`
+// disables tail calls TU-wide, so `fwd` gets a real `bl` and an epilogue to clear DIT
+// in, and there is nothing severe to report. That is the fix this report argued for;
+// what the report has to keep proving is that it still FIRES when the leak is put back.
+//
+// Default: the cross-TU records, and no severe warning on stderr.
+// RUN: rm -f %t.loss
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
-// RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt %s -o /dev/null 2>&1 \
+// RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt \
+// RUN:     -mllvm -taint-info-loss-report=%t.loss %s -o /dev/null 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=NOWARN --allow-empty
+// NOWARN-NOT: DIT stays SET past this call
+//
+// RUN: FileCheck %s --check-prefix=NOLEAK --input-file=%t.loss
+// NOLEAK-NOT: leak-tailcall
+// NOLEAK-NOT: SEVERE
+//
+// Put the tail call back and the severe loss returns, warning on stderr with no
+// report flag needed - a silent degeneration to blanket coverage is not discoverable.
+// RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
+// RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt \
+// RUN:     -mllvm -taint-no-tail-calls=0 %s -o /dev/null 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=WARN
 // WARN: taint: fwd: DIT stays SET past this call
 //
@@ -21,6 +41,7 @@
 // RUN: rm -f %t.loss
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
 // RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt \
+// RUN:     -mllvm -taint-no-tail-calls=0 \
 // RUN:     -mllvm -taint-info-loss-report=%t.loss %s -o /dev/null 2>&1
 // RUN: FileCheck %s --check-prefix=LOSS --input-file=%t.loss
 //
@@ -42,9 +63,11 @@
 // LOSS:   repair    seed the TU that defines it:
 // LOSS-NEXT:               sink_partial,2,pointee
 //
+// The repair for the severe one is no longer an annotation at all - it is a build
+// configuration to put back.
 // LOSS: taint-stop leak-tailcall  in=fwd src=taint-info-loss.c callee=sink_extern
 // LOSS:   severity  SEVERE
-// LOSS:   repair    rebuild this TU with -ftaint-dit-abi
+// LOSS:   repair    tail calls are disabled TU-wide by default
 //
 // A callee the seed file ALREADY covers in full is suppressed outright. Telling
 // the user to seed something they have seeded is what made the report look like
@@ -57,8 +80,9 @@
 // Declaration only: another TU, so the analysis cannot follow the secret in.
 unsigned long sink_extern(unsigned long a, const unsigned char *secret);
 
-// A thin forwarder, exactly libsodium's shape. -O2 makes the call a tail call,
-// which is what turns a recoverable imprecision into an unbounded one.
+// A thin forwarder, exactly libsodium's shape. Plain -O2 makes the call a tail call,
+// which is what turns a recoverable imprecision into an unbounded one; -ftaint-harden
+// now suppresses that, so only the -taint-no-tail-calls=0 arm above sees it.
 unsigned long fwd(unsigned long a, const unsigned char *secret) {
   return sink_extern(a, secret);
 }

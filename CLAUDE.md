@@ -98,10 +98,29 @@ passed to external/indirect callees cannot be protected by placement - audit the
 functions that enable DIT and exit without clearing it, which is every tail call in an
 instrumented function (a tail call is an exit with no epilogue, so there is nowhere to
 put the clear - `docs/design/dit-tailcall-gap.md`). `DITLEAK return` is a placement bug and also
-warns on stderr. **`DITLEAK tailcall` was an accepted cost and is now an ABI violation
-to audit** - `docs/design/dit-abi.md` makes DIT callee-saved and disables tail calls
-TU-wide, so the line should normally be absent; a surviving one means `musttail` or the
-MachineOutliner.
+warns on stderr.
+
+**Tail calls are OFF TU-wide for any hardened build** (`-taint-no-tail-calls`, default
+1). Not because of the callee-saved ABI - that is not shipping - but because a tail call
+has no epilogue in which to clear DIT, so taking one turns selective placement into
+blanket coverage for the rest of the program, silently: the switches are all still
+emitted and the verifier still passes. libsodium's `randombytes_buf` exits through an
+indirect tail call, which is why a program that merely calls `sodium_init()` used to pay
+the entire always-on penalty at zero secret fraction (+14.77%, against -0.10% with the
+disable; `docs/design/dit-tailcall-gap.md` §7). `DITLEAK tailcall` should therefore
+normally be absent; a surviving one means `musttail` or the MachineOutliner.
+`DITLEAK tailcall-ungated` means something else - the flag did not reach that TU, or the
+build set `-mllvm -taint-no-tail-calls=0`.
+
+Two properties of the implementation are load-bearing. It is stamped **at codegen**, not
+in `CodeGenOptions`, because `disable-tail-calls` is read by TailRecursionElimination as
+well as by ISel and stamping it early would cost every function in the TU its
+tail-recursion elimination; so it is **not** visible in `-emit-llvm` output, only the
+`taint-no-tail-calls` module flag is. And it keys on `-ftaint-harden` being **present**,
+not on any seed matching, so an `-ftaint-harden=<EMPTY>` baseline arm stays
+codegen-matched to the arm it controls for. `=0` is the A/B hatch (worth +8.89 points at
+f = 9.4% on serializing hardware, so the trade is real); it is refused under
+`-ftaint-dit-abi`.
 
 The coalesced "regions" in the reports **do not drive placement** - they feed the report
 files only. The gap that merges them was `-taint-region-merge-gap` until 2026-08-24 and
@@ -159,18 +178,19 @@ it at every exit it controls; a caller may rely on DIT never coming back lower t
 went in, so **call sites emit nothing**. That removes all four after-call re-assert
 classes by construction, with no LTO and no annotation.
 
-Landed: **`-ftaint-dit-abi` implies `-fno-optimize-sibling-calls`** (TU-wide).
-**It is gated on the ABI flag, NOT on `-ftaint-harden`** - `disable-tail-calls` is
-honoured by TailRecursionElimination too, so applying it to every hardened build turns
-tail recursion into O(n) stack frames TU-wide, a stack-overflow hazard paid even with
-the ABI off. A tail call is an exit with no epilogue, so the callee cannot restore there;
-the per-function form is unavailable because the instrumented set is only known after a
-post-PEI pass. `musttail` and `MachineOutlinerTailCall` survive the flag and show up as
-`DITLEAK tailcall`, which is now a violation to audit rather than an accepted cost.
+**The TU-wide tail-call disable moved OUT of this ABI on 2026-09-01** and now rides on
+`-ftaint-harden` (see `-taint-no-tail-calls` above). It was the one piece of the ABI
+worth keeping, and it was only ever reachable through the ABI flag. The
+TailRecursionElimination hazard that had gated it here is gone: the attribute is stamped
+at codegen instead of in `CodeGenOptions`, so TRE runs first and self-recursion still
+becomes a loop. What remains ABI-specific is that `-mllvm -taint-no-tail-calls=0` is
+refused under `-ftaint-dit-abi`, where a surviving tail call breaks the contract rather
+than costing cycles. `musttail` and `MachineOutlinerTailCall` survive regardless and show
+up as `DITLEAK tailcall`.
 
 Landed and OPT-IN: **`-ftaint-dit-abi`** (the `-mllvm -taint-dit-abi` cl::opt still
-exists for llc/A-B runs, but on its own it gives the ABI WITHOUT the tail-call disable,
-which is an incomplete configuration - prefer the driver flag), the callee half - entry `MRS` into a
+exists for llc/A-B runs; both spellings now get the tail-call disable, since it rides on
+`-ftaint-harden`, but only the driver flag refuses the opt-out), the callee half - entry `MRS` into a
 pre-PEI-reserved frame slot, a restore at each return, and **nothing at any call site**.
 **Both placements are supported.** The restore form is chosen **per exit**, not per
 placement: a guarded clear (`tbnz w, #24` over `msr DIT, #0`) where DIT is provably set
@@ -188,9 +208,10 @@ SignTransactionECDSA (27/30)**.
 **Default stays OFF, and the reason is not the per-arm delta.** LTO with the ABI is
 still slower than non-LTO WITHOUT it (+19.50% / +9.08%), so the ABI only helps in a
 configuration nobody should pick on performance grounds, while the default
-configuration gains nothing measurable and would pay shrink wrapping, a TU-wide
-tail-call disable and a frame slot per function. **Use `-ftaint-dit-abi` if you are
-already building with LTO; do not adopt LTO to get it.**
+configuration gains nothing measurable and would pay shrink wrapping and a frame slot
+per function. (The TU-wide tail-call disable used to be listed here as a cost of the
+ABI; it is now the hardening default and is paid either way.) **Superseded 2026-09-01:
+this ABI is not shipping at all - do not prescribe `-ftaint-dit-abi`.**
 
 **libsodium f-sweep, 2026-08-31**: at f=25.8% the ABI costs **+3.34%** against
 `def30`'s +8.64% and blanket's +8.78% - so **the ABI is what makes selective

@@ -1373,6 +1373,19 @@ void EmitAssemblyHelper::RunTaintHardenCodegen(
     llvm::TaintDITAbi = true;
   llvm::scope_exit RestoreDITAbi([&] { llvm::TaintDITAbi = SavedDITAbi; });
 
+  // Tail calls off, TU-wide. HERE and not in CompilerInvocation, because this
+  // runs after RunOptimizationPipeline: `disable-tail-calls` is read by
+  // TailRecursionElimination as well as by ISel, and stamping it before the
+  // optimizer would cost every function in the TU its tail-recursion
+  // elimination for nothing. ISel is downstream of this point, so it still sees
+  // the attribute and forms no TCRETURN.
+  //
+  // This also covers input that is ALREADY IR (`clang -x ir foo.bc`), which
+  // CGCall's per-function stamping never reached - the libsodium sweep builds
+  // every arm from whole-library bitcode and used to keep five tail calls
+  // through crypto_onetimeauth as a result.
+  llvm::applyTaintTailCallDisable(*TheModule);
+
   // The taint analysis wants alias analysis, exactly as it does under the new
   // PM. These managers must outlive PM.run() below, since the module pass holds
   // a reference to FAM.
@@ -1571,35 +1584,33 @@ void clang::emitBackendOutput(CompilerInstance &CI, CodeGenOptions &CGOpts,
   llvm::TimeTraceScope TimeScope("Backend");
   DiagnosticsEngine &Diags = CI.getDiagnostics();
 
-  // Record -ftaint-dit-abi IN THE MODULE, not only in the cl::opt.
+  // Record the taint codegen requests IN THE MODULE, not only in CodeGenOptions.
   //
   // Under LTO, code generation happens inside libLTO driven by the linker, which
-  // never sees CodeGenOptions. A flag consumed only on the clang codegen path is
-  // therefore silently inert for an LTO build - measured: the LTO arm paid the
-  // ABI's tail-call disable (an IR attribute, so it survives) and got no carrier
-  // at all, 0 `mrs DIT` in the whole binary. LTOBackend reads this flag back.
+  // never sees CodeGenOptions. A request consumed only on the clang codegen path
+  // is therefore silently inert for an LTO build - measured on -ftaint-dit-abi:
+  // the LTO arm got no carrier at all, 0 `mrs DIT` in the whole binary.
+  // LTOBackend reads these flags back.
   //
   // Set here rather than in RunTaintHardenCodegen because THAT is the non-LTO
   // path; with -flto clang emits bitcode without going through it.
-  if (CGOpts.TaintDITAbi && M) {
-    if (!M->getModuleFlag("taint-dit-abi"))
+  if (M) {
+    if (CGOpts.TaintDITAbi && !M->getModuleFlag("taint-dit-abi"))
       M->addModuleFlag(llvm::Module::Override, "taint-dit-abi", 1);
 
-    // Apply the tail-call disable HERE, not only in CGCall's IR generation.
+    // The tail-call disable travels as a REQUEST, not as the attribute itself.
+    // LTOBackend has to stamp it after its own optimizer runs, for the same
+    // TailRecursionElimination reason the non-LTO path does; an attribute
+    // written into the bitcode here would be in place before that optimizer.
     //
-    // CGCall adds "disable-tail-calls" as it emits each function, so it never
-    // runs for input that is ALREADY IR - `clang -x ir foo.bc`, which is how the
-    // libsodium sweep builds every arm from whole-library bitcode. The ABI then
-    // silently ran without its tail-call disable, every tail call survived and
-    // leaked DIT on, and the arm degenerated to blanket. Measured on that rig:
-    // five surviving tail calls through crypto_onetimeauth, all reported
-    // `tailcall-ungated`.
-    //
-    // Setting it here covers source and bitcode input alike, and runs before the
-    // optimizer, so TailRecursionElimination sees it too.
-    for (llvm::Function &F : *M)
-      if (!F.isDeclaration() && !F.hasFnAttribute("disable-tail-calls"))
-        F.addFnAttr("disable-tail-calls", "true");
+    // Keyed on -ftaint-harden being PRESENT, not on any seed matching. Every rig
+    // builds its baseline arm as `-ftaint-harden=<EMPTY seed file>` precisely so
+    // the baseline shares the hardened arm's codegen, and an empty seed file
+    // means the module carries no taint sources at all. Keying on the seeds
+    // would leave that baseline with its tail calls while the hardened arm lost
+    // them, and the A/B would charge a codegen change to DIT.
+    if (!CGOpts.TaintHarden.empty() && !M->getModuleFlag("taint-no-tail-calls"))
+      M->addModuleFlag(llvm::Module::Override, "taint-no-tail-calls", 1);
   }
 
   std::unique_ptr<llvm::Module> EmptyModule;

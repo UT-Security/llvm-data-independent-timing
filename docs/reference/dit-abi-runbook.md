@@ -40,27 +40,31 @@ macOS: create `build/bin/clang.cfg` once per build dir (see `CLAUDE.md`).
 build/bin/clang -O2 -ftaint-harden=<seeds.txt> -ftaint-dit-abi -c file.c -o file.o
 ```
 
-> ### The single most common way to get an invalid arm
+> ### The tail-call trap, and why it is now mostly gone
 >
-> **`-mllvm -taint-dit-abi` is NOT the same as `-ftaint-dit-abi`.** The `-mllvm`
-> form turns on the carrier but NOT the tail-call disable, so every tail call in
-> the TU survives and leaks DIT on. On a libsodium sweep this produced eight leak
-> sites, seven of them ordinary tail calls, and the arm degenerated to blanket.
+> **This used to be the single most common way to get an invalid arm.**
+> `-mllvm -taint-dit-abi` turns on the carrier but used to leave tail calls alone,
+> so every tail call in the TU survived and leaked DIT on - eight leak sites on a
+> libsodium sweep, seven of them ordinary tail calls, and the arm degenerated to
+> blanket.
 >
-> The driver flag did not exist before commit `86ce9846a55a` (2026-08-30), so any
-> ABI arm built before then is in this state.
+> **Since 2026-09-01 the tail-call disable rides on `-ftaint-harden`**, which every
+> arm passes, so both spellings of the ABI option now get it. `-ftaint-dit-abi` is
+> still the right flag - it is the one that refuses the `-taint-no-tail-calls=0`
+> opt-out - but forgetting it no longer costs you the tail-call disable. Arms built
+> before this date, and any arm carrying `-mllvm -taint-no-tail-calls=0`, are still
+> in the old state.
 >
-> **Check the report:** `NONLOCAL tailcall-ungated` means the flag never reached
-> that translation unit - a build-configuration problem. `NONLOCAL musttail` means
+> **Check the report:** `NONLOCAL tailcall-ungated` means the disable never reached
+> that translation unit - either no `-ftaint-harden`, or an explicit
+> `-taint-no-tail-calls=0`; a build-configuration problem. `NONLOCAL musttail` means
 > the TU IS gated and the tail call survived anyway, which is genuine `musttail`
-> or the MachineOutliner and is not fixable by the flag.
+> or the MachineOutliner and is not fixable by any flag.
 
-`-ftaint-dit-abi` is a **driver flag**, not `-mllvm`. It does two things that must
-stay in step: it turns on the backend option, and it implies
-`-fno-optimize-sibling-calls`. `-mllvm -taint-dit-abi` alone gives you the ABI
-*without* the tail-call disable, which is an incomplete configuration - a tail
-call is an exit with no epilogue, so the callee cannot restore DIT there. Use the
-driver flag unless you are deliberately A/B-ing the backend option.
+`-ftaint-dit-abi` is a **driver flag**, not `-mllvm`, and the two are still not
+interchangeable: the driver flag is what makes the build refuse
+`-mllvm -taint-no-tail-calls=0`. Use it unless you are deliberately A/B-ing the
+backend option.
 
 ### Full LTO
 
@@ -85,7 +89,9 @@ Three things are load-bearing and each one has cost a wasted build:
   recorded as a module flag at compile time because codegen happens inside libLTO,
   driven by the linker, which never sees clang's CodeGenOptions. If you see a
   hardened LTO binary with **zero `mrs DIT`**, that is this channel broken - the
-  build still pays the tail-call disable and gets no carrier.
+  build still pays the tail-call disable and gets no carrier. The tail-call disable
+  travels the same way, as a separate `taint-no-tail-calls` module flag that
+  `LTOBackend::codegen` stamps from after its own optimizer.
 
 LTO forces single-partition codegen (the analysis needs the whole module), so the
 link is single-threaded. Measured on Bitcoin Core's `bench_bitcoin`: 29 min

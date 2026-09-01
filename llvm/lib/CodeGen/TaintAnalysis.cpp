@@ -49,6 +49,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/WithColor.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
 #include <optional>
@@ -129,8 +130,68 @@ cl::opt<bool> llvm::TaintDITAbi(
     cl::desc("Callee-saved PSTATE.DIT (docs/design/dit-abi.md): read DIT at "
              "entry, restore it at every return, and emit nothing at call "
              "sites. Works with BOTH placement modes, including the default "
-             "`region`. Prefer the driver flag -ftaint-dit-abi: this option "
-             "alone gives the ABI WITHOUT the tail-call disable it requires."));
+             "`region`. The tail-call disable this ABI needs is no longer "
+             "part of it: -ftaint-harden turns it on for any hardened build "
+             "(-taint-no-tail-calls), so both spellings get it through clang. "
+             "Driving llc directly still needs an explicit -disable-tail-calls, "
+             "because nothing stamps the attribute on that path."));
+
+// TAIL CALLS ARE OFF FOR ANY HARDENED BUILD, and this is deliberately NOT tied
+// to -taint-dit-abi any more (the callee-saved ABI is not shipping; the
+// tail-call disable is the narrow fix that was only ever reachable through it).
+//
+// A tail call is an exit with no epilogue. An instrumented function that takes
+// one has nowhere to put its `MSR DIT, #0`, so DIT stays set for the rest of the
+// program and selective placement degenerates to blanket coverage. libsodium's
+// `randombytes_buf` does exactly this through an indirect tail call, which means
+// a program that only calls `sodium_init()` pays the ENTIRE always-on penalty at
+// zero secret fraction: +14.77% renamed / +14.64% serializing, against -0.10% /
+// -0.00% once tail calls are suppressed (docs/design/dit-tailcall-gap.md §7).
+//
+// WHY THIS IS A DEFAULT AND NOT A RECOMMENDATION. The failure is silent. Nothing
+// in the build reports "your placement just became blanket"; the switches are all
+// still there, the verifier still passes (it asks only whether every Need runs
+// with DIT=1, and an enable with no matching clear is exactly what makes that
+// pass), and the cost shows up only as a number in a benchmark nobody ran.
+//
+// WHY IT IS STILL OVERRIDABLE. On serializing-`MSR DIT` hardware the clears this
+// restores are real switches at ~21 cyc, worth +8.89 points at f = 9.4%. The
+// trade is real and has to stay measurable, so `-taint-no-tail-calls=0` puts them
+// back -- except under the ABI, where a surviving tail call is not a cost but a
+// violation of the contract.
+cl::opt<bool> llvm::TaintNoTailCalls(
+    "taint-no-tail-calls", cl::init(true),
+    cl::desc("Disable tail calls TU-wide when hardening (default true). A tail "
+             "call cannot restore PSTATE.DIT, so taking one leaves DIT set for "
+             "the rest of the program and turns selective placement into blanket "
+             "coverage. =0 restores them for A/B measurement; refused under "
+             "-taint-dit-abi, where a tail call is an ABI violation."));
+
+unsigned llvm::applyTaintTailCallDisable(Module &M) {
+  if (!TaintNoTailCalls) {
+    // Under the callee-saved ABI the disable is not a tuning choice: without it
+    // a callee leaks its enable into its caller's caller and the contract does
+    // not hold. Refuse the opt-out rather than emit an object that quietly
+    // violates the ABI it claims to implement.
+    if (!TaintDITAbi)
+      return 0;
+    WithColor::warning()
+        << "taint: -taint-no-tail-calls=0 ignored under -taint-dit-abi; a tail "
+           "call has no epilogue in which to restore PSTATE.DIT, so allowing "
+           "one would break the callee-saved contract\n";
+  }
+
+  // Declarations are somebody else's codegen. Stamping them changes nothing and
+  // would make the count meaningless as a report of what this TU did.
+  unsigned N = 0;
+  for (Function &F : M) {
+    if (F.isDeclaration() || F.hasFnAttribute("disable-tail-calls"))
+      continue;
+    F.addFnAttr("disable-tail-calls", "true");
+    ++N;
+  }
+  return N;
+}
 
 cl::opt<std::string> llvm::TaintNonlocalReportFile(
     "taint-nonlocal-report", cl::init(""), cl::Hidden,
@@ -2937,9 +2998,11 @@ static void reportNonlocalDITExits(MachineFunction &MF, Module &M,
                 .getValueAsBool();
         if (!Gated)
           emit("tailcall-ungated", MI, findCalledFunction(M, MI),
-               "this function has no `disable-tail-calls` attribute, so "
-               "-ftaint-dit-abi did not reach its translation unit - a build "
-               "configuration problem, NOT musttail");
+               "this function has no `disable-tail-calls` attribute, so the "
+               "hardening default did not reach its translation unit - either "
+               "-ftaint-harden was not passed for this TU, or the build set "
+               "-mllvm -taint-no-tail-calls=0. A build configuration problem, "
+               "NOT musttail");
         else
           emit("musttail", MI, findCalledFunction(M, MI),
                "the function IS gated yet kept a tail call, so this is genuine "
@@ -3013,8 +3076,11 @@ static void reportUnbalancedDITExits(MachineFunction &MF,
             "epilogue to restore it",
             "DIT stays SET past this call: all later code runs protected, so "
             "selective placement degenerates to blanket coverage from here on",
-            "rebuild this TU with -ftaint-dit-abi, which disables tail calls "
-            "TU-wide and restores DIT at every exit");
+            "tail calls are disabled TU-wide by default whenever hardening "
+            "runs, so reaching this means either -ftaint-harden was not passed "
+            "for this TU, or the build set -mllvm -taint-no-tail-calls=0; "
+            "restore the default. If the attribute IS present, this is genuine "
+            "musttail or MachineOutlinerTailCall and no flag reaches it");
       }
       if (OS) {
         const Function *Callee = TailCall ? findCalledFunction(M, MI) : nullptr;

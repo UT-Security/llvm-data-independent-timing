@@ -101,53 +101,67 @@ fix, and it has direct precedent: both LLVM and GCC decline to tail-call out of 
 function that must restore PSTATE.SM (`mode-bit-precedent.md` §2.4).
 
 **DECIDED 2026-08-30: disable tail calls for the whole translation unit, not
-per-function** - and gate it on the ABI, not on hardening. `-ftaint-dit-abi`
-implies `-fno-optimize-sibling-calls`; `-ftaint-harden` alone must NOT.
+per-function.** **REVISED 2026-09-01: it rides on `-ftaint-harden`, not on this ABI.**
+This ABI is not shipping; the tail-call disable was the piece of it worth keeping, and
+§7 of `dit-tailcall-gap.md` is why - the residual is not a bounded leak, it is the whole
+always-on penalty at low secret fraction. So `-ftaint-harden` now turns tail calls off
+for every hardened build, and what remains ABI-specific is only that the A/B opt-out is
+refused when `-ftaint-dit-abi` is on, because there a surviving tail call breaks the
+contract rather than costing cycles.
 
-**Why the gating matters, found in review after shipping it the wrong way.**
-`disable-tail-calls` is honoured by `TailRecursionElimination.cpp` as well as by
-ISel. Applying it whenever hardening is on therefore turns tail RECURSION into
-O(n) stack frames in every function of the TU, tainted or not - a stack-overflow
-hazard, paid even when the ABI that needs it is switched off, and not overridable
-with `-foptimize-sibling-calls`. Measured: a tail-recursive function that plain
-`-O2` reduces to a closed form with no call at all emitted `bl` plus a frame under
-`-ftaint-harden`.
+**The TailRecursionElimination objection that forced the earlier gating is GONE, and it
+was never a real trade.** `disable-tail-calls` is honoured by
+`TailRecursionElimination.cpp:909` as well as by ISel, so stamping it in
+`CodeGenOptions` - before the optimizer - turned tail RECURSION into O(n) stack frames
+in every function of the TU. The answer is to stamp it **after** the IR pipeline
+instead: `llvm::applyTaintTailCallDisable`, called from `RunTaintHardenCodegen` and from
+`LTOBackend::codegen`. TRE then runs untouched, and TRE turning self-recursion into a
+loop is *strictly better* for DIT than a tail call - there is no call left at all. ISel,
+the only other consumer, is downstream of the stamp and still forms nothing. What was
+read as a trade between two goods was an artifact of stamping at the wrong point.
 
 The per-function form is the obvious design and it is not available to us. Setting
 `disable-tail-calls` on *only the instrumented functions* requires knowing which
 functions get instrumented, which is known only after the MIR analysis, which runs after
 ISel has already formed the tail calls. That is the two-pass compile. The global form
-needs no analysis at all, so **it decouples this ABI from the two-pass compile
-entirely** - which was the single largest blocker on the critical path.
+needs no analysis at all, which is what keeps this off the two-pass critical path.
 
 Mechanics, verified in tree:
 
-- `-fno-optimize-sibling-calls` sets `CodeGenOpts.DisableTailCalls`
-  (`CodeGenOptions.def:81`), which adds `"disable-tail-calls"="true"` to every function
-  (`CGCall.cpp:2661`). The attribute is IR-level, so it survives into LTO.
-- `SelectionDAGBuilder::canTailCall` honors it (`SelectionDAGBuilder.cpp:9073`).
+- `llvm::applyTaintTailCallDisable(Module&)` adds `"disable-tail-calls"="true"` to every
+  definition. It honours `-taint-no-tail-calls=0`, except under `-taint-dit-abi`, where
+  it warns and stamps anyway.
+- Non-LTO: `RunTaintHardenCodegen` (`BackendUtil.cpp`) calls it, after
+  `RunOptimizationPipeline`. This covers source and `-x ir` bitcode input alike -
+  `CGCall.cpp:2661`'s per-function stamping never ran for the latter, which is how five
+  tail calls through `crypto_onetimeauth` survived on the libsodium sweep.
+- LTO: `emitBackendOutput` records a `taint-no-tail-calls` module flag; `LTOBackend`'s
+  `codegen()` calls the same helper from it, after `opt()`. The flag is keyed on
+  `-ftaint-harden` being **present**, not on `moduleHasTaintSources`, so an
+  `-ftaint-harden=<EMPTY>` baseline arm loses its tail calls too and stays
+  codegen-matched to the arm it is the control for.
+- `SelectionDAGBuilder::canTailCall` honors the attribute
+  (`SelectionDAGBuilder.cpp:9074`); so do `TargetLowering.cpp:66`, `FastISel.cpp:1136`
+  and `GlobalISel/CallLowering.cpp:107`.
 - `llc` has the equivalent `-disable-tail-calls` (`CommandFlags.cpp:346`) for the
   wrapper flow.
 
 **The cost is paid by the whole TU, not just instrumented functions.** That is the
 deliberate trade: a simple, analysis-free mechanism in exchange for slower non-secret
-code and deeper stacks. It should be measured, not assumed, and the old +27% static
-switch figure (414 -> 524) was taken on the per-function form under the caller-saved
-design and does not transfer.
+code. It should be measured, not assumed, and the old +27% static switch figure
+(414 -> 524) was taken on the per-function form under the caller-saved design and does
+not transfer. The measured price is in `dit-tailcall-gap.md` §7: free-to-better on
+renamed-`MSR DIT` hardware, +8.89 points at f = 9.4% on serializing hardware. That
+asymmetry is why `-taint-no-tail-calls=0` exists.
 
-#### 2.1.0 The residual cost, now confined to ABI builds
+#### 2.1.0 The tail-recursion cost: WITHDRAWN
 
-Disabling tail calls TU-wide also disables tail-RECURSION elimination, so a
-tail-recursive function in an ABI build gets O(n) stack frames where plain `-O2`
-would have produced a loop or a closed form. Measured: `rec(secret, n, acc)`
-compiles to no call and no frame at `-O2`, and to `bl` plus a frame under
-`-ftaint-dit-abi`.
-
-That is a real limitation of the ABI, not a bug - it is the price of "no analysis
-needed", and the alternative is per-function marking, which needs the two-pass
-compile this design exists to avoid. It is acceptable only because it is now
-**opt-in**: gating it on `-ftaint-harden` instead made every hardened build pay a
-stack-overflow hazard for an ABI that was switched off.
+An earlier revision of this section recorded that a tail-recursive function gets O(n)
+stack frames under the disable, and treated that as the price of "no analysis needed".
+It was an artifact of stamping the attribute before the optimizer, not a property of
+disabling tail calls, and it is gone now that the stamp happens at codegen. `rec(secret,
+n, acc)` reduces exactly as it does at plain `-O2`. The regression test that pins this is
+the `TRE` prefix in `clang/test/CodeGen/taint-no-tail-calls.c`.
 
 #### 2.1.1 Two tail calls survive the flag
 

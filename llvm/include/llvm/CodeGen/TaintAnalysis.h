@@ -69,6 +69,35 @@ extern cl::opt<bool> TaintInsertDIT;
 /// never use.
 extern cl::opt<bool> TaintDITAbi;
 
+/// TU-wide tail-call disable, ON by default whenever hardening runs.
+///
+/// A tail call is an exit with no epilogue, so an instrumented function that
+/// takes one can never clear PSTATE.DIT again: everything downstream runs
+/// protected and selective placement silently degenerates to blanket coverage.
+/// It is not hypothetical - libsodium's `randombytes_buf` exits through an
+/// indirect tail call, so a program that only calls `sodium_init()` runs with
+/// DIT set for its whole life and pays the entire always-on penalty at zero
+/// secret fraction (docs/design/dit-tailcall-gap.md §7).
+///
+/// Set =0 to get tail calls back. That is a MEASUREMENT hatch: on hardware with
+/// a serializing `MSR DIT` the restored clears are real switches and cost +8.89
+/// points at f = 9.4%, so the trade has to stay measurable. It is refused under
+/// -taint-dit-abi, where a surviving tail call is an ABI violation rather than a
+/// cost.
+extern cl::opt<bool> TaintNoTailCalls;
+
+/// Stamp the hardening-wide tail-call disable (\see TaintNoTailCalls) on every
+/// definition in \p M, and return how many functions were stamped.
+///
+/// MUST be called at CODEGEN time, never before the IR optimization pipeline.
+/// The `disable-tail-calls` attribute is read by TailRecursionElimination as
+/// well as by ISel, so stamping it early would turn tail RECURSION into O(n)
+/// stack frames in every function of the TU. Applied after the optimizer, TRE
+/// runs untouched - self-recursion still becomes a loop, which is strictly
+/// better for DIT than a tail call - while ISel, the only other consumer, still
+/// sees the attribute and forms nothing.
+unsigned applyTaintTailCallDisable(Module &M);
+
 /// Command-line option for the call-site residual (escape) report: call sites
 /// passing tainted/pointee-tainted arguments to callees the analysis cannot
 /// instrument (external declarations, indirect calls).

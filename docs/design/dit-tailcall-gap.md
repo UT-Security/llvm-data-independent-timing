@@ -1,12 +1,31 @@
 # The tail-call DIT gap: why a tail call can't both protect and restore
 
-**STATUS 2026-08-30: the accepted-cost framing here is SUPERSEDED by**
-`docs/design/dit-abi.md`. DIT is now callee-saved, so a tail call out of an
-instrumented function is an ABI violation rather than a tolerated leak. The fix is
-global (`-ftaint-harden` implies `-fno-optimize-sibling-calls`), not the per-function
-`disable-tail-calls` this file's §4 anticipated, so it no longer needs the two-pass
-compile. `musttail` and `MachineOutlinerTailCall` survive the flag and are reported.
-The mechanics below are still accurate; only the verdict changed.
+**STATUS 2026-09-01: the accepted-cost framing here is SUPERSEDED. Tail calls are now
+disabled TU-wide by default for any `-ftaint-harden` build** (`-taint-no-tail-calls`,
+default 1), and §7 below is why: the residual is not a bounded cost, it is the entire
+always-on penalty at low secret fraction, in exactly the regime fine-grained placement
+exists to serve. The fix is global, not the per-function `disable-tail-calls` this
+file's §4 anticipated, so it needs no two-pass compile. `musttail` and
+`MachineOutlinerTailCall` survive it and are reported. The mechanics below are still
+accurate; only the verdict changed.
+
+**This is NOT the callee-saved ABI, and no longer arrives through it.** An earlier
+revision of this banner said DIT is callee-saved and that `-ftaint-dit-abi` was how the
+disable was reached. That ABI is not shipping (decision 2026-09-01); the tail-call
+disable was the one piece of it worth keeping, so it was decoupled and now rides on
+`-ftaint-harden` alone.
+
+**Two implementation properties worth knowing before you read the code.** The attribute
+is stamped at CODEGEN - `llvm::applyTaintTailCallDisable`, called from
+`RunTaintHardenCodegen` and from `LTOBackend::codegen`, both of which run after their
+optimizer - because `disable-tail-calls` is honoured by TailRecursionElimination as well
+as by ISel, and stamping it early would turn tail RECURSION into O(n) stack frames in
+every function of the TU. TRE turning self-recursion into a loop is strictly better for
+DIT than a tail call, so there was nothing to trade. Consequently the attribute is not in
+`-emit-llvm` output; the `taint-no-tail-calls` module flag is what travels into bitcode,
+and the LTO backend stamps from it. That flag keys on `-ftaint-harden` being present, not
+on any seed matching, so an `-ftaint-harden=<EMPTY>` baseline arm loses its tail calls
+too and stays codegen-matched to the arm it controls for.
 
 
 **Found 2026-08-05 on gem5, running hardened libsodium.** Whole-function placement

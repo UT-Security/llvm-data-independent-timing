@@ -507,6 +507,18 @@ static void codegen(const Config &Conf, TargetMachine *TM,
     if (Hardening && Mod.getModuleFlag("taint-dit-abi") &&
         TaintDITAbi.getNumOccurrences() == 0)
       TaintDITAbi = true;
+
+    // Tail calls off, TU-wide, stamped HERE because this is after opt(): the
+    // `disable-tail-calls` attribute is read by TailRecursionElimination as well
+    // as by ISel, so it must not be in the bitcode when the LTO optimizer runs.
+    //
+    // Gated on the module flag rather than on `Hardening`. A baseline arm built
+    // with `-ftaint-harden=<EMPTY seed file>` carries no taint sources, so
+    // `Hardening` is false for it, but it still has to lose its tail calls or it
+    // stops being codegen-matched to the arm it is the control for.
+    if (Mod.getModuleFlag("taint-no-tail-calls"))
+      applyTaintTailCallDisable(Mod);
+
     PassInstrumentationCallbacks PIC;
     LoopAnalysisManager LAM;
     FunctionAnalysisManager FAM;

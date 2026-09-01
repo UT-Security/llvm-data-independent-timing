@@ -83,6 +83,13 @@ perl -0pi -e 's/<mcsymbol >//g' f.pe.mir                       # MIR CFI seriali
 llc  -enable-new-pm -run-taint-interproc -taint-insert-dit [flags] f.pe.mir -o f.hardened.mir
 llc  -start-after=prologepilog f.hardened.mir -filetype=obj -o f.o
 ```
+**The wrapper flow does NOT get the tail-call disable.** `-taint-no-tail-calls` is
+stamped by clang and by the LTO backend, not by `llc`, so an arm built this way keeps
+its tail calls and every one of them leaks DIT on. Pass `-disable-tail-calls` to the
+FIRST `llc` (the one that lowers from IR - by the `-run-taint-interproc` step the tail
+calls already exist), and check the result with `-taint-callsite-report`: a
+`DITLEAK tailcall-ungated` line means you forgot.
+
 A Firefox TU uses `-stop-before=aarch64-asm-printer` instead of `stop-after=prologepilog`,
 plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `-O2`).
 
@@ -90,6 +97,7 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
 | Flag | Meaning / default |
 |---|---|
 | `-taint-insert-dit` | master switch; implied by `-ftaint-harden`. Without it, analysis runs + reports emit but codegen is untouched (A/B baseline). |
+| `-taint-no-tail-calls={0\|1}` | **default 1 = tail calls are OFF TU-wide whenever `-ftaint-harden` is passed.** A tail call is an exit with no epilogue, so DIT can never be cleared after one and selective placement degenerates to blanket - libsodium's `randombytes_buf` does this through an indirect tail call, so `sodium_init()` alone costs the full always-on penalty (§7 of `docs/design/dit-tailcall-gap.md`). `=0` restores them for A/B; refused under `-ftaint-dit-abi`. Keyed on the FLAG, not on the seeds, so an `-ftaint-harden=<EMPTY>` baseline stays codegen-matched. Stamped at codegen, after the IR pipeline, so TailRecursionElimination is untouched - which is why it is not in `-emit-llvm` output (only the `taint-no-tail-calls` module flag is). |
 | `-taint-dit-placement={region\|function}` | **default `region`** (fine-grain). `function` = coarse: DIT on at entry, off before each return. |
 | `-taint-dit-loop-hoist={0\|1}` | **default 1** = each need-loop coarsened On with the enable hoisted to the preheader (one toggle, whole loop covered). `0` selects block-minimal coverage: fewest instrs covered, per-iteration toggles. |
 | `-taint-dit-switch-cyc` (default **30**), `-taint-dit-dwell-per-instr` (default 1.0) | cost-model knobs for region merging admission. 30 cyc is the measured serializing switch cost; the error is asymmetric (merging costs cheap dwell and is fail-safe, not merging costs a full switch pair), so err high. |
@@ -139,8 +147,11 @@ summary bit proves it redundant; `-taint-dit-reassert-report` audits the rest. S
 in any "before every return" walk. Whole-function placement used to clear DIT
 immediately before `b crypto_sign_ed25519`, running the callee that receives the secret
 completely unprotected (fixed 2026-08-05; `docs/design/dit-tailcall-gap.md`). The
-permanent residual: after a tail call DIT may stay set indefinitely, so an instrumented
-function does not restore DIT on every exit path.
+residual - after a tail call DIT may stay set indefinitely - **is no longer accepted**:
+tail calls are disabled TU-wide by default for any hardened build (`-taint-no-tail-calls`,
+above). What survives the disable is `musttail` and `MachineOutlinerTailCall`, both
+reported as `DITLEAK tailcall`; a `DITLEAK tailcall-ungated` line instead means the flag
+did not reach that TU.
 
 ## 5. Why the 3-phase serialize/reparse design (load-bearing)
 

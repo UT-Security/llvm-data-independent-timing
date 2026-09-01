@@ -2304,31 +2304,16 @@ bool CompilerInvocation::ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args,
 
   Opts.StaticClosure = Args.hasArg(options::OPT_static_libclosure);
 
-  // The callee-saved PSTATE.DIT ABI requires that no instrumented function exit
-  // by tail call: a tail call has no epilogue, so there is nowhere to restore
-  // DIT, and the callee would leak its enable into its caller's caller
-  // (docs/design/dit-abi.md §2.1).
+  // NOTE: -ftaint-harden's TU-wide tail-call disable is NOT applied here.
   //
-  // The per-function form of the fix is not available to us. Setting
-  // "disable-tail-calls" on only the instrumented functions requires knowing
-  // which functions the taint analysis will instrument, and that is decided by a
-  // MIR pass running after PrologEpilogInserter - long after ISel has formed the
-  // tail calls. Disabling them for the whole TU needs no analysis at all, which
-  // is what keeps this ABI off a two-pass compile.
-  //
-  // Gated on the ABI, NOT on -ftaint-harden. `disable-tail-calls` is honoured by
-  // TailRecursionElimination as well as ISel, so applying it whenever hardening
-  // is on turns tail RECURSION into O(n) stack frames in every function of the
-  // TU, tainted or not - a stack-overflow hazard, paid even when the ABI that
-  // needs it is switched off.
-  //
-  // Two tail calls still survive and are audited rather than prevented:
-  // `musttail`, which bypasses the attribute at SelectionDAGBuilder::canTailCall
-  // because guaranteed TCO is a correctness requirement, and
-  // MachineOutlinerTailCall, which runs downstream of the pass. Both surface as
-  // `DITLEAK tailcall` lines.
-  if (Opts.TaintDITAbi)
-    Opts.DisableTailCalls = true;
+  // It is stamped at codegen instead (llvm::applyTaintTailCallDisable, called
+  // from RunTaintHardenCodegen and from LTOBackend), because the
+  // `disable-tail-calls` attribute is honoured by TailRecursionElimination as
+  // well as by ISel. Setting it in CodeGenOptions puts it on every function
+  // before the optimizer runs, which would turn tail RECURSION into O(n) stack
+  // frames across the whole TU - a stack-overflow hazard, and pure loss, since
+  // TRE turning self-recursion into a loop is strictly better for DIT than a
+  // tail call. See docs/design/dit-tailcall-gap.md.
 
   return Diags.getNumErrors() == NumErrorsBefore;
 }

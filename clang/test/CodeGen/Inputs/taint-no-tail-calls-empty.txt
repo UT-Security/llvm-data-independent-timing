@@ -1,0 +1,8 @@
+# Deliberately seeds nothing.
+#
+# This is the shape every A/B rig uses for its baseline arm
+# (utils/dit_host_screening/xover/build.sh, build2.sh, scripts/build_sodium_arms.sh):
+# `-ftaint-harden=<EMPTY>` so the baseline shares the hardened arm's codegen with
+# no DIT switches in it. The tail-call disable has to key on the FLAG, not on the
+# seeds, or the baseline keeps tail calls the hardened arm lost and the A/B
+# charges a codegen change to DIT.

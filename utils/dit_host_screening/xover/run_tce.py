@@ -37,6 +37,13 @@ ARMS = {
     # function has an epilogue in which to emit its DIT clear. ntcbase is the
     # MATCHED round-trip control: same lowering, taint pass not run. Comparing
     # ntc30 against `off` would charge the tail-call codegen change to DIT.
+    #
+    # HISTORICAL as of 2026-09-01: what these arms measured is WHY the suppression
+    # became the default (-taint-no-tail-calls, on for any -ftaint-harden build,
+    # see docs/design/dit-tailcall-gap.md §7). `def30` rebuilt against a current
+    # compiler therefore already has tail calls off, so a fresh def30-vs-ntc30
+    # delta no longer isolates anything - re-check the arm recipes before reading
+    # one. The recorded numbers stand; they were taken when def30 still had them.
     "ntcbase":("ntcbase",0),
     "ntc30":  ("ntc30", 0),
 }

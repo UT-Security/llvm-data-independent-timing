@@ -100,8 +100,9 @@ How the analysis is built, which bugs were found in it, and what is still open.
   instrumented callee, `d_out == d_in` at every exit it controls; guarantee to every
   caller, `d_out >= d_in`, unconditionally. Call sites emit nothing, which removes all
   four re-assert classes by construction with no LTO and no annotation. Two decisions
-  come with it: tail calls are disabled TU-wide (`-fno-optimize-sibling-calls`, so no
-  two-pass compile needed), and `_Unwind_Resume` / `longjmp` / `musttail` /
+  came with it: tail calls disabled TU-wide (no two-pass compile needed) - **which as of
+  2026-09-01 is no longer the ABI's, it rides on `-ftaint-harden` for every hardened
+  build, see `-taint-no-tail-calls`** - and `_Unwind_Resume` / `longjmp` / `musttail` /
   MachineOutliner sites degrade to the guarantee and are reported as `NONLOCAL` lines
   rather than fixed. Supersedes the framing in `dit-tailcall-gap.md` and
   `dit-unconditional-design.md` §2.

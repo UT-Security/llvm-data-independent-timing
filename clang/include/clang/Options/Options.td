@@ -4086,9 +4086,10 @@ def ftaint_dit_abi : Flag<["-"], "ftaint-dit-abi">,
     MarshallingInfoFlag<CodeGenOpts<"TaintDITAbi">>,
     HelpText<"Use the callee-saved PSTATE.DIT calling convention: read DIT at "
              "entry, restore it at every return, and emit nothing at call "
-             "sites. Implies -fno-optimize-sibling-calls, because a tail call "
-             "is an exit with no epilogue at which DIT could be restored. "
-             "Requires -ftaint-harden.">;
+             "sites. Requires -ftaint-harden, whose TU-wide tail-call disable "
+             "this ABI depends on: a tail call is an exit with no epilogue at "
+             "which DIT could be restored, so -mllvm -taint-no-tail-calls=0 is "
+             "refused when this is on.">;
 
 def ftaint_harden_EQ : Joined<["-"], "ftaint-harden=">,
     Group<f_Group>,

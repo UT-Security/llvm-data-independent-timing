@@ -2,29 +2,18 @@
 //
 // REQUIRES: aarch64-registered-target
 
-// Piece 1: -ftaint-dit-abi implies a TU-wide tail-call disable, because a tail
-// call is an exit with no epilogue and the callee could not restore DIT there.
-// The per-function form is unavailable: which functions get instrumented is only
-// known after a post-PEI MIR pass, long after ISel has formed the tail calls.
-// RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -emit-llvm -ftaint-dit-abi \
-// RUN:     -ftaint-harden=%S/Inputs/dit-abi-secret.txt %s -o - \
-// RUN:   | FileCheck %s --check-prefix=NOTAIL
-// NOTAIL: "disable-tail-calls"="true"
-
-// It must NOT be implied by -ftaint-harden alone. `disable-tail-calls` is honoured
-// by TailRecursionElimination as well as ISel, so applying it whenever hardening
-// is on turns tail RECURSION into O(n) stack frames in every function of the TU,
-// tainted or not - a stack-overflow hazard, and paid even when the ABI that needs
-// it is switched off.
-// RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -emit-llvm \
-// RUN:     -ftaint-harden=%S/Inputs/dit-abi-secret.txt %s -o - \
-// RUN:   | FileCheck %s --check-prefix=HARDENONLY
-// HARDENONLY-NOT: disable-tail-calls
-
-// And absent entirely without any flag.
-// RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -emit-llvm %s -o - \
-// RUN:   | FileCheck %s --check-prefix=NOFLAG
-// NOFLAG-NOT: disable-tail-calls
+// Piece 1 USED TO LIVE HERE: the TU-wide tail-call disable. It is no longer the ABI's,
+// and no longer visible in IR.
+//
+// It rides on -ftaint-harden now, for every hardened build, because a tail call taken
+// with DIT on never restores it and selective placement silently degenerates to blanket
+// coverage - a hole the ABI's flag happened to plug but was never the only route to.
+// And it is stamped at codegen rather than in CodeGenOptions, so that
+// TailRecursionElimination, which reads the same attribute, is not collateral damage.
+// Both properties are tested in clang/test/CodeGen/taint-no-tail-calls.c.
+//
+// What is left here for the ABI is only that the A/B hatch is refused when it is on,
+// which that file also covers.
 
 // Piece 3, the callee half. Today's placement clears DIT unconditionally at the
 // exit and therefore has to re-assert after every call it cannot prove
