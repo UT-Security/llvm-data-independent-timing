@@ -3013,8 +3013,11 @@ static void reportUnbalancedDITExits(MachineFunction &MF,
             "epilogue to restore it",
             "DIT stays SET past this call: all later code runs protected, so "
             "selective placement degenerates to blanket coverage from here on",
-            "rebuild this TU with -ftaint-dit-abi, which disables tail calls "
-            "TU-wide and restores DIT at every exit");
+            "disable tail calls for this TU: -fno-optimize-sibling-calls "
+            "through clang, -disable-tail-calls if you drive llc directly. "
+            "(-ftaint-dit-abi also does this, but it brings the whole "
+            "callee-saved ABI with it, which is not the shipped "
+            "configuration - the tail-call disable is the narrow fix.)");
       }
       if (OS) {
         const Function *Callee = TailCall ? findCalledFunction(M, MI) : nullptr;
