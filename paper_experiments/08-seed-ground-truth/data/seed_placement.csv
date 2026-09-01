@@ -1,0 +1,9 @@
+# What the SEED POINT costs, measured against CryptoMPK's ground truth.
+# Both seeds express the same intent - "the signing key is secret" - and
+# CryptoMPK's own annotation is the buffer form (`#pragma tainter taint(&key_pair)`).
+# need/coverage are our pass's own -taint-dit-precision-report figures.
+seed_set,seed_lines,switches,recall_vs_cryptompk_pct,precision_vs_cryptompk_pct,final_create_need,final_create_coverage_pct,curve_ladder_marked
+create_only,"hydro_sign_create,4,pointee",27,32.4,68.8,27,12.0,no
+keygen_only,"hydro_sign_keygen,0,pointee",298,76.5,57.8,264,99.2,yes
+both,"both of the above",300,79.4,58.7,264,99.2,yes
+diag_hashfinal,"create_only + hydro_hash_final,1,pointee",304,,,265,99.2,yes

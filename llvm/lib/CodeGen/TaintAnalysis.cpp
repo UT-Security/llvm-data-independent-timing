@@ -3076,11 +3076,14 @@ static void reportUnbalancedDITExits(MachineFunction &MF,
             "epilogue to restore it",
             "DIT stays SET past this call: all later code runs protected, so "
             "selective placement degenerates to blanket coverage from here on",
-            "tail calls are disabled TU-wide by default whenever hardening "
-            "runs, so reaching this means either -ftaint-harden was not passed "
-            "for this TU, or the build set -mllvm -taint-no-tail-calls=0; "
-            "restore the default. If the attribute IS present, this is genuine "
-            "musttail or MachineOutlinerTailCall and no flag reaches it");
+            "disable tail calls for this TU. Through clang that is already "
+            "the default whenever hardening runs, so reaching this means "
+            "-ftaint-harden was not passed for this TU or the build set "
+            "-mllvm -taint-no-tail-calls=0; restore it. Driving llc directly "
+            "needs an explicit -disable-tail-calls, because nothing stamps the "
+            "attribute on that path. If the attribute IS present, this is "
+            "genuine musttail or MachineOutlinerTailCall and no flag reaches "
+            "it");
       }
       if (OS) {
         const Function *Callee = TailCall ? findCalledFunction(M, MI) : nullptr;

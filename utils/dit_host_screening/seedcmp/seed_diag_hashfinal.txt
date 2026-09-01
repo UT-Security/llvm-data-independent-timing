@@ -1,0 +1,2 @@
+hydro_sign_create,4,pointee
+hydro_hash_final,1,pointee

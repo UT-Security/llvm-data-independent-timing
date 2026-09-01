@@ -67,7 +67,7 @@
 // configuration to put back.
 // LOSS: taint-stop leak-tailcall  in=fwd src=taint-info-loss.c callee=sink_extern
 // LOSS:   severity  SEVERE
-// LOSS:   repair    tail calls are disabled TU-wide by default
+// LOSS:   repair    disable tail calls for this TU. Through clang that is already the default
 //
 // A callee the seed file ALREADY covers in full is suppressed outright. Telling
 // the user to seed something they have seeded is what made the report look like

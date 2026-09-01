@@ -1,0 +1,4 @@
+# Build products and per-run reports. Regenerate with ./run_seedcmp.sh.
+arms/
+out/
+build.log
