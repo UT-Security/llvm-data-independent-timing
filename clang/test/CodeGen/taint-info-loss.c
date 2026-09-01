@@ -24,17 +24,35 @@
 // RUN:     -mllvm -taint-info-loss-report=%t.loss %s -o /dev/null 2>&1
 // RUN: FileCheck %s --check-prefix=LOSS --input-file=%t.loss
 //
+// Records appear in file order: the cross-TU ones from the analysis pass, then
+// the severe tail-call one from placement.
+//
 // The cross-TU record carries a pasteable seed line, and it must name EVERY
 // argument that carried taint - suggesting only the lowest index points the user
 // at an output buffer and omits the key.
 // LOSS: taint-stop cross-tu  in=fwd src=taint-info-loss.c callee=sink_extern
 // LOSS:   severity  moderate
 // LOSS:   repair    seed the TU that defines it:
-// LOSS:               sink_extern,1,pointee
+// LOSS-NEXT:               sink_extern,1,pointee
+//
+// A PARTIALLY seeded callee is still reported, listing only what is MISSING.
+// sink_partial is seeded on argument 1; arguments 1 and 2 both carry taint here,
+// so only argument 2 should be suggested.
+// LOSS: taint-stop cross-tu  in=fwd3 src=taint-info-loss.c callee=sink_partial
+// LOSS:   repair    seed the TU that defines it:
+// LOSS-NEXT:               sink_partial,2,pointee
 //
 // LOSS: taint-stop leak-tailcall  in=fwd src=taint-info-loss.c callee=sink_extern
 // LOSS:   severity  SEVERE
 // LOSS:   repair    rebuild this TU with -ftaint-dit-abi
+//
+// A callee the seed file ALREADY covers in full is suppressed outright. Telling
+// the user to seed something they have seeded is what made the report look like
+// it never converged - 9 of 41 records on libsodium were exactly that. Scanned
+// over the whole file, hence its own prefix.
+// RUN: FileCheck %s --check-prefix=NOSEED --input-file=%t.loss
+// NOSEED-NOT: sink_seeded
+// NOSEED-NOT: sink_partial,1
 
 // Declaration only: another TU, so the analysis cannot follow the secret in.
 unsigned long sink_extern(unsigned long a, const unsigned char *secret);
@@ -43,4 +61,19 @@ unsigned long sink_extern(unsigned long a, const unsigned char *secret);
 // which is what turns a recoverable imprecision into an unbounded one.
 unsigned long fwd(unsigned long a, const unsigned char *secret) {
   return sink_extern(a, secret);
+}
+
+// Fully seeded callee. Not a tail call (the +1 keeps a real return), so this
+// isolates the cross-TU suppression from the tail-call leak above.
+unsigned long sink_seeded(unsigned long a, const unsigned char *secret);
+unsigned long fwd2(unsigned long a, const unsigned char *secret) {
+  return sink_seeded(a, secret) + 1;
+}
+
+// Seeded on argument 1 only, while arguments 1 AND 2 carry taint here.
+unsigned long sink_partial(unsigned long a, const unsigned char *s1,
+                           const unsigned char *s2);
+unsigned long fwd3(unsigned long a, const unsigned char *s1,
+                   const unsigned char *s2) {
+  return sink_partial(a, s1, s2) + 1;
 }

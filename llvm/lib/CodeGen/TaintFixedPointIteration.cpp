@@ -728,6 +728,30 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 // the secret, so the line can be pasted straight into the
                 // taint-source file; a stack-passed secret sets no bit and gets
                 // no suggestion rather than a guessed one.
+                // Suppress entirely when the seed file already covers EXACTLY
+                // the arguments carrying taint here: the callee is placed where
+                // it is defined and there is nothing for the user to do. But
+                // compare argument-by-argument, not by name - a partially
+                // seeded callee (key seeded, message not) is still a real gap,
+                // and it is reported below listing only what is MISSING.
+                unsigned SeedD = 0, SeedP = 0;
+                if (Callee && Callee->hasFnAttribute("taint-seeded-elsewhere")) {
+                  StringRef V =
+                      Callee->getFnAttribute("taint-seeded-elsewhere").getValueAsString();
+                  StringRef D, P;
+                  std::tie(D, P) = V.split(',');
+                  D.getAsInteger(10, SeedD);
+                  P.getAsInteger(10, SeedP);
+                }
+                // A pointee seed also covers a by-value use of the same index:
+                // both make the analysis treat that parameter as carrying a
+                // secret, which is all this check is about.
+                const unsigned Covered = SeedD | SeedP;
+                const unsigned MissD = Arg.DataMask & ~Covered;
+                const unsigned MissP = Arg.PointeeMask & ~Covered;
+                if (Callee && (SeedD || SeedP) && !MissD && !MissP)
+                  return true;   // fully seeded elsewhere - nothing to report
+
                 // Emit EVERY argument that carried taint, not just the first.
                 // crypto_sign passes four pointee-tainted arguments and the key
                 // is the LAST of them; suggesting only the lowest index points
@@ -736,8 +760,8 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 if (Callee) {
                   SmallString<160> R("seed the TU that defines it:");
                   for (unsigned i = 0; i < 8; ++i) {
-                    const bool P = Arg.PointeeMask & (1u << i);
-                    const bool D = Arg.DataMask & (1u << i);
+                    const bool P = MissP & (1u << i);
+                    const bool D = MissD & (1u << i);
                     if (!P && !D)
                       continue;
                     R += "\n              ";
@@ -751,15 +775,15 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                     Repair = std::string(R);
                 }
                 reportInfoLoss(
-                    LossOS, TaintLossSeverity::Moderate,
-                    Callee ? "cross-tu" : "indirect", F,
-                    Callee ? Callee->getName() : StringRef("<indirect>"),
-                    MI.getDebugLoc(),
-                    "the secret is passed to a callee this pass cannot see; DIT "
-                    "is enabled so the callee inherits protection",
-                    "no placement happens inside the callee - it runs entirely "
-                    "protected, and any narrowing it could have done is lost",
-                    Repair);
+                      LossOS, TaintLossSeverity::Moderate,
+                      Callee ? "cross-tu" : "indirect", F,
+                      Callee ? Callee->getName() : StringRef("<indirect>"),
+                      MI.getDebugLoc(),
+                      "the secret is passed to a callee this pass cannot see; DIT "
+                      "is enabled so the callee inherits protection",
+                      "no placement happens inside the callee - it runs entirely "
+                      "protected, and any narrowing it could have done is lost",
+                      Repair);
                 return true;
               });
         });

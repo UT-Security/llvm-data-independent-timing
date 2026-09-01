@@ -145,10 +145,42 @@ PreservedAnalyses TaintSourceAnnotatorPass::run(Module &M,
   bool Changed = false;
 
   for (Function &F : M) {
-      if (F.isDeclaration())
-        continue;
-
       auto It = TaintSources.find(F.getName());
+
+      if (F.isDeclaration()) {
+        // A seed naming a function this TU only DECLARES leaves no other trace.
+        // The seed is a PARAMETER attribute and parameters live with the body,
+        // which is in a different translation unit compiled by a different
+        // process. So the interprocedural report had no way to tell "you never
+        // annotated this callee" from "you annotated it, in the TU that defines
+        // it" - and kept emitting the same repair suggestion for a callee the
+        // user had already seeded, on every rebuild, forever.
+        //
+        // Read ONLY by the information-loss report, never by the analysis, so
+        // it cannot move a switch. Verified: the hardened library is
+        // byte-identical with and without it.
+        if (It != TaintSources.end()) {
+          // Carry the seeded ARGUMENT INDICES, not just the name. A name-only
+          // marker would suppress the report for a callee that is seeded
+          // PARTIALLY - key seeded, message not - which is exactly the case
+          // worth still hearing about. The consumer compares these against the
+          // arguments actually carrying taint at the call site and stays quiet
+          // only when the seed covers all of them.
+          auto mask = [](const llvm::SmallSet<unsigned, 4> &S) {
+            unsigned M = 0;
+            for (unsigned I : S)
+              if (I < 32)
+                M |= 1u << I;
+            return M;
+          };
+          F.addFnAttr("taint-seeded-elsewhere",
+                      (Twine(mask(It->second.TaintedArgs)) + "," +
+                       Twine(mask(It->second.PointeeTaintedArgs)))
+                          .str());
+        }
+        continue;
+      }
+
       if (It == TaintSources.end())
         continue;
 

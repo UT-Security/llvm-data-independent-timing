@@ -247,6 +247,19 @@ The repair line is pasteable and the loop closes: adding it took `ref10/sign.c` 
 **0 to 24** `msr DIT`, and the report then named the next wall
 (`crypto_sign_ed25519_detached` -> `crypto_hash_sha512`). That is the intended
 workflow - the compiler reports where it stopped, you annotate, it goes deeper.
+On libsodium's signing path the loop reaches a **fixpoint in one round**: five seed
+lines take SHA-512 from 0 to 14 switches and the curve arithmetic from 0 to 4.
+
+**A callee the seed file already covers is SUPPRESSED, matched per argument.**
+Seeds are parameter attributes, so they live with the body - a TU that only
+*declares* a seeded callee could not tell "never annotated" from "annotated in the
+TU that defines it", and kept re-suggesting a repair the user had already applied
+(9 of 41 records on libsodium). `TaintSourceAnnotator` now stamps a seeded
+declaration with `"taint-seeded-elsewhere"="<dataMask>,<pointeeMask>"`, read ONLY
+by the report - the hardened library is byte-identical with and without it.
+Matching is **per argument, not by name**, so a partially seeded callee (key
+seeded, message not) is still reported and lists only the MISSING arguments.
+Report went 41 -> 32 records, all actionable.
 
 Noise is low because the criterion is consequence: a whole libsodium build produces
 **7 warnings on 7 functions**, all of them genuine thin forwarders (`crypto_sign`,
