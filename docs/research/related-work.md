@@ -187,6 +187,84 @@ analogue. (Their *implementation* of it is unsound in the under-protecting
 direction - one declassified field permanently declassifies the whole
 `AliasObject` - so take the tag, not the object-level rule.)
 
+#### Can we reuse their benchmark suite? Partly - the annotations, not the workloads
+
+Checked 2026-09-01 against the shipped `dataset.tar.gz` (sha256 `ab8125b6...`,
+same artifact as above). Seven targets: `ccrypt-1.11`, `libhydrogen`,
+`libsodium`, `apache-2.4.43`+`openssl-1.0.2u`, `nginx-1.17.10`+`openssl-1.0.2u`,
+`opensmtpd-6.0.3p1`+`glibc-2.27`, `vsftpd-3.0.3`+`glibc-2.27`.
+
+**The workloads mostly do not transfer, for a reason worth stating in the
+paper: their threat model selects a different axis than ours.** MPK protects
+where a secret *buffer lives*, so they pick programs with long-lived secret
+memory. DIT governs what the *ALU does*, so we need secret-dependent arithmetic
+to be hot. The two are independent, and libhydrogen shows it inside one library:
+
+| libhydrogen path | primitive | DIT-relevant ops |
+|---|---|---|
+| `hydro_secretbox_*`, `hydro_hash_*` | Gimli | **zero multiplies** - only `^ & \| << >>`, all fixed-latency |
+| `hydro_sign_*`, `hydro_kx_*` | X25519 on `__uint128_t` limbs | 41 in `hydro_x25519_mul` alone, 17 in `sc_montmul` |
+
+CryptoMPK protects both paths and cannot see that difference. Confirmed by
+disassembly, not predicted: `build/bin/clang -O2 -c hydrogen.c`, then count
+`mul/umulh/madd` per symbol.
+
+**But the multiplies do not save it, and this was measured, not assumed.**
+`libhydrogen_enc` fails our framework's first question *by construction* - no
+multiplies, nothing for DIT to slow down. The prediction that `libhydrogen_sign`
+would therefore pass it is **wrong**: blanket DIT on the signing loop is free on
+M5, 25 paired reps at alternating arm order, 2000 signatures per rep.
+
+| message | nodit | blanket | blanket vs nodit | blanket faster in |
+|---|---|---|---|---|
+| 4 B | 208.675 ms | 208.570 ms | **-0.05%** | 13/25 |
+| 1024 B | 223.479 ms | 223.322 ms | **-0.07%** | 15/25 |
+
+That is indistinguishable from zero, and it is exactly what our own libsodium
+screen already says: blanket is free on `x25519`, and libhydrogen's signatures
+*are* X25519. The lesson is that the presence of DIT-relevant opcodes is not
+sufficient - a 64x64 multiply on M5 is already fixed-latency, so DIT removes
+nothing. **Check the primitive against the existing screen before believing an
+opcode count.**
+
+**So the whole suite is out on our first question or duplicates work we already
+have**: libhydrogen free on both paths, libsodium already experiments 02 and 07,
+nginx/Apache already experiment 05 and on a `no-asm` EOL OpenSSL besides, ccrypt
+a T-table AES whose real leak DIT does not cover, and the two libcrypt daemons
+Linux-only.
+
+Three further blockers, in order of how much they cost to work around:
+
+- **Their drivers have no public lane.** The only non-crypto work in all four
+  shipped `src/*.c` is `fopen`/`fseek`/`fread`, which is kernel time, and
+  `libhydrogen_enc.c` performs a *single* encrypt call rather than a loop. There
+  is no knob that moves the secret fraction, so none of them can produce a
+  crossover without being rewritten - at which point they are no longer
+  third-party workloads.
+- **Every OpenSSL row is `no-asm`** (above), on `openssl-1.0.2u`, EOL since 2019.
+  Our experiment 05 already measures nginx + OpenSSL 3.5.4 as shipped and reports
+  the reach limit honestly, which is strictly the better result.
+- **OpenSMTPD and vsftpd need a Linux target** (`glibc-2.27` libcrypt). The gem5
+  rig can run those; the M5 silicon rig cannot.
+
+**What does transfer is the annotation set**, and it is the most useful thing
+here: their 39 `#pragma tainter` tags are a *third-party* ground truth for
+"where does the secret enter", which is exactly what experiment 07 measures and
+exactly the axis on which "you chose your own seeds" is a fair objection. Their
+`sinktaint` declassification marker is the analogue we already noted we lack.
+
+**Two defects in the shipped artifact**, found while checking the above:
+
+- `src/libsodium_sign.c` is **byte-identical to `src/libhydrogen_sign.c`** (both
+  sha256 `8bafa650...`): it `#include`s `hydrogen.h` and calls `hydro_sign_*`.
+  There is no libsodium signing driver in the dataset, so the paper's libsodium
+  signing row is measured by something not shipped, or on libhydrogen.
+- Every `#pragma tainter` in all four shipped drivers is **commented out**
+  (`//#pragma`). The drivers as distributed carry no annotations at all.
+
+Neither changes their conclusions, and neither should be raised as more than a
+footnote - but do not cite `libsodium_sign` as a libsodium result.
+
 ### 3b. What survives, and it is stronger
 
 **You cannot always-on a memory domain.** "Grant everything" is not weaker
