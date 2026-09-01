@@ -315,8 +315,21 @@ X86/AMDGPU only), so lowering and emission remain on the legacy PM.
   strip); call-site debug info `callSites:` block-number-vs-layout-position mismatch
   (fixed at root in `llvm/lib/CodeGen/MIRParser/MIRParser.cpp` `parseMachineInst`,
   resolves via `PFS.MBBSlots`); jump tables are safe (compression/relaxation rerun in
-  phase 3). `-g -O2 -ftaint-harden` is fully supported: barriers identical to the
+  phase 3). `-g -O2 -ftaint-harden` is supported: barriers identical to the
   non-debug build, `llvm-dwarfdump --verify` clean, `DW_TAG_call_site` preserved.
+- **Anything that MARKS instructions must skip meta instructions.** `isDITProtected`
+  ends in a class fallback - any FP/SIMD register operand counts as covered - and a
+  `DBG_VALUE` for a variable living in a NEON register carries one. It was therefore
+  a Need, and `pinToTimingMode` marks a Need by *adding an implicit `$dit` operand*.
+  A `DBG_VALUE` must have exactly four operands, so the fifth aborted the compiler
+  in an unrelated later pass (`malformed DBG_VALUE`, `VarLocBasedImpl.cpp:430`,
+  during `Live DEBUG_VALUE analysis`). Fixed 2026-08-31; `needsDIT` rejects
+  `isMetaInstruction()` and `pinToTimingMode` refuses to mutate one regardless of
+  caller. Test `clang/test/CodeGen/taint-dit-debug.c`. Two things to know: it needs
+  FULL debug info (`-gline-tables-only` emits no `DBG_VALUE` and hides it), and the
+  **non-debug build was byte-identical before and after the fix**, so no measurement
+  taken without `-g` is affected. Same failure shape as the plain-return carve-out
+  in `needsDIT`, which the FP fallback had swept in via `RET ... implicit $d0`.
 - `taint-annotate` runs at the **OptimizerLast** extension point so attributes survive
   the -O2 middle-end.
 - **Never classify instructions by mnemonic string.** A store's payload-register count

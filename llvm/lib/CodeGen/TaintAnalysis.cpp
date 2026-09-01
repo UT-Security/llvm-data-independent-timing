@@ -2653,6 +2653,19 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
 // residuals, see classifyDITUncovered). §5.6 Correction 1.
 static bool needsDIT(const MachineInstr &MI, const TaintFacts &F,
                      const TargetInstrInfo &TII) {
+  // A meta instruction never executes, so it can never need the mode. Same
+  // failure shape as the plain-return carve-out below: `isDITProtected`'s
+  // FP-class fallback matches anything carrying an FP register operand, and a
+  // DBG_VALUE describing a variable that lives in a NEON register carries one.
+  //
+  // Marking one is not merely imprecise, it is FATAL: the marker is an implicit
+  // operand added by pinToTimingMode, and a DBG_VALUE must have exactly four
+  // operands, so a fifth crashes LiveDebugValues with "malformed DBG_VALUE".
+  // Reached by any -g -O2 -ftaint-harden build of vector code - libsodium's
+  // chacha20_ref.c is the smallest reproducer.
+  if (MI.isMetaInstruction())
+    return false;
+
   if (!isTaintedInstruction(MI, F))
     return false;
 

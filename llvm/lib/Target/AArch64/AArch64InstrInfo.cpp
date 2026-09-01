@@ -7038,6 +7038,13 @@ bool AArch64InstrInfo::definesTimingMode(const MachineInstr &MI) const {
 }
 
 void AArch64InstrInfo::pinToTimingMode(MachineInstr &MI) const {
+  // Defence in depth: this MUTATES the operand list, and a meta instruction can
+  // have a fixed arity that an extra operand violates - a DBG_VALUE must have
+  // exactly four, and a fifth aborts LiveDebugValues. Callers are expected to
+  // filter (see needsDIT), but nothing that only marks instructions should be
+  // able to make the compiler crash if one forgets.
+  if (MI.isMetaInstruction())
+    return;
   if (MI.readsRegister(AArch64::DIT, /*TRI=*/nullptr))
     return;
   MI.addOperand(*MI.getMF(),
