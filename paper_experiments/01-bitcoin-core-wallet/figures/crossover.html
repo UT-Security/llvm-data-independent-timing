@@ -1,0 +1,488 @@
+<title>The Secret-Fraction Crossover</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+:root{
+  color-scheme: light;
+  --ground:#f6f7f9; --surface:#ffffff; --surface-2:#f0f2f6;
+  --ink:#14181d; --ink-2:#5a6472; --ink-3:#8b95a3;
+  --rule:#e2e6ec; --rule-2:#cdd4dd;
+  --s1:#2a78d6; --s2:#eb6834;
+  --s1-tint:#e9f1fb; --s2-tint:#fdeee7;
+  --ok:#0f7a52; --ok-tint:#e6f4ee;
+  --grid:#eaeef3;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --ground:#12151a; --surface:#191d24; --surface-2:#1f242c;
+    --ink:#eef1f5; --ink-2:#a3adbb; --ink-3:#78828f;
+    --rule:#272d36; --rule-2:#333b46;
+    --s1:#3987e5; --s2:#d95926;
+    --s1-tint:#16283d; --s2-tint:#33200f;
+    --ok:#4bbd8c; --ok-tint:#14261f;
+    --grid:#222831;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --ground:#12151a; --surface:#191d24; --surface-2:#1f242c;
+  --ink:#eef1f5; --ink-2:#a3adbb; --ink-3:#78828f;
+  --rule:#272d36; --rule-2:#333b46;
+  --s1:#3987e5; --s2:#d95926;
+  --s1-tint:#16283d; --s2-tint:#33200f;
+  --ok:#4bbd8c; --ok-tint:#14261f;
+  --grid:#222831;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:15.5px; line-height:1.62; margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px 96px}
+.col{max-width:68ch}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;text-wrap:balance;margin:0}
+h1{font-size:2.55rem;line-height:1.12;font-weight:600;letter-spacing:-.015em}
+h2{font-size:1.42rem;font-weight:600;letter-spacing:-.008em}
+h3{font-size:1.06rem;font-weight:600;font-family:"IBM Plex Sans",sans-serif}
+p{margin:0}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace;font-size:.685rem;font-weight:500;
+  text-transform:uppercase;letter-spacing:.13em;color:var(--ink-3);
+}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+
+/* ---- header ---- */
+header{padding:76px 0 40px;border-bottom:1px solid var(--rule)}
+.thesis{font-size:1.16rem;line-height:1.55;color:var(--ink-2);margin-top:20px;max-width:62ch}
+.thesis strong{color:var(--ink);font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:8px 10px;margin-top:26px}
+.tag{
+  font-family:"IBM Plex Mono",monospace;font-size:.71rem;color:var(--ink-2);
+  border:1px solid var(--rule-2);border-radius:3px;padding:3px 9px;background:var(--surface);
+}
+
+section{padding-top:52px}
+.lede{color:var(--ink-2);margin-top:12px}
+
+/* ---- stat row ---- */
+.stats{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);
+  border-radius:5px;overflow:hidden;margin-top:32px;
+}
+.stat{background:var(--surface);padding:20px 22px}
+.stat .k{font-family:"IBM Plex Mono",monospace;font-size:.665rem;text-transform:uppercase;
+  letter-spacing:.11em;color:var(--ink-3)}
+.stat .v{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+  font-size:1.92rem;font-weight:500;letter-spacing:-.02em;margin-top:10px;line-height:1}
+.stat .n{font-size:.815rem;color:var(--ink-2);margin-top:9px;line-height:1.45}
+.v.blue{color:var(--s1)} .v.orange{color:var(--s2)}
+
+/* ---- chart ---- */
+figure{margin:34px 0 0}
+.chartbox{background:var(--surface);border:1px solid var(--rule);border-radius:5px;
+  padding:22px 20px 14px;overflow-x:auto}
+.legend{display:flex;gap:20px;flex-wrap:wrap;padding:0 2px 14px}
+.lg{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--ink-2)}
+.sw{width:22px;height:3px;border-radius:2px;flex:none}
+figcaption{font-size:.845rem;color:var(--ink-2);margin-top:14px;max-width:74ch}
+svg{display:block;min-width:660px}
+.gl{stroke:var(--grid);stroke-width:1}
+.axl{fill:var(--ink-3);font-family:"IBM Plex Mono",monospace;font-size:10.5px}
+.zl{stroke:var(--rule-2);stroke-width:1.5;stroke-dasharray:4 3}
+.dlab{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500}
+.antxt{fill:var(--ink-3);font-family:"IBM Plex Mono",monospace;font-size:10px;
+  text-transform:uppercase;letter-spacing:.09em}
+#hl{opacity:0;transition:opacity .1s}
+.tip{
+  position:absolute;pointer-events:none;opacity:0;transition:opacity .1s;
+  background:var(--surface);border:1px solid var(--rule-2);border-radius:4px;
+  padding:9px 11px;font-size:.78rem;box-shadow:0 6px 20px rgba(0,0,0,.13);z-index:5;
+  font-family:"IBM Plex Mono",monospace;white-space:nowrap;
+}
+.tip b{font-weight:600}
+.tip .r{display:flex;align-items:center;gap:7px;margin-top:5px}
+.tdot{width:8px;height:8px;border-radius:50%;flex:none}
+
+/* ---- tables ---- */
+.tblwrap{overflow-x:auto;margin-top:26px;border:1px solid var(--rule);
+  border-radius:5px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.855rem}
+th,td{padding:10px 13px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--rule)}
+th{font-family:"IBM Plex Mono",monospace;font-size:.665rem;text-transform:uppercase;
+  letter-spacing:.085em;color:var(--ink-3);font-weight:500;background:var(--surface-2);
+  border-bottom:1px solid var(--rule-2)}
+td{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+th:first-child,td:first-child{text-align:left}
+tr:last-child td{border-bottom:none}
+td.hero{color:var(--ink);font-weight:600}
+.chip{display:inline-block;font-size:.7rem;padding:2px 8px;border-radius:3px;font-weight:500}
+.chip.pass{background:var(--s1-tint);color:var(--s1)}
+.chip.blanket{background:var(--s2-tint);color:var(--s2)}
+.chip.tie{background:var(--surface-2);color:var(--ink-3)}
+
+/* ---- code ---- */
+pre{
+  font-family:"IBM Plex Mono",monospace;font-size:.8rem;line-height:1.72;
+  background:var(--surface);border:1px solid var(--rule);border-radius:5px;
+  padding:20px 22px;overflow-x:auto;margin:22px 0 0;color:var(--ink-2);
+}
+pre .cm{color:var(--ink-3)}
+pre .pub{color:var(--ink)}
+.secret-line{display:block;background:var(--s2-tint);color:var(--ink);
+  margin:0 -22px;padding:0 22px;border-left:2px solid var(--s2)}
+.lanekey{display:flex;gap:22px;flex-wrap:wrap;margin-top:16px;font-size:.83rem;color:var(--ink-2)}
+.lanekey span{display:flex;align-items:center;gap:8px}
+.lanebar{width:12px;height:12px;border-radius:2px;flex:none}
+
+/* ---- gates ---- */
+.gates{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:5px;
+  overflow:hidden;margin-top:26px}
+.gate{background:var(--surface);padding:16px 18px;display:flex;gap:13px;align-items:flex-start}
+.gdot{width:7px;height:7px;border-radius:50%;background:var(--ok);margin-top:7px;flex:none}
+.gate .gn{font-size:.87rem;font-weight:500;color:var(--ink)}
+.gate .gv{font-family:"IBM Plex Mono",monospace;font-size:.775rem;color:var(--ink-2);margin-top:4px}
+
+/* ---- callouts ---- */
+.note{border-left:2px solid var(--rule-2);padding:2px 0 2px 20px;margin-top:24px;
+  color:var(--ink-2);font-size:.925rem}
+.note strong{color:var(--ink);font-weight:600}
+.warn{border-left-color:var(--s2)}
+ol.caveats{margin:22px 0 0;padding-left:22px;color:var(--ink-2)}
+ol.caveats li{margin-bottom:15px;padding-left:5px}
+ol.caveats strong{color:var(--ink);font-weight:600}
+footer{margin-top:64px;padding-top:26px;border-top:1px solid var(--rule);
+  font-size:.815rem;color:var(--ink-3);font-family:"IBM Plex Mono",monospace;line-height:1.9}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:640px){h1{font-size:1.95rem}.wrap{padding:0 18px 64px}header{padding-top:48px}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Experiment 1 &middot; Bitcoin Core wallet</div>
+  <h1>The Secret-Fraction Crossover</h1>
+  <p class="thesis">Whether selective <span class="mono">PSTATE.DIT</span> placement beats
+  turning DIT on for everything is decided by <strong>how much of the running time is
+  secret</strong> &mdash; and the crossover is measurable inside a single unmodified call
+  into shipped wallet code, by varying one integer.</p>
+  <div class="meta">
+    <span class="tag">Apple M5 &middot; Mac17,2</span>
+    <span class="tag">10 paired reps</span>
+    <span class="tag">8 arms &middot; rotated order</span>
+    <span class="tag">gem5 Neoverse-V2 FDP</span>
+    <span class="tag">2026-08-31</span>
+  </div>
+</header>
+
+<section>
+  <div class="stats">
+    <div class="stat">
+      <div class="k">Pass wins below</div>
+      <div class="v blue">30%</div>
+      <div class="n">secret fraction. &minus;2.9% vs blanket at f&nbsp;=&nbsp;5.6%, 1/10 reps slower</div>
+    </div>
+    <div class="stat">
+      <div class="k">Verdict flips near</div>
+      <div class="v">45%</div>
+      <div class="n">statistically indistinguishable here; blanket wins outright by 61%</div>
+    </div>
+    <div class="stat">
+      <div class="k">Blanket DIT costs</div>
+      <div class="v orange">&minus;3.9%</div>
+      <div class="n">of IPC, and it is flat across the whole range of f</div>
+    </div>
+    <div class="stat">
+      <div class="k">Toggle bill at f = 75%</div>
+      <div class="v">+6.1%</div>
+      <div class="n">the switch instruction alone, placement held identical</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>A fixed prize against a growing toggle bill</h2>
+  <p class="lede col">Blanket DIT&rsquo;s cost barely moves as the workload gets more secret &mdash;
+  it protects everything either way. What moves is what selective placement pays: each
+  additional signature is one more DIT region to switch in and out of. The crossover is
+  those two lines meeting.</p>
+
+  <figure>
+    <div class="chartbox" id="cb">
+      <div class="legend">
+        <span class="lg"><span class="sw" style="background:var(--s1)"></span>Pass vs blanket &mdash; below zero, selective placement wins</span>
+        <span class="lg"><span class="sw" style="background:var(--s2)"></span>Switch cost &mdash; the <span class="mono">msr&nbsp;DIT</span> instruction alone</span>
+      </div>
+      <svg id="chart" viewBox="0 0 760 386" role="img"
+           aria-label="Two series plotted against secret fraction from 3.7 to 75 percent. Pass versus blanket rises from minus 3.52 percent to plus 1.65 percent, crossing zero between 45 and 61 percent. Switch cost rises from minus 0.64 to plus 5.98 percent. Full values in the table below."></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+    <figcaption>Secret-fraction sweep, 20 paired reps per point (the 8-point curve).
+    Shaded band marks where the sign test cannot resolve a winner. Values in
+    <a href="#t1" style="color:var(--s1)">Table 1</a>.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>What is public and what is secret</h2>
+  <p class="lede col">Both lanes live inside one call to <span class="mono">CreateTransaction</span>,
+  in the order the wallet runs them. Selection finishes entirely before any real key is
+  touched, and the size estimate deliberately uses a dummy signer &mdash; so the secret work
+  is one contiguous phase at the end.</p>
+
+<pre><span class="cm"># ---- SETUP (untimed) ----</span>
+wallet = CreateWallet()
+repeat BTC_BENCH_CHAIN (5000): GenerateBlock(wallet)   <span class="cm"># builds the UTXO pool</span>
+preset = pick BTC_BENCH_INPUTS coins
+
+<span class="cm"># ---- TIMED: one call into shipped wallet code ----</span>
+<span class="pub">available = AvailableCoins(wallet)</span>                  <span class="cm"># enumerate UTXOs</span>
+<span class="pub">result    = SelectCoins(available, target)</span>          <span class="cm"># 4 solvers; the prize is here</span>
+<span class="pub">            &rarr; SelectCoinsBnB, CoinGrinder,</span>
+<span class="pub">              KnapsackSolver, SelectCoinsSRD</span>
+<span class="pub">size_est  = CalculateMaximumSignedTxSize(</span>
+<span class="pub">              tx, DummySignatureCreator)</span>            <span class="cm"># dummy sigs, no key</span>
+<span class="pub">txNew     = BuildAndSerialize(result, recipients)</span>
+
+if sign:                                            <span class="cm"># BTC_BENCH_SIGN</span>
+<span class="secret-line">  wallet.SignTransaction(txNew)                     <span class="cm"># per input:</span></span>
+<span class="secret-line">    CKey::Sign(hash, sig)</span>
+<span class="secret-line">      secp256k1_ecdsa_sign(ctx, sig, hash32, seckey)</span>
+                                <span class="cm">^^^^^^ arg 3 pointee = the secret</span></pre>
+
+  <div class="lanekey">
+    <span><span class="lanebar" style="background:var(--rule-2)"></span>Public &mdash; never reads the private key; amounts and UTXOs are on-chain data</span>
+    <span><span class="lanebar" style="background:var(--s2)"></span>Secret &mdash; the only tainted work</span>
+  </div>
+
+  <div class="note"><strong>The prize is one named mechanism.</strong> gem5 feature isolation
+  attributes the entire public-lane cost to <strong>EVES</strong>, the value predictor:
+  coin selection is a serial, value-dependent dependence chain, and DIT switches the
+  predictor off. DMP, computation simplification and SIP contribute nothing measurable.</div>
+</section>
+
+<section id="t1">
+  <h2>Table 1</h2>
+  <p class="lede col">Median per-rep ratio over 10 paired reps, arm order rotated every rep.
+  <span class="mono">n/10</span> counts reps in which the pass is slower than blanket, with an
+  exact two-sided sign test. With N&nbsp;=&nbsp;10 only n&nbsp;&le;&nbsp;1 or n&nbsp;&ge;&nbsp;9
+  reaches p&nbsp;&lt;&nbsp;0.05, so a middling count is a tie however its median reads.</p>
+
+  <div class="tblwrap">
+    <table>
+      <thead><tr>
+        <th>K inputs</th><th>f_secret</th><th>baseline</th><th>C_public</th><th>C_whole</th>
+        <th>pass vs base</th><th>pass vs blanket</th><th>sign test</th><th>verdict</th><th>switch cost</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>1</td><td>3.5%</td><td>15.39 ms</td><td>+3.56%</td><td>+4.09%</td><td>+0.93%</td>
+            <td class="hero">&minus;2.58%</td><td>0/10 **</td><td><span class="chip pass">pass</span></td><td>+0.20%</td></tr>
+        <tr><td>4</td><td>5.6%</td><td>15.78 ms</td><td>+3.26%</td><td>+4.08%</td><td>+1.14%</td>
+            <td class="hero">&minus;2.89%</td><td>1/10 *</td><td><span class="chip pass">pass</span></td><td>+0.41%</td></tr>
+        <tr><td>100</td><td>44.6%</td><td>27.76 ms</td><td>+3.12%</td><td>+3.88%</td><td>+4.46%</td>
+            <td class="hero">+0.39%</td><td>7/10 ns</td><td><span class="chip tie">tie</span></td><td>+3.34%</td></tr>
+        <tr><td>400</td><td>75.2%</td><td>64.23 ms</td><td>+4.11%</td><td>+4.19%</td><td>+6.56%</td>
+            <td class="hero">+2.21%</td><td>10/10 **</td><td><span class="chip blanket">blanket</span></td><td>+6.08%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note"><strong>Independently replicated.</strong> A separate 20-rep run over 8 knob
+  points reproduces every verdict, and <span class="mono">f_secret</span> itself lands within
+  0.3&nbsp;pp at all four shared points &mdash; 3.7 / 5.8 / 45.0 / 75.0 against 3.5 / 5.6 / 44.6 / 75.2.</div>
+</section>
+
+<section>
+  <h2>What blanket DIT costs in IPC</h2>
+  <p class="lede col">Absolute IPC is not measurable on this machine: macOS ships no usable
+  PMU &mdash; no <span class="mono">perf</span>, <span class="mono">kpc</span>/<span class="mono">kperf</span>
+  are private and root-only, and there is no <span class="mono">xctrace</span> without full Xcode.
+  The <em>change</em> in IPC is exact anyway, and needs no counter.</p>
+
+  <div class="note"><strong>Why the derivation holds.</strong> The two arms are the
+  <em>same binary</em>, differing only by an inserted library that sets
+  <span class="mono">PSTATE.DIT</span> process-wide. Blanket DIT changes no instruction, so with
+  I fixed, <span class="mono">IPC_blanket / IPC_base = t_base / t_blanket = 1/(1+C_whole)</span>.
+  gem5 confirms the premise to the instruction on three separate runs:
+  <span class="mono">numInsts = 59,697,945</span>, identical in both arms at both switch models.
+  The duplicate-baseline arm bounds the one assumption, equal clock.</div>
+
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>K</th><th>f_secret</th><th>no DIT</th><th>blanket DIT</th>
+        <th>time cost</th><th>IPC change</th><th>&plusmn; drift</th><th>n/N</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>3.5%</td><td>15.39 ms</td><td>16.00 ms</td><td>+4.09%</td><td class="hero">&minus;3.93%</td><td>0.30%</td><td>10/10</td></tr>
+        <tr><td>4</td><td>5.6%</td><td>15.78 ms</td><td>16.39 ms</td><td>+4.08%</td><td class="hero">&minus;3.92%</td><td>0.00%</td><td>9/10</td></tr>
+        <tr><td>100</td><td>44.6%</td><td>27.76 ms</td><td>28.84 ms</td><td>+3.88%</td><td class="hero">&minus;3.73%</td><td>0.16%</td><td>10/10</td></tr>
+        <tr><td>400</td><td>75.2%</td><td>64.23 ms</td><td>66.90 ms</td><td>+4.19%</td><td class="hero">&minus;4.02%</td><td>0.21%</td><td>10/10</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:38px">Absolute IPC, from gem5</h3>
+  <p class="lede col">Coin-selection kernel, equal-length <span class="mono">argv[0]</span> for
+  every arm. Switch model is a no-op here (+0.034%) because the blanket arm takes its switch
+  from a constructor before <span class="mono">main</span>, never inside the measured region.</p>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>arm</th><th>switch model</th><th>IPC</th><th>cycles</th><th>vs base</th></tr></thead>
+      <tbody>
+        <tr><td>base</td><td>either</td><td class="hero">1.955873</td><td>30,522,406</td><td>&mdash;</td></tr>
+        <tr><td>blanket</td><td>spec</td><td class="hero">1.773742</td><td>33,656,493</td><td>+10.27%</td></tr>
+        <tr><td>blanket</td><td>serdit</td><td>1.773147</td><td>33,667,788</td><td>+10.31%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note warn"><strong>The previously committed figure was 0.28&nbsp;pp too large.</strong>
+  The earlier coinsel stats predate the equal-length-path gate: they compared
+  <span class="mono">btc_coinsel_base</span> against <span class="mono">btc_coinsel_blanket</span>
+  directly, and <span class="mono">argv[0]</span> length shifts stack alignment for a whole run
+  &mdash; worth up to 0.84% on a byte-identical binary. Re-taken through the gate, blanket vs base
+  moves from +10.60% to <strong>+10.27%</strong> and the IPC change from &minus;9.59% to
+  <strong>&minus;9.31%</strong>. The base arm absorbed all of it. Quote the gated numbers.</div>
+</section>
+
+<section>
+  <h2>Validity gates</h2>
+  <p class="lede col">Every number above is conditional on these. Each one caught a real defect
+  in this project at some point, so they ship with the result rather than beside it.</p>
+  <div class="gates">
+    <div class="gate"><span class="gdot"></span><div>
+      <div class="gn">In-band positive control</div>
+      <div class="gv">lvp_chase 3.99&times; &mdash; DIT took effect throughout</div></div></div>
+    <div class="gate"><span class="gdot"></span><div>
+      <div class="gn">Noise floor</div>
+      <div class="gv">duplicate baseline &minus;0.00% .. +0.30%</div></div></div>
+    <div class="gate"><span class="gdot"></span><div>
+      <div class="gn">Harness null</div>
+      <div class="gv">library loaded, DIT never written: &minus;0.04% .. +0.34%</div></div></div>
+    <div class="gate"><span class="gdot"></span><div>
+      <div class="gn">NOP substitution</div>
+      <div class="gv">same placement, zero <span class="mono">msr DIT</span> &mdash; isolates alignment</div></div></div>
+    <div class="gate"><span class="gdot"></span><div>
+      <div class="gn">Arithmetic closes</div>
+      <div class="gv">implied C_secret +4.52%, spread 0.60 pp vs +3.39% measured</div></div></div>
+    <div class="gate"><span class="gdot"></span><div>
+      <div class="gn">gem5 instruction identity</div>
+      <div class="gv">simInsts equal across switch models; ditSuppressed = 0 in base</div></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>What this cannot settle</h2>
+  <ol class="caveats">
+    <li><strong>Region count and secret fraction are confounded.</strong> Each signature adds
+    both secret work and one DIT region, so this curve cannot separate &ldquo;fraction decides&rdquo;
+    from &ldquo;region count decides&rdquo;. Disentangling it needs the chain-length knob, which
+    moves the public lane at a fixed signature count. The rig supports it; it has not been run.</li>
+    <li><strong>The region boundary is not where the design note claims.</strong> Only C is
+    instrumented in this build, so DIT regions sit inside libsecp256k1 per
+    <span class="mono">secp256k1_ecdsa_sign</span> call &mdash; not at the C++
+    <span class="mono">SignTransaction</span> phase boundary. The measurement is valid; the prose
+    needs fixing. A phase-level boundary would place one region per call instead of K, which is
+    exactly the variable driving the crossover &mdash; so this is also the most promising follow-up.</li>
+    <li><strong>Closure is acceptable, not tight.</strong> Implied C_secret runs +4.52% against an
+    independently measured +3.39%. Inside the gate, but the gap is unexplained.</li>
+    <li><strong>gem5 cannot confirm the magnitude here.</strong> It reproduces silicon&rsquo;s
+    always-on cost on the coin-selection kernel but reads essentially zero on ECDSA signing, where
+    silicon is itself marginal. This is a silicon result; gem5 answers the switch-model question.</li>
+  </ol>
+</section>
+
+<footer>
+  data &nbsp;utils/dit_host_screening/btc/wallet_m5_ipc.csv &middot; 320 rows<br>
+  scripts &nbsp;table_wallet_sweep.py &middot; ipc_wallet_sweep.py &middot; btc_gem5.py<br>
+  docs &nbsp;docs/paper/table1-bitcoin-secret-fraction.md &middot; docs/results/dit-blanket-ipc-m5.md
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var A=[[3.7,-3.52],[5.8,-2.81],[10.2,-3.18],[19.2,-2.06],[29.8,-1.93],[45.0,-0.48],[61.2,0.74],[75.0,1.65]];
+  var B=[[3.7,-0.64],[5.8,0.95],[10.2,0.16],[19.2,0.81],[29.8,1.77],[45.0,3.53],[61.2,5.10],[75.0,5.98]];
+  var W=760,H=386,L=54,R=132,T=18,Bm=46;
+  var x0=0,x1=80,y0=-4.5,y1=7;
+  function X(v){return L+(v-x0)/(x1-x0)*(W-L-R);}
+  function Y(v){return T+(y1-v)/(y1-y0)*(H-T-Bm);}
+  var NS='http://www.w3.org/2000/svg';
+  function el(n,a){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  var svg=document.getElementById('chart');
+
+  // unresolved-verdict band: between the last significant win and the first significant loss
+  svg.appendChild(el('rect',{x:X(29.8),y:T,width:X(61.2)-X(29.8),height:H-T-Bm,
+    fill:'var(--grid)',opacity:'.62'}));
+  var bt=el('text',{x:(X(29.8)+X(61.2))/2,y:T+14,'text-anchor':'middle','class':'antxt'});
+  bt.textContent='verdict unresolved';svg.appendChild(bt);
+
+  // horizontal grid + y labels
+  for(var v=-4;v<=7;v+=1){
+    if(v===0)continue;
+    svg.appendChild(el('line',{x1:L,y1:Y(v),x2:W-R,y2:Y(v),'class':'gl'}));
+  }
+  for(var v2=-4;v2<=7;v2+=2){
+    var t=el('text',{x:L-11,y:Y(v2)+3.5,'text-anchor':'end','class':'axl'});
+    t.textContent=(v2>0?'+':'')+v2+'%';svg.appendChild(t);
+  }
+  // zero line
+  svg.appendChild(el('line',{x1:L,y1:Y(0),x2:W-R,y2:Y(0),'class':'zl'}));
+
+  // x axis
+  svg.appendChild(el('line',{x1:L,y1:H-Bm,x2:W-R,y2:H-Bm,stroke:'var(--rule-2)','stroke-width':'1'}));
+  [0,20,40,60,80].forEach(function(v){
+    var t=el('text',{x:X(v),y:H-Bm+19,'text-anchor':'middle','class':'axl'});
+    t.textContent=v+'%';svg.appendChild(t);
+  });
+  var xt=el('text',{x:(L+(W-R))/2,y:H-8,'text-anchor':'middle','class':'antxt'});
+  xt.textContent='secret fraction of runtime';svg.appendChild(xt);
+
+  function path(d,c){
+    var s='';d.forEach(function(p,i){s+=(i?' L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1);});
+    svg.appendChild(el('path',{d:s,fill:'none',stroke:c,'stroke-width':'2',
+      'stroke-linejoin':'round','stroke-linecap':'round'}));
+  }
+  path(B,'var(--s2)');path(A,'var(--s1)');
+  function dots(d,c){
+    d.forEach(function(p){
+      svg.appendChild(el('circle',{cx:X(p[0]),cy:Y(p[1]),r:'4.6',fill:c,
+        stroke:'var(--surface)','stroke-width':'2'}));
+    });
+  }
+  dots(B,'var(--s2)');dots(A,'var(--s1)');
+
+  // direct labels at the series ends
+  function dlab(p,c,txt,dy){
+    var t=el('text',{x:X(p[0])+13,y:Y(p[1])+4+(dy||0),fill:c,'class':'dlab'});
+    t.textContent=txt;svg.appendChild(t);
+  }
+  dlab(A[7],'var(--s1)','pass vs blanket',0);
+  dlab(B[7],'var(--s2)','switch cost',0);
+
+  // hover layer
+  var hl=el('line',{x1:0,y1:T,x2:0,y2:H-Bm,stroke:'var(--rule-2)','stroke-width':'1',id:'hl'});
+  svg.appendChild(hl);
+  var tip=document.getElementById('tip'),box=document.getElementById('cb');
+  svg.addEventListener('mousemove',function(e){
+    var r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)*(W/r.width);
+    var bi=0,bd=1e9;
+    A.forEach(function(p,i){var d=Math.abs(X(p[0])-sx);if(d<bd){bd=d;bi=i;}});
+    if(bd>46){hl.style.opacity=0;tip.style.opacity=0;return;}
+    hl.setAttribute('x1',X(A[bi][0]));hl.setAttribute('x2',X(A[bi][0]));hl.style.opacity=.9;
+    tip.innerHTML='<b>f_secret '+A[bi][0].toFixed(1)+'%</b>'+
+      '<div class="r"><span class="tdot" style="background:var(--s1)"></span>pass vs blanket '+
+      (A[bi][1]>0?'+':'')+A[bi][1].toFixed(2)+'%</div>'+
+      '<div class="r"><span class="tdot" style="background:var(--s2)"></span>switch cost '+
+      (B[bi][1]>0?'+':'')+B[bi][1].toFixed(2)+'%</div>';
+    var px=X(A[bi][0])*(r.width/W);
+    tip.style.left=Math.min(Math.max(px-58,4),r.width-190)+'px';
+    tip.style.top=(Y(Math.max(A[bi][1],B[bi][1]))*(r.height/H)-14)+'px';
+    tip.style.opacity=1;
+  });
+  svg.addEventListener('mouseleave',function(){hl.style.opacity=0;tip.style.opacity=0;});
+})();
+</script>
