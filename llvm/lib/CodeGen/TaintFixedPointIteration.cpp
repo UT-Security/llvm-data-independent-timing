@@ -764,7 +764,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                     const bool D = MissD & (1u << i);
                     if (!P && !D)
                       continue;
-                    R += "\n              ";
+                    R += "\n                  ";
                     R += Callee->getName();
                     R += ",";
                     R += Twine(i).str();

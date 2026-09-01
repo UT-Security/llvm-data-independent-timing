@@ -3649,20 +3649,26 @@ void llvm::reportInfoLoss(raw_ostream *OS, TaintLossSeverity Sev,
     // had warned), so each line has to stand on its own.
     StringRef Src = Where.getParent() ? StringRef(Where.getParent()->getSourceFileName())
                                       : StringRef();
-    *OS << "taint-stop " << Kind << "  in=" << Where.getName();
+    // Number the records so they can be referred to. The counter is per clang
+    // INVOCATION (both writers - the fixed point and placement - share it), so a
+    // build of many TUs restarts at [1] for each. That is deliberate: the report
+    // appends, and a run of numbers restarting partway down the file is exactly
+    // how you spot a stale file left over from a previous build.
+    static unsigned Seq = 0;
+    *OS << "[" << ++Seq << "] taint-stop " << Kind << "  in=" << Where.getName();
     if (!Src.empty())
       *OS << " src=" << sys::path::filename(Src);
     if (!CalleeName.empty())
       *OS << " callee=" << CalleeName;
     if (DL)
       *OS << " line=" << DL.getLine();
-    *OS << "\n  severity  " << SevStr << "\n";
+    *OS << "\n      severity  " << SevStr << "\n";
     if (!Action.empty())
-      *OS << "  action    " << Action << "\n";
+      *OS << "      action    " << Action << "\n";
     if (!Cost.empty())
-      *OS << "  cost      " << Cost << "\n";
+      *OS << "      cost      " << Cost << "\n";
     if (!Repair.empty())
-      *OS << "  repair    " << Repair << "\n";
+      *OS << "      repair    " << Repair << "\n";
   }
 
   // Loud by default for the severe class only. A report file nobody passes a

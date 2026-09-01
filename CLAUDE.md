@@ -261,6 +261,15 @@ Matching is **per argument, not by name**, so a partially seeded callee (key
 seeded, message not) is still reported and lists only the MISSING arguments.
 Report went 41 -> 32 records, all actionable.
 
+**The report APPENDS and never truncates, and records are numbered.** Truncating
+per clang invocation left only the last TU's lines - on libsodium an empty file
+while seven functions had warned on stderr - so it accumulates instead, and each
+record carries `src=`. The consequence is that **two builds double the file** (32
+-> 64 measured), so remove it first; the build scripts here do. The `[N]` counter
+is per INVOCATION, shared by both writers, so a run of numbers restarting partway
+down the file is how you spot a stale file. Verified safe under `make -j9`: nine
+concurrent clang processes appending produced zero interleaved records.
+
 Noise is low because the criterion is consequence: a whole libsodium build produces
 **7 warnings on 7 functions**, all of them genuine thin forwarders (`crypto_sign`,
 the `crypto_onetimeauth*` family, `poly1305_finish`). A file with no losses produces
