@@ -33,6 +33,12 @@ library:
 
 Same pass, same library, opposite verdicts. The denominator is the variable.
 
+That relationship is now a measured curve rather than four points from four
+workloads. Inside **one** Bitcoin Core wallet call, varying only the number of
+inputs, the pass goes from **-2.58%** at f = 3.5% to **+2.21%** at f = 75.2%,
+crossing over around f ~ 45%
+(`paper_experiments/01-bitcoin-core-wallet/`).
+
 ---
 
 ## 2. The benchmark design pattern
@@ -354,13 +360,18 @@ Sources: `docs/results/dit-bitcoin-coinsel-gem5.md`,
 | 1 | **SQLCipher cache sweep** | SQLite B-tree descent | AES-256-CBC + HMAC per page | `PRAGMA cache_size` | **in progress** |
 | 2 | SQLite + ECDSA | SQLite queries | libsecp256k1 sign | signatures per batch | gem5 point at 2.23%; curve missing |
 | 3 | CPython + coincurve | interpreter + Django | libsecp256k1 via coincurve | signatures per request | both endpoints measured; middle missing |
-| 4 | Bitcoin Core | wallet + mempool + validation | libsecp256k1 | **inputs per transaction** (`BTC_BENCH_INPUTS`) | 9 benches measured; **both endpoints now on gem5 too**; knob unpinned and demonstrated to span f_secret 4%-75%, sweep not yet run under the full rig -- see `bitcoin-secret-fraction-sweep.md` |
+| 4 | **Bitcoin Core wallet** | wallet + mempool + validation | libsecp256k1 | **inputs per transaction** (`BTC_BENCH_INPUTS`) | **done - the crossover curve.** Full rig, 8 knob points x 8 arms x 20 reps, replicated at 10 reps; crossover at f ~ 45%, closure passes. See `paper_experiments/01-bitcoin-core-wallet/` |
 | 5 | **Skia filters** | CPU raster | n/a | n/a | **done - negative control** |
 | 6 | libsodium | n/a | 13 primitives | n/a | done - fails Q1 |
 
-Benchmark 1 is the exemplar because it carries the fraction story and the
-granularity story in the same figure, on one unmodified real application, with a
-knob that moves nothing but the decrypt rate.
+Benchmark 1 was chosen as the exemplar because it carries the fraction story and
+the granularity story in the same figure, on one unmodified real application,
+with a knob that moves nothing but the decrypt rate.
+
+**Benchmark 4 got there first.** The Bitcoin Core wallet sweep is the completed
+curve, and it has one property the SQLCipher exemplar does not: both lanes sit
+inside a single unmodified call, in the order the wallet runs them. It is
+`paper_experiments/01-bitcoin-core-wallet/`.
 
 ---
 
