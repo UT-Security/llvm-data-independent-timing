@@ -410,6 +410,45 @@ it is an `Arg(k)` whose k is recoverable from the frame layout. **Worth folding
 into B1** - it is the same fix, applied to arguments that arrived on the stack
 rather than in a register.
 
+### `Arg(k)` has a name, and a 1990s lineage
+
+Second-hand: the search reports reading these primary texts, but my own attempts
+to fetch Wilson and Lam hit a 403 and then a bad certificate, so **the quotes
+below are unverified by me.** Worth checking before citing.
+
+There is no single field-wide term, but there is a **self-reported lineage** for
+exactly this device - a symbolic placeholder for storage a callee cannot name,
+instantiated against the caller's own objects at each call site:
+
+| term | paper |
+|---|---|
+| *non-visible variables* | Landi and Ryder, PLDI 1992 |
+| *invisible variables* | Emami, Ghiya and Hendren, PLDI 1994 (citing Landi and Ryder) |
+| **extended parameters** | Wilson and Lam, PLDI 1995 (claiming equivalence to the above) |
+
+`Arg(k)` is an extended parameter at depth 0. Three details are directly useful:
+
+- **Wilson and Lam create them LAZILY**, only as the callee actually references
+  them, explicitly to avoid Emami et al.'s eager creation for every input pointer.
+  Ours are created eagerly at entry for every pointer argument, which is cheaper
+  to implement and costs a map entry per argument; worth revisiting if the map
+  ever shows up in a profile.
+- **Wilson and Lam are deliberately UNTYPED** - raw base/offset/stride triples,
+  chosen so "problems related to type casts and unions become irrelevant". That is
+  the closest of the three to a machine-level representation, and it is the one to
+  read first.
+- **Transitive composition is where they differ**, which is the axis §3c cares
+  about: Wilson and Lam unbounded (recursive walk up the call graph), Landi and
+  Ryder k-limited by construction, Emami et al. unbounded with no stated limit,
+  and Choi et al. reported by both others as breaking down past one call-chain
+  link. Ours is one hop per edge composed by the bottom-up fixed point, which is
+  GCC's arrangement.
+
+**The honest framing for a write-up:** the device is thirty years old and we
+should use its name; what is not obviously precedented is computing it after
+register allocation. See `related-work.md` §7, where that claim is recorded
+scoped and hedged.
+
 ### On the soundness direction: it does NOT flip, and we should not claim it does
 
 Searched from three angles. **No source says the conservative direction is

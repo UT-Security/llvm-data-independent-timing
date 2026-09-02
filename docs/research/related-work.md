@@ -390,6 +390,35 @@ M3**, plus Intel's own "may be significantly higher on future processors."
   blanket is not a defence at all. For MPK, "grant everything" is no isolation;
   for DIT, the mode bit set once is complete protection at a measured cost. Ours
   is the first setting where the comparison exists to be made.
+- **A per-parameter interprocedural memory-effect summary computed POST-REGISTER
+  ALLOCATION.** Searched 2026-09-02; **this is an unfound-in-search claim, not a
+  proven absence**, and it must be written that way. The search found the two
+  halves shipped separately and never together:
+
+  | system | interprocedural summary? | over what? | when |
+  |---|---|---|---|
+  | Spike (PLDI 1997) | yes, reusable, call-graph propagated | **registers only** | post-RA, post-link |
+  | PLTO | yes | **scalar stack-depth bounds** | post-RA |
+  | Alto | - | "rudimentary and conservative" aliasing, by its own admission | post-RA |
+  | GCC `ipa-modref` | yes, per-parameter, precise | **memory objects** | GIMPLE, **pre-RA** |
+
+  So: register-scoped summaries exist post-RA; per-parameter memory-effect
+  summaries exist pre-RA; nobody was found combining them. **I verified the GCC
+  half myself** - `ipa-modref` is a tree/GIMPLE pass, confirmed from its source -
+  and the post-RA half is second-hand from a search that reports reading the Spike
+  and PLTO papers in full. LLVM's own structure corroborates the gap from the
+  other side: `MachineFunctionPass` is strictly per-function with no module-level
+  cross-function analysis facility, which is why `TaintInterprocPass` had to be
+  built as a novel module pass inserted after PEI.
+
+  **State it scoped, and never as "nobody has done this".** The defensible form is
+  that the combination was not found, that its two halves are shipped separately
+  by named systems, and that the reason is structural rather than accidental: the
+  named IR objects a memory summary needs are exactly what register allocation
+  destroys. Given this file's own history of retracted novelty claims (§8), assume
+  this one is wrong until someone has read Spike's summary representation
+  directly.
+
 - **Secret fraction as the deciding variable.** Never stated in this form. Closest:
   PROSPECT's sweep (blanket 110% → 145% as the secret fraction rises, precise flat
   at 100%) and SpectreGuard's *"secrets that are accessed infrequently will have
