@@ -180,6 +180,95 @@ unrelated call site.
 | A | `hydro_x25519_core` passing limb arrays on its own frame to `hydro_x25519_mul` |
 | B | `hydro_hash_final` filling `eph_sk`, which points into `csig` - the caller's own argument, not a frame object |
 
+## 3c. Proposed fix for gap B: generalise provenance from Frame to Arg
+
+**The concept is already half-built.** `CellInfo` on the STORE side already has
+an `Arg` kind carrying an `ArgNo`, and that is what lets
+`computeFunctionMemEffects` record `WritesSecretThroughArgPointee` precisely.
+What is missing is the symmetric half on the DATAFLOW side:
+
+| | exists | missing |
+|---|---|---|
+| pointer provenance | `FrameRefs`: reg -> frame index | reg -> "the object argument k points at" |
+| memory cells | `TaintedStackCells`, `TaintedGlobalCells` | tainted cells keyed by `ArgNo` |
+
+So the caller can *classify a store* as "through arg k" but cannot *remember*
+that the object arg k points at now holds a secret, and cannot recognise a
+register as pointing at it.
+
+### The changes
+
+1. **`TaintState::FrameRefs` becomes a `PointerBase` map**: reg -> `Frame(FI)`
+   *or* `Arg(k)`. One variant added to an existing map.
+2. **Seed it at entry**: each pointer-typed incoming argument register k starts
+   with base `Arg(k)`.
+3. **Propagate it exactly as frames are propagated**: a `COPY` inherits the
+   base; every other def kills it; **pointer arithmetic is NOT followed**. Same
+   conservatism, same reason - a computed offset can leave the object, and
+   attributing to the wrong object is the under-taint direction.
+4. **Add `TaintedArgCells`**, whole-object granularity keyed by `ArgNo`, matching
+   what `anyTaintedStackCellForFI` does for frames.
+5. **P1b application at the call site**: where it currently does
+   `getFrameRef(reg)` and falls back to `setExternalMemClobbered()`, it consults
+   the general base and, for `Arg(k)`, sets the arg cell instead.
+6. **Load path**: an MMO classifying as `CellInfo::Arg` with a tainted `ArgNo`
+   returns secret.
+7. **`computeFunctionMemEffects`**: a tainted `Arg(k)` cell at exit becomes
+   `WritesSecretThroughArgPointee.insert(k)`. **This is what makes it compose
+   upward, and it needs no new consumer** - callers already read that field.
+
+### Stage it in two halves, and measure them apart
+
+This is the part the project's own history argues for: the `+44 points` and
+`408 -> 628` verdicts in `p1b-frame-provenance.md` §4 cannot now be attributed to
+a mechanism, because two effects were changed at once.
+
+- **B1, naming.** Items 1-7 above, used ONLY to replace the blunt fallback.
+  Expected to *reduce* switches: it substitutes a named object for
+  `ExternalMemClobbered`, which today poisons every subsequent load in the caller
+  AND re-exports as TOP to that caller's callers.
+- **B2, consumption.** Let a pointer whose base is a tainted `Arg(k)` count as
+  pointee-tainted when passed onward - the same rule as gap A's fix, generalised
+  from `Frame` to any base. **This is the half that actually closes the leak**,
+  and the additive half that costs switches.
+
+### Why B1 is probably a WIN, not a cost
+
+Unlike gap A, this is substitutive rather than additive. Counting the two
+outcomes of the P1b application on libhydrogen (summed over the fixed point, so
+read the ratio, not the absolute):
+
+| outcome at a call site whose callee writes through a pointer arg | count |
+|---|---|
+| `P1b: tainted 1 caller object(s) precisely` | 644 |
+| `P1a: blunt clobber, provenance unknown` | **1253** |
+
+**Two thirds of these call sites already degrade to a whole-caller clobber.**
+Not all 1253 will have `Arg(k)` provenance - some are heap, some genuinely
+unresolvable - but every one that does is a flood replaced by a name. The
+corroborating figure: 47 of 53 functions with a mod-set on libhydrogen export
+`UNKNOWN(TOP)`.
+
+### What to watch
+
+- **`Arg(k)` is context-insensitive** - "the object arg 0 points at" is a
+  different object per caller. But that is exactly the existing
+  `WritesSecretThroughArgPointee` semantics, and P1b resolves it per caller at
+  the next level down, so the imprecision is bounded at one level rather than
+  compounding.
+- **Heap pointers remain unnamed.** B does not fix a secret written into
+  `malloc`ed memory whose pointer is not argument-derived. That stays TOP, and
+  it is the right answer until there is a heap-object abstraction.
+- **Verify on the ORACLE, not the precision report.** Gap A improved the report
+  and moved the oracle by exactly zero. The gate for B is
+  `paper_experiments/08-seed-ground-truth` going from 445,276 toward the 126 the
+  keygen-buffer seed already achieves, plus `gapB_only.c` showing `consume`
+  analysed at all.
+- **Gap B is target-independent**, unlike the call-site gate: `gapB_only.c`
+  leaves `consume` unanalysed on both `arm64-apple-darwin` and
+  `aarch64-unknown-linux-gnu`. That is the reason to believe it is the real cause
+  on the Linux binary the oracle measures, where the gate is irrelevant.
+
 ## 4. Measured effect of the A fix, and why it is not enough
 
 libhydrogen, natural seed, `-mllvm -taint-frame-addr-args`, **darwin object**:
@@ -264,10 +353,11 @@ placement fix.**
    else can be verified against the instrument that matters. Start by diffing
    what taints in `hydro_sign_final_create` between the two targets - 21.0% vs
    12.0% coverage says the two builds lose the secret in different places.
-3. **Close gap B** with argument-derived pointer provenance (the store side
-   already models it as `CellInfo::Arg`), then re-run the oracle: the target is
-   libhydrogen's natural seed reaching the 0.03% the keygen-buffer seed already
-   achieves.
+3. **Close gap B** (§3c), in two measured halves: B1 naming, expected to reduce
+   switches by substituting a named object for a whole-caller clobber at the
+   two-thirds of sites that take the blunt fallback today; then B2 consumption,
+   which is what actually closes the leak. The target is libhydrogen's natural
+   seed reaching the 0.03% the keygen-buffer seed already achieves.
 4. **Re-measure `-taint-frame-addr-args` on libsecp256k1** and decide its
    default. Only worth doing after B, since A alone moves nothing.
 5. Re-run the experiment 08 oracle after each step. It is the only instrument
