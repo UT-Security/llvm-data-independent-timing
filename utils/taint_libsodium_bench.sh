@@ -64,6 +64,25 @@ VARIANTS="${VARIANTS:-A:baseline:0 B:hardened:0 D:tuned:0 E:func:0 C:baseline:1}
 die() { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
 [[ -d "$BENCH_DIR" ]] || die "benchmark dir not found: $BENCH_DIR (set BENCH_DIR=)"
+
+# The gate instrument is TRACKED IN THIS REPO and installed into the benchmark
+# checkout on every run, because crypto-dit-benchmarks is not part of this repo
+# and the original ditprobe was lost by living only inside it. Same reason
+# taint_cio_parity.sh copies utils/cio_ditctl.c rather than reading it from the
+# work dir. utils/ditprobe.c is the copy to edit; this one is a build artifact.
+if [[ -f "$REPO_ROOT/utils/ditprobe.c" ]]; then
+  mkdir -p "$BENCH_DIR/ditprobe"
+  if ! cmp -s "$REPO_ROOT/utils/ditprobe.c" "$BENCH_DIR/ditprobe/ditprobe.c"; then
+    cp -f "$REPO_ROOT/utils/ditprobe.c" "$BENCH_DIR/ditprobe/ditprobe.c" \
+      && printf 'installed ditprobe.c -> %s/ditprobe/\n' "$BENCH_DIR"
+  fi
+  if [[ ! -f "$BENCH_DIR/ditprobe/Makefile" ]]; then
+    # the rigs compile directly; this only makes `cd ditprobe && make` work the
+    # way it does in the twelve sibling driver directories
+    printf 'CC = clang\nCFLAGS = -Wall -O2 -I..\nLDFLAGS = -lsodium\n\nTARGET = ditprobe\nSRC = ditprobe.c\n\nall: $(TARGET)\n\n$(TARGET): $(SRC)\n\t$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)\n\nclean:\n\trm -f $(TARGET)\n\n.PHONY: all clean\n' \
+      > "$BENCH_DIR/ditprobe/Makefile"
+  fi
+fi
 [[ -f "$INC/sodium.h" ]] || die "libsodium headers not found: $INC (run taint_libsodium_eval.sh)"
 for v in $VARIANTS; do
   rest=${v#*:}; a="$WORK/libsodium-${rest%:*}.a"

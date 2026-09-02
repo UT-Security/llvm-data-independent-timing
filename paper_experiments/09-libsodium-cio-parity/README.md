@@ -377,15 +377,24 @@ sudo -E env CIO_OPT=-O2 OURS=ditprobe CIO_REPS=15 \
 supplies the blanket arm and the counters; `utils/cio_ditctl.c` is its
 DYLD-injected equivalent for non-sudo runs.
 
-Three pieces of this rig existed only in an untracked home directory on the M5
+Four pieces of this rig existed only in an untracked home directory on the M5
 machine and had to be rebuilt to run it again. They are now in the repo, which is
 the point:
 
 ```sh
+utils/ditprobe.c                         # the gate instrument (gates 1-4)
 utils/taint_cio_eval_setup.sh            # CIO's drivers + the eval_util.h port
 utils/taint_libsodium_narrow.sh          # arm N (indirect-call-resolved IR)
 utils/taint_libsodium_nopsw.sh           # arm Z (NOP-switch control)
 ```
+
+`ditprobe.c` is the odd one out because the rigs build drivers from
+`$BENCH_DIR/<name>/<name>.c` and `crypto-dit-benchmarks` is not part of this
+repo. Both `taint_libsodium_sudo_run.sh` and `taint_libsodium_bench.sh` therefore
+**install it into the benchmark checkout on every run**, overwriting what is
+there, the same way `taint_cio_parity.sh` copies `utils/cio_ditctl.c` rather than
+trusting the work dir. Edit `utils/ditprobe.c`; the copy under `$BENCH_DIR` is a
+build artifact.
 
 `taint_libsodium_eval.sh` builds arms A/C/P/F by default; `fine` (X) needs
 `POLICIES_OVERRIDE`, and N and Z come from the two scripts above. The M4 run:

@@ -91,6 +91,25 @@ fi
 mkdir -p "$OUT"
 info "    output -> $OUT"
 
+# The gate instrument is TRACKED IN THIS REPO and installed into the benchmark
+# checkout on every run, because crypto-dit-benchmarks is not part of this repo
+# and the original ditprobe was lost by living only inside it. Same reason
+# taint_cio_parity.sh copies utils/cio_ditctl.c rather than reading it from the
+# work dir. utils/ditprobe.c is the copy to edit; this one is a build artifact.
+if [[ -f "$REPO_ROOT/utils/ditprobe.c" ]]; then
+  mkdir -p "$BENCH_DIR/ditprobe"
+  if ! cmp -s "$REPO_ROOT/utils/ditprobe.c" "$BENCH_DIR/ditprobe/ditprobe.c"; then
+    cp -f "$REPO_ROOT/utils/ditprobe.c" "$BENCH_DIR/ditprobe/ditprobe.c" \
+      && info "    installed ditprobe.c -> $BENCH_DIR/ditprobe/"
+  fi
+  if [[ ! -f "$BENCH_DIR/ditprobe/Makefile" ]]; then
+    # the rigs compile directly; this only makes `cd ditprobe && make` work the
+    # way it does in the twelve sibling driver directories
+    printf 'CC = clang\nCFLAGS = -Wall -O2 -I..\nLDFLAGS = -lsodium\n\nTARGET = ditprobe\nSRC = ditprobe.c\n\nall: $(TARGET)\n\n$(TARGET): $(SRC)\n\t$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)\n\nclean:\n\trm -f $(TARGET)\n\n.PHONY: all clean\n' \
+      > "$BENCH_DIR/ditprobe/Makefile"
+  fi
+fi
+
 # record exactly what produced these numbers
 { echo "date: $(date -u +%FT%TZ)"; echo "host: $(sysctl -n hw.model) $(sysctl -n machdep.cpu.brand_string)"
   echo "root: $([[ $(id -u) -eq 0 ]] && echo yes || echo no)"; echo "llvm: $LLVM_BIN"
