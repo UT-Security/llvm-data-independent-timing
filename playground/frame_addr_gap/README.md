@@ -18,6 +18,7 @@ secret-dependent instructions run with `PSTATE.DIT` clear.
 | `gapA.c` | caller taints its own frame object and passes the address in |
 | `gapB.c` | the same callee reached two ways, one that works and one that does not |
 | `gapB_only.c` | gap B with the working caller deleted, so nothing masks it |
+| `gapB_memcpy.c` | the THIRD gap: the same shape but filled by an external `memcpy`, whose summary collapses to `UNKNOWN(TOP)`. The size must be runtime-variable - a constant-size `memcpy` is lowered to plain stores and resolves fine |
 | `gapB_interior.c` | gap B as it appears in real code: an INTERIOR pointer into the caller's own argument (`&csig[32]`), which following copies alone does not reach |
 
 `gapB.c` is the one to read: `via_local` and `via_argptr` call the *same*

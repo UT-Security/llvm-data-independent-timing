@@ -1859,6 +1859,31 @@ public:
     return std::nullopt;
   }
 
+  /// If MI computes an address by displacing a pointer by a REGISTER amount -
+  /// `add xD, xB, xN`, `add xD, xB, xN, lsl #k`, `add xD, xB, wN, uxtw` - append
+  /// every operand that could be the pointer BASE to Bases and return true.
+  ///
+  /// The non-constant companion to isAddImmediate, which covers `base + imm`.
+  /// Provenance analyses need both: an interior pointer is just as often
+  /// `p + i * stride` as `p + 32`, and refusing the register form loses the
+  /// object identity of anything indexed by a loop variable.
+  ///
+  /// BOTH operands are reported, because the ISA does not distinguish base from
+  /// index: `add x0, x1, x2` is the same instruction whichever of x1/x2 holds
+  /// the pointer. A caller MUST resolve that ambiguity itself, and must treat
+  /// "more than one candidate resolves to a known but different object" as
+  /// unknown rather than choosing one - guessing misattributes provenance, which
+  /// for a security analysis is the direction that loses the secret.
+  ///
+  /// Subtraction is deliberately NOT included. `p - i` is in-object arithmetic,
+  /// but `p - q` is a pointer difference whose result is an integer, and the two
+  /// are the same instruction.
+  virtual bool
+  getPointerDisplacementBases(const MachineInstr &MI,
+                              SmallVectorImpl<Register> &Bases) const {
+    return false;
+  }
+
   /// Return true only when PSTATE.DIT (data-independent timing) guarantees this
   /// instruction's timing is independent of its non-address operand values -
   /// i.e. the instruction is in the target's DIT-covered set. The taint hardener

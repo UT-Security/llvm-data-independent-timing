@@ -459,6 +459,9 @@ public:
   std::optional<unsigned>
   getNumStoredValueRegs(const MachineInstr &MI) const override;
 
+  bool getPointerDisplacementBases(const MachineInstr &MI,
+                                   SmallVectorImpl<Register> &Bases) const override;
+
   bool isDITProtected(const MachineInstr &MI) const override;
 
   MCInst getNop() const override;
