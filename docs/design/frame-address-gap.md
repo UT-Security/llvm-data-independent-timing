@@ -269,6 +269,61 @@ corroborating figure: 47 of 53 functions with a mod-set on libhydrogen export
   `aarch64-unknown-linux-gnu`. That is the reason to believe it is the real cause
   on the Linux binary the oracle measures, where the gate is irrelevant.
 
+## 3d. Can more seeds substitute for the fix? Partly, and not safely
+
+Worth answering because it is the cheap option and it is what the tooling
+already asks the user to do.
+
+**First, gap B is narrower than §3b suggests.** The blunt clobber DOES cover the
+case where the caller loads the buffer itself; it fails only when the caller
+passes the pointer ON (`playground/frame_addr_gap/shapes.c`):
+
+| shape | what the caller does with the filled buffer | result |
+|---|---|---|
+| `inline_consume` | loads it and multiplies | need=11, **coverage 94.1%** - covered |
+| `pass_on` | hands the pointer to another function | `consume` **absent** - uncovered |
+
+`ExternalMemClobbered` poisons subsequent *loads*, and that is enough for the
+first. Passing a pointer does not consult it, which is the whole of gap B.
+
+**A seed does patch the second** (`seedfix.c`). Adding `consume,0,pointee`:
+
+| seeds | `consume` | total switches |
+|---|---|---|
+| `pass_on,1,pointee` | absent | 5 |
+| `+ consume,0,pointee` | need=8, coverage 90.0% | 8 |
+
+**But four things make it a workaround rather than a fix.**
+
+1. **A seed is a per-FUNCTION attribute, not a per-call-site one.** Seeding
+   `consume` instruments it for *every* caller. `seedfix.c` includes
+   `public_path`, which calls the same helper with nothing secret anywhere near
+   it, and it now pays `consume`'s two switches on every call. The precision
+   cost scales with how shared the helper is, and crypto helpers are shared.
+2. **You cannot find the site.** This is the finding from experiment 08: on
+   libhydrogen the information-loss report emitted **zero** records while 97.61%
+   of secret operations ran unprotected. There is nothing to tell the developer
+   which function to seed.
+3. **The seed that works on libhydrogen works BY ACCIDENT.**
+   `hydro_sign_keygen,0,pointee` reaches 0.03% under-taint, but not by expressing
+   the `sk -> hash -> eph_sk` dataflow that is broken. It taints the keypair
+   buffer, that reaches the RNG state global, and the module-wide secret-global
+   rule then makes every RNG consumer secret - including `eph_sk`, which is
+   *produced* by `hydro_random_buf`. The tell is in experiment 08's own numbers:
+   it drags in 17 `hydro_kx_*` and 8 `_hydro_pwhash_*` functions the driver never
+   calls. It depends on the RNG state being a global and on keygen being in the
+   same TU; neither is a property of the secret.
+4. **The compiler's own suggested repair did not transfer.**
+   `hydro_hash_final,1,pointee` - the line the info-loss machinery would print -
+   took darwin from 12.0% to 99.2% coverage and did **nothing** on the Linux
+   build the oracle measures (445,276 either way). A repair that is
+   target-dependent is not a repair.
+
+**So: seeds can cover a specific hole once someone knows it is there, at a cost
+that lands on every caller of the seeded function.** They cannot be the answer to
+a defect that is invisible, and on the one workload measured end to end the seed
+that appears to work is exploiting an unrelated over-approximation.
+
 ## 4. Measured effect of the A fix, and why it is not enough
 
 libhydrogen, natural seed, `-mllvm -taint-frame-addr-args`, **darwin object**:
