@@ -40,14 +40,28 @@ CIO_CFG_URL="https://raw.githubusercontent.com/counter-optimization/cio/HEAD/lib
 ALL_STAGES="fetch patch build bitcode seed analyze archives check report"
 
 # DIT placement policies to build. label:flags
-# NOTE: the DEFAULT policy assumes toggles are FREE (switch-cyc=0) and toggles per
-# loop iteration (loop-hoist=0). On hardware where MSR DIT is serializing (~30 cyc
-# on M4) that is the wrong model -- 'tuned' is the serializing-hardware policy.
+#
+# NOTE (2026-09-01): the pass DEFAULTS changed on 2026-08-24 (commit 47d34937f5df,
+# "[taint] Settle the shipped defaults"). They are now region / switch-cyc=30 /
+# loop-hoist=1 / mod-set gate ON, so 'hardened' IS the shipped configuration and
+# 'tuned' below is now a no-op duplicate of it -- kept only because the archive
+# name is referenced by older result docs. The pre-2026-08-24 default
+# (switch-cyc=0, loop-hoist=0) is the 'fine' policy: it is what produced the
+# +46%/+94% libsodium numbers in docs/results/dit-cost-model.md, and it is now a
+# historical arm, not a default.
+#
+# Override the whole set for a one-off study:
+#   POLICIES_OVERRIDE="pass:-taint-dit-placement=region;func:-taint-dit-placement=function"
 POLICIES=(
   "hardened:-taint-dit-placement=region"
   "tuned:-taint-dit-placement=region -taint-dit-switch-cyc=30 -taint-dit-loop-hoist=1"
   "func:-taint-dit-placement=function"
 )
+if [[ -n "${POLICIES_OVERRIDE:-}" ]]; then
+  POLICIES=()
+  IFS=';' read -r -a POLICIES <<< "$POLICIES_OVERRIDE"
+  printf '\033[1m==> policy set overridden: %s\033[0m\n' "${POLICIES[*]}"
+fi
 
 red()  { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
@@ -219,12 +233,28 @@ fi
 
 # ---------------------------------------------------------------- analyze
 if want analyze; then
-  info "lower to post-prologepilog MIR"
-  "$LLVM_BIN/llc" -O2 -stop-after=prologepilog "$WORK/libsodium-annotated.ll" \
+  # -disable-tail-calls is REQUIRED, not a tuning choice, and it goes here so
+  # every arm (baseline included) shares one codegen configuration.
+  #
+  # A tail call has no epilogue. If DIT is on when one is taken the mode is never
+  # restored, so every instruction after it runs protected and the "selective"
+  # arm silently becomes blanket-plus-switches. Measured on this library at the
+  # shipped defaults: 13 SEVERE `leak-tailcall` sites, among them `crypto_sign`
+  # (the ed25519 entry point) and the whole poly1305/chacha20 chain that AEAD
+  # goes through. Turning tail calls off takes the information-loss report from
+  # 36 records / 13 severe to 23 records / 0 severe, leaving exactly the 19
+  # indirect + 4 cross-TU stops, which are real and unrelated.
+  #
+  # The clang-side equivalent is -ftaint-dit-abi (which disables tail calls
+  # TU-wide); this rig drives llc directly, so it needs the codegen option.
+  info "lower to post-prologepilog MIR (tail calls disabled)"
+  "$LLVM_BIN/llc" -O2 -disable-tail-calls -stop-after=prologepilog \
+      "$WORK/libsodium-annotated.ll" \
       -o "$WORK/libsodium.pe.mir" || die "llc -stop-after=prologepilog failed"
   perl -0pi -e 's/<mcsymbol >//g' "$WORK/libsodium.pe.mir"   # MIR CFI serialization bug
 
   mkdir -p "$WORK/rpt"
+  rm -f "$WORK/rpt/infoloss.txt"   # the report APPENDS; stale records would mix in
   for p in "${POLICIES[@]}"; do
     label="${p%%:*}"; flags="${p#*:}"
     info "analyze + insert DIT [$label] $flags"
@@ -235,7 +265,8 @@ if want analyze; then
              "-taint-regions-output=$WORK/rpt/regions.txt" \
              "-taint-callsite-report=$WORK/rpt/callsites.txt" \
              "-taint-uncovered-report=$WORK/rpt/uncovered.txt" \
-             "-taint-clobber-report=$WORK/rpt/clobber.txt" ) \
+             "-taint-clobber-report=$WORK/rpt/clobber.txt" \
+             "-taint-info-loss-report=$WORK/rpt/infoloss.txt" ) \
         "$WORK/libsodium.pe.mir" -o "$WORK/libsodium.$label.mir" \
       || die "taint analysis failed for $label"
   done
@@ -292,6 +323,12 @@ if want report; then
     d=$(python3 -c "print('%+.2f%%'%(($t-$base_text)/$base_text*100))" 2>/dev/null || echo '?')
     printf '  %-22s %10s %10s %9s\n' "$label" "$n" "${t:-?}" "$d"
   done
+  if [[ -f "$WORK/rpt/infoloss.txt" ]]; then
+    sev=$(grep -c 'severity  SEVERE' "$WORK/rpt/infoloss.txt")
+    rec=$(grep -cE '^\[[0-9]+\]' "$WORK/rpt/infoloss.txt")
+    printf '  %-22s %s records, %s SEVERE\n' 'info-loss report' "$rec" "$sev"
+    [[ "$sev" -ne 0 ]] && red "  WARNING: $sev severe information-loss sites -- selective placement has degenerated to blanket somewhere. See $WORK/rpt/infoloss.txt"
+  fi
   for r in callsites uncovered clobber; do
     [[ -f "$WORK/rpt/$r.txt" ]] && printf '  %-22s %s lines\n' "$r report" "$(grep -c . "$WORK/rpt/$r.txt")"
   done

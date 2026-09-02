@@ -27,7 +27,18 @@
 #   LLVM_BIN=<dir>    built tools                    (default <repo>/build/bin)
 #   BENCHES=<list>    default "ed25519 aead_chacha20poly1305"
 #   REPS=<n>          repetitions, min is reported   (default 5)
-#   PIN_CPU=<n>       P-core to pin to               (default 7)
+#   PIN_CPU=<n>       logical CPU for the hard bind  (default 7)
+#
+# CORE RESIDENCY (2026-09-01). The harness used to inject libcpupin.dylib, which
+# writes the sysctl kern.sched_thread_bind_cpu. That OID only exists on a kernel
+# booted with enable_skstb=1; on stock macOS the write fails with ENOENT, the
+# error goes to stderr which this script discards, and the run proceeds UNPINNED
+# while still printing "pin_cpu=7". Measured on Mac17,2: the OID is absent.
+# libqospin.dylib replaces it -- it still tries the hard bind, then falls back to
+# QOS_CLASS_USER_INTERACTIVE, the supported P-cluster bias on Apple silicon.
+# That is a bias, not a binding, so the ditprobe driver reports the measured core
+# clock per rep (P ~4590 MHz, E ~1045 MHz) and the run is only valid if every arm
+# reads P-core clock. Include ditprobe in BENCHES to arm that gate.
 #
 # NOTE ON argon2id: it is CIO's headline worst case (27.84x) but the harness runs
 # 1000 iterations of a memory-hard KDF, which takes hours. Add it explicitly and
@@ -46,7 +57,9 @@ PIN="${PIN_CPU:-7}"
 INC="$WORK/src/libsodium/include"
 
 # label:archive:harness_DIT
-VARIANTS="A:baseline:0 B:hardened:0 D:tuned:0 E:func:0 C:baseline:1"
+# Override for a one-off study, e.g. the CIO-parity case study:
+#   VARIANTS="A:baseline:0 C:baseline:1 P:hardened:0 F:func:0 X:fine:0"
+VARIANTS="${VARIANTS:-A:baseline:0 B:hardened:0 D:tuned:0 E:func:0 C:baseline:1}"
 
 die() { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
@@ -64,7 +77,8 @@ if [[ "$(id -u)" -ne 0 ]]; then
 fi
 
 echo "libsodium: $WORK"
-echo "reps=$REPS  pin_cpu=$PIN  benches=$BENCHES"
+echo "reps=$REPS  qos=user-interactive (hard bind to cpu=$PIN if the kernel has it)"
+echo "benches=$BENCHES"
 printf '\n%-24s %-9s' benchmark metric
 for v in $VARIANTS; do printf ' %10s' "${v%%:*}"; done
 printf '   |'
@@ -119,13 +133,26 @@ for b in $BENCHES; do
     fi
   done
 
+  # Rotate the arm order every rep. Round-robin alone still leaves each variant in a
+  # FIXED position within a rep, so rep 1's cold slot always lands on the same arm --
+  # the residual flagged in docs/results/dit-cost-model.md. Rotating by one each rep
+  # gives every arm the cold slot equally often.
+  read -r -a VARR <<< "$VARIANTS"
+  NV=${#VARR[@]}
   for r in $(seq 1 "$REPS"); do
-    for v in $VARIANTS; do
+    for k in $(seq 0 $((NV - 1))); do
+      v=${VARR[$(( (k + r - 1) % NV ))]}
       label=${v%%:*}; rest=${v#*:}; arch=${rest%:*}; dit=${rest#*:}
       bin="$OUT/$b.$arch.$dit"
       [[ -x "$bin" ]] || continue
-      ENABLE_DIT="$dit" PIN_CPU="$PIN" DYLD_INSERT_LIBRARIES="$BENCH_DIR/libcpupin.dylib" \
-        "$bin" 2>/dev/null | awk -v L="$label" '/^=== /{print L, $2, $3}' >> "$OUT/$b.raw"
+      # Driver output is  '=== <key words> <result> <mem_usage>'. The key is not
+      # always one word (x25519 prints '=== Key Agreement'), so take the result as
+      # $(NF-1) and join everything between '===' and it. The old '$2 $3' form fed
+      # the literal string 'Agreement' to float() and killed the whole bench.
+      ENABLE_DIT="$dit" PIN_CPU="$PIN" DYLD_INSERT_LIBRARIES="$BENCH_DIR/libqospin.dylib" \
+        "$bin" 2>/dev/null \
+        | awk -v L="$label" '/^=== / && NF>=4 {k=""; for(i=2;i<=NF-2;i++) k=k (i>2?"_":"") $i;
+                             print L, k, $(NF-1)}' >> "$OUT/$b.raw"
     done
   done
 
@@ -150,14 +177,20 @@ for key in order:
     med = {c: st.median(data[(key, c)]) for c in labels if (key, c) in data}
     if 'A' not in med: continue
     base = med['A']
-    print(f"{bench:<24} {key:<9}" + "".join(f" {med.get(c,0):10.0f}" for c in labels)
-          + "   |" + "".join(f" {med[c]/base:7.3f}x" for c in labels if c != 'A' and c in med))
+    # A metric can legitimately read 0 in the control arm (the DitBit readback
+    # row), which makes a ratio undefined -- print the absolutes and move on.
+    ratios = ("   |" + "".join(f" {med[c]/base:7.3f}x"
+                               for c in labels if c != 'A' and c in med)) if base else ""
+    print(f"{bench:<24} {key:<9}" + "".join(f" {med.get(c,0):10.0f}" for c in labels) + ratios)
     # Noise floor: worst within-config spread vs the between-config range of medians.
     # Comparable magnitudes mean the ratios are not resolvable at this sample count.
     spreads = [(max(v) - min(v)) / min(v) for c, v in
                ((c, data[(key, c)]) for c in labels if (key, c) in data) if min(v) > 0]
     worst = max(spreads) if spreads else 0.0
-    betw = (max(med.values()) - min(med.values())) / min(med.values()) if med else 0.0
+    lo = min(med.values()) if med else 0.0
+    # A key can legitimately read 0 in some arms (the DitBit readback row), which
+    # makes a relative spread undefined -- report it as unresolvable, not a crash.
+    betw = (max(med.values()) - lo) / lo if lo > 0 else 0.0
     flag = "   <-- NOT RESOLVABLE, ratios above are noise" if worst >= 0.5 * betw else ""
     print(f"{'':<24} {'(noise)':<9} within-config spread {worst*100:.1f}%"
           f"   between-config {betw*100:.1f}%{flag}")
