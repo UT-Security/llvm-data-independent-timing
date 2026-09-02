@@ -271,6 +271,13 @@ cl::opt<bool> llvm::TaintArgProvenance(
              "clobbering all of the caller's memory (B1)"),
     cl::init(false), cl::Hidden);
 
+cl::opt<bool> llvm::TaintLibcModel(
+    "taint-libc-model",
+    cl::desc("Model the memory effect of libc movers (memcpy/memmove) instead "
+             "of treating them as opaque external calls that clobber all "
+             "caller memory"),
+    cl::init(false), cl::Hidden);
+
 cl::opt<bool> llvm::TaintArgPointeeArgs(
     "taint-arg-pointee-args",
     cl::desc("Treat a call argument that points at a tainted arg pointee as "
@@ -462,6 +469,101 @@ static bool callCannotMakeMemorySecret(const Function *Callee) {
     return true;
 
   return false;
+}
+
+/// A libc function that MOVES bytes from one pointer argument to another, with
+/// no other caller-visible memory effect.
+struct LibcMoveModel {
+  unsigned DstArg;
+  unsigned SrcArg;
+  unsigned LenArg;
+};
+
+/// Recognise the libc movers whose memory effect is fully determined by their
+/// contract, so a call to one need not collapse to TOP.
+///
+/// Why this is needed at all: an external declaration receiving a secret is
+/// blunt TOP - "wrote a secret somewhere caller-visible". That is safe, and for
+/// a caller that later LOADS the buffer it is even sufficient, because TOP
+/// poisons loads. It is not sufficient for a caller that PASSES THE BUFFER ON,
+/// because nothing marks the pointer. libhydrogen's `hydro_hash_final` fills its
+/// output with `memcpy` and its caller hands that buffer straight to the curve,
+/// so the whole X25519 ladder ran unprotected on a correct, conservative
+/// summary. See docs/design/frame-address-gap.md.
+///
+/// Name matching is the available route - `TargetLibraryInfo` is not plumbed
+/// into this pass - and it is the same route `callCannotMakeMemorySecret` takes
+/// for `operator delete`. Three guards keep it honest: the callee must be a
+/// DECLARATION (a definition in this TU is analysed for real and needs no
+/// model), the name must match exactly, and the signature must be
+/// (ptr, ptr, int) so a local function that merely shares the name is not
+/// silently given libc semantics.
+///
+/// Callee is often NULL here and that is the normal case, not a failure: a C
+/// `memcpy` reaches -O2 as the intrinsic `llvm.memcpy.p0.p0.i64`, which ISel
+/// lowers to a libcall referencing the bare external symbol `memcpy`. The module
+/// then declares only the intrinsic, so `M.getFunction("memcpy")` is null and
+/// the call site carries a symbol name rather than a Function. Match on SymName
+/// in that case: `memcpy` and friends are reserved identifiers, which is the
+/// same justification `callCannotMakeMemorySecret` uses for `operator delete`.
+static std::optional<LibcMoveModel> getLibcMoveModel(const Function *Callee,
+                                                    StringRef SymName) {
+  // A definition in this TU is analysed for real and needs no model.
+  if (Callee && !Callee->isDeclaration())
+    return std::nullopt;
+
+  StringRef N = Callee ? Callee->getName() : SymName;
+  // memmove and mempcpy have the same caller-visible effect as memcpy for this
+  // purpose: dst's bytes come from src, and nothing else caller-visible changes.
+  //
+  // The str* family is deliberately EXCLUDED. strcat and strncat also READ dst,
+  // and the n-suffixed forms write a length that depends on the source contents
+  // rather than on an argument - both are different shapes, and adding them
+  // without measuring is exactly the over-reach this table should avoid.
+  if (N != "memcpy" && N != "memmove" && N != "mempcpy")
+    return std::nullopt;
+
+  // When a declaration exists, check its shape too, so a local function that
+  // merely shares the name is not silently given libc semantics. With only a
+  // symbol there is nothing to check, and the reserved-identifier argument
+  // carries it.
+  if (Callee) {
+    FunctionType *FT = Callee->getFunctionType();
+    if (FT->getNumParams() != 3 || !FT->getParamType(0)->isPointerTy() ||
+        !FT->getParamType(1)->isPointerTy() ||
+        !FT->getParamType(2)->isIntegerTy())
+      return std::nullopt;
+  }
+
+  // Argument positions are the same for all three, and the same in the libcall
+  // ISel emits as in the C signature: (dst, src, len).
+  return LibcMoveModel{/*DstArg=*/0, /*SrcArg=*/1, /*LenArg=*/2};
+}
+
+/// The callee's symbol name at a direct call, whether or not the module has a
+/// Function for it. Empty for an indirect call.
+static StringRef getCalleeSymbolName(const MachineInstr &MI) {
+  for (const MachineOperand &MO : MI.operands()) {
+    if (MO.isGlobal())
+      if (const auto *GV = MO.getGlobal())
+        return GV->getName();
+    if (MO.isSymbol())
+      return MO.getSymbolName();
+  }
+  return StringRef();
+}
+
+/// The physical register holding argument ArgNo at this call site, if present.
+static Register findCallArgReg(const MachineInstr &MI, unsigned ArgNo,
+                               const TargetRegisterInfo *TRI) {
+  for (const MachineOperand &MO : MI.uses()) {
+    if (!MO.isReg() || MO.isDef() || !MO.getReg().isValid() ||
+        !MO.getReg().isPhysical())
+      continue;
+    if (TRI->getEncodingValue(MO.getReg()) == ArgNo)
+      return MO.getReg();
+  }
+  return Register();
 }
 
 /// Unified cell extraction from a MachineMemOperand.
@@ -1037,6 +1139,20 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
   // narrow: no arithmetic on an existing frame pointer is followed, because a
   // computed offset could leave the object and mis-attributing provenance is the
   // one direction that under-taints.
+  // Argument-register provenance as it stood BEFORE this instruction's defs
+  // were killed. Only populated for calls; see the snapshot below.
+  SmallDenseMap<unsigned, TaintState::PointerBase, 8> PreCallArgBases;
+
+  // A call's arguments must be read in the state ENTERING it. The provenance
+  // block below kills every def, and a call implicitly defines x0 and clobbers
+  // the caller-saved registers - so reading afterwards loses exactly the frame
+  // and argument bases that the frame-address (gap A) and arg-pointee (B2)
+  // rules inside taintedCallArguments depend on. The fixed-point iteration gets
+  // this right for free by using replayTaint's Pre hook; here it has to be
+  // explicit.
+  const CallArgTaint EnteringArgTaint =
+      MI.isCall() ? taintedCallArguments(MI, S, TRI) : CallArgTaint();
+
   // Arg provenance (B1) needs the same kill/copy walk but no frame map, so it
   // must not be gated on the frame map being non-empty: a leaf that only
   // forwards a pointer argument has no frame objects at all and is exactly the
@@ -1048,6 +1164,19 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     // - the exact shape of an interior pointer into an argument - reads and
     // writes the same register, so killing first loses the base we are about to
     // propagate. This cost a silent no-result on the interior-pointer repro.
+    // A CALL implicitly defines x0 (its return value) and clobbers the
+    // caller-saved registers, so the kill below wipes the very argument
+    // registers the call handling further down needs to name. Snapshot them
+    // first. (The fixed-point iteration avoids this by reading the state
+    // ENTERING the call through replayTaint's Pre hook; the in-function paths
+    // have no such luxury.)
+    if (MI.isCall())
+      for (const MachineOperand &MO : MI.uses())
+        if (MO.isReg() && !MO.isDef() && MO.getReg().isValid() &&
+            MO.getReg().isPhysical() && TRI->getEncodingValue(MO.getReg()) <= 7)
+          if (auto B = S.getPointerBase(MO.getReg()))
+            PreCallArgBases[MO.getReg().id()] = *B;
+
     std::optional<TaintState::PointerBase> SrcBase;
     bool VarDisplacement = false;
     if (MI.isCopy() && MI.getOperand(1).isReg()) {
@@ -1081,6 +1210,18 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // land in frame_B, and attributing it to A UNDER-taints. An argument's
         // object has bounds we cannot see, and in well-defined C in-object
         // arithmetic stays inside - the assumption GCC's parm_offset makes.
+        LLVM_DEBUG({
+          dbgs() << "      [vardisp] cands:";
+          for (Register C : Cands) {
+            dbgs() << " " << printReg(C, TRI);
+            if (auto B = S.getPointerBase(C))
+              dbgs() << "=" << (B->K == TaintState::PointerBase::Arg ? "arg" : "fi")
+                     << B->Index;
+            else
+              dbgs() << "=none";
+          }
+          dbgs() << (Ambiguous ? "  AMBIGUOUS" : "") << "\n";
+        });
         if (Ambiguous || (SrcBase && SrcBase->K != TaintState::PointerBase::Arg))
           SrcBase.reset();
         VarDisplacement = SrcBase.has_value();
@@ -1407,7 +1548,8 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
   if (MI.isCall() && TSI && M) {
     LLVM_DEBUG(dbgs() << "      handling call instruction\n");
 
-    bool HasTaintedArg = anyTaintedCallArgument(MI, S, TRI);
+    const CallArgTaint &ArgTaint = EnteringArgTaint;
+    bool HasTaintedArg = ArgTaint.any();
     // Consumed: this call took the outgoing area as its arguments. The next call
     // stores its own, so leaving the bit set would make every later call in the
     // block look secret-passing.
@@ -1516,7 +1658,11 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
                   continue;
                 if (TRI->getEncodingValue(MO.getReg()) != Idx)
                   continue;
-                Found = S.getPointerBase(MO.getReg());
+                {
+                  auto It = PreCallArgBases.find(MO.getReg().id());
+                  if (It != PreCallArgBases.end())
+                    Found = It->second;
+                }
                 break;
               }
               // An Arg base is only usable when B1 is on; otherwise fall back,
@@ -1578,10 +1724,65 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // modes. Annotation-driven mode suppresses the clobber's FLOOD at load
         // consumption (below), not here, so the mod-set stays complete.
         taintCallResultDefs(MI, S, TRI);
+        std::optional<LibcMoveModel> Move;
+        if (TaintLibcModel)
+          Move = getLibcMoveModel(Callee, getCalleeSymbolName(MI));
+        // A secret-dependent LENGTH is a different channel and not one this
+        // model covers: which bytes of dst were overwritten would itself be
+        // secret. Fall back to TOP rather than reason about it.
+        if (Move && (ArgTaint.DataMask & (1u << Move->LenArg)))
+          Move.reset();
+
         if (callCannotMakeMemorySecret(Callee)) {
           LLVM_DEBUG(dbgs()
                      << "        external call to " << Callee->getName()
                      << " cannot make memory secret: clobber suppressed\n");
+        } else if (Move) {
+          // The mover's contract: dst's bytes come from src, and nothing else
+          // caller-visible changes. So it makes memory secret IFF the source is
+          // secret - and when it does, it makes exactly ONE object secret,
+          // which is the fact blunt TOP throws away.
+          const bool SrcSecret =
+              (ArgTaint.DataMask | ArgTaint.PointeeMask) & (1u << Move->SrcArg);
+          const StringRef MoveName =
+              Callee ? Callee->getName() : getCalleeSymbolName(MI);
+          if (!SrcSecret) {
+            // Reached only because some OTHER argument is tainted - dst already
+            // holding a secret, say. Copying public bytes cannot create one.
+            LLVM_DEBUG(dbgs() << "        libc move " << MoveName
+                              << ": source is public, nothing becomes secret\n");
+          } else {
+            Register DstReg = findCallArgReg(MI, Move->DstArg, TRI);
+            std::optional<TaintState::PointerBase> DstBase;
+            if (DstReg.isValid()) {
+              auto It = PreCallArgBases.find(DstReg.id());
+              if (It != PreCallArgBases.end())
+                DstBase = It->second;
+            }
+            if (DstBase && DstBase->K == TaintState::PointerBase::Frame) {
+              const MachineFrameInfo &MFI = MI.getMF()->getFrameInfo();
+              int64_t Sz = MFI.getObjectSize(DstBase->Index);
+              if (Sz > 0)
+                S.setTaintedStackCell(DstBase->Index, 0, (uint64_t)Sz);
+              else
+                S.setExternalMemClobbered();
+              LLVM_DEBUG(dbgs() << "        libc move " << MoveName
+                                << ": frame object " << DstBase->Index
+                                << " becomes secret\n");
+            } else if (DstBase && TaintArgProvenance) {
+              S.setTaintedArgPointee((unsigned)DstBase->Index);
+              LLVM_DEBUG(dbgs() << "        libc move " << MoveName
+                                << ": our own arg " << DstBase->Index
+                                << "'s pointee becomes secret\n");
+            } else {
+              // Cannot name the destination, so we know a secret was written
+              // but not where. That is precisely blunt TOP, and it is the right
+              // answer here rather than a failure of the model.
+              S.setExternalMemClobbered();
+              LLVM_DEBUG(dbgs() << "        libc move " << MoveName
+                                << ": destination unnameable, TOP\n");
+            }
+          }
         } else {
         S.setExternalMemClobbered();
         if (Callee)
