@@ -602,6 +602,63 @@ Five links, on one chain, in one function:
 Links 3, 4 and 5 are built and each verified on its own repro. **Link 2 is
 upstream of all of them**, which is why none of them has moved this workload.
 
+### The actual fix: `getUnderlyingObject` stops at a PHI
+
+Having established that the gate's TAINT half failed because frame object 5 was
+never marked, the chain bottomed out at a **variable-index load**. The cause is
+one line of standard LLVM behaviour:
+
+> `getUnderlyingObject` does not look through PHI nodes.
+
+A pointer carried around a loop IS a phi. So `in[i]` inside
+`for (i...) buf[...] ^= in[i]` resolves to the phi, not to the local the loop
+walks, and the access is classified unknown/heap. Measured in
+`hydro_sign_final_create`: **753 of 777 unresolved accesses had a phi as their
+underlying object.**
+
+`getUnderlyingObjects` (plural) looks through phis and selects. The fix accepts
+its answer **only when every path agrees on one object** - disagreement means the
+access could be to either, and Unknown is then correct. Offset precision is
+unaffected: the constant-offset check fails for a phi-based pointer, so this
+lands on whole-object granularity, which is what an unknown index deserves.
+
+#### Measured on the gem5 shadow-taint oracle
+
+The instrument that had refused to move for every previous change in this file:
+
+| arm | under-taint ops | protected | unprotected | before |
+|---|---|---|---|---|
+| null (control) | 456,194 | 0 | 100% | unchanged |
+| **create** (natural seed) | **368,821** | **87,373** | **80.85%** | *97.61%* |
+| **repair** (`+ hydro_hash_final,1,pointee`) | **126** | 456,068 | **0.03%** | *97.61%* |
+
+Two results, and the second is the bigger one:
+
+- The natural seed goes from 97.61% to **80.85%** unprotected, with protected
+  operations up **8x** (10,918 -> 87,373).
+- **The compiler's own suggested repair now works.** `hydro_hash_final,1,pointee`
+  is the line the information-loss report prints; before this fix it changed
+  nothing on the Linux target (445,276 either way) while working on darwin, which
+  §3d recorded as "a repair that is target-dependent is not a repair". It now
+  reaches **0.03%**, matching the keygen-buffer seed. The annotate-recompile loop
+  closes on the target the oracle measures.
+
+#### It is unflagged, and the oracle is why that is defensible
+
+This changes the default path. The precision report showed both gains and losses
+- `hydro_sign_final_create` need 27 -> 245, but `hydro_sign_final_verify` (119)
+and `hydro_sign_verify` (11) disappeared entirely - and a disappearance is
+exactly the shape an under-taint takes. The report cannot tell the two apart.
+
+The oracle can, and it says the under-taint count went **down** by 76,455 ops.
+**A reclassification that introduced a leak would have moved that number up.**
+(The functions that lost coverage take the signature and the PUBLIC key, so
+having no secret under an `sk`-only seed is the correct answer, not a loss.)
+
+This is also the fourth time in this file that the precision report and the
+oracle disagreed about whether something helped. **Report first, oracle second,
+and believe the oracle.**
+
 ### Prior art for §3c (partial)
 
 Searched 2026-09-02. **Andromeda, TaintDroid and all GCC quotes below were
@@ -993,11 +1050,11 @@ placement fix.**
    close their repros; libhydrogen does not move because of a third gap.
    The `TargetInstrInfo` hook landed (blunt 1,253 -> 494) and so did the libc
    model, which does produce the missing `arg1` on `hydro_hash_final`. Neither
-   closed libhydrogen. Established by measurement: the gate's NAMING half works
-   (`base=fi5`) and its TAINT half fails (`objTainted=0`), because a
-   **variable-index load** from the local `block` is not attributed to that frame
-   object. **The next step is `getCellFromMMO`'s read side**, not any of the
-   call-site rules.
+   closed libhydrogen. DONE. The gate's NAMING half worked and its TAINT half failed,
+   because `getUnderlyingObject` stops at a PHI and every loop-carried pointer
+   read was classified unknown/heap. Fixed with `getUnderlyingObjects` plus a
+   unanimity check; oracle 97.61% -> 80.85%, and the compiler's own repair line
+   now reaches 0.03%.
 4. **Re-measure `-taint-frame-addr-args` on libsecp256k1** and decide its
    default. Only worth doing after B, since A alone moves nothing.
 5. Re-run the experiment 08 oracle after each step. It is the only instrument

@@ -705,6 +705,29 @@ static CellInfo getCellFromMMO(const MachineMemOperand &MMO,
   }
   if (const Value *V = MMO.getValue()) {
     const Value *UO = getUnderlyingObject(V);
+
+    // A pointer carried around a loop is a PHI, and getUnderlyingObject stops
+    // at one - so `buf[i]` inside a loop resolves to the phi, not to the object
+    // the loop walks. That single fact was the largest source of unresolved
+    // accesses measured here: 753 of 777 in `hydro_sign_final_create`, which is
+    // why a read of the local the secret had just been memcpy'd into came back
+    // classified as unknown/heap and the whole X25519 ladder stayed public
+    // (docs/design/frame-address-gap.md).
+    //
+    // getUnderlyingObjects looks through phis and selects. Accept its answer
+    // ONLY when every path agrees on one object: disagreement means the access
+    // could be to either, we cannot name it, and Unknown is the correct answer.
+    // Offset precision is not affected - the constant-offset check below fails
+    // for a phi-based pointer, so this lands on whole-object granularity, which
+    // is what an unknown index deserves anyway.
+    if (isa<PHINode>(UO) || isa<SelectInst>(UO)) {
+      SmallVector<const Value *, 4> Objs;
+      getUnderlyingObjects(V, Objs);
+      if (!Objs.empty() &&
+          llvm::all_of(Objs, [&](const Value *O) { return O == Objs[0]; }))
+        UO = Objs[0];
+    }
+
     if (auto *GV = dyn_cast<GlobalVariable>(UO)) {
       CI.K = CellInfo::Global;
       CI.GV = GV;
@@ -751,6 +774,16 @@ static CellInfo getCellFromMMO(const MachineMemOperand &MMO,
       CI.ArgNo = A->getArgNo();
       return CI;
     }
+    LLVM_DEBUG(dbgs() << "      [cell] unresolved, UO is a "
+                      << UO->getValueID() << " ("
+                      << (isa<PHINode>(UO)      ? "phi"
+                          : isa<SelectInst>(UO) ? "select"
+                          : isa<CallInst>(UO)   ? "call"
+                          : isa<LoadInst>(UO)   ? "load"
+                                                : "other")
+                      << ")\n");
+  } else {
+    LLVM_DEBUG(dbgs() << "      [cell] unresolved, MMO has no IR value\n");
   }
   return CI; // Unknown
 }
