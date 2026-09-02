@@ -1,0 +1,14 @@
+# What still runs unprotected at the BEST seed (both), 5 signatures. The `main`
+# rows are the harness reading sig[0]: the signature is secret-DERIVED but
+# public by design, and we have no declassification tag (CryptoMPK's `sinktaint`
+# is the analogue we lack). They are not a library defect.
+pc,ops,function,source
+0x23a374,20,hydro_hash_final,impl/hash.h:110
+0x23a37c,40,hydro_hash_final,impl/hash.h:110
+0x23f994,160,hydro_hash_update,impl/hash.h:16 inlined into hydro_sign_challenge sign.h:30
+0x23f99c,80,hydro_hash_update,impl/hash.h:16 inlined into hydro_sign_challenge sign.h:30
+0x23f9a0,160,hydro_hash_update,impl/hash.h:16 inlined into hydro_sign_challenge sign.h:30
+0x23f9a4,160,hydro_hash_update,impl/hash.h:16 inlined into hydro_sign_challenge sign.h:30
+0x23fb34,4,hydro_sign_create,impl/sign.h:185
+0x240d04,5,main,hydro_oracle_gem5.c:59 (harness declassification)
+0x240d0c,5,main,hydro_oracle_gem5.c:59 (harness declassification)

@@ -1,0 +1,15 @@
+# gem5 shadow-taint oracle, libhydrogen signing, Neoverse-V2 FDP.
+# An "under-taint op" is a committed DIT-covered instruction with a
+# secret-derived operand and PSTATE.DIT clear. The NULL arm is the required
+# control: it is the same code with no -ftaint-harden, and a zero from any
+# hardened arm is meaningless unless the null arm fires.
+# Counts scale exactly with rounds (445276 x 5 = 2226384), so one signature is
+# representative.
+arm,seed_set,rounds,undertaint_ops,protected_ops,undertaint_sites,unprotected_share_pct
+null,"none (control)",1,456194,0,715,100.00
+create,"hydro_sign_create,4,pointee",1,445276,10918,611,97.61
+both,"+ hydro_sign_keygen,0,pointee",1,126,456068,8,0.03
+repair,"+ hydro_hash_final,1,pointee",1,445276,10918,611,97.61
+null,"none (control)",5,,,,
+create,"hydro_sign_create,4,pointee",5,2226384,54594,612,97.61
+both,"+ hydro_sign_keygen,0,pointee",5,634,2280344,9,0.03

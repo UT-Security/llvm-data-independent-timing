@@ -190,11 +190,11 @@
 <header class="masthead"><div class="col">
   <span class="eyebrow">Paper experiment 08 &middot; libhydrogen &middot; CryptoMPK S&amp;P 2022</span>
   <h1>Two Analyses, One Library</h1>
-  <p class="lede">Every other experiment here picks its own seeds, which makes &ldquo;you chose the annotations that flatter your pass&rdquo; a fair objection that no internal measurement can answer. CryptoMPK's artifact ships an <strong>independent group's derived taint set</strong>. Run our pass on their exact source and compare.</p>
+  <p class="lede">Every other experiment here picks its own seeds, which makes &ldquo;you chose the annotations that flatter your pass&rdquo; a fair objection that no internal measurement can answer. CryptoMPK's artifact ships an <strong>independent group's derived taint set</strong>. Run our pass on their exact source, compare &mdash; then confirm the disagreements with a shadow-taint simulator.</p>
   <div class="meta">
     <span class="chip live">79.4% of their functions</span>
     <span class="chip">seed point: 32.4% &rarr; 79.4%</span>
-    <span class="chip open">7 we never mark</span>
+    <span class="chip open">97.61% unprotected</span>
     <span class="chip open">our report: silent</span>
   </div>
 </div></header>
@@ -271,15 +271,81 @@
 </section>
 
 <section>
+  <span class="eyebrow">Tier 2 &middot; gem5 shadow taint</span>
+  <h2>What actually executes unprotected</h2>
+  <p class="sub">Static evidence cannot say whether an unmarked function <em>runs</em> with DIT clear. Shadow taint on registers and memory, checked at commit, seeded through an m5 op on the same key the compiler seed names. <strong>The null arm is the whole basis for reading a zero</strong>: same code, no hardening. If it were quiet, the seed never reached the crypto.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>arm</th><th>seed</th><th>under-taint ops</th><th>protected</th><th>sites</th><th>unprotected</th></tr></thead><tbody>
+    <tr><td><strong>null</strong></td><td>none (control)</td><td class="num">456,194</td><td class="num">0</td><td class="num">715</td><td class="num">100%</td></tr>
+    <tr class="rule-lane"><td><strong>create</strong></td><td class="fn">hydro_sign_create,4,pointee</td><td class="num cost"><strong>445,276</strong></td><td class="num">10,918</td><td class="num">611</td><td class="num cost"><strong>97.61%</strong></td></tr>
+    <tr><td><strong>both</strong></td><td class="fn">+ hydro_sign_keygen,0,pointee</td><td class="num">126</td><td class="num">456,068</td><td class="num">8</td><td class="num free"><strong>0.03%</strong></td></tr>
+  </tbody></table></div>
+  <div class="col"><p>Counts scale exactly with rounds (445,276 &times; 5 = 2,226,384), so one signature is representative. <strong>At the seed a developer writes first, 97.61% of every secret-carrying operation executes with <code>PSTATE.DIT</code> clear.</strong></p></div>
+</section>
+
+<section>
+  <span class="eyebrow">Resolution</span>
+  <h2>Three confirmed, one refuted, three not exercised</h2>
+  <p class="sub"><code>null</code> is the proof a function runs and touches a secret at all &mdash; without it a zero in a hardened arm cannot be told from &ldquo;never executed&rdquo;.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>function</th><th>null</th><th>create</th><th>both</th><th>verdict</th></tr></thead><tbody>
+    <tr class="rule-lane"><td class="fn">hydro_x25519_mul</td><td class="num">16,866</td><td class="num cost">16,866</td><td class="num free">0</td><td><strong>under-taint at the natural seed</strong></td></tr>
+    <tr class="rule-lane"><td class="fn">hydro_x25519_add</td><td class="num">5,632</td><td class="num cost">5,632</td><td class="num free">0</td><td><strong>under-taint at the natural seed</strong></td></tr>
+    <tr class="rule-lane"><td class="fn">hydro_hash_final</td><td class="num">12</td><td class="num cost">12</td><td class="num cost"><strong>12</strong></td><td><strong>under-taint at EVERY seed</strong></td></tr>
+    <tr><td class="fn">hydro_x25519_sc_montmul</td><td class="num">117</td><td class="num free">0</td><td class="num free">0</td><td><em>refuted</em> &mdash; the caller's region covers it</td></tr>
+    <tr><td class="fn">hydro_secretbox_setup</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td>never runs on this driver</td></tr>
+    <tr><td class="fn">hydro_sign_p2</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td>inlined; arithmetic is in its callees</td></tr>
+    <tr><td class="fn">hydro_sign_verify_p2</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td>inlined; arithmetic is in its callees</td></tr>
+  </tbody></table></div>
+  <div class="col"><p><code>sc_montmul</code> is the instructive one: it carries no taint of its own and is not <code>AlwaysEnteredWithDIT</code>, yet it runs protected because its call sites happen to sit inside the caller's region. <strong>No static evidence could have separated that from a real leak</strong>, which is exactly why this tier exists.</p></div>
+</section>
+
+<section>
+  <span class="eyebrow">Scale</span>
+  <h2>The seven were the tip</h2>
+  <p class="sub">At the natural seed the whole X25519 ladder runs clear, and the largest offender is not among the seven at all.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>function</th><th>ops with DIT clear</th><th>sites</th></tr></thead><tbody>
+    <tr class="rule-lane"><td class="fn">hydro_x25519_umaal</td><td class="num cost"><strong>291,335</strong></td><td class="num">101</td></tr>
+    <tr><td class="fn">hydro_x25519_propagate</td><td class="num">37,600</td><td class="num">58</td></tr>
+    <tr><td class="fn">hydro_x25519_sub</td><td class="num">28,160</td><td class="num">110</td></tr>
+    <tr><td class="fn">hydro_x25519_adc0</td><td class="num">21,494</td><td class="num">50</td></tr>
+    <tr><td class="fn">hydro_x25519_mul</td><td class="num">16,866</td><td class="num">6</td></tr>
+    <tr><td class="fn">gimli_core</td><td class="num">16,204</td><td class="num">70</td></tr>
+    <tr><td class="fn">hydro_x25519_condswap</td><td class="num">14,376</td><td class="num">96</td></tr>
+    <tr><td colspan="3">&hellip; 12 more</td></tr>
+  </tbody></table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Correction</span>
+  <h2>The static numbers are upper bounds</h2>
+  <div class="callout"><p>The static comparison credits us with <code>hydro_x25519_propagate</code>, <code>_sub</code> and <code>_canon</code> at the argument seed &mdash; all three scored &ldquo;both&rdquo;. The oracle says those same functions run with DIT clear for <strong>37,600 / 28,160 / 20</strong> ops at that seed. Both are right; the static method is what is wrong.</p>
+  <p>Every <code>x25519.h</code> line our analysis marked at that seed belongs to an <strong>inlined copy</strong> inside <code>hydro_sign_final_create</code> / <code>_final_verify</code> &mdash; 12 lines, checked against the <code>MachineFunction</code> column of the report. Mapping a source line back to its enclosing function cannot tell an inlined copy from the standalone function, so it credited us with covering functions we never touched.</p>
+  <p><strong>Read 32.4% and 79.4% as upper bounds on agreement.</strong> The oracle has no such problem: it works on committed PCs.</p></div>
+</section>
+
+<section>
+  <span class="eyebrow">Residual</span>
+  <h2>What still leaks at the best seed</h2>
+  <div class="col">
+    <p>126 ops at 8 sites, and they are not noise:</p>
+    <p><strong><code>hydro_hash_update</code></strong> (560 ops over 5 signatures, 4 sites), inlined into <code>hydro_sign_challenge</code> &mdash; the hash absorbing secret state. <strong><code>hydro_hash_final</code></strong> (60 ops) &mdash; one of the seven, <em>unfixed by any seed we tried</em>.</p>
+    <p><code>main</code> (10 ops) is the harness reading <code>sig[0]</code>. The signature is secret-<em>derived</em> but public by design, and we have no declassification tag &mdash; the <code>sinktaint</code> analogue we already knew we lacked. Not a library defect.</p>
+  </div>
+</section>
+
+<section>
   <span class="eyebrow">Limits</span>
   <h2>What this is not</h2>
   <div class="col">
-    <p><strong>Static evidence only for the seven.</strong> That they are unmarked and not <code>AlwaysEnteredWithDIT</code> is our pass's own accounting; that they are secret-dependent is CryptoMPK's finding plus the source. Confirming they <em>execute</em> with DIT off needs the gem5 shadow-taint oracle, not run here.</p>
+    <p><strong>The oracle is gem5, not silicon, and one driver.</strong> Three of the seven are simply not exercised by <code>libhydrogen_sign.c</code>, so they remain unresolved rather than cleared. The guest RNG is a fixed constant &mdash; SE mode implements neither <code>ppoll(2)</code> nor a readable <code>/dev/urandom</code> &mdash; which a simulator comparison needs anyway, and the question does not depend on entropy.</p>
+    <p><strong>No timing is quoted from the gem5 rig.</strong> SE mode writes <code>argv[0]</code> onto the initial stack, so binary path length shifts cycles by up to 0.84%. Under-taint PCs are unaffected: a static binary's code addresses do not move.</p>
     <p><strong>Their ground truth is imperfect too.</strong> Their <code>mxor</code> declassification is unsound at object granularity. Read 79% as agreement between two imperfect analyses, never as a score against truth.</p>
     <p><strong>The &ldquo;ours only&rdquo; set is not simply over-taint.</strong> Outside driver scope it is dominated by 17 <code>hydro_kx_*</code> and 8 <code>_hydro_pwhash_*</code> functions their drivers never call, reached by the module-wide secret-global rule on the RNG state. That rule is also the only route by which any seed reaches the <em>ephemeral</em> signing key, which is fresh randomness.</p>
     <p><strong>No timing.</strong> Experiment 04 already measured blanket DIT as free on libhydrogen, so there is no cost question to ask of this workload.</p>
   </div>
 </section>
 
-<footer><div class="col">libhydrogen as shipped in CryptoMPK's <code>dataset.tar.gz</code> (sha256 <code>ab8125b6&hellip;</code>) &middot; compiler <code>890af850b255</code> &middot; measured 2026&#8209;09&#8209;01</div></footer>
+<footer><div class="col">libhydrogen as shipped in CryptoMPK's <code>dataset.tar.gz</code> (sha256 <code>ab8125b6&hellip;</code>) &middot; compiler <code>845f69038a4e</code> &middot; gem5 Neoverse-V2 FDP &middot; measured 2026&#8209;09&#8209;01</div></footer>
 </div>

@@ -1,0 +1,22 @@
+# Where the 445,276 unprotected secret ops actually are, at the seed a developer
+# would write first. The seven were the tip: the whole X25519 ladder runs clear.
+function,undertaint_ops,undertaint_sites
+hydro_x25519_umaal,291335,101
+hydro_x25519_propagate,37600,58
+hydro_x25519_sub,28160,110
+hydro_x25519_adc0,21494,50
+hydro_x25519_mul,16866,6
+gimli_core,16204,70
+hydro_x25519_condswap,14376,96
+hydro_x25519_adc,11264,44
+hydro_x25519_add,5632,22
+hydro_x25519_core,1280,5
+hydro_x25519_ladder_part1,512,2
+hydro_hash_update,464,13
+gimli_core_u8,36,3
+hydro_x25519_canon,20,18
+gimli_pad_u8,12,6
+hydro_hash_final,12,2
+hydro_x25519_swapout,6,2
+main,2,2
+hydro_x25519_scalarmult,1,1

@@ -1,0 +1,12 @@
+# The seven functions experiment 08 found statically, resolved dynamically.
+# null = ops with a secret operand when nothing is hardened, i.e. proof the
+# function runs and touches a secret at all. Without that column a zero in the
+# hardened arms cannot be told from "never executed".
+function,null_ops,create_ops,both_ops,verdict
+hydro_x25519_mul,16866,16866,0,under-taint at the natural seed
+hydro_x25519_add,5632,5632,0,under-taint at the natural seed
+hydro_hash_final,12,12,12,under-taint at EVERY seed
+hydro_x25519_sc_montmul,117,0,0,"protected - the caller's region covers it, though it carries no taint of its own"
+hydro_secretbox_setup,0,0,0,never runs on this driver (the enc path)
+hydro_sign_p2,0,0,0,inlined; its arithmetic is in its callees
+hydro_sign_verify_p2,0,0,0,inlined; its arithmetic is in its callees
