@@ -50,3 +50,18 @@ unmodified patched form pulls in `<emmintrin.h>` and fails to compile, so
   `-debug-only=taint-interproc` before calling anything an under-taint.
 - **Do not compare raw totals.** Their set can only contain what their driver
   reaches; ours is the whole TU. `reachable.py` exists for this.
+
+## A note on `impl/gimli-core.h.orig` and `.rej`
+
+Left in place deliberately. They are CryptoMPK's own patch leftovers, and they
+settle which Gimli implementation their taint report covers. The `.rej` shows
+`libhydrogen_vector.patch` trying to rewrite `#ifdef __SSE2__` to `#ifndef`,
+**rejected because the tree already had it applied** - not because the change
+did not happen. So the shipped source is in the post-patch state, where an
+x86-64 host (which always defines `__SSE2__`) selects `gimli-core/portable.h`.
+Their report listing `impl/gimli-core/portable.h` lines confirms it
+independently.
+
+`impl/GPATH`, `GRTAGS`, `GTAGS` (GNU GLOBAL tag databases) and a stray
+`gimli-core1.h` also shipped in their tree and were removed here: binary build
+noise, not source.
