@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+#
+# Build the CIO-parity libsodium evaluation for gem5 SE mode: 6 library
+# variants, 7 arms, 5 of CIO's own drivers.
+#
+# This is the gem5 counterpart of utils/taint_libsodium_eval.sh +
+# taint_libsodium_sudo_run.sh, which target Apple silicon. It exists to run the
+# ONE experiment that silicon cannot: PSTATE.DIT with switch serialisation
+# removed. Experiment 09 concludes that the pass's whole cost is switch
+# serialisation with no dwell term, but on an M5 that rests on cycles-per-switch
+# coming out consistent across benchmarks -- a ratio derived by division. gem5
+# can turn the mechanism off and test it causally.
+#
+# HOST NOTE: this machine is aarch64 Linux (Neoverse-N1), so nothing is
+# cross-compiled and no sysroot is involved -- util/cross/taint-cross-cc is the
+# macOS path and is deliberately bypassed. The N1 has no FEAT_DIT, so these
+# binaries only ever execute under gem5.
+#
+# USAGE
+#   ./build_arms.sh                # all stages
+#   ./build_arms.sh lib            # library variants only
+#   ./build_arms.sh link           # relink drivers against existing libraries
+#
+# ENV
+#   LLVM=<dir>   taint LLVM build   (default ~/Documents/llvm-data-independent-timing/build)
+#   G5=<dir>     gem5-DIT tree      (default ~/Documents/gem5-DIT)
+#   SRC=<dir>    libsodium source   (default ~/Documents/libsodium-1.0.21)
+#   CIO=<dir>    CIO checkout       (their eval_*.c live here)
+#   WORK=<dir>   build root         (default ~/Documents/libsodium-cioparity)
+#   JOBS=<n>     make parallelism
+set -uo pipefail
+
+R="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LLVM="${LLVM:-$HOME/Documents/llvm-data-independent-timing/build}"
+G5="${G5:-$HOME/Documents/gem5-DIT}"
+SRC="${SRC:-$HOME/Documents/libsodium-1.0.21}"
+WORK="${WORK:-$HOME/Documents/libsodium-cioparity}"
+CIO="${CIO:?set CIO to a counter-optimization/cio checkout}"
+SEEDS="${SEEDS:-$G5/benchmarks/crypto/libsodium_secret.txt}"
+MARCH="${MARCH:-armv8.4-a}"
+JOBS="${JOBS:-32}"
+CC="$LLVM/bin/clang"
+
+BENCHES="${BENCHES:-ed25519 chacha20_poly1305_encrypt chacha20_poly1305_decrypt aesni256gcm_encrypt aesni256gcm_decrypt}"
+# arm -> library variant it links. `blanket` reuses the UNHARDENED base library
+# and adds a constructor, so blanket and base are one codegen in two modes.
+ARMS="${ARMS:-base blanket rt nop taint taintfn fine}"
+
+info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
+warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
+die()  { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
+STAGES="${*:-lib link}"
+want() { [[ " $STAGES " == *" $1 "* ]]; }
+
+[[ -x "$CC" ]]     || die "no clang at $CC"
+[[ -d "$SRC" ]]    || die "no libsodium source at $SRC"
+[[ -f "$SEEDS" ]]  || die "no seed file at $SEEDS"
+[[ -d "$CIO" ]]    || die "no CIO checkout at $CIO"
+[[ -f "$G5/include/gem5/m5ops.h" ]] || die "no m5ops.h under $G5/include"
+[[ -f "$G5/util/m5/build/arm64/out/libm5.a" ]] || die "no libm5.a -- build util/m5 for arm64"
+
+mkdir -p "$WORK"
+: > "$WORK/empty_seed.txt"
+
+lib_cflags() {
+  case "$1" in
+    # Unhardened. Also the blanket arm's library.
+    base)    echo "-O2" ;;
+    # Round-trip control: the full hardening pipeline with an EMPTY seed file,
+    # so zero switches are inserted. (rt - base) is the codegen cost of going
+    # through the pipeline at all, which must not be charged to DIT.
+    rt)      echo "-O2 -ftaint-harden=$WORK/empty_seed.txt" ;;
+    # Layout control: identical placement, identical instruction count, at
+    # identical addresses, every msr DIT emitted as HINT #0 so no mode switch
+    # ever executes. (taint - nop) is DIT's real cost; (nop - rt) is the pure
+    # code-layout cost of inserting switches. This arm is the reason the
+    # serialised-minus-renamed delta is interpretable rather than just a number.
+    nop)     echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-dit-nop-switches" ;;
+    # Shipped defaults: region placement, switch-cyc=30, loop hoist, mod-set gate.
+    taint)   echo "-O2 -ftaint-harden=$SEEDS" ;;
+    taintfn) echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-dit-placement=function" ;;
+    # Pre-2026-08-24 defaults. The arm that produced experiment 09's +153%/+166%
+    # column; a historical policy, not a default.
+    fine)    echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-dit-switch-cyc=0 -mllvm -taint-dit-loop-hoist=0" ;;
+    *) die "unknown variant: $1" ;;
+  esac
+}
+
+# ------------------------------------------------------------------ lib
+if want lib; then
+for v in base rt nop taint taintfn fine; do
+  W="$WORK/$v"
+  if [[ -f "$W/src/libsodium/.libs/libsodium.a" ]]; then
+    info "libsodium '$v' already built -- skipping"; continue
+  fi
+  info "libsodium variant '$v'"
+  rm -rf "$W"; mkdir -p "$W"
+  ( cd "$SRC" && tar cf - --exclude=.git --exclude='*.o' --exclude='*.lo' \
+      --exclude='*.a' --exclude='*.la' --exclude=.libs . ) | ( cd "$W" && tar xf - ) \
+    || die "could not copy source for $v"
+
+  # CIO seeds three symbols that only exist after THEIR rename patch, all
+  # statics in crypto_stream/chacha20/ref/chacha20_ref.c. Without this the seed
+  # file silently under-seeds: unmatched names are ignored without warning.
+  # \b matters -- stream_ref must not match inside stream_ref_xor_ic.
+  f="$W/src/libsodium/crypto_stream/chacha20/ref/chacha20_ref.c"
+  [[ -f "$f" ]] || die "not found: $f"
+  perl -pi -e 's/\bstream_ref\b/stream_ref_ref/g;
+               s/\bstream_ref_xor_ic\b/stream_ref_xor_ic_ref/g;
+               s/\bchacha20_encrypt_bytes\b/chacha20_encrypt_bytes_ref/g' "$f"
+  grep -q 'chacha20_encrypt_bytes_ref' "$f" || die "rename patch did not apply for $v"
+
+  # --disable-asm is REQUIRED, not a tuning choice: hand-written .S never goes
+  # through the pass, so anything in it would be invisible to the analysis.
+  # Experiment 09 builds the same way. --host forces autoconf's cross path so
+  # configure never RUNS a test binary -- these are built for armv8.4-a and this
+  # host is armv8.2-a, so a run test could die on an unsupported instruction.
+  ( cd "$W" && CC="$CC" \
+      ./configure --host=aarch64-linux-gnu \
+        --disable-shared --enable-static --disable-asm --disable-pie \
+        CFLAGS="-march=$MARCH $(lib_cflags "$v")" > configure.log 2>&1 ) \
+    || { tail -25 "$W/configure.log" >&2; die "configure failed for $v"; }
+  ( cd "$W" && make -j"$JOBS" > build.log 2>&1 ) \
+    || { tail -30 "$W/build.log" >&2; die "build failed for $v"; }
+
+  lib="$W/src/libsodium/.libs/libsodium.a"
+  [[ -f "$lib" ]] || die "no archive produced for $v"
+  n=$("$LLVM/bin/llvm-objdump" -d "$lib" 2>/dev/null | grep -icE '\bmsr\b[[:space:]]+dit,')
+  h=$("$LLVM/bin/llvm-objdump" -d "$lib" 2>/dev/null | grep -cE '\bhint\b[[:space:]]+#0')
+  info "    $(du -h "$lib" | cut -f1)   msr DIT: $n   hint #0: $h"
+done
+fi
+
+# ------------------------------------------------------------------ link
+if want link; then
+# CIO's drivers use a QUOTED include ("eval_util.h"), which searches the
+# directory of the including file BEFORE any -I path. So their x86 header always
+# wins in their own tree and -I cannot override it. Stage byte-identical copies
+# of the drivers next to our header instead, and record sha256 for each so
+# "unmodified" is a checkable claim rather than an assertion. CIO's checkout is
+# never written to.
+info "stage CIO drivers (byte-identical copies; only eval_util.h is ours)"
+STAGE="$WORK/src"
+mkdir -p "$STAGE" "$WORK/bin"
+cp -f "$R/eval_util.h" "$STAGE/eval_util.h"
+: > "$WORK/driver_sha256.txt"
+for b in $BENCHES; do
+  [[ -f "$CIO/eval_$b.c" ]] || continue
+  cp -f "$CIO/eval_$b.c" "$STAGE/eval_$b.c"
+  ( cd "$CIO" && sha256sum "eval_$b.c" ) >> "$WORK/driver_sha256.txt"
+done
+( cd "$STAGE" && sha256sum -c "$WORK/driver_sha256.txt" >/dev/null 2>&1 ) \
+  && info "    drivers byte-identical to the CIO checkout" \
+  || die "staged driver differs from CIO source"
+
+info "link"
+for b in $BENCHES; do
+  src="$STAGE/eval_$b.c"
+  [[ -f "$src" ]] || { warn "skip $b -- no $src"; continue; }
+  for arm in $ARMS; do
+    case "$arm" in blanket) v=base; extra="-DBLANKET_DIT" ;; *) v="$arm"; extra="" ;; esac
+    lib="$WORK/$v/src/libsodium/.libs/libsodium.a"
+    [[ -f "$lib" ]] || { warn "skip $b/$arm -- no library for '$v'"; continue; }
+    # NO_DYN_HIT_COUNTS: their opcode instrumentation is x86 and not our
+    # mitigation. The drivers are compiled at -O2, not CIO's -O0: at -O0 the
+    # volatile timer stores and unregistered argument setup land INSIDE the
+    # measured region and compress every ratio. Experiment 09 measured both and
+    # recorded -O0 as worth at most +0.8pp.
+    "$CC" -march="$MARCH" -O2 -std=gnu18 -static -fomit-frame-pointer \
+        -DNO_DYN_HIT_COUNTS $extra \
+        -I"$R" -I"$G5/include" -I"$WORK/$v/src/libsodium/include" \
+        -o "$WORK/bin/eval_${b}.${arm}" "$src" "$R/blanket_ctor.c" \
+        "$lib" -L"$G5/util/m5/build/arm64/out" -lm5 -lm \
+      >"$WORK/bin/.link_${b}_${arm}.log" 2>&1 \
+      || { warn "link failed $b/$arm"; tail -6 "$WORK/bin/.link_${b}_${arm}.log" >&2; continue; }
+  done
+  printf '    %-34s %s\n' "$b" "$(ls "$WORK/bin/eval_${b}."* 2>/dev/null | wc -l) arms"
+done
+ls -la "$WORK/bin"/eval_* 2>/dev/null | awk '{printf "  %10s  %s\n", $5, $9}' | head -40
+fi
+
+info "done: $STAGES"

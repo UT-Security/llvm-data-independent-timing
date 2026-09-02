@@ -1,0 +1,158 @@
+PMULL 64x64 -> 128 (FEAT_PMULL) in gem5 -- what was changed and how it was validated
+=====================================================================================
+
+Patch:  gem5-DIT branch `pmull64`, 2 files, +29/-5
+        src/arch/arm/isa/insts/neon64.isa    instantiate PmullX/Pmull2X for uint64_t
+        src/arch/arm/isa/formats/neon64.isa  decode size==3 to those instantiations
+Built:  build/ARM/gem5.opt, config byte-identical to the unpatched shared build
+        (diff of build/ARM/gem5.build/config: no differences)
+
+WHY THE PATCH IS THIS SMALL
+    No new arithmetic was written. pmullCode in insts/neon64.isa is already a
+    generic shift-and-xor carry-less multiply over Element/BigElement, and
+    templates/neon.isa already specialises bigger_type_t<uint64_t> to
+    __uint128_t. Instantiating for uint64_t gives
+    eCount = rCount * sizeof(uint32_t) / sizeof(uint64_t) = 1, so the loop runs
+    once over one 64-bit element and writes one 128-bit result -- the
+    architectural shape. hi=True reads source words 2 and 3, i.e. the upper 64
+    bits, which is PMULL2's operand selection. The previous code returned
+    Unknown64 for every size != 0, and the source carried the comment
+    "Note: 64-bit PMULL is not available (Crypto. Extension)".
+
+
+1. CORRECTNESS OF THE MULTIPLY -- against real hardware, not against itself
+---------------------------------------------------------------------------
+The obvious test would compare gem5's shift-and-xor loop to a shift-and-xor loop
+written for the test. That compares an algorithm with itself and proves nothing,
+so it was not done. Instead:
+
+  a) ALGEBRAIC known answers, derived from the definition of multiplication in
+     GF(2)[x] rather than computed by any loop:
+        clmul(2,2)   = 4                      x * x = x^2
+        clmul(3,3)   = 5                      (1+x)^2 = 1 + x^2, cross term vanishes
+        clmul(7,7)   = 0x15                   (1+x+x^2)^2
+        clmul(2^63,2^63) = 2^126
+        clmul(2^40,2^23) = 2^63               straddles the 64-bit result boundary
+        clmul(2^40,2^24) = 2^64               first bit of the high half
+        clmul(~0,~0) = 0x5555...5555          (sum x^i)^2 = sum x^{2i}
+  b) STRUCTURAL properties: commutativity, and bilinearity over GF(2) in both
+     arguments -- clmul(a^a2,b) == clmul(a,b) ^ clmul(a2,b). Bilinearity
+     constrains the whole map rather than isolated points.
+  c) OPERAND SELECTION, the part no arithmetic check would catch: PMULL must
+     read the LOW 64-bit element of each source and PMULL2 the HIGH one, tested
+     with vectors whose halves differ, plus a check that PMULL2 does not pick up
+     the low half.
+
+  THE INDEPENDENT ORACLE. This host is a Neoverse-N1 and /proc/cpuinfo lists
+  `pmull`, so it implements FEAT_PMULL in hardware. The same static binary was
+  run natively and under patched gem5:
+
+      15/15 checks pass natively   (real N1 silicon)
+      15/15 checks pass under gem5 (patched)
+      diff of the two outputs: BYTE-IDENTICAL
+
+  NEGATIVE CONTROL. The same binary under the unpatched build:
+      src/arch/arm/faults.cc:787: panic: Attempted to execute unknown
+      instruction (inst 0x0ee1e002)
+  So the test does exercise the new decode path. A passing result on a test the
+  old build also passed would have meant nothing.
+
+  Test source: pmull_test/pmull64_test.c
+
+
+2. THE CRYPTO ACTUALLY VERIFIES
+-------------------------------
+CIO's AEAD drivers encrypt, then decrypt their own ciphertext and print
+"FAILURE: ... sanity check" and exit(0) on mismatch. Across all 24 AES-GCM cells
+the count of FAILURE / Assertion / misuse lines in the gem5 logs is 0, so GHASH
+and the AES rounds produce self-consistent results over 50 measured operations
+per cell. libsodium also refuses the aes256gcm path entirely unless its runtime
+check accepts the backend, and it did not refuse.
+
+Not done: libsodium's own `make check` AES-GCM known-answer vectors under SE
+mode. The driver round-trip is weaker than a KAT -- it would not catch an error
+that is self-consistent in both directions. Worth adding before quoting these
+numbers as anything but internally consistent.
+
+
+3. NO REGRESSION
+----------------
+util/dit/validate_dit.py, 17 checks, run twice from the same tree with only the
+simulator swapped (--gem5 selects the binary):
+
+    unpatched shared build, HEAD 2acf7637bc : 13/17 passed
+    patched build,          HEAD 2acf7637bc : 13/17 passed
+    diff of the two check-by-check outputs  : IDENTICAL
+
+  All 9 feat_dit/* architectural checks pass on both. The 4 saverestore/*
+  numCycles mismatches are PRE-EXISTING and identical in both runs to the digit
+  (241358 vs 241419, 243228 vs 243195, 242377 vs 242375, 195150 vs 195162): the
+  manifest was recorded at ab710d6516 and the tree is 5 commits further on, so
+  the expectations are stale, not moved by this patch. leak/* needed
+  benchmarks/dit_probe/bin/dit_probe_arm64, which is untracked and therefore
+  absent from a fresh worktree; copied in, both pass.
+
+  BIT-IDENTITY on code that executes no PMULL. chacha20-poly1305 encrypt, arms
+  base/nop/taint x spec/serdit, same binaries and same $WORK, only the simulator
+  differing:
+
+      cell             unpatched   patched   insts same
+      base/spec           111331    111331   yes
+      base/serdit         111331    111331   yes
+      nop/spec            111756    111756   yes
+      nop/serdit          111756    111756   yes
+      taint/spec          110329    110329   yes
+      taint/serdit        201200    201200   yes
+
+  Note this could NOT be checked against the parent sweep's recorded numbers:
+  canon() hard-links each arm to a fixed-WIDTH path under $WORK, and this rig's
+  WORK ends "-aes" against the parent's "-wl". One character changes argv[0]'s
+  length, which shifts the initial process stack and the cycle count -- the
+  documented argv[0] trap. Swapping only the simulator isolates the variable
+  properly.
+
+
+WHAT THE PATCH DOES NOT COVER
+-----------------------------
+* NO FEATURE GATE. Architecturally PMULL at size==3 requires FEAT_PMULL
+  (ID_AA64ISAR0_EL1.AES == 2). This patch decodes it unconditionally, so a
+  configuration that does not advertise FEAT_PMULL will still execute it. The
+  pre-existing 8-bit PMULL is likewise ungated, and AESE64/AESD64/AESMC64 do
+  carry an enable_check, so this is a real inconsistency with the surrounding
+  code. It is permissive in the direction that cannot cause a false pass for
+  this experiment, but it should be gated before the patch goes anywhere near
+  upstream.
+* TIMING IS THE GENERIC SimdMultOp CLASS, not a measured FEAT_PMULL latency.
+  The instruction is modelled with whatever latency the Neoverse-V2 config gives
+  SimdMultOp. A real core's PMULL64 latency may differ, so ABSOLUTE AES-GCM
+  cycle counts here are not a claim about any silicon. The switch-model DELTA is
+  unaffected: it is a difference between two runs of the same binary in which
+  every PMULL is modelled identically.
+* Only sizes 0 and 3 decode. Sizes 1 and 2 remain Unknown64, which is correct --
+  they are architecturally unallocated.
+* No SVE/SVE2 PMULL forms were touched.
+
+
+4. THE COMMITTED SOURCE IS THE VALIDATED SOURCE
+-----------------------------------------------
+A comment line was reflowed after the first build, to satisfy gem5's 79-column
+pre-commit hook, so the binary that produced the numbers above was built from
+source differing from the commit by comment text. Only a `#` comment inside the
+ISA description changed, which cannot alter generated code, but that was
+verified rather than assumed:
+
+    rebuilt from committed b328f8e719, re-ran the hardware comparison
+        -> still BYTE-IDENTICAL to the native Neoverse-N1 output
+    re-ran aesni256gcm_encrypt/taint under both switch models
+        -> spec 1210.0 and serdit 1572.0 cyc/op, matching the swept values
+           to the decimal
+
+Commit: gem5-DIT b328f8e719 on branch pmull64
+        "arch-arm: implement PMULL/PMULL2 at size=3 (64x64 -> 128)"
+        2 files changed, 30 insertions(+), 5 deletions(-)
+Not pushed.
+
+The shared tree at ~/Documents/gem5-DIT was left untouched throughout: its
+build/ARM/gem5.opt still dates from Sep 2 01:09 and its checkout is still
+2acf7637bc with only the two pre-existing untracked binary directories. Its
+gem5.opt was executed read-only, as the unpatched baseline.

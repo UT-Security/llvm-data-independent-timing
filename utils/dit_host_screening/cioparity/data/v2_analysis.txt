@@ -1,0 +1,116 @@
+====================================================================================================
+ARMS  cycles/op, and % against `base` (the MIR round-trip control)
+====================================================================================================
+benchmark                   arm            spec cyc/op     spec %   serdit cyc/op   serdit %  switches/op
+aesni256gcm_decrypt         base                 1,088     +0.00%           1,088     +0.00%          0.0
+aesni256gcm_decrypt         blanket              1,182     +8.64%           1,182     +8.64%          0.0
+aesni256gcm_decrypt         taint                1,180     +8.46%           1,647    +51.38%         15.0
+aesni256gcm_decrypt         taintnop             1,094     +0.51%           1,094     +0.51%          0.0
+aesni256gcm_decrypt         taintfn              1,216    +11.76%           1,695    +55.79%         15.0
+aesni256gcm_decrypt         taintfnnop           1,096     +0.75%           1,096     +0.75%          0.0
+aesni256gcm_decrypt         fine                 1,101     +1.19%           1,607    +47.70%         18.0
+aesni256gcm_decrypt         finenop              1,014     -6.82%           1,014     -6.82%          0.0
+
+aesni256gcm_encrypt         base                 1,219     +0.00%           1,219     +0.00%          0.0
+aesni256gcm_encrypt         blanket              1,221     +0.15%           1,221     +0.15%          0.0
+aesni256gcm_encrypt         taint                1,210     -0.75%           1,572    +28.94%         15.0
+aesni256gcm_encrypt         taintnop             1,206     -1.07%           1,206     -1.07%          0.0
+aesni256gcm_encrypt         taintfn              1,212     -0.59%           1,588    +30.28%         15.0
+aesni256gcm_encrypt         taintfnnop           1,214     -0.43%           1,214     -0.43%          0.0
+aesni256gcm_encrypt         fine                 1,225     +0.48%           1,812    +48.62%         26.0
+aesni256gcm_encrypt         finenop              1,224     +0.40%           1,224     +0.40%          0.0
+
+chacha20_poly1305_decrypt   base                 2,270     +0.00%           2,270     +0.00%          0.0
+chacha20_poly1305_decrypt   blanket              2,367     +4.27%           2,367     +4.27%          0.0
+chacha20_poly1305_decrypt   taint                2,353     +3.66%           4,337    +91.07%         98.0
+chacha20_poly1305_decrypt   taintnop             2,337     +2.94%           2,337     +2.94%          0.0
+chacha20_poly1305_decrypt   taintfn              2,355     +3.77%           4,359    +92.06%         98.0
+chacha20_poly1305_decrypt   taintfnnop           2,336     +2.93%           2,336     +2.93%          0.0
+chacha20_poly1305_decrypt   fine                 2,398     +5.65%           4,866   +114.39%        134.0
+chacha20_poly1305_decrypt   finenop              2,449     +7.89%           2,449     +7.89%          0.0
+
+chacha20_poly1305_encrypt   base                 2,227     +0.00%           2,227     +0.00%          0.0
+chacha20_poly1305_encrypt   blanket              2,250     +1.03%           2,249     +1.02%          0.0
+chacha20_poly1305_encrypt   taint                2,207     -0.90%           4,024    +80.72%         94.0
+chacha20_poly1305_encrypt   taintnop             2,235     +0.38%           2,235     +0.38%          0.0
+chacha20_poly1305_encrypt   taintfn              2,230     +0.15%           4,157    +86.70%         94.0
+chacha20_poly1305_encrypt   taintfnnop           2,228     +0.07%           2,228     +0.07%          0.0
+chacha20_poly1305_encrypt   fine                 2,276     +2.22%           4,584   +105.88%        126.0
+chacha20_poly1305_encrypt   finenop              2,301     +3.34%           2,301     +3.34%          0.0
+
+ed25519                     base                78,044     +0.00%          78,044     +0.00%          0.0
+ed25519                     blanket             78,380     +0.43%          78,065     +0.03%          0.0
+ed25519                     taint               76,803     -1.59%          79,084     +1.33%         85.0
+ed25519                     taintnop            76,816     -1.57%          76,816     -1.57%          0.0
+ed25519                     taintfn             77,477     -0.73%          79,266     +1.57%         80.0
+ed25519                     taintfnnop          76,844     -1.54%          76,844     -1.54%          0.0
+ed25519                     fine                78,304     +0.33%          82,574     +5.80%        195.0
+ed25519                     finenop             78,064     +0.03%          78,064     +0.03%          0.0
+
+====================================================================================================
+DECOMPOSITION  percentage points of `base`, for the shipped `taint` arm
+====================================================================================================
+benchmark                        layout    renamed  serialising      total     sw/op   wr/Mcyc    floor
+aesni256gcm_decrypt              +0.51     +7.94      +42.92    +51.38      15.0     13787    0.00%
+aesni256gcm_encrypt              -1.07     +0.31      +29.69    +28.94      15.0     12303    0.00%
+chacha20_poly1305_decrypt        +2.94     +0.71      +87.42    +91.07      98.0     43176    0.00%
+chacha20_poly1305_encrypt        +0.38     -1.28      +81.62    +80.72      94.0     42217    0.00%
+ed25519                          -1.57     -0.02       +2.92     +1.33      85.0      1089    0.00%
+
+
+====================================================================================================
+PER SWITCH  cycles, from a difference between binaries that differ only
+            in whether the switch executes -- not a ratio of one measurement
+====================================================================================================
+benchmark                        renamed   serialising     ratio
+aesni256gcm_decrypt                  5.8          36.9      6.4x
+aesni256gcm_encrypt                  0.3          24.4   ~0 base
+chacha20_poly1305_decrypt            0.2          20.4   ~0 base
+chacha20_poly1305_encrypt           -0.3          19.0   ~0 base
+ed25519                             -0.2          26.7   ~0 base
+median                               0.2          24.4   ~0 base
+
+  The transferable claim is the CONSISTENCY of these columns across
+  independent benchmarks, not any single row.
+
+  NOT a closure check. rate x cost reproduces the measured total
+  identically -- rate is switches/base-cycles and cost is
+  delta-cycles/switches, so the product is delta-cycles/base-cycles
+  by algebra, whatever the numbers. Printing it as agreement would
+  be the same self-reproducing ratio experiment 09 warns about.
+
+  Independent reference points for the serialising column:
+    34.3 cyc/write  experiment 06, gem5 Neoverse-V2, mbedTLS record MAC
+    76.3 cyc/write  experiment 06, same workload at a 53x lower rate
+    ~41 cyc/switch  experiment 09, Apple M5 silicon, this library
+    ~24 cyc/switch  experiment 02, Apple M5 silicon
+====================================================================================================
+PER-POLICY LAYOUT vs SWITCHES  each policy against ITS OWN nop arm
+====================================================================================================
+  layout  = (policyNOP - base)      code layout alone, no switch executes
+  renamed = (policy - policyNOP)    the switches executing, renamed
+  serial  = (policy@serdit - policy@spec)
+  A policy with a large NEGATIVE layout term is winning on the codegen
+  lottery, not on placement. That is not a ranking of placement quality.
+
+benchmark                 policy       layout  renamed   serial    total  sw/op   dwell
+aesni256gcm_decrypt       taint        +0.51    +7.94   +42.92   +51.38     15     96%
+aesni256gcm_decrypt       taintfn      +0.75   +11.01   +44.03   +55.79     15     95%
+aesni256gcm_decrypt       fine         -6.82    +8.01   +46.51   +47.70     18     94%
+
+aesni256gcm_encrypt       taint        -1.07    +0.31   +29.69   +28.94     15     96%
+aesni256gcm_encrypt       taintfn      -0.43    -0.16   +30.87   +30.28     15     95%
+aesni256gcm_encrypt       fine         +0.40    +0.07   +48.15   +48.62     26     91%
+
+chacha20_poly1305_decrypt taint        +2.94    +0.71   +87.42   +91.07     98     90%
+chacha20_poly1305_decrypt taintfn      +2.93    +0.83   +88.29   +92.06     98     90%
+chacha20_poly1305_decrypt fine         +7.89    -2.24  +108.74  +114.39    134     87%
+
+chacha20_poly1305_encrypt taint        +0.38    -1.28   +81.62   +80.72     94     90%
+chacha20_poly1305_encrypt taintfn      +0.07    +0.09   +86.54   +86.70     94     90%
+chacha20_poly1305_encrypt fine         +3.34    -1.12  +103.66  +105.88    126     88%
+
+ed25519                   taint        -1.57    -0.02    +2.92    +1.33     85     99%
+ed25519                   taintfn      -1.54    +0.81    +2.29    +1.57     80     99%
+ed25519                   fine         +0.03    +0.31    +5.47    +5.80    195     99%
+
