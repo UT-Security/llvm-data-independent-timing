@@ -86,6 +86,13 @@ extern cl::opt<bool> TaintDITAbi;
 /// cost.
 extern cl::opt<bool> TaintNoTailCalls;
 
+/// Treat a call argument that is the address of a tainted frame object as
+/// passing a secret, in both directions (the mod-set gate's call-site test and
+/// the caller->callee parameter marking). Closes the caller->callee half of the
+/// frame-address gap; DEFAULT OFF pending measurement, see
+/// docs/design/p1b-frame-provenance.md §4.
+extern cl::opt<bool> TaintFrameAddrArgs;
+
 /// Stamp the hardening-wide tail-call disable (\see TaintNoTailCalls) on every
 /// definition in \p M, and return how many functions were stamped.
 ///
