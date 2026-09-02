@@ -314,6 +314,71 @@ It does: ed25519 3141 -> 3263, chacha enc 2720 -> 2694, chacha dec 2979 -> 2960,
 and cycles-per-switch 33.1 -> 33.4, 24.3 -> 25.2, 28.9 -> 28.5. The numerators
 did not move; the ratios did.
 
+### The same table as ratios
+
+Apple **M4** (Mac16,10), corrected CNTVCT timing. Every arm as a multiplier
+against arm `A`, the unhardened MIR round-trip control. `data/m4_results_ratios.csv`
+carries this for both timers.
+
+| benchmark | ns/op | cyc/op | blanket | pass | func | old def | resolved | nopsw |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| ed25519 sign | 7,828 | 34,506 | **1.0087x** | 1.0946x | 1.0884x | 1.1457x | 1.0900x | 0.9962x |
+| chacha20-poly1305 enc | 251 | 1,108 | **1.0127x** | 3.4316x | 3.4117x | 4.4134x | 3.4288x | 0.9760x |
+| chacha20-poly1305 dec | 256 | 1,129 | **1.0207x** | 3.6217x | 3.5859x | 4.7164x | 3.6306x | 1.0024x |
+| aes256-gcm enc | 62 | 272 | **1.0015x** | 3.3389x | 3.3165x | 5.0391x | 3.3672x | 1.0870x |
+| aes256-gcm dec | 82 | 360 | **1.0081x** | 2.9496x | 2.9016x | 3.4014x | 2.9726x | 0.9838x |
+| argon2id | 50,489,010 | 222,555,555 | **0.9981x** | 0.9963x | 0.9958x | 0.9955x | 0.9949x | 0.9950x |
+
+The ratio form makes the shape plainer than percentages do:
+
+- **Blanket is 1.00x-1.02x on all six**, and below 1 on argon2id. The mode is free.
+- **Selective placement is 2.9x-3.6x on the four short calls and 1.09x on ed25519.**
+  That spread IS the finding: cost tracks toggles per unit work, so it disappears
+  into a long operation and dominates a short one.
+- **The pre-2026-08-24 defaults reach 5.04x** on aes256-gcm encrypt - worse than
+  CIO's own published 3.66x `__text` growth, which is a blunt way to say how badly
+  the finest-grain placement lost.
+- **`func` is below `pass` on every row.** Coarser wins everywhere.
+- **`nopsw` sits at ~1.00x**, so code movement costs nothing - except aes256-gcm
+  encrypt at 1.0870x, where layout alone is a real part of that row's 3.34x.
+
+`ns/op` is what was measured; `cyc/op` is derived from it at the gate-measured
+4,408 MHz.
+
+### Running this on another host
+
+The M4 numbers above came from the corrected timer and the seven-arm set. To get
+a comparable set on another machine, build the arms and then:
+
+```sh
+sudo -E env LLVM_BIN=<toolchain>/bin CIO_DIR=~/Documents/cio-eval \
+  CIO_OPT=-O2 CHEAP_TIMER=1 OURS=ditprobe CIO_REPS=15 \
+  ARMS="A:baseline:0 C:baseline:1 P:hardened:0 F:func:0 X:fine:0 N:narrow:0 Z:nopsw:0" \
+  bash utils/taint_libsodium_sudo_run.sh
+```
+
+Run it **twice**, once with `CHEAP_TIMER=1` and once without, so the host's own
+instrumentation offset is visible rather than assumed; then
+`sudo -E utils/cio_offset_probe.c` compiled per its header measures that offset
+directly. The offset is a property of the instrument and differs per host - do not
+carry M4's 3,234 cycles over to another machine.
+
+**Data file naming.** The unprefixed files in `data/` are the original M5 run
+(kperf-timed, 2026-09-01). Everything from a later host takes a host prefix, so
+runs never collide:
+
+| | file |
+|---|---|
+| original M5 | `cio_benchmarks_O2.csv`, `ditprobe_gates.csv`, `results_summary.csv`, ... |
+| M4 | `m4_cio_benchmarks_{kperf,cntvct}_timed.csv`, `m4_results_summary.csv`, `m4_results_ratios.csv`, ... |
+| a re-run on M5 | `m5_*`, matching the M4 names - do NOT overwrite the unprefixed originals, which are what the published headline table above was computed from |
+
+Two things worth checking on any new host, because both bit here: gate 1 is a
+ratio whose ceiling is that core's L1 load-to-use latency, so read it as
+cycles/hop and not as a multiple; and `CNTFRQ_EL0` is not `hw.tbfrequency` (1 GHz
+vs 24 MHz on M4), so confirm the tick length before trusting any absolute number
+from the corrected timer.
+
 ### What the NOP-switch control bought
 
 Arm `Z` is arm `P` with all 521 `msr DIT` emitted as `nop` -- same instruction
