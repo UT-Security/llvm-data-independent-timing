@@ -271,6 +271,13 @@ cl::opt<bool> llvm::TaintArgProvenance(
              "clobbering all of the caller's memory (B1)"),
     cl::init(false), cl::Hidden);
 
+cl::opt<bool> llvm::TaintArgPointeeArgs(
+    "taint-arg-pointee-args",
+    cl::desc("Treat a call argument that points at a tainted arg pointee as "
+             "passing a secret (B2; needs -taint-arg-provenance to have named "
+             "the object, and is additive, so measure it on its own)"),
+    cl::init(false), cl::Hidden);
+
 cl::opt<bool> llvm::TaintFrameAddrArgs(
     "taint-frame-addr-args",
     cl::desc("Treat a call argument that points at a tainted frame object as "
@@ -897,12 +904,25 @@ CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
     // object holds any secret, not whether the callee reads that exact range,
     // which the call site cannot know. Over-approximating is the safe
     // direction, and this only ever ADDS taint, so it cannot introduce a leak.
-    if (TaintFrameAddrArgs)
-      if (auto FI = S.getFrameRef(MO.getReg()))
-        if (S.anyTaintedStackCellForFI(*FI)) {
-          R.Pointee = true;
-          R.PointeeMask |= uint8_t(1u << Idx);
-        }
+    // The same reasoning applies to EITHER nameable base. Frame(FI) is gap A;
+    // Arg(k) is gap B's consumption half (B2), where the object we are handing
+    // on is one our OWN caller gave us and a callee already filled with a
+    // secret. Without B2 the naming B1 records is never acted on: the pointer
+    // is passed, no register carries taint, and the callee learns nothing.
+    //
+    // The Arg case is inert unless -taint-arg-provenance populated the base in
+    // the first place, so -taint-arg-pointee-args alone cannot change anything.
+    if (auto B = S.getPointerBase(MO.getReg())) {
+      const bool PointsAtSecret =
+          B->K == TaintState::PointerBase::Frame
+              ? (TaintFrameAddrArgs && S.anyTaintedStackCellForFI(B->Index))
+              : (TaintArgPointeeArgs &&
+                 S.isTaintedArgPointee((unsigned)B->Index));
+      if (PointsAtSecret) {
+        R.Pointee = true;
+        R.PointeeMask |= uint8_t(1u << Idx);
+      }
+    }
   }
   // Stack-passed arguments. AAPCS64 puts arguments past the eighth (and large
   // aggregates) in the outgoing argument area, and the argument registers are
@@ -1023,6 +1043,17 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
   // case B1 exists for.
   if ((FOM && !FOM->empty()) || TaintArgProvenance) {
     const TargetInstrInfo *TIIp = MI.getMF()->getSubtarget().getInstrInfo();
+
+    // Read the SOURCE's provenance before the defs are killed. `add x0, x0, #32`
+    // - the exact shape of an interior pointer into an argument - reads and
+    // writes the same register, so killing first loses the base we are about to
+    // propagate. This cost a silent no-result on the interior-pointer repro.
+    std::optional<TaintState::PointerBase> SrcBase;
+    if (MI.isCopy() && MI.getOperand(1).isReg())
+      SrcBase = S.getPointerBase(MI.getOperand(1).getReg());
+    else if (auto AI = matchAddImm(MI, TIIp))
+      SrcBase = S.getPointerBase(AI->first);
+
     for (const MachineOperand &MO : MI.all_defs())
       if (MO.isReg() && MO.getReg().isValid())
         S.clearFrameRef(MO.getReg());
@@ -1031,10 +1062,9 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       // arithmetic is deliberately not followed, because a computed offset can
       // leave the object and mis-attributing is the one direction that
       // under-taints.
-      if (auto B = S.getPointerBase(MI.getOperand(1).getReg()))
-        S.setPointerBase(MI.getOperand(0).getReg(), *B);
-    } else if (auto AI = FOM && !FOM->empty() ? matchAddImm(MI, TIIp)
-                                              : std::nullopt) {
+      if (SrcBase)
+        S.setPointerBase(MI.getOperand(0).getReg(), *SrcBase);
+    } else if (auto AI = matchAddImm(MI, TIIp)) {
       const MachineFunction *MFp = MI.getMF();
       Register FP = TRI->getFrameRegister(*MFp);
       Register SP = MFp->getSubtarget()
@@ -1042,10 +1072,33 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
                         ->getStackPointerRegisterToSaveRestore();
       Register Dst = MI.getOperand(0).getReg();
       bool DstIsBase = (SP.isValid() && Dst == SP) || (FP.isValid() && Dst == FP);
-      if (!DstIsBase &&
-          ((SP.isValid() && AI->first == SP) || (FP.isValid() && AI->first == FP)))
-        if (auto FI = FOM->resolve(AI->first, AI->second))
-          S.setFrameRef(Dst, *FI);
+      const bool BaseIsSPOrFP =
+          (SP.isValid() && AI->first == SP) || (FP.isValid() && AI->first == FP);
+      if (!DstIsBase && BaseIsSPOrFP) {
+        // `$sp + imm` naming one of our own frame objects (P1b). Needs the map.
+        if (FOM && !FOM->empty())
+          if (auto FI = FOM->resolve(AI->first, AI->second))
+            S.setFrameRef(Dst, *FI);
+      } else if (!DstIsBase && TaintArgProvenance) {
+        // An INTERIOR POINTER into an argument's object: `&csig[32]`. This is
+        // the shape gap B actually takes in real code - libhydrogen's
+        // `hydro_sign_prehash` hands `&csig[NONCEBYTES]` to the callee that
+        // fills it - and following copies alone does not reach it.
+        //
+        // At whole-object granularity the displacement need not be stored: an
+        // interior pointer into argument k's object is still argument k's
+        // object. GCC's ipa-modref keeps exactly this much (`parm_index`
+        // survives; only `parm_offset_known` is lost when the displacement is
+        // not constant).
+        //
+        // ONLY for an Arg base, never a Frame one. Frame objects are adjacent
+        // and their bounds are known, so `&frame_A + large` can land in frame_B
+        // and attributing it to A would UNDER-taint. An argument's object has
+        // bounds we cannot see, and in well-defined C arithmetic within an
+        // object stays inside it - the same assumption `parm_offset` makes.
+        if (SrcBase && SrcBase->K == TaintState::PointerBase::Arg)
+          S.setPointerBase(Dst, *SrcBase);
+      }
     }
   }
 

@@ -7,6 +7,20 @@
 // RUN:     -ftaint-harden=%S/Inputs/taint-arg-provenance-seed.txt \
 // RUN:     -mllvm -debug-only=taint-analysis %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=OFF
+//
+// B2 (consumption). B1 only NAMES the object; passing the pointer onward still
+// transfers nothing until B2 acts on the name. With both, the callee's own
+// parameter is marked and its body is analysed.
+// RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o /dev/null \
+// RUN:     -ftaint-harden=%S/Inputs/taint-arg-provenance-seed.txt \
+// RUN:     -mllvm -taint-arg-provenance -mllvm -taint-arg-pointee-args \
+// RUN:     -mllvm -debug-only=taint-interproc %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=B2
+// RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o /dev/null \
+// RUN:     -ftaint-harden=%S/Inputs/taint-arg-provenance-seed.txt \
+// RUN:     -mllvm -taint-arg-provenance \
+// RUN:     -mllvm -debug-only=taint-interproc %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=B1ONLY
 
 // B1: name the object an incoming pointer argument points at, so a callee's
 // arg-pointee mod-set applies to that object instead of clobbering all of the
@@ -50,3 +64,10 @@ unsigned long via_argptr(unsigned long *buf, const unsigned long *key) {
 // loses the naming still fails.
 // ON: writes secret through a pointer arg (P1b/B1: named
 // OFF: writes secret through a pointer arg (P1a: blunt clobber, provenance unknown)
+
+// B1 alone must NOT reach the onward callee - that is what makes B2 a separable,
+// separately measurable half rather than a detail of B1. (Do not pin
+// "analyzing function consume": the module pass visits every function whether or
+// not it finds taint, so that marker is always present and proves nothing.)
+// B2: callee consume: arg 0 now pointee-tainted (our own arg 0 holds a secret
+// B1ONLY-NOT: callee consume: arg 0 now pointee-tainted
