@@ -50,6 +50,17 @@ CIO_REPS="${CIO_REPS:-15}"
 # CIO_OPT=-O2 measures the same experiment the way an application would build it.
 # The library archives are -O2 either way; only the driver changes.
 CIO_OPT="${CIO_OPT:--O0}"
+# CHEAP_TIMER=1 makes the driver's per-iteration samples come from CNTVCT_EL0
+# instead of the kperf counter read. The kperf read is a call into the kperf
+# driver and its cost lands INSIDE the timed region: 3234 cycles on M4, measured
+# with utils/cio_offset_probe.c. That cancels in arm-vs-arm differences but not
+# in ratios, and it is 72-87% of the measured baseline on chacha/AES, so it
+# deflates those percentage rows by 3.6-14x. Percentages are unit-free, so
+# CNTVCT (21-cycle offset) serves them better. OFF by default: the numbers in
+# paper_experiments/09 came from the kperf timing and stay reproducible.
+# NOTE the samples change UNITS when this is on -- CNTVCT ticks, 1 ns on M4.
+CHEAP_TIMER="${CHEAP_TIMER:-0}"
+CHEAP=""; [[ "$CHEAP_TIMER" == 1 ]] && CHEAP="-DCIO_SHIM_CHEAP_TIMER"
 INC="$WORK/src/libsodium/include"
 SHIM="$REPO_ROOT/utils/cio_arm_shim.h"
 
@@ -85,6 +96,19 @@ info "    output -> $OUT"
   echo "root: $([[ $(id -u) -eq 0 ]] && echo yes || echo no)"; echo "llvm: $LLVM_BIN"
   "$LLVM_BIN/llc" --version 2>/dev/null | sed -n '2,3p'
   echo "reps: ours=$REPS cio=$CIO_REPS"; echo "cio driver opt: $CIO_OPT"; echo "arms: $ARMS"
+  echo "region timer: $([[ "$CHEAP_TIMER" == 1 ]] && echo 'cntvct_el0 (cheap; samples are TICKS not cycles)' || echo 'kperf counter read (carries the ~3234-cycle region offset)')"
+  # CNTFRQ_EL0, read from the register, because it is the ONLY thing that sets
+  # the units of the driver's samples under CHEAP_TIMER. Do NOT substitute
+  # hw.tbfrequency: that is the Mach timebase behind mach_absolute_time and
+  # clock_gettime, and on M4 the two disagree -- tbfrequency 24 MHz (41.67 ns,
+  # which is what the older comments in this tree describe) against CNTFRQ_EL0
+  # 1 GHz (1 ns). Confirmed empirically: a ~260 ns chacha call reads ~260 ticks.
+  echo "cntfrq_el0: $(
+    _cf=$(mktemp -t cntfrq).c; _cfb=${_cf%.c}
+    printf '#include <stdio.h>\n#include <stdint.h>\nint main(void){uint64_t f;__asm__ volatile("mrs %%0, cntfrq_el0":"=r"(f));printf("%%llu",f);return 0;}\n' > "$_cf"
+    if clang -O0 -o "$_cfb" "$_cf" 2>/dev/null; then "$_cfb"; else printf unknown; fi
+    rm -f "$_cf" "$_cfb"
+  ) Hz  (tbfrequency $(sysctl -n hw.tbfrequency 2>/dev/null || echo ?) Hz)"
   echo "seed: $(grep -c '^[a-z]' "$WORK/secret_m4_pointee.txt" 2>/dev/null) lines from CIO libsodium.uarch_checker.config"
   for a in $ARMS; do r=${a#*:}; arch=${r%:*}
     n=$("$LLVM_BIN/llvm-objdump" -d "$WORK/libsodium-$arch.a" 2>/dev/null | grep -cE 'msr[[:space:]]+DIT')
@@ -133,7 +157,7 @@ done
 # ---------------------------------------------------------------- part 2
 info "PART 2: CIO's 6 benchmarks, their parameters (drivers at $CIO_OPT)"
 MSG="$(LC_ALL=C tr -dc '[:alnum:]' </dev/urandom | head -c 100)"; echo "$MSG" > "$OUT/msg.txt"
-: > "$OUT/cio.csv"; echo "benchmark,arm,archive,rep,mean_ticks,n,dit_exit,cycle_src,tot_cyc,tot_ins,map_stall,flush,reg_cyc,reg_ins,reg_n" >> "$OUT/cio.csv"
+: > "$OUT/cio.csv"; echo "benchmark,arm,archive,rep,mean_ticks,n,dit_exit,cycle_src,timer_src,tot_cyc,tot_ins,map_stall,flush,reg_cyc,reg_ins,reg_n" >> "$OUT/cio.csv"
 for b in $CIOB; do
   src="$CIO_DIR/eval_$b.c"; [[ -f "$src" ]] || { warn "skip $b (no source)"; continue; }
   for a in $ARMS; do
@@ -141,7 +165,8 @@ for b in $CIOB; do
     # -DCIO_SHIM_KPERF arms the shim's kperf cycle source (root only; it falls
     # back to CNTVCT_EL0 by itself otherwise). NOT used in part 1, whose drivers
     # #include perf.c themselves -- including it twice is a duplicate definition.
-    clang -fomit-frame-pointer $CIO_OPT -std=c18 -DCIO_SHIM_KPERF \
+    # shellcheck disable=SC2086
+    clang -fomit-frame-pointer $CIO_OPT -std=c18 -DCIO_SHIM_KPERF $CHEAP \
           -I"$BENCH_DIR" -include "$SHIM" -I"$INC" \
           -o "$OUT/eval_$b.$arch" "$src" "$WORK/libsodium-$arch.a" -lm 2>/dev/null \
       || warn "build failed eval_$b/$arch"
@@ -162,6 +187,7 @@ for b in $CIOB; do
       [[ -s "$cc" ]] || continue
       de=$(sed -n 's/.*SHIM exit dit=\([01]\).*/\1/p' "$err" | tail -1)
       cs=$(sed -n 's/.*cycles=\([a-z]*\).*/\1/p' "$err" | tail -1)
+      tm=$(sed -n 's/.*timer=\([a-z]*\).*/\1/p' "$err" | tail -1)
       tc=$(sed -n 's/.*tot_cyc=\([0-9]*\).*/\1/p' "$err" | tail -1)
       ti=$(sed -n 's/.*tot_ins=\([0-9]*\).*/\1/p' "$err" | tail -1)
       ms=$(sed -n 's/.*map_stall=\([0-9]*\).*/\1/p' "$err" | tail -1)
@@ -169,13 +195,13 @@ for b in $CIOB; do
       rc2=$(sed -n 's/.*reg_cyc=\([0-9]*\).*/\1/p' "$err" | tail -1)
       ri=$(sed -n 's/.*reg_ins=\([0-9]*\).*/\1/p' "$err" | tail -1)
       rn=$(sed -n 's/.*reg_n=\([0-9]*\).*/\1/p' "$err" | tail -1)
-      python3 - "$cc" "$b" "$lab" "$arch" "$rep" "${de:-?}" "${cs:-?}" \
+      python3 - "$cc" "$b" "$lab" "$arch" "$rep" "${de:-?}" "${cs:-?}" "${tm:-?}" \
                "${tc:-0}" "${ti:-0}" "${ms:-0}" "${fl:-0}" \
                "${rc2:-0}" "${ri:-0}" "${rn:-0}" >> "$OUT/cio.csv" <<'PY'
 import sys
-p,b,lab,arch,rep,de,cs,tc,ti,ms,fl,rc,ri,rn = sys.argv[1:15]
+p,b,lab,arch,rep,de,cs,tm,tc,ti,ms,fl,rc,ri,rn = sys.argv[1:16]
 v=[float(x) for x in open(p).read().split('\n')[1:] if x.strip().isdigit()]
-if v: print(f"{b},{lab},{arch},{rep},{sum(v)/len(v):.3f},{len(v)},{de},{cs},{tc},{ti},{ms},{fl},{rc},{ri},{rn}")
+if v: print(f"{b},{lab},{arch},{rep},{sum(v)/len(v):.3f},{len(v)},{de},{cs},{tm},{tc},{ti},{ms},{fl},{rc},{ri},{rn}")
 PY
     done
   done
