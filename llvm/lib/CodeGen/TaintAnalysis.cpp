@@ -4163,7 +4163,8 @@ void llvm::reportInfoLoss(raw_ostream *OS, TaintLossSeverity Sev,
                           StringRef Kind, const Function &Where,
                           StringRef CalleeName, const DebugLoc &DL,
                           StringRef Action, StringRef Cost, StringRef Repair) {
-  const char *SevStr = Sev == TaintLossSeverity::Severe     ? "SEVERE"
+  const char *SevStr = Sev == TaintLossSeverity::Unsound    ? "UNSOUND"
+                       : Sev == TaintLossSeverity::Severe   ? "SEVERE"
                        : Sev == TaintLossSeverity::Moderate ? "moderate"
                                                             : "info";
   if (OS) {
