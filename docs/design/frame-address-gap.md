@@ -443,11 +443,34 @@ Two things that repro taught, both worth keeping:
   address `&tmp` is not seen as passing a secret, so `memcpy` never looks like it
   receives one. All three gaps are on the same chain.
 
-**The fix is not more pointer provenance.** It is the libc model table already
-deferred in `docs/research/memory-summaries.md` as P1: teach the analysis that
-`memcpy(dst, src, n)` writes through argument 0 what it reads through argument 1.
-That is a small table, not an analysis, and it is what turns
+**A seed cannot express this, and that is the point.** Measured on
+`gapB_memcpy.c` with every placement flag on:
+
+| seed set | `produce` mod-set | `consume` |
+|---|---|---|
+| workload seed only | `UNKNOWN(TOP)` | absent |
+| `+ memcpy,1,pointee` | `UNKNOWN(TOP)` | absent |
+| `+ memcpy,0,pointee` | `UNKNOWN(TOP)` | absent |
+| `+ both memcpy args` | `UNKNOWN(TOP)` | absent |
+
+Nothing moves, because the seed file declares a **source** - "this argument is
+secret" - and what is missing is an **effect**: "this function writes through
+argument 0 what it reads through argument 1." The format has no way to say the
+second, and `memcpy` has no body to derive it from. **This is the sharp
+distinction against §3d:** there, a seed could patch a specific hole at a cost;
+here it cannot help at all, because the missing fact is a different KIND of fact.
+
+**The fix is not more pointer provenance, and not more seeds.** It is the libc
+model table already deferred in `docs/research/memory-summaries.md` as P1: teach
+the analysis that `memcpy(dst, src, n)` writes through argument 0 what it reads
+through argument 1. A small table, not an analysis, and it is what turns
 `hydro_hash_final`'s `UNKNOWN(TOP)` into `arg0 arg1`.
+
+It belongs in the compiler rather than in the seed file for the same reason:
+libc's effects are a fixed, knowable set that every user of the pass would
+otherwise have to rediscover and redeclare identically. Extending the seed syntax
+with an effect form (`memcpy,0,writes-from,1`) would work, but it would push a
+compiler-owned fact onto every user.
 
 ### Prior art for §3c (partial)
 
