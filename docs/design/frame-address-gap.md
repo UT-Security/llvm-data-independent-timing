@@ -269,6 +269,65 @@ corroborating figure: 47 of 53 functions with a mod-set on libhydrogen export
   `aarch64-unknown-linux-gnu`. That is the reason to believe it is the real cause
   on the Linux binary the oracle measures, where the gate is irrelevant.
 
+### Prior art for §3c (partial)
+
+Searched 2026-09-02. **Two of three searches died on a session rate limit**, so
+this covers the taint-tool question only; GCC's `ipa-modref` `parm_map`, the
+classic pointer-analysis literature (Landi/Ryder, Wilson/Lam partial transfer
+functions) and the post-RA/binary setting are **still unsearched**. Andromeda
+quotes below were verified by reading the PDF directly; the rest is
+second-hand from the search and is marked.
+
+**The concept has a standard name, and the design is not novel: it is an
+`access path` in a `storeless` heap model.** Andromeda (Tripp, Pistoia, Cousot,
+Cousot, Guarnieri, FASE 2013) roots every taint fact at a *variable or formal
+parameter* rather than at a named heap object, so a call site maps callee facts
+to caller facts by substituting actual for formal. **The object is never named -
+only a path to it.** That is exactly what `Arg(k)` is.
+
+**It degrades to machine level precisely at depth 0, which is what we need.**
+An access path is `x.f1...fn`. Post-RA there are no field names, so only `n = 0`
+survives - a path rooted at a formal with no field selectors, i.e. whole-object
+granularity keyed by argument index. That is the granularity §3c proposes, and
+it is the most this representation can offer here, not a shortcut.
+
+**The soundness direction matches ours.** Andromeda bounds path length at a
+constant `c` and appends `*`:
+
+> "a widened access path potentially points to more than one object. In this way,
+> the analysis can track a bounded number of access paths **in a sound manner** by
+> restricting the length of an access path to some constant c"
+
+Over-approximating at the truncation point, like our refusal to follow pointer
+arithmetic. (Andromeda does **not** state a default for `c`.)
+
+**Andromeda does not specify its interprocedural transfer functions** - "Extending
+the core language to contain procedure calls is straightforward [5]", where [5] is
+Cheng and Hwu, *Modular interprocedural pointer analysis using access paths*,
+PLDI 2000. **That is the paper to read for the actual mechanism**, and it has not
+been read yet.
+
+**TAJ rejected this design, and the reason does not apply to us** (second-hand).
+TAJ (PLDI 2009, same lead author) reportedly discarded threading heap effects
+through extra parameters and return values as a scalability bottleneck, using a
+whole-program Andersen points-to solution with direct store-site-to-load-site
+edges instead. That option is not available post-RA: no allocation sites, no
+whole-program points-to. So the alternative to §3c is not "do what TAJ did", it
+is "have no answer".
+
+**TaintDroid's JNI boundary is this exact defect** (second-hand, and the closest
+match found). Native code is unmonitored; on return, a hand-written `(from, to)`
+*method profile* supplies the flows, and the default heuristic assigns the union
+of argument taints **to the return value only**. A native callee that fills a
+caller-supplied buffer and returns `void` therefore gets nothing. **That is gap B
+with a different vocabulary, and their answer is our seed file** - which is why
+§3d's conclusion is not an idiosyncrasy of this project.
+
+**oo7 has no answer to borrow** (second-hand). It performs no interprocedural
+static dataflow at all: taint rides a BAP/Primus microexecution that steps *into*
+callees, so no summary and no map-back step ever exists. Worth recording because
+`related-work.md` cites oo7 - it is not a precedent for anything in this file.
+
 ## 3d. Can more seeds substitute for the fix? Partly, and not safely
 
 Worth answering because it is the cheap option and it is what the tooling
@@ -417,6 +476,9 @@ placement fix.**
    default. Only worth doing after B, since A alone moves nothing.
 5. Re-run the experiment 08 oracle after each step. It is the only instrument
    that separated a real fix from a plausible one here, twice.
+6. **Finish the prior-art search** (see below): `ipa-modref`'s `parm_map` is the
+   closest *shipped* analogue to §3c and is still unread, as is Cheng and Hwu
+   PLDI 2000, which is where Andromeda's actual interprocedural mechanism lives.
 
 ## 8. Two traps this investigation hit
 
