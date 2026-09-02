@@ -711,6 +711,15 @@ enum class TaintLossSeverity {
   Info,     ///< precision lost, no coverage consequence
   Moderate, ///< over-approximated, but DIT stays scoped to this function
   Severe,   ///< DIT enabled and provably never cleared - degenerates to blanket
+  /// The analysis lost the secret and does NOT know it, so coverage may be
+  /// ABSENT rather than merely wider than necessary. Every other severity here
+  /// describes an OVER-approximation - the callee inherits DIT, or the whole
+  /// function does - and is therefore safe but costly. This one is the opposite
+  /// direction and is the only kind that can leak: nothing downstream re-adds
+  /// the protection, because nothing downstream knows it is missing. Kept
+  /// distinct from Severe so a report reader and a build gate can tell "we
+  /// protected too much" from "we may have protected nothing".
+  Unsound,
 };
 
 /// One record in the information-loss report. See `-taint-info-loss-report`.
