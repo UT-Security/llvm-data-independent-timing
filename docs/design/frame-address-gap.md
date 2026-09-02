@@ -659,6 +659,14 @@ This is also the fourth time in this file that the precision report and the
 oracle disagreed about whether something helped. **Report first, oracle second,
 and believe the oracle.**
 
+#### And it is free
+
+libsodium, CIO-parity seed, full cross build, toolchain pinned: **134 switches
+before the fix, 134 after.** libhydrogen's baseline moves 27 -> 28. So the
+default path gains 8x the protected operations on the signing workload and costs
+nothing measurable in switches on the cost workload - which is the shape of a
+missing-information bug being fixed, not of a precision knob being traded.
+
 ### Prior art for §3c (partial)
 
 Searched 2026-09-02. **Andromeda, TaintDroid and all GCC quotes below were
