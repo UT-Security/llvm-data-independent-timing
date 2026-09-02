@@ -274,9 +274,9 @@ corroborating figure: 47 of 53 functions with a mod-set on libhydrogen export
 Searched 2026-09-02. **Two of three searches died on a session rate limit**, so
 this covers the taint-tool question only; GCC's `ipa-modref` `parm_map`, the
 classic pointer-analysis literature (Landi/Ryder, Wilson/Lam partial transfer
-functions) and the post-RA/binary setting are **still unsearched**. Andromeda
-quotes below were verified by reading the PDF directly; the rest is
-second-hand from the search and is marked.
+functions) and the post-RA/binary setting were re-searched separately.
+**Andromeda and TaintDroid quotes below were verified by reading the papers
+directly**; anything still second-hand is marked as such.
 
 **The concept has a standard name, and the design is not novel: it is an
 `access path` in a `storeless` heap model.** Andromeda (Tripp, Pistoia, Cousot,
@@ -315,13 +315,30 @@ edges instead. That option is not available post-RA: no allocation sites, no
 whole-program points-to. So the alternative to §3c is not "do what TAJ did", it
 is "have no answer".
 
-**TaintDroid's JNI boundary is this exact defect** (second-hand, and the closest
-match found). Native code is unmonitored; on return, a hand-written `(from, to)`
-*method profile* supplies the flows, and the default heuristic assigns the union
-of argument taints **to the return value only**. A native callee that fills a
-caller-supplied buffer and returns `void` therefore gets nothing. **That is gap B
-with a different vocabulary, and their answer is our seed file** - which is why
-§3d's conclusion is not an idiosyncrasy of this project.
+**TaintDroid's JNI boundary is this exact defect** - the closest match found,
+and **verified against the OSDI 2010 paper directly**. Native code is unmonitored;
+on return, TaintDroid consults a hand-written *method profile*, "a list of
+(from, to) pairs indicating flows between variables, which may be method
+parameters, class variables, or return values". Where no profile exists, the
+default heuristic
+
+> "assigns the union of the method argument taint tags to the taint tag of the
+> **return value**. While the heuristic has **false negatives for methods using
+> objects**, it covers many existing methods."
+
+A native callee that fills a caller-supplied buffer and returns `void` therefore
+gets nothing. **That is gap B in different vocabulary, and their answer is our
+seed file** - profiles are "defined as needed" - which is why §3d's conclusion is
+a property of this problem shape rather than an idiosyncrasy of this project.
+
+Their coverage figure is worth recording next to ours. Of 2,844 JNI methods in
+Android 2.1, **913 are covered by the automatic heuristic**; the rest "may or may
+not have information flows that produce false negatives". That is 32% resolved
+automatically against our 34% of call sites resolved precisely (644 of 1,897).
+The denominators are not the same thing - theirs is methods-not-touching-objects,
+ours is call-sites-with-resolvable-provenance - so this is a coincidence of
+magnitude and not a shared measurement. It is still the same story: **roughly two
+thirds of the boundary is unresolved, and the residue is handed to a human.**
 
 **oo7 has no answer to borrow** (second-hand). It performs no interprocedural
 static dataflow at all: taint rides a BAP/Primus microexecution that steps *into*
