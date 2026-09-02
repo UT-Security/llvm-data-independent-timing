@@ -1,8 +1,10 @@
 # The frame-address gap: why 97.61% of a signing path ran unprotected
 
-**Status: partly diagnosed. One half fixed behind a default-off flag and
-measured worthless on its own; the root cause on the target the oracle measures
-is still unidentified.**
+**Status: gap A fixed behind a default-off flag and measured worthless on its
+own. Gap B's NAMING half (B1) is implemented behind `-taint-arg-provenance`,
+default off, and measured: it does what it was predicted to do and closes no
+leak by itself. B2 (consumption) is not written. The root cause on the target
+the oracle measures is still unidentified.**
 Written 2026-09-02 from the experiment 08 oracle result
 (`paper_experiments/08-seed-ground-truth`).
 
@@ -272,6 +274,76 @@ corroborating figure: 47 of 53 functions with a mod-set on libhydrogen export
   `aarch64-unknown-linux-gnu`. That is the reason to believe it is the real cause
   on the Linux binary the oracle measures, where the gate is irrelevant.
 
+### B1 as implemented (`-taint-arg-provenance`, default OFF)
+
+Landed 2026-09-02. Seven items, all extensions of existing machinery:
+
+| # | change | where |
+|---|---|---|
+| 1 | `FrameRefs` becomes `PointerBases`, values tagged `Frame(FI)` or `Arg(k)` | `TaintAnalysis.h` |
+| 2 | seed `Arg(k)` for each incoming pointer argument register | `TaintAnalysis.cpp`, entry seeding |
+| 3 | `COPY` inherits either kind; every def kills; arithmetic still not followed | `propagateTaintMI` |
+| 4 | `TaintedArgPointees`, whole-object, keyed by argument number | `TaintAnalysis.h` |
+| 5 | call site resolves to a `PointerBase` and applies per kind | `propagateTaintMI` |
+| 6 | a load through a tainted arg pointee reads secret | load path |
+| 7 | a tainted arg pointee at exit re-exports as `WritesSecretThroughArgPointee` | `computeFunctionMemEffects` |
+
+**One map, not two.** A tagged value rather than a parallel `ArgRefs` map, so a
+def cannot kill one kind and leave a stale base of the other behind. `getFrameRef`
+stays deliberately narrow - it returns a frame index only for `Frame`, so a caller
+that can only act on a frame index is never handed an argument number.
+
+**The ABI assumption is checked, not assumed.** AAPCS64 puts integer and pointer
+arguments in X0-X7 *in order*, so a register's encoding is its argument index only
+when every argument takes a GPR. A float or vector argument takes a V register and
+shifts the correspondence. The seeding therefore **skips any signature that is not
+all integer/pointer**, because naming the WRONG object is an under-taint - the one
+direction that loses the secret, and the one place the usual over-approximate
+instinct does not apply.
+
+#### Measured: it does what §3c predicted, and no more
+
+`playground/frame_addr_gap/gapB_only.c`, the isolated gap-B repro:
+
+| | off | on |
+|---|---|---|
+| `mem-effects[produce]` | `arg0` | `arg0` |
+| **`mem-effects[via_argptr]`** | **`UNKNOWN(TOP)`** | **`arg0`** |
+| call-site decision | `P1a: blunt clobber` | `P1b/B1: named 1 object` |
+| `via_argptr` need | 3 | 1 |
+
+The caller's summary stops degrading to TOP and names the argument it was
+actually passed - which is the thing B2 will consume. libhydrogen, whole library:
+
+| | blunt fallback | named precisely | `msr DIT` |
+|---|---|---|---|
+| off | 1,253 | 644 | 318 |
+| **on** | **1,010** | **923** | **318** |
+
+**Switch count identical.** B1 is purely substitutive: 279 call sites stop
+flooding the caller and start naming an object, and codegen does not move. That
+is the predicted shape - and it is also why B1 alone is not worth turning on.
+
+**It closes no leak.** `consume` is still absent from the report in
+`gapB_only.c`, and libhydrogen's natural seed still emits 27 switches. Passing a
+pointer onward still transfers nothing, because that is B2.
+
+#### A trap worth keeping: never divert a load away from an existing taint source
+
+The first version of item 6 was a separate `else if (CI.K == CellInfo::Arg)`
+branch in the load path. It looked right and it **silently under-tainted**:
+argument-based loads previously fell through to the unknown/heap branch, which is
+where `anyRegUseOfKind(TaintKind::Pointee, ...)` lives - the primary way pointee
+taint reaches a loaded value. Intercepting them bypassed it, and the secret
+multiply in `produce` fell from **need=12 to need=4** while every test still
+passed.
+
+The rule this yields: **an addition to the taint lattice must be additive at the
+consumption site too.** Item 6 is now an extra `||` inside the existing branch,
+not a branch of its own. Caught only because `gapB_only.c` reports per-function
+`need`, which is the argument for keeping a repro whose numbers you know by
+heart.
+
 ### Prior art for §3c (partial)
 
 Searched 2026-09-02. **Andromeda, TaintDroid and all GCC quotes below were
@@ -337,6 +409,39 @@ argument is a further provenance refinement"). Under §3c that becomes reachable
 it is an `Arg(k)` whose k is recoverable from the frame layout. **Worth folding
 into B1** - it is the same fix, applied to arguments that arrived on the stack
 rather than in a register.
+
+### On the soundness direction: it does NOT flip, and we should not claim it does
+
+Searched from three angles. **No source says the conservative direction is
+opposite for compiler alias analysis and for security taint analysis.** Every
+source retrieved calls the *same* direction safe in both: over-approximate the
+may-point-to / may-taint set. Steensgaard's "safe (conservative)" is a superset;
+Andersen's "safe approximation" covers all runtime addresses; LLVM's `MayAlias`
+default is the same move. **Our refusal to follow pointer arithmetic is textbook
+may-analysis conservatism, not an inversion of it**, and writing it up as an
+inversion would be our own synthesis rather than a citation.
+
+**Two things do support the choice, and neither is the one to overclaim.**
+
+- **The named critique in the literature targets the OPPOSITE mechanism.**
+  Slowinska and Bos, *Pointless Tainting?* (EuroSys 2009), is a sustained,
+  measured critique of aggressively propagating taint *through* arithmetic and
+  then dereferences - "taint explosion... hard to avoid". No critique of refusing
+  to follow arithmetic was found.
+- **Cerberus/PNVI reportedly records GCC declining to re-attribute a pointer to a
+  different object even when arithmetic makes the bit patterns identical**, which
+  is the same instinct reached for a different reason (alias-analysis freedom).
+
+**And one warning worth heeding.** TaintDroid, DFSan and Panorama all *follow*
+arithmetic and propagate taint through indexing - mechanically the opposite of
+our rule. They are solving value-taint-through-indexing ("does the loaded byte
+carry the secret"), where we are solving object-provenance-naming ("which object
+does this computed address denote"). In our problem, refusing to name and falling
+back to the clobber IS the over-approximating direction. **Do not cite them as
+endorsing our mechanism** - a careful reader will notice they do the opposite
+concrete thing. The defensible claim is narrower: no prior work found poses this
+sub-question directly, and the nearest analogues reach the same conservative
+instinct by different mechanisms.
 
 ### Cheng and Hwu (PLDI 2000) shipped their results at k = 1
 
@@ -509,24 +614,30 @@ the ephemeral key never becomes secret at all, so the whole ladder is public no
 matter what the curve helpers can pass between themselves. **B is the
 load-bearing half. Do A second, or not at all.**
 
-## 5. Cost, and why the flag is DEFAULT OFF
+## 5. Cost, and why BOTH flags are DEFAULT OFF
 
 This rule has been tried and rejected once
 (`docs/design/p1b-frame-provenance.md` §4): gate + fallback went 408 -> 628
 switches on libsecp256k1, and `ecdsa_verify` - a path that handles only public
 data - went from 0 switches back to 12.
 
-Re-measured on the current tree, it is much cheaper than that verdict suggests.
-libsodium, CIO-parity seed (77 lines), full cross build:
+**A libsodium re-measurement of 134 -> 152 switches (+13.4%) was reported here
+and is RETRACTED.** Both arms were built by the wrong compiler. `taint-cross-cc`
+reads `LLVM_BUILD` at run time, and `LLVM_BUILD=x ./configure` sets it for
+*configure* only - during `make` it fell back to `~/Documents/llvm-project/build`,
+an August build that carries an **older, since-removed implementation of
+`-taint-frame-addr-args`**. So the number measured the old whole-frame fallback,
+which is precisely the thing the +54% verdict is about, and not this
+implementation at all.
 
-| | `msr DIT` |
-|---|---|
-| `-ftaint-harden` | 134 |
-| `+ -taint-frame-addr-args` | **152** (+13.4%) |
+The tell was the re-run failing with `Unknown command line argument
+'-taint-arg-provenance'` from a compiler that had just been built with it. **A
+flag that exists in your tree and is rejected by "your" compiler means the
+toolchain is not pinned** - the same trap as [[dit-measurement-hygiene]], reached
+by a different route. Export `LLVM_BUILD`, or pass `CC` as an absolute path.
 
-+13.4% is not +54%. But **libsecp256k1 has not been re-measured**, and that is
-where the false positives were, so the old verdict stands until it is. The flag
-stays off.
+libsecp256k1 has also not been re-measured, and that is where the false positives
+were. **Both flags stay off until measured on a pinned toolchain.**
 
 **The decision rule is not "does it improve coverage".** It will, always -
 adding taint always does. It is: does the coverage it adds correspond to real
