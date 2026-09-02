@@ -93,6 +93,93 @@ and passing a pointer does not consult the clobber. The fix is to extend pointer
 provenance beyond frame objects to argument-derived pointers, which the store
 side already models (`CellInfo::Arg`).
 
+## 3b. The two gaps as runnable code
+
+Both reproduce in a single TU, so neither is the cross-TU limit. Sources in
+`playground/frame_addr_gap/`. **A function absent from the precision report was
+never analysed** - its secret-dependent instructions run with DIT clear.
+
+### Gap A: the caller taints its own frame object and passes the address
+
+```c
+__attribute__((noinline)) uint64_t consume(const uint64_t *p) {
+    uint64_t a = 1;
+    for (int i = 0; i < 4; i++) a = a * p[i] + 3;   /* secret multiply */
+    return a;
+}
+uint64_t entry(const uint64_t *key) {               /* seed: entry,0,pointee */
+    uint64_t local[4];
+    for (int i = 0; i < 4; i++) local[i] = key[i] ^ 0x55;  /* taints local */
+    return consume(local);                          /* passes &local */
+}
+```
+
+The analysis gets the first half right - `taint stack cell FI=1 off=0 sz=8`. Then
+`&local` is `ADDXri $sp, imm`, an ordinary integer, and the call passes nothing
+the callee can be told about:
+
+```
+default                consume ABSENT from the report      <- multiply unprotected
+-taint-frame-addr-args consume need=8 switches=2 coverage=90.0
+                       caller entry -> callee consume: arg 0 now pointee-tainted
+                       (frame object 1 holds a secret, via $x0)
+```
+
+### Gap B: the write-back target is the caller's own argument
+
+Same callee reached two ways. Only one works.
+
+```c
+__attribute__((noinline)) void produce(uint64_t *out, const uint64_t *key) {
+    for (int i = 0; i < 4; i++) out[i] = key[i] * 3;   /* secret through arg0 */
+}
+
+uint64_t via_local(const uint64_t *key) {      /* seed: via_local,0,pointee */
+    uint64_t buf[4];                           /* a FRAME OBJECT */
+    produce(buf, key);
+    return consume(buf);
+}
+
+uint64_t via_argptr(uint64_t *buf, const uint64_t *key) {  /* seed: ...,1,pointee */
+    produce(buf, key);                         /* buf is OUR OWN ARGUMENT */
+    return consume(buf);
+}
+```
+
+`produce`'s summary is precise and correct in both cases - `mem-effects[produce]:
+arg0`. What differs is whether the caller can name the object it passed:
+
+```
+via_local   call to produce writes secret through a pointer arg
+            (P1b: tainted 1 caller object(s) precisely)     <- works
+via_argptr  call to produce writes secret through a pointer arg
+            (P1a: blunt clobber, provenance unknown)        <- fails
+            mem-effects[via_argptr]: UNKNOWN(TOP)
+```
+
+`getFrameRef` resolves frame objects only, so for `via_argptr` P1b falls back to
+`ExternalMemClobbered`. That poisons subsequent *loads* in `via_argptr` - but it
+never loads `buf`, it passes the pointer on, and passing a pointer does not
+consult the clobber. With the working caller deleted (`gapB_only.c`), `consume`
+is absent from the report under **both** arms: `-taint-frame-addr-args` does not
+help, because there is no frame object to resolve.
+
+### They compose, and one good caller hides the other
+
+In `gapB.c` with both callers and `-taint-frame-addr-args`, `consume` comes out
+covered - **but only because `via_local` instrumented the shared body**. The
+analysis is context-insensitive, so one well-analysed caller silently fixes the
+function for every other caller. That is why `gapB_only.c` exists, and it is a
+general warning for anything measured this way: a defect can be masked by an
+unrelated call site.
+
+### Where each one is in libhydrogen
+
+| gap | libhydrogen site |
+|---|---|
+| A | `hydro_x25519_core` passing limb arrays on its own frame to `hydro_x25519_mul` |
+| B | `hydro_hash_final` filling `eph_sk`, which points into `csig` - the caller's own argument, not a frame object |
+
 ## 4. Measured effect of the A fix, and why it is not enough
 
 libhydrogen, natural seed, `-mllvm -taint-frame-addr-args`, **darwin object**:

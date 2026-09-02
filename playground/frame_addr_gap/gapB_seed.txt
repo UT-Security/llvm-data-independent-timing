@@ -1,0 +1,2 @@
+via_local,0,pointee
+via_argptr,1,pointee
