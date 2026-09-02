@@ -621,23 +621,37 @@ This rule has been tried and rejected once
 switches on libsecp256k1, and `ecdsa_verify` - a path that handles only public
 data - went from 0 switches back to 12.
 
-**A libsodium re-measurement of 134 -> 152 switches (+13.4%) was reported here
-and is RETRACTED.** Both arms were built by the wrong compiler. `taint-cross-cc`
-reads `LLVM_BUILD` at run time, and `LLVM_BUILD=x ./configure` sets it for
-*configure* only - during `make` it fell back to `~/Documents/llvm-project/build`,
-an August build that carries an **older, since-removed implementation of
-`-taint-frame-addr-args`**. So the number measured the old whole-frame fallback,
-which is precisely the thing the +54% verdict is about, and not this
-implementation at all.
+libsodium, CIO-parity seed (77 lines), full cross build, **toolchain pinned**:
 
-The tell was the re-run failing with `Unknown command line argument
-'-taint-arg-provenance'` from a compiler that had just been built with it. **A
-flag that exists in your tree and is rejected by "your" compiler means the
-toolchain is not pinned** - the same trap as [[dit-measurement-hygiene]], reached
-by a different route. Export `LLVM_BUILD`, or pass `CC` as an absolute path.
+| arm | `msr DIT` | vs base |
+|---|---|---|
+| `-ftaint-harden` | 134 | - |
+| `+ -taint-frame-addr-args` (gap A) | 152 | **+13.4%** |
+| `+ -taint-arg-provenance` (B1) | **134** | **0.0%** |
 
-libsecp256k1 has also not been re-measured, and that is where the false positives
-were. **Both flags stay off until measured on a pinned toolchain.**
+**B1 is free on libsodium**, which is the expected shape for a substitutive
+change and matches libhydrogen, where it moved 1,253 blunt fallbacks to 1,010
+with the switch count unchanged at 318. Gap A's +13.4% is real and is the cost of
+an *additive* rule.
+
+> **A methodology note that nearly cost this number.** An earlier run of the same
+> comparison was invalid and was retracted: `taint-cross-cc` reads `LLVM_BUILD` at
+> run time, and `LLVM_BUILD=x ./configure` sets it for *configure* only, so during
+> `make` it fell back to `~/Documents/llvm-project/build` - an August build
+> carrying an **older, since-removed implementation of `-taint-frame-addr-args`**.
+> The tell was a re-run failing with `Unknown command line argument
+> '-taint-arg-provenance'` from a compiler that had just been built with it. **A
+> flag that exists in your tree and is rejected by "your" compiler means the
+> toolchain is not pinned** ([[dit-measurement-hygiene]], reached by a new route).
+> Export `LLVM_BUILD`, or give `CC` an absolute path.
+>
+> Re-run pinned, gap A comes back at **152 again**, so the value survived - but it
+> survived by luck, and the invalid run could not have told us that. Record the
+> retraction, not just the number.
+
+libsecp256k1 has **not** been re-measured, and that is where gap A's false
+positives were (`ecdsa_verify` 0 -> 12). **Gap A stays off until it is.** B1 stays
+off because it closes no leak on its own; its case is made by B2, not by itself.
 
 **The decision rule is not "does it improve coverage".** It will, always -
 adding taint always does. It is: does the coverage it adds correspond to real
