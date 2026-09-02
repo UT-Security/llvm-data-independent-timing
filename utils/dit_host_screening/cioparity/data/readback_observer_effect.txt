@@ -1,0 +1,25 @@
+The cross-model control gate caught the gate instrument itself.
+
+`base` and `nop` commit ZERO DIT writes inside the ROI, so --no-speculative-dit
+has nothing legitimate to act on and must leave them bit-identical. With the
+exit-time `mrs DIT` readback compiled in they were not identical: a `mrs DIT`
+existing at all decodes to MrsDit64 under the speculative model and to the
+SERIALISING Mrs64 under --no-speculative-dit, and that shifted the measured
+region even though the instruction runs in a destructor after the last dump.
+
+ed25519, whole-library arms, 20 measured regions:
+  arms                                spec      serdit    drift
+  readback compiled in / base      1562973     1557511   0.349%
+  readback compiled in / nop       1525150     1532012   0.450%
+  readback removed (probe) / baseNR     1560877     1560877   0.000%
+  readback removed (probe) / nopNR     1536318     1536318   0.000%
+  readback behind -DDIT_READBACK / base     1560877     1560877   0.000%
+  readback behind -DDIT_READBACK / nop     1536318     1536318   0.000%
+
+Two identical runs of the same binary and config differ by 0.000%, so gem5 is
+bit-deterministic and input entropy is NOT the cause -- an earlier draft blamed
+crypto_sign_keypair drawing fresh OS entropy per region, and that was wrong.
+
+Fix: the readback moved behind -DDIT_READBACK into a separate `gate` stage.
+Timings come from readback-free binaries; the mode-at-exit check still runs on
+its own builds. `blanket` keeps one constructor `msr DIT`, inherent to that arm.

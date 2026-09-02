@@ -27,7 +27,7 @@ were run.
 | 06 | [switch-model generality](06-switch-model-generality/) | - | experiments 02 and 03's workloads | **MSR DIT implementation - measures TRANSFERABILITY** | **complete, gem5** |
 | 07 | [annotation cost](07-annotation-cost/) | - | libsodium signing path | **seed DEPTH - measures DEVELOPER cost** | **complete, silicon** |
 | 08 | [seed ground truth](08-seed-ground-truth/) | - | libhydrogen signing, their exact source | **none - compares our taint set against an INDEPENDENT one** | **complete** |
-| 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon x2 (M5 + M4); percentages corrected 4-15x, conclusions unchanged** |
+| 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon x2 (M5 + M4) + gem5 switch model; percentages corrected 4-15x, conclusions unchanged** |
 
 ## Published pages
 
@@ -45,6 +45,7 @@ One artifact per experiment. Republish through the recorded URL (`Artifact` with
 | 07 | The Annotation Loop | https://claude.ai/code/artifact/ac6058f5-25ba-4a38-bf2e-6a385652ffb3 |
 | 08 | Two Analyses, One Library | https://claude.ai/code/artifact/2a789196-2274-42fc-9922-b624f0808762 |
 | 09 | Nothing to Recover | https://claude.ai/code/artifact/24709335-fc81-4a36-8eca-0c64fcc6cf8a |
+| 09b | The Cost Is the Switch (gem5 switch model) | https://claude.ai/code/artifact/6b5dc30a-1296-4d02-a5e2-b723e6c8ed57 |
 
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6
 
@@ -61,9 +62,12 @@ framework's first question (blanket DIT is already free on it), kept in
 **libsodium is BOTH**, and it is now two experiments rather than a footnote: 02 is
 the flow with a public lane, where the pass beats blanket by 21%; 09 is the
 library alone, run the way the closest prior work (CIO, ASPLOS'24) ran it, where
-blanket wins on 5 of 6. Same library, opposite verdicts - which is the point. Its own primitives fail the first question - blanket is free on aead,
-x25519, sha512, salsa20 and hmac_sha512, and on ed25519 it is a *speedup*
-(-2.96%), so no placement can win. But libsodium *inside a flow with a public
+blanket wins on 5 of 6. Same library, opposite verdicts - which is the point. Its own primitives fail the first question: blanket costs
+**+0.00% to +1.99% across all 13** (`09-libsodium-cio-parity/data/primitives_13_silicon.csv`,
+19 measurements, ed25519 sign +0.19%), so there is no headroom and no placement
+can win. (**Corrected 2026-09-02.** This sentence previously called ed25519 "a
+*speedup* (-2.96%)". Nothing in the tree supports that figure; the measured
+value is +0.19%, and the 13-primitive CSV it comes from was unreferenced.) But libsodium *inside a flow with a public
 lane* is experiment 02, where blanket reaches +32.64% and the pass beats it by
 21%. The library is not the workload; the flow is.
 

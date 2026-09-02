@@ -15,6 +15,14 @@ percentages before the instrumentation offset was found. Kept because the
 headline table above is still those numbers and the two have to stay legible
 together; its own artifact is gone.
 
+**Second page, different instrument:**
+https://claude.ai/code/artifact/6b5dc30a-1296-4d02-a5e2-b723e6c8ed57
+Source: `figures/switch-model.html`. *The Cost Is the Switch* carries the gem5
+switch-model counterfactual (serialised vs renamed `MSR DIT`) and all six
+benchmarks. It is a separate page rather than a merge because it is a separate
+instrument answering a question silicon cannot: the two are complementary, not
+alternative readings of one run.
+
 ---
 
 ## The claim
@@ -65,6 +73,15 @@ of the per-run means. `A` is the MIR round-trip control, not the stock build.
 > a 21-cycle timer instead, are in the next section. The three CONCLUSIONS in
 > this section all survive; it is their magnitudes that do not.
 
+**`data/primitives_13_silicon.csv` corroborates this independently** and was
+previously uncited: 13 libsodium primitives, 19 measurements, the same six arms,
+same run. Blanket is the smallest cost in every one of them, against the pass's
+much larger spread. **It carries the same instrumentation offset as the table
+above**, having been measured on the same kperf path, so its percentages are
+compressed by the same factor and it corroborates the ORDERING rather than the
+magnitudes. Re-measuring it with the 21-cycle timer is the cheap way to turn
+three times the measurements into three times the evidence.
+
 **Three readings, in order of importance:**
 
 1. **Blanket is free on every one of them**, and faster than baseline on four.
@@ -73,10 +90,37 @@ of the per-run means. `A` is the MIR round-trip control, not the stock build.
 2. **Coarser placement beats finer on all six.** `func` < `region` everywhere.
    That is what the cost model predicts when dwell is zero: narrowing coverage
    buys nothing, so you only pay toggles, and fewer toggles is better.
-3. **argon2id is free in every arm.** A 191M-cycle operation amortises every
-   switch. Overhead tracks executed switches *per unit work*, not a fixed
-   per-call charge - and this is the cleanest demonstration we have, because it
-   is the benchmark where CIO pays most (27.84x) and we pay nothing.
+3. **argon2id is free in every arm**, and the toggle rate is the reason:
+   measured under gem5 at **1.3 committed switches per million cycles**, against
+   43,176 for chacha20-poly1305. Overhead tracks executed switches *per unit
+   work*, not a fixed per-call charge, and this is the null endpoint of that
+   axis - the benchmark where CIO pays most (27.84x) and we pay nothing.
+
+   **CORRECTION 2026-09-02: the low toggle rate is not amortisation.** An
+   earlier version of this reading said "a 191M-cycle operation amortises every
+   switch" and called it the cleanest demonstration of the cost model. The
+   mechanism is different, and worse: **taint does not reach the hashing kernel
+   at all.** `argon2_hash` builds an `argon2_context` on its own stack and
+   stores the password pointer into it; storing a pointee-tainted pointer into
+   memory does not mark the destination, and passing the struct's address does
+   not make that address pointee-tainted. So `argon2_ctx` receives a *clean*
+   pointer and `argon2_initialize`, `argon2_fill_memory_blocks` and
+   `argon2_fill_segment_ref` - which are essentially all 191M cycles - carry
+   **zero switches** and appear in no report. The 438 switches that do execute
+   are in the wrapper functions.
+
+   The secret is nonetheless protected here, by luck rather than by design:
+   CIO's config marks all five arguments of the entry point, so `argon2_ctx`
+   carries a region for an over-tainted *variant flag* which happens to span the
+   calls into the kernel. Had it not, the password would have been hashed with
+   the mode clear and nothing would have said so. See
+   `docs/design/frame-addr-fallback.md` (the gap is known; the whole-frame fix
+   was removed on 2026-08-24 for costing +45.32% against the mod-set gate) and
+   the new `memory` information-loss category, which now reports it.
+
+   **This row is therefore not evidence for the placement cost model.** It is
+   evidence for the toggle-rate model, which is the claim it is cited for
+   elsewhere, and that part stands.
 
 ## Where the cost comes from
 
@@ -91,14 +135,16 @@ between arms cancel it exactly.
 | chacha20-poly1305 decrypt | 103 | +4,611 | **44.8** |
 | aes256-gcm encrypt | 15 | +1,020 | 66.3 |
 | aes256-gcm decrypt | 18 | +1,017 | 56.3 |
-| argon2id | ~0 (noise) | ~0 | n/a |
+| argon2id | ~0 (noise) [438 under gem5] | ~0 | n/a |
 
 **The evidence is the CONSISTENCY of the last column across independent
 benchmarks (40.3, 41.2, 44.8), not any per-row agreement.** Cycles-per-switch is
 derived by dividing measured cycles by measured switches, so multiplying it back
 out reproduces the measurement by construction and proves nothing. The AES rows
 rest on 15-18 switches and are too noisy to support the claim; they are shown for
-completeness, not as support.
+completeness, not as support. (**Settled 2026-09-02 under gem5**, which counts
+switches exactly rather than inferring them - see the switch-model section
+below.)
 
 Blanket adds **0 +/- 10 instructions and 0 +/- 60 cycles** per operation, measured
 the same way. So the cost decomposes as switch serialisation alone, with no dwell
@@ -234,7 +280,74 @@ run_sodium_oracle.sh}` in the gem5-DIT tree; raw output in `data/oracle_*.txt`.
 200 signatures of the libsecp256k1 M3 run; one gem5 configuration; and the two
 workloads seeded through `crypto_sign` and
 `crypto_aead_chacha20poly1305_ietf_encrypt` only, so the argon2id and AES-GCM
-paths of this experiment are unaudited.
+paths of this experiment are **not audited by this oracle**.
+
+For argon2id that gap is now known to be real rather than merely unmeasured: the
+analysis loses the password through memory before the hashing kernel (see
+reading 3), so a shadow-taint run on that path is the audit most worth adding.
+The static half is covered: the `needuncovered` counter added 2026-09-02 reports
+**0** instructions that require DIT and run without it, for every placement
+policy, over `need = 4,172` - but that counts only what the analysis *knows* is
+secret, which is exactly what fails here.
+
+## The switch-model counterfactual (gem5, 2026-09-02)
+
+Every number above is Apple M5, whose `MSR DIT` serialises. That is the only
+implementation silicon offers, so the decomposition in "Where the cost comes
+from" - **the cost is switch serialisation, with no dwell term** - rests on
+cycles-per-switch being consistent across benchmarks, a ratio this README
+already says "proves nothing" on its own.
+
+gem5 can turn the mechanism off. `--no-speculative-dit` selects the serialising
+path; without it the write is a renamed CC-register write. Same binary, same
+input, one mechanism changed, and **all six benchmarks now run** - including the
+two AES-GCM rows disclaimed above and argon2id, where silicon could only report
+noise.
+
+| benchmark | renamed switch | serialising switch | committed switches/op |
+|---|---|---|---|
+| chacha20-poly1305 encrypt | **-0.90%** | **+80.72%** | 94 |
+| chacha20-poly1305 decrypt | **+3.66%** | **+91.07%** | 98 |
+| aes256-gcm encrypt | **-0.75%** | **+28.94%** | 15 |
+| aes256-gcm decrypt | **+8.46%** | **+51.38%** | 15 |
+| ed25519 sign | **-1.59%** | **+1.33%** | 85 |
+| argon2id | **+1.35%** | **+1.42%** | 438 |
+
+**The decomposition is confirmed causally rather than by ratio.** A renamed
+switch costs -0.3 to +5.8 cycles; a serialising one costs 19.0 to 36.9. The
+comparison is immune to code-layout effects because it is one binary under two
+machine configurations.
+
+Three things this settles that silicon could not:
+
+- **The AES-GCM rows.** This README disclaims them ("too noisy to support the
+  claim") because 15-18 switches is at the edge of kperf's resolution. gem5
+  counts exactly 15 and the cross-model control floor is 0.00%.
+- **argon2id's switch count.** `data/results_summary.csv` records
+  `pass_switches_per_op = -197187` here - noise divided by noise, rendered
+  honestly as "~0 (noise)" in the table above. The real figure is **438**, and
+  at 1.3 writes per million cycles the serialising penalty is +0.07 points.
+  Together with chacha20's 43,176 that is a 30,000x span on experiment 06's
+  toggle-rate axis, whose previous range was 86 to 4,601.
+- **Placement granularity is a consequence of serialisation, not a property of
+  placement.** Under a serialising switch the three policies spread over 25
+  points; renamed, they collapse into 3. On a core that renames the write the
+  policy choice is nearly free.
+
+**Reading 2 above holds on gem5 too, but only once code layout is controlled.**
+Inserting a switch moves all downstream code by exactly 4.00 bytes, and the
+resulting cache-line displacement is worth **-6.82% to +7.89%** - larger than
+the policy differences it is measured against. Comparing raw totals made `fine`
+appear to beat `region` on aes256-gcm decrypt; against a per-policy layout twin
+(same placement, `HINT #0` in place of each switch, byte-identical addresses)
+`fine` is 3.7 points *worse*, executing more switches at the same dwell. The
+`func < region` ordering then holds on 4 of 5 benchmarks at three different
+alignment settings.
+
+Full rig, data and limits: `utils/dit_host_screening/cioparity/RESULTS.md`.
+Required two gem5 patches, both validated and unpushed: PMULL 64x64->128 (absent
+from gem5, so AES-GCM could not run at all) and `commit.ditCycles` (cycles with
+the mode set - the dwell axis the switch counters cannot provide).
 
 ## Second host, and a measurement correction
 
@@ -601,6 +714,15 @@ numbers above stay reproducible byte-for-byte.
   argon2id's two absolutes differ by 5% (211.4M vs 222.6M cycles) because
   wall-clock includes preemption over a 50 ms region where kperf counts thread
   cycles only.
+- **The per-TU flag is coarser than the configuration evaluated here.** These
+  arms come from whole-library bitcode (`llvm-link` -> one MIR -> the pass over
+  everything at once), which is what produces 521/569/631 switches. Hardening
+  per translation unit with `clang -ftaint-harden`, the shipped user-facing
+  flag, yields 134 static switches and - measured under gem5 - **3 committed
+  writes per signature against this configuration's 85**, because taint cannot
+  cross a TU boundary so the mode is set once and inherited. Both are sound;
+  they are not the same operating point, and the numbers here belong to the
+  whole-library one.
 - **Three counter claims were made and retracted** during this work: that blanket
   raises IPC (whole-process artifact; the timed region is +/-2%), that timed-region
   IPC was 12-14 (instrumentation asymmetry, since fixed), and that DIT removes
