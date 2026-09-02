@@ -1,0 +1,335 @@
+<title>Nothing to Recover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --ground:#F2F4F5; --surface:#FFFFFF; --sunk:#E9EDEF;
+  --ink:#11171C; --muted:#5A6670; --faint:#8695A0;
+  --rule:#D6DCDF; --rule-soft:#E4E9EB;
+  --free:#1B7F6B; --free-soft:#CFE6DF;
+  --cost:#B4472B; --cost-soft:#F0D5CC;
+  --shadow:0 1px 2px rgba(17,23,28,.06),0 8px 24px -12px rgba(17,23,28,.18);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+    --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+    --rule:#2A343B; --rule-soft:#222B31;
+    --free:#4FC3A6; --free-soft:#1E3A35;
+    --cost:#E8825F; --cost-soft:#3D2620;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+  --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+  --rule:#2A343B; --rule-soft:#222B31;
+  --free:#4FC3A6; --free-soft:#1E3A35;
+  --cost:#E8825F; --cost-soft:#3D2620;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.62;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px 96px}
+.col{max-width:68ch}
+h1,h2,h3,.eyebrow,th,.mono,.num{font-family:Archivo,"Helvetica Neue",Arial,sans-serif}
+h1{font-size:clamp(2.5rem,6vw,4.1rem);line-height:1.02;letter-spacing:-.03em;
+  font-weight:700;margin:0 0 .5rem;text-wrap:balance}
+h2{font-size:1.32rem;letter-spacing:-.01em;font-weight:600;margin:0;text-wrap:balance}
+h3{font-size:.95rem;font-weight:600;margin:0 0 .35rem;letter-spacing:-.005em}
+p{margin:0 0 1.05rem}
+a{color:var(--free)}
+.eyebrow{font-size:.7rem;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 1.4rem}
+.mono,.num,code{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  font-variant-numeric:tabular-nums}
+code{background:var(--sunk);padding:.1em .38em;border-radius:3px;font-size:.86em}
+
+header{padding:72px 0 40px}
+.lede{font-size:1.24rem;line-height:1.5;color:var(--ink);margin:0 0 1.5rem}
+.lede b{font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:0 28px;padding-top:20px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--faint);letter-spacing:.02em}
+.meta span{white-space:nowrap}
+
+section{padding-top:52px}
+.sechead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.sechead .tag{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--faint);
+  letter-spacing:.08em;white-space:nowrap}
+.sub{color:var(--muted);font-size:.96rem;margin:0 0 26px;max-width:68ch}
+
+/* the signature device: one shared scale, zero anchored left */
+.bars{margin:26px 0 8px;display:flex;flex-direction:column;gap:2px}
+.brow{display:grid;grid-template-columns:210px 1fr;gap:18px;align-items:center;
+  padding:11px 0;border-bottom:1px solid var(--rule-soft)}
+.brow:first-child{border-top:1px solid var(--rule)}
+.bname{font-family:Archivo,sans-serif;font-size:.86rem;font-weight:500;line-height:1.25}
+.bname small{display:block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;
+  color:var(--faint);font-weight:400;margin-top:2px}
+.track{position:relative;height:34px}
+.zero{position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--rule)}
+.bar{position:absolute;border-radius:0 2px 2px 0;display:flex;
+  align-items:center;padding-left:8px}
+.bar.free{background:var(--free-soft);border-left:2px solid var(--free)}
+.bar.cost{background:var(--cost-soft);border-left:2px solid var(--cost)}
+.bar .v{font-family:"IBM Plex Mono",monospace;font-size:.74rem;font-weight:500;
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+.bar.free .v{color:var(--free)}
+.bar.cost .v{color:var(--cost)}
+.bar .v.out{position:absolute;left:calc(100% + 8px)}
+.blegend{display:flex;gap:22px;margin-top:14px;font-size:.76rem;color:var(--muted)}
+.blegend i{display:inline-block;width:22px;height:9px;border-radius:2px;margin-right:7px;
+  vertical-align:middle}
+.blegend .f i{background:var(--free-soft);border-left:2px solid var(--free)}
+.blegend .c i{background:var(--cost-soft);border-left:2px solid var(--cost)}
+
+.scroll{overflow-x:auto;margin:22px 0 6px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.83rem}
+th{font-size:.68rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--faint);text-align:right;padding:12px 14px;border-bottom:1px solid var(--rule);
+  white-space:nowrap;background:var(--surface)}
+th:first-child,td:first-child{text-align:left}
+td{padding:10px 14px;border-bottom:1px solid var(--rule-soft);text-align:right;
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child{font-family:Archivo,sans-serif;font-size:.85rem}
+tr:last-child td{border-bottom:none}
+.free-t{color:var(--free);font-weight:500}
+.cost-t{color:var(--cost);font-weight:500}
+caption{caption-side:bottom;text-align:left;padding:11px 14px;font-size:.76rem;
+  color:var(--faint);font-family:"Source Serif 4",serif;border-top:1px solid var(--rule-soft)}
+
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:18px;margin:24px 0}
+.note{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:18px 20px}
+.note p{font-size:.9rem;margin:0;color:var(--muted)}
+.note h3{color:var(--ink)}
+
+.gates{display:flex;flex-direction:column;gap:0;margin:22px 0 6px;
+  border:1px solid var(--rule);border-radius:6px;background:var(--surface);overflow:hidden}
+.gate{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:baseline;
+  padding:12px 18px;border-bottom:1px solid var(--rule-soft)}
+.gate:last-child{border-bottom:none}
+.gate .k{font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--ink)}
+.gate .d{font-size:.85rem;color:var(--muted);line-height:1.4}
+.pass{font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;letter-spacing:.06em;
+  color:var(--free);border:1px solid var(--free-soft);background:var(--free-soft);
+  padding:2px 8px;border-radius:99px;white-space:nowrap}
+:root[data-theme="dark"] .pass,:root:not([data-theme="light"]) .pass{border-color:transparent}
+
+.kill{border-left:2px solid var(--cost);padding:2px 0 2px 20px;margin:24px 0}
+.kill p{margin:0 0 .6rem;font-size:.95rem}
+.kill p:last-child{margin:0}
+.kill .h{font-family:Archivo,sans-serif;font-weight:600;font-size:.9rem;color:var(--cost)}
+
+ul{margin:0 0 1.05rem;padding-left:1.15rem}
+li{margin-bottom:.5rem}
+footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
+  font-size:.8rem;color:var(--faint)}
+@media (max-width:640px){
+  .brow{grid-template-columns:1fr;gap:6px}
+  .track{height:30px}
+  header{padding:48px 0 32px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .bar{transition:width .2s ease}
+}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Experiment 09 &middot; libsodium, CIO parity</p>
+  <h1>Nothing to Recover</h1>
+  <p class="lede">Run the closest prior work&rsquo;s experiment on their library, with their seeds
+  and their drivers, and the first question answers itself. Blanket <code>PSTATE.DIT</code> costs
+  <b>&minus;0.60% to +1.95%</b> on all six benchmarks. There is no headroom &mdash; so every
+  selective placement policy spends switches to recover something worth nothing, and loses by
+  <b>12% to 124%</b>.</p>
+  <div class="meta">
+    <span>Apple M5 &middot; Mac17,2</span>
+    <span>kperf FIXED_CYCLES</span>
+    <span>15 reps &middot; median</span>
+    <span>libsodium 1.0.21 &middot; --disable-asm</span>
+    <span>2026-09-01</span>
+  </div>
+</header>
+
+<section>
+  <div class="sechead"><h2>The whole result, on one scale</h2><span class="tag">vs unhardened control</span></div>
+  <p class="sub">Cost of blanket DIT against cost of the shipped selective pass, drawn to a single
+  shared scale. Blanket is the thin marks at the zero line.</p>
+
+  <div class="bars" id="bars"></div>
+  <div class="blegend">
+    <span class="f"><i></i>C &mdash; blanket DIT, mode set once</span>
+    <span class="c"><i></i>P &mdash; selective placement, shipped defaults</span>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Every arm</h2><span class="tag">median of per-run means</span></div>
+  <p class="sub">CIO&rsquo;s six drivers at their own iteration counts. <b>A</b> is the MIR
+  round-trip control, not the stock build &mdash; the 3-phase round-trip perturbs codegen by itself.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>benchmark</th><th>cycles/op</th><th>C blanket</th><th>P pass</th>
+      <th>F function</th><th>X old defaults</th><th>N resolved</th><th>MAD</th></tr></thead>
+      <tbody id="tbl"></tbody>
+      <caption>Arm order rotates every rep. MAD is the median absolute deviation of the 15 per-rep
+      means, worst arm shown.</caption>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Where the cost goes</h2><span class="tag">counters, timed region only</span></div>
+  <p class="sub">Instruction counts read inside the timed call attribute the overhead exactly.
+  Absolute counts carry a constant instrumentation offset; differences between arms cancel it.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>benchmark</th><th>executed switches/op</th><th>extra cycles/op</th>
+      <th>cycles per switch</th></tr></thead>
+      <tbody>
+        <tr><td>ed25519 sign</td><td>109</td><td>+4,487</td><td class="cost-t">41.2</td></tr>
+        <tr><td>chacha20-poly1305 encrypt</td><td>105</td><td>+4,225</td><td class="cost-t">40.3</td></tr>
+        <tr><td>chacha20-poly1305 decrypt</td><td>103</td><td>+4,611</td><td class="cost-t">44.8</td></tr>
+        <tr><td>aes256-gcm encrypt</td><td>15</td><td>+1,020</td><td>66.3</td></tr>
+        <tr><td>aes256-gcm decrypt</td><td>18</td><td>+1,017</td><td>56.3</td></tr>
+        <tr><td>argon2id</td><td>~0 (noise)</td><td>~0</td><td>&mdash;</td></tr>
+      </tbody>
+      <caption>The evidence is the <em>consistency</em> of the last column across independent
+      benchmarks (40.3 / 41.2 / 44.8), not per-row agreement &mdash; cycles-per-switch is derived by
+      dividing measured cycles by measured switches, so multiplying it back proves nothing. The AES
+      rows rest on 15&ndash;18 switches and are too noisy to support the claim.</caption>
+    </table>
+  </div>
+  <div class="pair">
+    <div class="note"><h3>No dwell term</h3><p>Blanket adds <b>0&nbsp;&plusmn;&nbsp;10 instructions</b>
+    and <b>0&nbsp;&plusmn;&nbsp;60 cycles</b> per operation, measured the same way. The cost is switch
+    serialisation alone &mdash; which is what &ldquo;blanket is free&rdquo; implies.</p></div>
+    <div class="note"><h3>Coarser wins, everywhere</h3><p>Whole-function placement (F) beats region
+    placement (P) on all six. With dwell at zero, narrowing coverage buys nothing and you only pay
+    toggles, so fewer toggles is strictly better.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Against CIO</h2><span class="tag">same library, same seeds</span></div>
+  <p class="sub">CIO could not use the hardware mode and says so &mdash; at the time, only Apple
+  M-series shipped <code>PSTATE.DIT</code>, and Intel&rsquo;s DOIT needed the kernel. Their overhead
+  is the price of doing in software what the mode does in hardware.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th></th><th>CIO, published</th><th>blanket DIT</th><th>our pass</th></tr></thead>
+      <tbody>
+        <tr><td>ed25519</td><td class="cost-t">20.32&times; / 16.73&times;</td>
+            <td class="free-t">1.0017&times;</td><td>1.119&times;</td></tr>
+        <tr><td>argon2id</td><td class="cost-t">27.84&times;</td>
+            <td class="free-t">0.997&times;</td><td>0.998&times;</td></tr>
+        <tr><td>libsodium <span class="mono">__text</span></td>
+            <td class="cost-t">+62% / +208% / +266%</td><td class="free-t">0%</td><td>+0.87%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="col">The interesting comparison is not that we beat them. It is that <b>blanket beats
+  them by roughly 400&times;</b>, and our selective placement then gives back a factor of 70 to
+  protect strictly less code.</p>
+</section>
+
+<section>
+  <div class="sechead"><h2>Why the null result counts</h2><span class="tag">all gates armed</span></div>
+  <p class="sub">A negative result is only worth reading if the instrument is proven able to see a
+  positive one. <span class="mono">ditprobe</span> runs interleaved with every benchmark, same arms,
+  same rotation.</p>
+  <div class="gates">
+    <div class="gate"><span class="k">3.932&times;</span><span class="d">Value-predictable pointer
+      chase, 222 &rarr; 873 ps/hop with the mode on. The instrument can see DIT.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">1.0000&times;</span><span class="d">Random-permutation chase,
+      nothing to predict. Negative control stays flat.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">4597&ndash;4598 MHz</span><span class="d">Dependent-ADD clock
+      probe on every arm. QoS is a bias, not a binding, so residency is checked per rep.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">DIT 0 / 1</span><span class="d"><code>PSTATE.DIT</code> read
+      back inside the region: 0 for every arm, 1 for blanket.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">&plusmn;0.23%</span><span class="d">Retired instructions,
+      blanket vs baseline. The arms run the same work, so the cycle ratios mean something.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">86 / 86</span><span class="d"><span class="mono">make check</span>
+      on both the control and the hardened library.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">0 severe</span><span class="d">Information-loss report. Six
+      <span class="mono">TCRETURN</span>s survive <span class="mono">-disable-tail-calls</span>
+      (<span class="mono">musttail</span> and the late outliner bypass it); all six are libc calls in
+      functions carrying no <span class="mono">msr DIT</span>, so no mode is left set.</span><span class="pass">PASS</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><h2>What this does not say</h2><span class="tag">limits, recorded</span></div>
+  <div class="col">
+  <ul>
+    <li><b>It is not evidence against selective placement.</b> It is the measurement that says where
+    placement does not belong, and that you can know it before writing any compiler. In experiment 02
+    the same library is the secret lane of a flow <em>with</em> a public lane, and the pass beats
+    blanket by 21%. The library is not the workload; the flow is.</li>
+    <li><b>CIO&rsquo;s seeds over-taint.</b> Their config marks all five arguments of
+    <code>crypto_sign</code>, including the message length and the output buffer. That inflates the
+    126 <span class="mono">UNCOVERED</span> sites &mdash; a branch on a length is reported as a secret
+    branch. The 49 AES-GCM secret-address sites are genuine; the total is not 126 real leaks.</li>
+    <li><b>Their AEAD drivers discard the additional data.</b>
+    <code>additional_data_sz = 0; //strtol(...)</code> &mdash; the Makefile passes AD&nbsp;=&nbsp;100
+    and the driver ignores it. Reproduced exactly; the label is wrong in their Makefile, not in the
+    measurement.</li>
+    <li><b>No dynamic verification.</b> Coverage here is static. Whether every secret-dependent
+    instruction actually executes with DIT on needs the gem5 shadow-taint oracle, which has not been
+    run on this library.</li>
+  </ul>
+  </div>
+  <div class="kill">
+    <p class="h">Three counter claims were made and retracted while building this.</p>
+    <p>That blanket raises IPC by up to 9.4% &mdash; a whole-process artifact; the timed region is
+    &plusmn;2%, and the two disagreed in sign on 5 of 6 benchmarks. That timed-region IPC was 12&ndash;14
+    &mdash; impossible on an 8-wide core, caused by reading the two counters in separate calls so the
+    instruction window bracketed work the cycle window did not. That DIT removes value-predictor
+    flushes &mdash; flush counts move &minus;0.1% to &minus;7.3%.</p>
+    <p>The switch-count decomposition above replaced all three, and only surfaced because one of the
+    numbers was absurd enough to force a re-derivation.</p>
+  </div>
+</section>
+
+<footer>
+  <span class="mono">paper_experiments/09-libsodium-cio-parity</span> &middot; raw data, seed files and
+  the escape, uncovered and information-loss reports ship in <span class="mono">data/</span> &middot;
+  rerun with <span class="mono">utils/taint_libsodium_sudo_run.sh</span>
+</footer>
+</div>
+
+<script>
+const ROWS=[
+ {n:"ed25519 sign",             d:"crypto_sign, 100 B message", cyc:"37,508",      C:0.17, P:11.94, F:10.57, X:24.75, N:12.02, mad:"0.12%"},
+ {n:"chacha20-poly1305 encrypt",d:"100 B, AD 0",                cyc:"3,701",       C:-0.54,P:114.26,F:111.83,X:153.44,N:114.32,mad:"0.33%"},
+ {n:"chacha20-poly1305 decrypt",d:"100 B, AD 0",                cyc:"3,729",       C:-0.60,P:123.56,F:119.03,X:165.98,N:123.43,mad:"0.48%"},
+ {n:"aes256-gcm encrypt",       d:"key expanded per call",      cyc:"2,876",       C:-0.59,P:35.34, F:33.79, X:50.91, N:35.06, mad:"0.57%"},
+ {n:"aes256-gcm decrypt",       d:"key expanded per call",      cyc:"2,969",       C:1.95, P:34.24, F:32.82, X:38.33, N:34.34, mad:"0.91%"},
+ {n:"argon2id",                 d:"interactive: 2 pass, 64 MiB",cyc:"191,171,059", C:-0.33,P:-0.17, F:-0.34, X:0.04,  N:0.03,  mad:"0.23%"}
+];
+const MAX=170, fmt=v=>(v>=0?"+":"−")+Math.abs(v).toFixed(2)+"%";
+
+// two stacked half-height bars per row: blanket above, pass below, same zero line
+document.getElementById("bars").innerHTML=ROWS.map(r=>{
+  // blanket above the line, pass below it, both measured from the same zero
+  const bar=(v,cls,top)=>{
+    const w=Math.max(Math.abs(v)/MAX*100,0.6), out=w<24;
+    return `<div class="bar ${cls}" style="top:${top}px;height:13px;width:${w}%">`+
+           `<span class="v${out?" out":""}">${fmt(v)}</span></div>`;
+  };
+  return `<div class="brow">
+    <div class="bname">${r.n}<small>${r.d} &middot; ${r.cyc} cyc</small></div>
+    <div class="track"><div class="zero"></div>${bar(r.C,"free",0)}${bar(r.P,"cost",17)}</div>
+  </div>`;
+}).join("");
+
+document.getElementById("tbl").innerHTML=ROWS.map(r=>{
+  const c=v=>`<td class="${v>2?"cost-t":(Math.abs(v)<2?"free-t":"")}">${fmt(v)}</td>`;
+  return `<tr><td>${r.n}</td><td>${r.cyc}</td>${c(r.C)}${c(r.P)}${c(r.F)}${c(r.X)}${c(r.N)}<td>${r.mad}</td></tr>`;
+}).join("");
+</script>

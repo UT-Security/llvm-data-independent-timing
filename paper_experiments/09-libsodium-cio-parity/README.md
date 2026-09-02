@@ -3,6 +3,11 @@
 **Status: complete, silicon.** Measured 2026-09-01 on Apple M5 (Mac17,2), root,
 real kperf cycle counters.
 
+**Published artifact:** https://claude.ai/code/artifact/842a1394-e976-4587-861c-076657829a48
+Source: `figures/cio-parity.html`. To update the page, republish **that URL**
+(`Artifact` with `url=...`); publishing the file without it creates a second
+artifact instead of updating this one.
+
 ---
 
 ## The claim
@@ -145,6 +150,31 @@ not the pass's.
   entry points, so their placement covers their secret work whoever calls them,
   and the caller re-asserts after every indirect call. Safe **here**, but by a
   property of CIO's seed set rather than by construction.
+- **Tail calls are disabled, and the six that survive are audited.** A tail call
+  has no epilogue, so one taken with DIT on never restores the mode and the arm
+  becomes blanket in disguise - this rig had **13 such sites** before the fix,
+  `crypto_sign` among them. The lowering `llc` now runs `-disable-tail-calls`,
+  upstream of every arm. Six `TCRETURN`s still survive it (out of 956 returns),
+  because `musttail` bypasses the option in SelectionDAGBuilder and
+  `MachineOutlinerTailCall` runs downstream of the pass. All six are libc calls
+  in functions that carry **no `msr DIT` at all**, so there is no mode to fail to
+  restore:
+
+  | function | tail-calls | instrumented |
+  |---|---|---|
+  | `aegis128l_mac`, `aegis128l_mac.78` | `bzero` | no |
+  | `aegis256_mac`, `aegis256_mac.95` | `bzero` | no |
+  | `_sodium_keccak1600_ref_extract_bytes` | `memcpy` | no |
+  | `sodium_malloc` | `memset` | no |
+
+  None of them is reachable from CIO's seed set, which is why they are
+  uninstrumented. The pass's own check agrees independently: **0 `leak-tailcall`
+  records** in `data/report_infoloss.txt`, against 13 before. Both MIRs
+  (`libsodium.pe.mir`, `libsodium.nar.pe.mir`) show the same 6, so the `N` arm is
+  built the same way. **This audit is required, not decorative:** "the flag was
+  passed" is not the same claim as "no DIT-on exit tail-calls", and only the
+  second one licenses the numbers above.
+
 - **126 UNCOVERED sites** (`data/report_uncovered.txt`): 97 secret-address, 29
   secret-branch. **DIT does not cover these channels at all** - a secret used as
   a memory address is a cache-timing leak and a secret-dependent branch is a
