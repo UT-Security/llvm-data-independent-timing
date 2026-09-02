@@ -1,0 +1,368 @@
+<title>Nothing to Recover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --ground:#F2F4F5; --surface:#FFFFFF; --sunk:#E9EDEF;
+  --ink:#11171C; --muted:#5A6670; --faint:#8695A0;
+  --rule:#D6DCDF; --rule-soft:#E4E9EB;
+  --free:#1B7F6B; --free-soft:#CFE6DF;
+  --cost:#B4472B; --cost-soft:#F0D5CC;
+  --rev:#8A6A1F; --rev-soft:#F2E3C4;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+    --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+    --rule:#2A343B; --rule-soft:#222B31;
+    --free:#4FC3A6; --free-soft:#1E3A35;
+    --cost:#E8825F; --cost-soft:#3D2620;
+    --rev:#D9AE55; --rev-soft:#3A2F16;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+  --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+  --rule:#2A343B; --rule-soft:#222B31;
+  --free:#4FC3A6; --free-soft:#1E3A35;
+  --cost:#E8825F; --cost-soft:#3D2620;
+  --rev:#D9AE55; --rev-soft:#3A2F16;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.62;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px 96px}
+.col{max-width:68ch}
+h1,h2,h3,.eyebrow,th,.mono{font-family:Archivo,"Helvetica Neue",Arial,sans-serif}
+h1{font-size:clamp(2.5rem,6vw,4.1rem);line-height:1.02;letter-spacing:-.03em;
+  font-weight:700;margin:0 0 .5rem;text-wrap:balance}
+h2{font-size:1.32rem;letter-spacing:-.01em;font-weight:600;margin:0;text-wrap:balance}
+h3{font-size:.95rem;font-weight:600;margin:0 0 .35rem}
+p{margin:0 0 1.05rem}
+.eyebrow{font-size:.7rem;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 1.4rem}
+.mono,code{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  font-variant-numeric:tabular-nums}
+code{background:var(--sunk);padding:.1em .38em;border-radius:3px;font-size:.86em}
+header{padding:72px 0 40px}
+.lede{font-size:1.24rem;line-height:1.5;margin:0 0 1.5rem}
+.lede b{font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:0 26px;padding-top:20px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:.73rem;color:var(--faint)}
+.meta span{white-space:nowrap}
+section{padding-top:52px}
+.sechead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.sechead .tag{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--faint);
+  letter-spacing:.08em;white-space:nowrap}
+.sub{color:var(--muted);font-size:.96rem;margin:0 0 26px;max-width:68ch}
+
+.bars{margin:26px 0 8px;display:flex;flex-direction:column;gap:2px}
+.brow{display:grid;grid-template-columns:200px 1fr;gap:18px;align-items:center;
+  padding:11px 0;border-bottom:1px solid var(--rule-soft)}
+.brow:first-child{border-top:1px solid var(--rule)}
+.bname{font-family:Archivo,sans-serif;font-size:.85rem;font-weight:500;line-height:1.25}
+.bname small{display:block;font-family:"IBM Plex Mono",monospace;font-size:.67rem;
+  color:var(--faint);font-weight:400;margin-top:2px}
+.track{position:relative;height:34px}
+.one{position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--rule)}
+.bar{position:absolute;display:flex;align-items:center;padding-left:8px;border-radius:0 2px 2px 0}
+.bar.free{background:var(--free-soft);border-left:2px solid var(--free)}
+.bar.cost{background:var(--cost-soft);border-left:2px solid var(--cost)}
+.bar .v{font-family:"IBM Plex Mono",monospace;font-size:.73rem;font-weight:500;white-space:nowrap}
+.bar.free .v{color:var(--free)} .bar.cost .v{color:var(--cost)}
+.bar .v.out{position:absolute;left:calc(100% + 8px)}
+.blegend{display:flex;gap:22px;margin-top:14px;font-size:.76rem;color:var(--muted)}
+.blegend i{display:inline-block;width:22px;height:9px;border-radius:2px;margin-right:7px;
+  vertical-align:middle}
+.blegend .f i{background:var(--free-soft);border-left:2px solid var(--free)}
+.blegend .c i{background:var(--cost-soft);border-left:2px solid var(--cost)}
+
+.scroll{overflow-x:auto;margin:22px 0 6px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.82rem}
+th{font-size:.67rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--faint);text-align:right;padding:12px 13px;border-bottom:1px solid var(--rule);
+  white-space:nowrap;background:var(--surface)}
+th:first-child,td:first-child{text-align:left}
+td{padding:9px 13px;border-bottom:1px solid var(--rule-soft);text-align:right;
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child{font-family:Archivo,sans-serif;font-size:.84rem}
+tr:last-child td{border-bottom:none}
+tr.alt td{color:var(--faint)}
+.free-t{color:var(--free);font-weight:500}
+.cost-t{color:var(--cost);font-weight:500}
+.rev-t{color:var(--rev);font-weight:500}
+caption{caption-side:bottom;text-align:left;padding:11px 13px;font-size:.76rem;
+  color:var(--faint);font-family:"Source Serif 4",serif;border-top:1px solid var(--rule-soft)}
+.hostcell{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.05em;
+  color:var(--faint)}
+
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin:24px 0}
+.note{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:18px 20px}
+.note p{font-size:.9rem;margin:0;color:var(--muted)}
+.note h3{color:var(--ink)}
+.gates{border:1px solid var(--rule);border-radius:6px;background:var(--surface);
+  overflow:hidden;margin:22px 0 6px}
+.gate{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:baseline;
+  padding:12px 18px;border-bottom:1px solid var(--rule-soft)}
+.gate:last-child{border-bottom:none}
+.gate .k{font-family:"IBM Plex Mono",monospace;font-size:.77rem}
+.gate .d{font-size:.85rem;color:var(--muted);line-height:1.4}
+.pass{font-family:"IBM Plex Mono",monospace;font-size:.67rem;font-weight:600;letter-spacing:.06em;
+  color:var(--free);background:var(--free-soft);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.kill{border-left:2px solid var(--rev);padding:2px 0 2px 20px;margin:24px 0}
+.kill p{margin:0 0 .6rem;font-size:.95rem}
+.kill p:last-child{margin:0}
+.kill .h{font-family:Archivo,sans-serif;font-weight:600;font-size:.9rem;color:var(--rev)}
+ul{margin:0 0 1.05rem;padding-left:1.15rem} li{margin-bottom:.5rem}
+footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
+  font-size:.8rem;color:var(--faint)}
+@media (max-width:640px){.brow{grid-template-columns:1fr;gap:6px}.track{height:30px}
+  header{padding:48px 0 32px}}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Experiment 09 &middot; libsodium, CIO parity &middot; two hosts</p>
+  <h1>Nothing to Recover</h1>
+  <p class="lede">Run the closest prior work&rsquo;s experiment on their library, with their seeds and
+  their drivers, and the first question answers itself. Blanket <code>PSTATE.DIT</code> costs
+  <b>1.00&times;&ndash;1.02&times;</b> on all six benchmarks, on two different chips, and is
+  <em>below</em> 1 on argon2id. There is no headroom &mdash; so every selective placement policy
+  spends switches to recover something worth nothing, and loses by up to <b>5.3&times;</b>.</p>
+  <div class="meta">
+    <span>Apple M5 &middot; Mac17,2</span>
+    <span>Apple M4 &middot; Mac16,10</span>
+    <span>kperf, root, 15 reps</span>
+    <span>libsodium 1.0.21 &middot; --disable-asm</span>
+    <span>2026-09-02</span>
+  </div>
+</header>
+
+<div class="kill">
+  <p class="h">These numbers are a correction. The first publication understated them 4&times; to 15&times;.</p>
+  <p>Each sample was timed between two <code>kpc_get_thread_counters()</code> calls &mdash; calls into
+  the kperf driver, not register reads, with the counter sampled part-way through, so their cost lands
+  <em>inside</em> the timed region. Measured directly against a payload of known length:
+  <b>2,521 cycles on M5</b> and <b>3,234 on M4</b>. That is 68% of the chacha baseline and 88% of the
+  AES one. It cancels in arm-vs-arm differences, so the switch decomposition always held; it sits in
+  the <em>denominator</em> of every ratio, which did not.</p>
+  <p>Re-timed with a 21-cycle counter on both machines, with a NOP-switch control added.
+  <b>All three conclusions survive.</b> Only the magnitudes changed, and they changed in the direction
+  that makes this experiment&rsquo;s argument stronger.</p>
+</div>
+
+<section>
+  <div class="sechead"><h2>The whole result, on one scale</h2><span class="tag">M5 &middot; multiple of unhardened</span></div>
+  <p class="sub">Blanket DIT against the shipped selective pass, drawn to a shared scale anchored at
+  1.0&times;. Blanket is the sliver at the line.</p>
+  <div class="bars" id="bars"></div>
+  <div class="blegend">
+    <span class="f"><i></i>blanket DIT &mdash; mode set once, never cleared</span>
+    <span class="c"><i></i>selective placement, shipped defaults</span>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Both hosts, every arm</h2><span class="tag">corrected timer</span></div>
+  <p class="sub">Each arm as a multiplier against <b>A</b>, the unhardened MIR round-trip control &mdash;
+  not the stock build, because the 3-phase round-trip perturbs codegen by itself. <b>Z</b> is arm P
+  with all 521 <code>msr DIT</code> emitted as <code>nop</code>: same instruction count, same
+  addresses, byte-identical but for 521 opcodes.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>benchmark</th><th>host</th><th>cyc/op</th><th>blanket</th><th>pass</th>
+      <th>func</th><th>old def</th><th>resolved</th><th>nop ctl</th></tr></thead>
+      <tbody id="tbl"></tbody>
+      <caption>Arm order rotates every rep; median of 15. M5 MAD 0.15&ndash;2.29%, M4 0.32&ndash;1.56%.</caption>
+    </table>
+  </div>
+  <div class="pair">
+    <div class="note"><h3>Blanket is free on both</h3><p>1.0057&ndash;1.0217&times; on M5 against
+    1.0015&ndash;1.0207&times; on M4, below 1 on argon2id both times. The load-bearing claim, and the
+    two hosts agree to within two points on every row.</p></div>
+    <div class="note"><h3>Coarser wins on both</h3><p><code>func</code> sits below <code>pass</code>
+    on all six rows, on both machines. With dwell at zero, narrowing coverage buys nothing and you
+    only pay toggles.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Where the hosts differ</h2><span class="tag">the switch itself</span></div>
+  <p class="sub">M5&rsquo;s pass costs 4.83&times; on chacha where M4&rsquo;s costs 3.43&times;. Same
+  binaries, same executed switch counts &mdash; so this is not placement.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th></th><th>M5</th><th>M4</th></tr></thead>
+      <tbody>
+        <tr><td>cycles per executed switch</td><td class="cost-t">~43.6</td><td>~33.4</td></tr>
+        <tr><td>instrumentation offset</td><td>2,521 cyc</td><td>3,234 cyc</td></tr>
+        <tr><td>pass, chacha20-poly1305 enc</td><td class="cost-t">4.83&times;</td><td>3.43&times;</td></tr>
+        <tr><td>pass, aes256-gcm enc</td><td class="cost-t">5.27&times;</td><td>3.34&times;</td></tr>
+        <tr><td>old defaults, aes256-gcm enc</td><td class="cost-t">7.10&times;</td><td>5.04&times;</td></tr>
+      </tbody>
+      <caption>A cost model calibrated in cycles has to be calibrated per core &mdash; which is the
+      argument for <code>-taint-dit-switch-cyc</code> staying a knob rather than becoming a constant.</caption>
+    </table>
+  </div>
+  <p class="col"><b>And the layout term reproduces.</b> Arm <code>Z</code> is within &plusmn;0.7% of
+  1.0&times; on five rows and <b>1.0769&times; on aes256-gcm encrypt</b>, against <b>1.0870&times;</b>
+  on M4 &mdash; the same effect, the same benchmark, a second machine. Instrumenting a 55-tick region
+  costs something through code movement alone, and an <code>A</code>-vs-<code>P</code> comparison
+  books it as DIT cost. That is what arm <code>Z</code> is for.</p>
+</section>
+
+<section>
+  <div class="sechead"><h2>Against CIO</h2><span class="tag">same library, same seeds</span></div>
+  <p class="sub">CIO could not use the hardware mode and says so &mdash; at the time only Apple
+  M-series shipped <code>PSTATE.DIT</code>, and Intel&rsquo;s DOIT needed the kernel. Their overhead
+  is the price of doing in software what the mode does in hardware.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th></th><th>CIO, published</th><th>blanket DIT</th><th>our pass (M5)</th></tr></thead>
+      <tbody>
+        <tr><td>ed25519</td><td class="cost-t">20.32&times; / 16.73&times;</td>
+            <td class="free-t">1.006&times;</td><td>1.134&times;</td></tr>
+        <tr><td>argon2id</td><td class="cost-t">27.84&times;</td>
+            <td class="free-t">0.998&times;</td><td>1.000&times;</td></tr>
+        <tr><td>libsodium <span class="mono">__text</span></td>
+            <td class="cost-t">+62% / +208% / +266%</td><td class="free-t">0%</td><td>+0.87%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="col">The interesting comparison is not that we beat them. It is that <b>blanket beats them
+  by roughly 400&times;</b> on ed25519 while our selective placement gives back a factor of 20 to
+  protect strictly less code.</p>
+</section>
+
+<section>
+  <div class="sechead"><h2>The secrets really are protected</h2><span class="tag">gem5 shadow taint</span></div>
+  <p class="sub">Static coverage says 108 functions instrumented and 0 severe information-loss
+  records. It cannot say whether a secret ever reaches a covered instruction with the mode clear,
+  because nothing faults when it does.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>workload</th><th>seed set</th><th>protected</th><th>DIT clear</th><th>sites in libsodium</th></tr></thead>
+      <tbody>
+        <tr><td>ed25519 sign</td><td>key</td><td>294,164</td><td class="free-t">0</td><td class="free-t">0</td></tr>
+        <tr><td></td><td>key + message (CIO&rsquo;s)</td><td>297,638</td><td class="free-t">0</td><td class="free-t">0</td></tr>
+        <tr class="alt"><td></td><td>unhardened control</td><td>0</td><td>294,164</td><td>&mdash;</td></tr>
+        <tr><td>chacha20-poly1305</td><td>key</td><td>7,170</td><td class="free-t">0</td><td class="free-t">0</td></tr>
+        <tr><td></td><td>key + message</td><td>7,224</td><td class="free-t">0</td><td class="free-t">0</td></tr>
+        <tr class="alt"><td></td><td>unhardened control</td><td>0</td><td>7,170</td><td>&mdash;</td></tr>
+      </tbody>
+      <caption>The unhardened control is what makes the zero mean something: the same library without
+      hardening runs every one of those instructions unprotected, so the oracle demonstrably reached
+      the crypto.</caption>
+    </table>
+  </div>
+  <p class="col"><b>And the oracle&rsquo;s own propagation is verified</b>, because a model that lost
+  the key mid-algorithm would report the same clean zero. Seeding a <em>public</em> buffer of the same
+  size at the same point collapses the count to <b>0</b>; seeding nothing gives <b>0</b>; the count
+  scales exactly linearly with work (3,585 / 7,170 / 14,340 over 1, 2 and 4 rounds); and at
+  <b>40.7% of all committed instructions</b> the taint covers the whole primitive rather than a
+  truncated prefix of it.</p>
+</section>
+
+<section>
+  <div class="sechead"><h2>Why the null result counts</h2><span class="tag">M5, all gates armed</span></div>
+  <p class="sub">A negative result is worth nothing unless the instrument is proven able to see a
+  positive one. <code>ditprobe</code> runs interleaved with every benchmark, same arms, same rotation.</p>
+  <div class="gates">
+    <div class="gate"><span class="k">1.00 &rarr; 3.00 cyc/hop</span><span class="d">Value-predictable
+      pointer chase with the mode on. Read as cycles/hop, not as a multiple &mdash; the ratio&rsquo;s
+      ceiling is that core&rsquo;s L1 load-to-use latency.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">flat</span><span class="d">Random-permutation chase, nothing to
+      predict. The negative control.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">4590&ndash;4604 MHz</span><span class="d">Core clock on every
+      arm. QoS is a bias, not a binding, so residency is checked per rep.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">DIT 0 / 1</span><span class="d"><code>PSTATE.DIT</code> read
+      back in-region: 0 for every arm, 1 for blanket.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">&plusmn;0.23%</span><span class="d">Retired instructions,
+      blanket vs baseline. The arms run the same work, so the ratios mean something.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">86 / 86</span><span class="d"><code>make check</code> on both
+      the control and the hardened library.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">0 severe</span><span class="d">Information-loss report. Six
+      <code>TCRETURN</code>s survive <code>-disable-tail-calls</code>; all six are libc calls in
+      functions carrying no <code>msr DIT</code>, so no mode is left set.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">5 of 5</span><span class="d">Offset probe sweeps at full clock.
+      A run where all five are discarded is void &mdash; that happened once, under competing
+      load.</span><span class="pass">PASS</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><h2>What this does not say</h2><span class="tag">limits, recorded</span></div>
+  <div class="col">
+  <ul>
+    <li><b>It is not evidence against selective placement.</b> It says where placement does not
+    belong, and that you can know before writing any compiler. In experiment 02 the same library is
+    the secret lane of a flow <em>with</em> a public lane and the pass beats blanket by 21%. The
+    library is not the workload; the flow is.</li>
+    <li><b>CIO&rsquo;s seeds over-taint.</b> Their config marks all five arguments of
+    <code>crypto_sign</code>, including the message length and the output buffer, which inflates the
+    126 static <code>UNCOVERED</code> sites &mdash; a branch on a length reported as a secret branch.</li>
+    <li><b>The oracle covers two of six paths.</b> argon2id and AES-GCM are unaudited, and it is two
+    operations per workload against the libsecp256k1 run&rsquo;s 200. Misc registers are untracked by
+    design, and the address channel is counted but never flagged, since DIT does not cover cache
+    timing.</li>
+    <li><b>Three earlier counter claims were retracted:</b> that blanket raises IPC (a whole-process
+    artifact &mdash; the timed region is &plusmn;2%), that timed-region IPC was 12&ndash;14
+    (impossible on an 8-wide core; an instrumentation asymmetry, since fixed), and that DIT removes
+    value-predictor flushes (flush counts move &minus;0.1% to &minus;7.3%).</li>
+  </ul>
+  </div>
+</section>
+
+<footer>
+  <span class="mono">paper_experiments/09-libsodium-cio-parity</span> &middot; raw data for both hosts,
+  both timers, the seed files and the escape / uncovered / information-loss reports ship in
+  <span class="mono">data/</span> &middot; rerun with
+  <span class="mono">utils/run_m5_corrected.sh</span>
+</footer>
+</div>
+
+<script>
+const M5=[
+ {n:"ed25519 sign",             d:"crypto_sign, 100 B",      cyc:"36,690",      C:1.0057,P:1.1342,F:1.1251,X:1.2745,N:1.1307,Z:1.0068},
+ {n:"chacha20-poly1305 enc",    d:"100 B, AD 0",             cyc:"1,119",       C:1.0070,P:4.8326,F:4.7516,X:6.0872,N:4.8106,Z:0.9972},
+ {n:"chacha20-poly1305 dec",    d:"100 B, AD 0",             cyc:"1,180",       C:1.0217,P:4.9040,F:4.7916,X:6.2127,N:4.9214,Z:0.9960},
+ {n:"aes256-gcm enc",           d:"key expanded per call",   cyc:"252",         C:1.0096,P:5.2735,F:5.1441,X:7.1021,N:5.2663,Z:1.0769},
+ {n:"aes256-gcm dec",           d:"key expanded per call",   cyc:"345",         C:1.0116,P:4.1435,F:4.0735,X:4.5052,N:4.1886,Z:1.0066},
+ {n:"argon2id",                 d:"interactive: 2 pass, 64 MiB",cyc:"197,919,014",C:0.9977,P:1.0002,F:0.9977,X:1.0008,N:1.0004,Z:1.0002}
+];
+const M4=[
+ {cyc:"34,506",      C:1.0087,P:1.0946,F:1.0884,X:1.1457,N:1.0900,Z:0.9962},
+ {cyc:"1,108",       C:1.0127,P:3.4316,F:3.4117,X:4.4134,N:3.4288,Z:0.9760},
+ {cyc:"1,129",       C:1.0207,P:3.6217,F:3.5859,X:4.7164,N:3.6306,Z:1.0024},
+ {cyc:"272",         C:1.0015,P:3.3389,F:3.3165,X:5.0391,N:3.3672,Z:1.0870},
+ {cyc:"360",         C:1.0081,P:2.9496,F:2.9016,X:3.4014,N:2.9726,Z:0.9838},
+ {cyc:"222,555,555", C:0.9981,P:0.9963,F:0.9958,X:0.9955,N:0.9949,Z:0.9950}
+];
+const MAX=7.2, fx=v=>v.toFixed(4).replace(/0+$/,"").replace(/\.$/,"")+"x";
+
+document.getElementById("bars").innerHTML=M5.map(r=>{
+  const bar=(v,cls,top)=>{
+    const w=Math.max((v-1)/(MAX-1)*100,0.6), out=w<20;
+    return `<div class="bar ${cls}" style="top:${top}px;height:13px;width:${w}%">`+
+           `<span class="v${out?" out":""}">${fx(v)}</span></div>`;
+  };
+  return `<div class="brow">
+    <div class="bname">${r.n}<small>${r.d} &middot; ${r.cyc} cyc</small></div>
+    <div class="track"><div class="one"></div>${bar(r.C,"free",0)}${bar(r.P,"cost",17)}</div>
+  </div>`;
+}).join("");
+
+document.getElementById("tbl").innerHTML=M5.map((r,i)=>{
+  const m4=M4[i];
+  const c=(v,hi)=>`<td class="${v<1.03?"free-t":(hi?"cost-t":"")}">${fx(v)}</td>`;
+  const zc=v=>`<td class="${v>1.03?"rev-t":""}">${fx(v)}</td>`;
+  return `<tr><td rowspan="2">${r.n}</td><td class="hostcell">M5</td><td>${r.cyc}</td>`+
+         c(r.C)+c(r.P,1)+c(r.F,1)+c(r.X,1)+c(r.N,1)+zc(r.Z)+`</tr>`+
+         `<tr class="alt"><td class="hostcell">M4</td><td>${m4.cyc}</td>`+
+         `<td>${fx(m4.C)}</td><td>${fx(m4.P)}</td><td>${fx(m4.F)}</td><td>${fx(m4.X)}</td>`+
+         `<td>${fx(m4.N)}</td><td>${fx(m4.Z)}</td></tr>`;
+}).join("");
+</script>

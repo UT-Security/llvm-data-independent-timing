@@ -5,10 +5,15 @@ of six rows -- see "Second host, and a measurement correction".** Measured
 2026-09-01 on Apple M5 (Mac17,2), root, real kperf cycle counters; replicated
 2026-09-02 on Apple M4 (Mac16,10).
 
-**Published artifact:** https://claude.ai/code/artifact/842a1394-e976-4587-861c-076657829a48
-Source: `figures/cio-parity.html`. To update the page, republish **that URL**
-(`Artifact` with `url=...`); publishing the file without it creates a second
-artifact instead of updating this one.
+**Published artifact:** https://claude.ai/code/artifact/24709335-fc81-4a36-8eca-0c64fcc6cf8a
+Source: `figures/cio-parity-corrected.html`, carrying the corrected two-host
+tables. To update the page, republish **that URL** (`Artifact` with `url=...`);
+publishing the file without it creates a second artifact instead.
+
+`figures/cio-parity.html` is the superseded page, built from the uncorrected M5
+percentages before the instrumentation offset was found. Kept because the
+headline table above is still those numbers and the two have to stay legible
+together; its own artifact is gone.
 
 ---
 
