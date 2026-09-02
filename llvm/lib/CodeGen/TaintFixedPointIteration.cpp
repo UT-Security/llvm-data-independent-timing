@@ -141,13 +141,40 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
                               << " now tainted (via " << printReg(PhysReg, TRI)
                               << ")\n");
           }
-          // KNOWN GAP: passing `&local_secret` in still transfers nothing when
-          // the pointer register itself was never pointee-tainted, because
-          // post-prologepilog the address is a bare `$sp + imm`. The
-          // whole-frame fallback that used to bridge this cost +44 points
-          // against the mod-set gate and has been removed; the fix is
-          // per-object provenance on the caller->callee direction (P1b covers
-          // the callee->caller half). See docs/design/p1b-frame-provenance.md.
+          // The caller->callee half of the frame-address gap: passing
+          // `&local_secret` in. Post-prologepilog the address is a bare
+          // `$sp + imm`, so the pointer register carries no taint of its own
+          // and nothing transfers - the secret is in a MEMORY CELL, not a
+          // register.
+          //
+          // Under -taint-frame-addr-args, use P1b's per-object frame provenance
+          // to bridge it: if this argument register is known to point at a
+          // frame object that holds a secret, the callee's parameter really is
+          // a pointer to secret memory. Monotone, so the fixed point still
+          // converges: the mark can only be added, and it is what lets the
+          // callee's own analysis discover the write-back its mod-set then
+          // re-exports.
+          //
+          // DEFAULT OFF, deliberately. The whole-frame form of this cost +44
+          // points against the mod-set gate; the per-object form measured
+          // 408 -> 628 switches on libsecp256k1 with 12 false positives back in
+          // `ecdsa_verify` (docs/design/p1b-frame-provenance.md §4). What is new
+          // is the other side of the ledger: with it off, the gem5 shadow-taint
+          // oracle measures 97.61% of libhydrogen's secret-carrying operations
+          // committing with PSTATE.DIT clear under a natural seed
+          // (paper_experiments/08-seed-ground-truth).
+          if (TaintFrameAddrArgs && PtrParam)
+            if (auto FI = S.getFrameRef(PhysReg))
+              if (S.anyTaintedStackCellForFI(*FI) &&
+                  CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
+                SummaryChanged = true;
+                LLVM_DEBUG(dbgs()
+                           << "  caller " << MF.getName() << " -> callee "
+                           << Callee->getName() << ": arg " << ArgIdx
+                           << " now pointee-tainted (frame object " << *FI
+                           << " holds a secret, via " << printReg(PhysReg, TRI)
+                           << ")\n");
+              }
           if (S.isPointeeTainted(PhysReg) &&
               CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
             SummaryChanged = true;

@@ -249,6 +249,28 @@ cl::opt<std::string> llvm::TaintDITJoinReportFile(
 // `WritesSecretToGlobal` is never gated: it is already per-global rather than a
 // flood, and it is the "secret arrived through a global" case the gate is
 // unsound for. See docs/design/context-insensitivity.md, source-condition.md.
+// A call argument that is the ADDRESS OF A FRAME OBJECT holding a secret counts
+// as passing a secret, in both directions: the mod-set gate applies the callee's
+// write-back clobber, and the callee's parameter is marked pointee-tainted.
+//
+// This is the caller->callee half of the frame-address gap, left open by P1b
+// (docs/design/p1b-frame-provenance.md §4). It is DEFAULT OFF and must stay that
+// way until measured: the whole-frame form of this rule cost +44 points against
+// the mod-set gate, and the per-object form measured 408 -> 628 switches on
+// libsecp256k1 with 12 false positives back in `ecdsa_verify`.
+//
+// What makes it worth re-measuring rather than leaving buried: with it off, the
+// gem5 shadow-taint oracle measures 445,276 of 456,194 secret-carrying
+// operations (97.61%) committing with PSTATE.DIT clear on libhydrogen's signing
+// path under the seed a developer would naturally write. See
+// paper_experiments/08-seed-ground-truth.
+cl::opt<bool> llvm::TaintFrameAddrArgs(
+    "taint-frame-addr-args",
+    cl::desc("Treat a call argument that points at a tainted frame object as "
+             "passing a secret (closes the caller->callee frame-address gap; "
+             "costs precision - measure before enabling)"),
+    cl::init(false), cl::Hidden);
+
 static cl::opt<bool> TaintNoModsetGate(
     "taint-no-modset-gate",
     cl::desc(
@@ -841,7 +863,39 @@ CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
       R.Pointee = true;
       R.PointeeMask |= uint8_t(1u << Idx);
     }
-    // Fallback (-taint-frame-addr-args): the argument is an address into a
+    // The argument is the ADDRESS OF A FRAME OBJECT THIS FUNCTION TAINTED.
+    // No register is data- or pointee-tainted here: the caller wrote the secret
+    // into its own stack slot and is now passing a pointer to it, so the taint
+    // lives in a memory cell, not in the register the callee will read.
+    //
+    // Canonical shape, from libhydrogen's signing path:
+    //
+    //     hydro_hash_state st;
+    //     hydro_hash_init(&st, zero, sk);        // sk lands in st (inlined)
+    //     hydro_hash_final(&st, eph_sk, 32);     // <-- this call
+    //     hydro_x25519_scalarmult_base_uniform(eph_pk, eph_sk);
+    //
+    // Without this, the mod-set call-site gate answers "this call site passes
+    // no secret", suppresses hydro_hash_final's write-back clobber, and the
+    // caller never learns eph_sk became secret. The whole X25519 ladder then
+    // runs unprotected. MEASURED with the gem5 shadow-taint oracle before the
+    // fix: 445,276 of 456,194 secret-carrying operations (97.61%) committed
+    // with PSTATE.DIT clear. See paper_experiments/08-seed-ground-truth.
+    //
+    // Reported as POINTEE, which is exactly what it is - a public address to
+    // secret memory - so it both (a) makes the gate apply the callee's clobber
+    // and (b) marks the callee's parameter, letting taint enter the callee.
+    //
+    // Object-granular on purpose: `anyTaintedStackCellForFI` asks whether the
+    // object holds any secret, not whether the callee reads that exact range,
+    // which the call site cannot know. Over-approximating is the safe
+    // direction, and this only ever ADDS taint, so it cannot introduce a leak.
+    if (TaintFrameAddrArgs)
+      if (auto FI = S.getFrameRef(MO.getReg()))
+        if (S.anyTaintedStackCellForFI(*FI)) {
+          R.Pointee = true;
+          R.PointeeMask |= uint8_t(1u << Idx);
+        }
   }
   // Stack-passed arguments. AAPCS64 puts arguments past the eighth (and large
   // aggregates) in the outgoing argument area, and the argument registers are
