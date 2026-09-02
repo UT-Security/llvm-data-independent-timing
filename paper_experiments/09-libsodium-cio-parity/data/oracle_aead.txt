@@ -1,0 +1,13 @@
+== libsodium under the shadow-taint oracle: aead, 2 op(s) ==
+   compiler: 8d944025f4f6 (dit-tainter)
+   seeds:    benchmarks/crypto/libsodium_secret.txt (CIO parity)
+  NULL CONTROL sees the secret path (must be >100)       7170
+
+  arm               protected    clear (under)
+  taint                  7170                0
+  taintfn                7170                0
+  ctl(none)                 0             7170
+  sites INSIDE libsodium, taint (must be 0)              0
+  sites INSIDE libsodium, taintfn (must be 0)            0
+
+PASS - no secret reached a covered instruction unprotected

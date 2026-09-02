@@ -180,9 +180,45 @@ not the pass's.
   a memory address is a cache-timing leak and a secret-dependent branch is a
   control-flow leak, whatever the mode bit says.
 
-**Nothing here is dynamic verification.** These are static claims. Whether every
-secret-dependent instruction actually executes with DIT on needs the gem5
-shadow-taint oracle, which has not been run on libsodium.
+### And it is dynamically verified (2026-09-01)
+
+The static claims above are now backed by the gem5 shadow-taint oracle, which
+answers the one thing no compiler report can: **did a secret ever reach a
+DIT-covered instruction while `PSTATE.DIT` was clear?** Nothing faults when that
+happens, so it is invisible to static analysis - and invisible to the Tier 1
+hardware oracle too, which only sees reads of the raw key *buffer* while
+everything derived from the key (the expanded scalar, the SHA-512 state, the
+poly1305 accumulator) lives in registers and on the stack.
+
+| workload | arm | secret ops protected | **DIT clear (under-taint)** | sites in libsodium |
+|---|---|---|---|---|
+| ed25519 sign | `taint` (region, shipped) | 294,164 | **0** | **0** |
+| | `taintfn` (whole-function) | 294,164 | **0** | **0** |
+| | *unhardened control* | 0 | *294,164* | - |
+| chacha20-poly1305 | `taint` | 7,170 | **0** | **0** |
+| | `taintfn` | 7,170 | **0** | **0** |
+| | *unhardened control* | 0 | *7,170* | - |
+
+**The null control is what makes the zero mean anything.** The same library with
+`-ftaint-harden` removed reports every one of those secret-consuming instructions
+running unprotected, which proves the oracle saw the crypto path. A zero from
+this tool without its control is worthless - that rule comes from the M3
+libsecp256k1 run and it is enforced by the script.
+
+**The three counts matching to the digit is a consistency check, not a
+coincidence.** They are three different binaries carrying 0, 134 and 137
+`msr DIT`. Hardening changes whether the mode is on, not which instructions
+consume the secret, so the same count must appear in all three.
+
+Both hardened arms are equally sound - including `taintfn`, the arm that also
+won on time. Rigs: `benchmarks/taint_oracle/{sodium_gem5.c,build_sodium.sh,
+run_sodium_oracle.sh}` in the gem5-DIT tree; raw output in `data/oracle_*.txt`.
+
+**What it still does not cover.** Two signatures and two AEAD calls, against the
+200 signatures of the libsecp256k1 M3 run; one gem5 configuration; and the two
+workloads seeded through `crypto_sign` and
+`crypto_aead_chacha20poly1305_ietf_encrypt` only, so the argon2id and AES-GCM
+paths of this experiment are unaudited.
 
 ## Reproducing
 

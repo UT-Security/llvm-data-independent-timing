@@ -279,9 +279,11 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
     <code>additional_data_sz = 0; //strtol(...)</code> &mdash; the Makefile passes AD&nbsp;=&nbsp;100
     and the driver ignores it. Reproduced exactly; the label is wrong in their Makefile, not in the
     measurement.</li>
-    <li><b>No dynamic verification.</b> Coverage here is static. Whether every secret-dependent
-    instruction actually executes with DIT on needs the gem5 shadow-taint oracle, which has not been
-    run on this library.</li>
+    <li><b>Dynamic verification is now done, on two of the six paths.</b> The gem5 shadow-taint
+    oracle reports <b>zero under-taints</b> in both hardened arms &mdash; 294,164 secret operations in
+    ed25519 signing and 7,170 in chacha20-poly1305, every one of them executing with the mode set,
+    against an unhardened control where all of them run clear. The argon2id and AES-GCM paths are
+    still unaudited, and it is two operations per workload, not the 200 of the libsecp256k1 run.</li>
   </ul>
   </div>
   <div class="kill">
