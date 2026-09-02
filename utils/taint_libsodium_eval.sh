@@ -245,8 +245,12 @@ if want analyze; then
   # 36 records / 13 severe to 23 records / 0 severe, leaving exactly the 19
   # indirect + 4 cross-TU stops, which are real and unrelated.
   #
-  # The clang-side equivalent is -ftaint-dit-abi (which disables tail calls
-  # TU-wide); this rig drives llc directly, so it needs the codegen option.
+  # Since 61158c8a599e, -ftaint-harden ITSELF disables tail calls for any build
+  # that goes through clang (it stamps the taint-no-tail-calls module flag; it is
+  # no longer tied to -ftaint-dit-abi, which is not the shipped configuration).
+  # That does NOT cover this rig: the wrapper flow lowers with llc, and nothing
+  # stamps the attribute on that path, so the codegen option stays REQUIRED here.
+  # See docs/overview.md section 3.
   info "lower to post-prologepilog MIR (tail calls disabled)"
   "$LLVM_BIN/llc" -O2 -disable-tail-calls -stop-after=prologepilog \
       "$WORK/libsodium-annotated.ll" \
