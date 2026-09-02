@@ -251,6 +251,9 @@ corroborating figure: 47 of 53 functions with a mod-set on libhydrogen export
 
 ### What to watch
 
+- **Fold in the fixed-frame-object case.** An incoming stack argument slot is a
+  fixed frame object with a recoverable argument index, currently sent to TOP
+  (`TaintAnalysis.cpp:1739`). Same fix, arguments that arrived on the stack.
 - **`Arg(k)` is context-insensitive** - "the object arg 0 points at" is a
   different object per caller. But that is exactly the existing
   `WritesSecretThroughArgPointee` semantics, and P1b resolves it per caller at
@@ -271,12 +274,92 @@ corroborating figure: 47 of 53 functions with a mod-set on libhydrogen export
 
 ### Prior art for §3c (partial)
 
-Searched 2026-09-02. **Two of three searches died on a session rate limit**, so
-this covers the taint-tool question only; GCC's `ipa-modref` `parm_map`, the
-classic pointer-analysis literature (Landi/Ryder, Wilson/Lam partial transfer
-functions) and the post-RA/binary setting were re-searched separately.
-**Andromeda and TaintDroid quotes below were verified by reading the papers
-directly**; anything still second-hand is marked as such.
+Searched 2026-09-02. **Andromeda, TaintDroid and all GCC quotes below were
+verified by reading the source/paper directly**; anything still second-hand is
+marked as such. The classic-literature and post-RA/binary questions were still
+outstanding when this was written.
+
+### GCC's `ipa-modref` ships this design, and it composes transitively
+
+**This is the closest shipped analogue and it settles the main design question.**
+Verified against `gcc/ipa-modref-tree.h` on master. The summary key is the same
+triple §3c proposes:
+
+```c
+struct modref_parm_map {
+  int parm_index;            /* index of parameter we translate to */
+  bool parm_offset_known;
+  poly_int64 parm_offset;
+};
+enum modref_special_parms {
+  MODREF_UNKNOWN_PARM = -1,  MODREF_STATIC_CHAIN_PARM = -2,
+  MODREF_RETSLOT_PARM = -3,  MODREF_GLOBAL_MEMORY_PARM = -4,
+  MODREF_LOCAL_MEMORY_PARM = -5
+};
+```
+
+And the call-site step is exactly item 5 of §3c - reparent the callee's access
+onto the caller's own parameter:
+
+```c
+if (m.parm_index == MODREF_LOCAL_MEMORY_PARM)
+  continue;                                    /* dropped, not escalated */
+a.parm_offset += m.parm_offset;                /* compose offsets */
+a.parm_offset_known &= m.parm_offset_known;    /* any break -> unknown */
+a.parm_index = m.parm_index;                   /* reparent onto caller's parm */
+```
+
+**Transitivity is structural, not clever.** Each call edge resolves ONE hop
+(reportedly via IPA jump functions: the actual is the caller's own formal,
+optionally plus a compile-time-constant offset). Multi-hop reach comes from
+running the merge in call-graph postorder so every callee is final before its
+callers. **That is a load-bearing confirmation for §3c: we need no per-edge
+cleverness, only a bottom-up fixed point - which the pass already has.**
+
+**One refinement worth taking.** GCC keeps `parm_index` while clearing
+`parm_offset_known` when the displacement is not statically constant: *"I know
+the object but not where in it"* is a distinct, strictly better state than *"I do
+not know the object"*. Our depth-0 whole-object proposal is precisely GCC's
+degraded state made permanent - which is the honest way to describe it, and it
+means the design is a known-good fallback rather than an approximation nobody
+has tried.
+
+**What we already have.** GCC's two-way split - callee-private memory *dropped*
+(`MODREF_LOCAL_MEMORY_PARM`) versus untraceable memory escalated to TOP
+(`MODREF_UNKNOWN_PARM`) - is already implemented here:
+`computeFunctionMemEffects` ignores non-fixed frame objects as caller-invisible
+and sends unknown/heap to `WritesSecretToUnknown`. No change needed.
+
+**What we do not have, and the code already says so.** A *fixed* frame object is
+an incoming stack argument slot, so it HAS an argument index, and we map it to
+TOP anyway (`TaintAnalysis.cpp:1739`, comment: "mapping it to the specific
+argument is a further provenance refinement"). Under §3c that becomes reachable:
+it is an `Arg(k)` whose k is recoverable from the frame layout. **Worth folding
+into B1** - it is the same fix, applied to arguments that arrived on the stack
+rather than in a register.
+
+### Cheng and Hwu (PLDI 2000) shipped their results at k = 1
+
+The paper Andromeda defers to. Reportedly substitutes the callee's formal root
+with the actual-argument *expression* and re-evaluates in the caller, bottom-up
+over the SCC-DAG - the same postorder composition as GCC, twenty years earlier.
+Two things matter for us: the substitution is compositional, so a base that is
+itself another formal needs **no special case**; and their reported SPEC results
+were obtained at **k = 1**, the least expressive non-trivial setting.
+**Depth-0/shallow is where practical implementations of this idea land, not a
+concession forced by our setting.**
+
+### LLVM's Attributor is not a usable template
+
+`AAPointerInfo` reportedly tracks per-`Argument` accesses with offsets and does
+translate a callee's argument summary back to a call site - but as a monotone
+fixed point over the live module-wide **SSA def-use graph**, with no portable
+summary object to lift out. That precision is inseparable from named
+`Value`/`Argument` identity, which post-RA does not have. **GCC's flat POD is the
+shape to imitate; LLVM's is not**, and the coarse IR-level alternative
+(`writeonly`, `memory(argmem: write)`) carries no offset or index at all.
+
+
 
 **The concept has a standard name, and the design is not novel: it is an
 `access path` in a `storeless` heap model.** Andromeda (Tripp, Pistoia, Cousot,
