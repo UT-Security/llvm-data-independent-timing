@@ -1049,10 +1049,43 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     // writes the same register, so killing first loses the base we are about to
     // propagate. This cost a silent no-result on the interior-pointer repro.
     std::optional<TaintState::PointerBase> SrcBase;
-    if (MI.isCopy() && MI.getOperand(1).isReg())
+    bool VarDisplacement = false;
+    if (MI.isCopy() && MI.getOperand(1).isReg()) {
       SrcBase = S.getPointerBase(MI.getOperand(1).getReg());
-    else if (auto AI = matchAddImm(MI, TIIp))
+    } else if (auto AI = matchAddImm(MI, TIIp)) {
       SrcBase = S.getPointerBase(AI->first);
+    } else if (TaintArgProvenance) {
+      // VARIABLE displacement: `p + i * stride`, which is what indexing by a
+      // loop variable lowers to and what `memcpy(out + i * RATE, ...)` inside
+      // libhydrogen's hydro_hash_final actually emits. Following only constant
+      // displacements loses the object identity of every such pointer, and with
+      // it the callee's chance to record a precise arg-pointee effect.
+      //
+      // The target reports BOTH operands because the ISA does not say which is
+      // the pointer. Resolve it here, and only when the candidates agree on one
+      // object: if two of them carry different known bases the instruction is
+      // genuinely ambiguous, and picking one would misattribute provenance.
+      SmallVector<Register, 2> Cands;
+      if (TIIp->getPointerDisplacementBases(MI, Cands)) {
+        bool Ambiguous = false;
+        for (Register C : Cands)
+          if (auto B = S.getPointerBase(C)) {
+            if (SrcBase && *SrcBase != *B) {
+              Ambiguous = true;
+              break;
+            }
+            SrcBase = B;
+          }
+        // ARG bases only. A frame base must not survive variable displacement:
+        // frame objects are adjacent with known bounds, so `&frame_A + n` can
+        // land in frame_B, and attributing it to A UNDER-taints. An argument's
+        // object has bounds we cannot see, and in well-defined C in-object
+        // arithmetic stays inside - the assumption GCC's parm_offset makes.
+        if (Ambiguous || (SrcBase && SrcBase->K != TaintState::PointerBase::Arg))
+          SrcBase.reset();
+        VarDisplacement = SrcBase.has_value();
+      }
+    }
 
     for (const MachineOperand &MO : MI.all_defs())
       if (MO.isReg() && MO.getReg().isValid())
@@ -1099,6 +1132,10 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         if (SrcBase && SrcBase->K == TaintState::PointerBase::Arg)
           S.setPointerBase(Dst, *SrcBase);
       }
+    } else if (VarDisplacement) {
+      Register Dst = MI.getOperand(0).getReg();
+      if (Dst.isValid())
+        S.setPointerBase(Dst, *SrcBase);
     }
   }
 

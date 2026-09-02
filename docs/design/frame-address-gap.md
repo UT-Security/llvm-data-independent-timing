@@ -387,45 +387,67 @@ Two ordering bugs in two halves of the same feature, both silent, both caught
 only by a repro whose expected output was known. **Neither showed up in 46
 tests.**
 
-### Why libhydrogen still does not move: there are THREE gaps, not two
+### The `TargetInstrInfo` hook, and a diagnosis I got wrong
 
-This is the substantive finding, and it is why B2 changes nothing on the workload
-the oracle measures. Tracing `hydro_sign_prehash` with everything enabled:
+`TII::getPointerDisplacementBases` is the non-constant companion to
+`isAddImmediate`: given `add xD, xB, xN` or `add xD, xB, wN, uxtw`, it reports
+the operands that could be the pointer base. **Both** are reported, because the
+ISA does not distinguish base from index; the caller takes a base only when the
+candidates agree on one object, since guessing misattributes provenance. The
+AArch64 side handles `ADDXrs`/`ADDXrx`/`ADDXrx64` and skips 32-bit operands,
+which cannot hold a pointer and are therefore always the index. Subtraction is
+excluded: `p - i` is in-object arithmetic but `p - q` is a pointer difference,
+and they are the same instruction.
 
-| step | needs | status |
+**It is worth having.** libhydrogen, whole library, switches unchanged at 318
+throughout:
+
+| provenance follows | blunt fallback | named |
 |---|---|---|
-| `hydro_hash_init(&st, zero, sk)` puts the secret in `st` | inlined, works | fine |
-| `hydro_hash_final(&st, ...)` must SEE the secret via `&st` | **gap A** (frame address as an argument) | `-taint-frame-addr-args` |
-| inside, `memcpy(out + i*RATE, buf, RATE)` must record "writes through arg 1" | **variable-offset provenance** | **NOT IMPLEMENTED** |
-| caller must resolve that onto `&csig[32]` and pass it on | **gap B** (B1 + B2) | implemented |
+| nothing (no B1) | 1,253 | 644 |
+| copies only | 1,010 | 923 |
+| **+ variable displacement** | **494** | **1,439** |
 
-The third step is where it stops. `hydro_hash_final`'s own summary comes out as
-**`arg0 UNKNOWN(TOP)`** - it records the state it updates, but the write to `out`
-goes through `out + i * gimli_RATE`, a **loop induction variable**, so the store
-does not classify as `CellInfo::Arg` and degrades to TOP. **B2 has no precise
-arg-pointee fact to consume**, so the chain breaks one step before it.
+Blunt fallbacks down 61% from baseline, still with **zero** switch change. That is
+the substitutive shape B1 was supposed to have, now at more than double the reach.
 
-Measured, natural seed, `hydro_sign_final_create` coverage:
+**But it did not unblock libhydrogen, and the reason is that I had named the
+third gap wrongly.** The previous revision of this section said the third gap was
+variable-offset provenance. The hook now exists and `A+B1+B2` still equals
+`A only` exactly - 46 switches, 12.0% coverage, 2 curve functions. **That claim
+was wrong and is retracted.**
 
-| flags | `msr DIT` | coverage | curve fns |
-|---|---|---|---|
-| baseline | 27 | 12.0% | 0 |
-| A only | 46 | 12.0% | 2 |
-| B1+B2 | 27 | 12.0% | 0 |
-| **A+B1+B2** | **46** | **12.0%** | **2** |
+### The actual third gap: an external callee gives TOP, not a per-argument effect
 
-`A+B1+B2` equals `A only` exactly. **B contributes nothing until the third gap is
-closed.**
+`hydro_hash_final` calls **`memcpy`**, an external declaration. The blunt-TOP
+rule fires - an external callee receiving a secret sets `WritesSecretToUnknown` -
+so its summary is `arg0 UNKNOWN(TOP)`: it names the state it updates and says
+only "somewhere" about the buffer it fills. **There is no precise arg-pointee
+fact for B2 to consume.**
 
-**The fix is named and is GCC's:** keep `parm_index` when the displacement is not
-compile-time-constant, clearing only `parm_offset_known`. At whole-object
-granularity we store no offset anyway, so it is the same information we already
-keep for the constant case. What blocks it is mechanical, not conceptual:
-`TII->isAddImmediate` is the target-independent hook for `base + imm`, and there
-is no equivalent for register-register address arithmetic - and this file's rules
-forbid classifying instructions by opcode or mnemonic. It needs a new
-`TargetInstrInfo` hook, which is a real design decision rather than a two-line
-change.
+Isolated in `playground/frame_addr_gap/gapB_memcpy.c`, which is
+`gapB_interior.c` with the fill done by `memcpy` instead of a loop:
+
+| repro | `produce` mod-set | `consume` |
+|---|---|---|
+| `gapB_interior.c` (loop) | `arg0` | **ANALYSED** |
+| `gapB_memcpy.c`, B1+B2 | *(empty)* | absent |
+| `gapB_memcpy.c`, A+B1+B2 | **`UNKNOWN(TOP)`** | absent |
+
+Two things that repro taught, both worth keeping:
+
+- **A constant-size `memcpy` does not reproduce it.** The first version used
+  `memcpy(out, tmp, sizeof tmp)`, which lowers to plain stores and resolves
+  fine. The size has to be runtime-variable to force a real call.
+- **The B1+B2 row is empty rather than TOP** because without gap A the frame
+  address `&tmp` is not seen as passing a secret, so `memcpy` never looks like it
+  receives one. All three gaps are on the same chain.
+
+**The fix is not more pointer provenance.** It is the libc model table already
+deferred in `docs/research/memory-summaries.md` as P1: teach the analysis that
+`memcpy(dst, src, n)` writes through argument 0 what it reads through argument 1.
+That is a small table, not an analysis, and it is what turns
+`hydro_hash_final`'s `UNKNOWN(TOP)` into `arg0 arg1`.
 
 ### Prior art for §3c (partial)
 
@@ -816,10 +838,12 @@ placement fix.**
    12.0% coverage says the two builds lose the secret in different places.
 3. ~~**Close gap B**~~ **DONE, and insufficient.** B1 and B2 both landed and both
    close their repros; libhydrogen does not move because of a third gap.
-   **The next actual step is a `TargetInstrInfo` hook for register-register
-   address arithmetic**, so provenance survives `out + i * RATE` and
-   `hydro_hash_final` can record a precise arg-pointee effect instead of TOP.
-   Without it neither half of gap B can help on real code.
+   The `TargetInstrInfo` hook for register-register address arithmetic landed
+   and more than doubled the naming reach (blunt 1,253 -> 494), but it was NOT
+   the blocker. **The next actual step is the libc model table** (P1 in
+   `memory-summaries.md`): `hydro_hash_final` fills its output buffer with
+   `memcpy`, an external callee, so its summary collapses to `UNKNOWN(TOP)` and
+   B2 has no precise fact to consume.
 4. **Re-measure `-taint-frame-addr-args` on libsecp256k1** and decide its
    default. Only worth doing after B, since A alone moves nothing.
 5. Re-run the experiment 08 oracle after each step. It is the only instrument

@@ -7495,6 +7495,46 @@ AArch64InstrInfo::getTimingModeSwitch(const MachineInstr &MI) const {
   return MI.getOperand(1).getImm() != 0;
 }
 
+bool AArch64InstrInfo::getPointerDisplacementBases(
+    const MachineInstr &MI, SmallVectorImpl<Register> &Bases) const {
+  // 64-bit ADD with a register operand. AArch64 has no plain "ADDXrr": a
+  // register-register add is ADDXrs with a shift amount of zero, and an add of a
+  // narrower index is ADDXrx (`add x0, x1, w2, uxtw`), which is what indexing by
+  // a 32-bit loop variable lowers to.
+  //
+  // ADDXri is NOT handled here - that is isAddImmediate's job, and it gives the
+  // caller a constant displacement this hook cannot.
+  switch (MI.getOpcode()) {
+  case AArch64::ADDXrs:
+  case AArch64::ADDXrx:
+  case AArch64::ADDXrx64:
+    break;
+  default:
+    return false;
+  }
+
+  // Operands 1 and 2 are the two source registers. Report both: which one is
+  // the pointer is not knowable from the instruction, only from what the caller
+  // knows about each register.
+  if (MI.getNumOperands() < 3)
+    return false;
+  bool Any = false;
+  for (unsigned I : {1u, 2u}) {
+    const MachineOperand &MO = MI.getOperand(I);
+    if (!MO.isReg() || MO.isDef() || !MO.getReg().isValid())
+      continue;
+    // A 32-bit operand cannot hold a 64-bit pointer, so it is the index, never
+    // the base. This is what makes the common `add x0, x1, w2, uxtw` form
+    // unambiguous rather than a bail-out.
+    if (!AArch64::GPR64RegClass.contains(MO.getReg()) &&
+        !AArch64::GPR64spRegClass.contains(MO.getReg()))
+      continue;
+    Bases.push_back(MO.getReg());
+    Any = true;
+  }
+  return Any;
+}
+
 std::optional<unsigned>
 AArch64InstrInfo::getNumStoredValueRegs(const MachineInstr &MI) const {
   // Read-modify-write memory operands have no distinct value operand to point
