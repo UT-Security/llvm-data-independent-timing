@@ -1014,7 +1014,21 @@ CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
     //
     // The Arg case is inert unless -taint-arg-provenance populated the base in
     // the first place, so -taint-arg-pointee-args alone cannot change anything.
-    if (auto B = S.getPointerBase(MO.getReg())) {
+    auto Base = S.getPointerBase(MO.getReg());
+    LLVM_DEBUG({
+      dbgs() << "      [gate] arg" << Idx << " " << printReg(MO.getReg(), TRI)
+             << " base=";
+      if (!Base)
+        dbgs() << "NONE";
+      else if (Base->K == TaintState::PointerBase::Frame)
+        dbgs() << "fi" << Base->Index << " objTainted="
+               << S.anyTaintedStackCellForFI(Base->Index);
+      else
+        dbgs() << "arg" << Base->Index << " pointeeTainted="
+               << S.isTaintedArgPointee((unsigned)Base->Index);
+      dbgs() << "\n";
+    });
+    if (auto B = Base) {
       const bool PointsAtSecret =
           B->K == TaintState::PointerBase::Frame
               ? (TaintFrameAddrArgs && S.anyTaintedStackCellForFI(B->Index))

@@ -532,23 +532,75 @@ And one plain omission worth recording because it wasted a cycle: the
 `ADDXrr` is what `p + i` actually lowers to. The hook was inert on the real
 workload while passing every test.
 
-### It still does not close libhydrogen, and the honest count is now four gaps
+### Which half of the gate fails: MEASURED, and it is not the naming
 
-With every flag on, the caller-side result is unchanged from gap A alone:
-46 switches, `hydro_sign_final_create` at 12.0%, 2 curve functions.
-
-The next link is visible in the log and is **gap A failing at the inner call**:
+With every flag on, the caller-side result is still gap A alone - 46 switches,
+`hydro_sign_final_create` at 12.0%, 2 curve functions - and the gate still says:
 
 ```
 call to hydro_hash_final writes secret through a pointer arg
   but this call site passes no secret: clobber suppressed (callsite-gated)
 ```
 
-`hydro_sign_prehash` passes `&st`, a frame object the inlined `hydro_hash_init`
-filled with the secret. For the gate to admit the call, that frame object's cells
-must be tainted AND `&st` must resolve to it. One of those is not holding, and
-which one is not yet established. **Do not guess at it - that is how the last two
-diagnoses in this file turned out wrong.**
+Gap A's rule has two halves: resolve the argument to a frame object, then ask
+whether that object holds a secret. Instrumented (`[gate]` under
+`-debug-only=taint-analysis`), 106 evaluations at that site:
+
+```
+[gate] arg0 $x0 base=fi5 objTainted=0
+```
+
+**The naming half WORKS. The taint half fails.** `&st` resolves to frame object
+5; frame object 5 is never marked secret. No amount of provenance work fixes
+this - the object genuinely carries no taint in the analysis's view.
+
+#### Why fi5 is never tainted, traced to the bottom
+
+`hydro_hash_init` is **fully inlined** here (it is analysed as its own function
+for other callers, but `hydro_sign_final_create` makes no call to it), and it
+does not write the key into `state` directly:
+
+```c
+uint8_t block[80];                                  /* a local -> fi4 */
+memcpy(block + gimli_RATE + 1, key, 32);            /* secret -> block */
+hydro_hash_update(state, block, p);                 /* inlined too */
+    for (i = 0; i < ps; i++)
+        buf[state->buf_off + i] ^= in[i];           /* block -> state */
+```
+
+Following it through the log:
+
+| step | evidence | verdict |
+|---|---|---|
+| key reaches `block` | `taint stack cell FI=4 off=17 sz=16`, `off=33 sz=16` | works - the constant-size memcpy is expanded to stores, no model needed |
+| `in[i]` loaded from `block` | **0** loads attributed to FI=4; 834 land on unknown/heap | **fails here** |
+| XOR result stored into `state` | `stack cell FI=5 off=0/16/32/48 (store untainted)` | consequence: the source was not secret |
+| gate asks if fi5 holds a secret | `objTainted=0` | consequence |
+
+**The break is a variable-index LOAD from a frame object.** `in[i]` with a loop
+counter lowers to a register-offset load whose MMO does not resolve to the
+alloca, so it is classified unknown/heap rather than as a cell of fi4. The store
+side of the same object resolves fine (the memcpy stores are constant-offset);
+it is the read side, at a variable index, that loses the object.
+
+So the fifth link is the mirror image of the third: **provenance work covered
+pointer arithmetic for CALL ARGUMENTS, and this is the same problem for LOADS.**
+`getCellFromMMO` is where it would be fixed, not in the call-site rules.
+
+#### The honest count
+
+Five links, on one chain, in one function:
+
+| # | link | status |
+|---|---|---|
+| 1 | secret reaches `block` via constant-offset stores | works |
+| 2 | **variable-index load from `block`** | **open - the current blocker** |
+| 3 | `&st` passed to `hash_final` (gap A) | flag exists |
+| 4 | `hash_final` records writing through arg 1 (libc model) | flag exists, verified |
+| 5 | caller passes `eph_sk` onward (B1+B2) | flags exist, verified |
+
+Links 3, 4 and 5 are built and each verified on its own repro. **Link 2 is
+upstream of all of them**, which is why none of them has moved this workload.
 
 ### Prior art for §3c (partial)
 
@@ -941,9 +993,11 @@ placement fix.**
    close their repros; libhydrogen does not move because of a third gap.
    The `TargetInstrInfo` hook landed (blunt 1,253 -> 494) and so did the libc
    model, which does produce the missing `arg1` on `hydro_hash_final`. Neither
-   closed libhydrogen. **The next step is to establish why the gate still calls
-   the `hydro_hash_final` call site secret-free** when `&st` is passed - by
-   measurement, not by another guess.
+   closed libhydrogen. Established by measurement: the gate's NAMING half works
+   (`base=fi5`) and its TAINT half fails (`objTainted=0`), because a
+   **variable-index load** from the local `block` is not attributed to that frame
+   object. **The next step is `getCellFromMMO`'s read side**, not any of the
+   call-site rules.
 4. **Re-measure `-taint-frame-addr-args` on libsecp256k1** and decide its
    default. Only worth doing after B, since A alone moves nothing.
 5. Re-run the experiment 08 oracle after each step. It is the only instrument
