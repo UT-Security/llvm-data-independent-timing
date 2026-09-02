@@ -3,7 +3,9 @@
 **Status: gap A fixed behind a default-off flag and measured worthless on its
 own. Gap B's NAMING half (B1) is implemented behind `-taint-arg-provenance`,
 default off, and measured: it does what it was predicted to do and closes no
-leak by itself. B2 (consumption) is not written. The root cause on the target
+leak by itself. B2 (consumption) is
+implemented behind `-taint-arg-pointee-args` and closes gap B on both repros -
+and libhydrogen turns out to need a THIRD thing neither half provides. The root cause on the target
 the oracle measures is still unidentified.**
 Written 2026-09-02 from the experiment 08 oracle result
 (`paper_experiments/08-seed-ground-truth`).
@@ -343,6 +345,87 @@ consumption site too.** Item 6 is now an extra `||` inside the existing branch,
 not a branch of its own. Caught only because `gapB_only.c` reports per-function
 `need`, which is the argument for keeping a repro whose numbers you know by
 heart.
+
+### B2 as implemented (`-taint-arg-pointee-args`, default OFF)
+
+The consumption half: a pointer whose base is a tainted `Arg(k)` counts as
+passing a secret. Two sites, both generalisations of gap A's rule from `Frame`
+to either base - `taintedCallArguments` (so the gate's call-site test says yes)
+and the fixed-point iteration (so the callee's parameter is marked). **Inert
+without `-taint-arg-provenance`**, since there is then no `Arg` base to find.
+
+**Interior pointers had to be added to make it work at all.** Following COPY
+alone is not enough: the real shape is `&csig[NONCEBYTES]`, an argument base plus
+a constant, which is `hydro_sign_prehash`'s `eph_sk`. So an add-immediate off an
+`Arg` base now propagates that base. At whole-object granularity the displacement
+need not be stored - an interior pointer into argument k's object is still
+argument k's object - which is GCC keeping `parm_index` while only
+`parm_offset_known` depends on the displacement being constant.
+
+**Only for an `Arg` base, never a `Frame` one.** Frame objects are adjacent with
+known bounds, so `&frame_A + large` can land in frame_B and attributing it to A
+would UNDER-taint. An argument's object has bounds we cannot see, and in
+well-defined C arithmetic within an object stays inside it - the same assumption
+`parm_offset` makes.
+
+| repro | baseline | B1 | B2 alone | B1+B2 |
+|---|---|---|---|---|
+| `gapB_only.c` (pointer passed on) | absent | absent | absent | **ANALYSED** |
+| `gapB_interior.c` (interior pointer) | absent | absent | absent | **ANALYSED** |
+
+B2-alone being inert is measured, not asserted, and the lit test pins all four
+arms so the two halves stay separately measurable.
+
+#### A second ordering trap, same family as the first
+
+The interior-pointer case silently did nothing at first. `add x0, x0, #0x20` -
+the exact shape - **reads and writes the same register**, and the provenance
+block kills every def before propagating. The source's base was gone before it
+could be read. Now captured first, then killed, then set.
+
+Two ordering bugs in two halves of the same feature, both silent, both caught
+only by a repro whose expected output was known. **Neither showed up in 46
+tests.**
+
+### Why libhydrogen still does not move: there are THREE gaps, not two
+
+This is the substantive finding, and it is why B2 changes nothing on the workload
+the oracle measures. Tracing `hydro_sign_prehash` with everything enabled:
+
+| step | needs | status |
+|---|---|---|
+| `hydro_hash_init(&st, zero, sk)` puts the secret in `st` | inlined, works | fine |
+| `hydro_hash_final(&st, ...)` must SEE the secret via `&st` | **gap A** (frame address as an argument) | `-taint-frame-addr-args` |
+| inside, `memcpy(out + i*RATE, buf, RATE)` must record "writes through arg 1" | **variable-offset provenance** | **NOT IMPLEMENTED** |
+| caller must resolve that onto `&csig[32]` and pass it on | **gap B** (B1 + B2) | implemented |
+
+The third step is where it stops. `hydro_hash_final`'s own summary comes out as
+**`arg0 UNKNOWN(TOP)`** - it records the state it updates, but the write to `out`
+goes through `out + i * gimli_RATE`, a **loop induction variable**, so the store
+does not classify as `CellInfo::Arg` and degrades to TOP. **B2 has no precise
+arg-pointee fact to consume**, so the chain breaks one step before it.
+
+Measured, natural seed, `hydro_sign_final_create` coverage:
+
+| flags | `msr DIT` | coverage | curve fns |
+|---|---|---|---|
+| baseline | 27 | 12.0% | 0 |
+| A only | 46 | 12.0% | 2 |
+| B1+B2 | 27 | 12.0% | 0 |
+| **A+B1+B2** | **46** | **12.0%** | **2** |
+
+`A+B1+B2` equals `A only` exactly. **B contributes nothing until the third gap is
+closed.**
+
+**The fix is named and is GCC's:** keep `parm_index` when the displacement is not
+compile-time-constant, clearing only `parm_offset_known`. At whole-object
+granularity we store no offset anyway, so it is the same information we already
+keep for the constant case. What blocks it is mechanical, not conceptual:
+`TII->isAddImmediate` is the target-independent hook for `base + imm`, and there
+is no equivalent for register-register address arithmetic - and this file's rules
+forbid classifying instructions by opcode or mnemonic. It needs a new
+`TargetInstrInfo` hook, which is a real design decision rather than a two-line
+change.
 
 ### Prior art for §3c (partial)
 
@@ -731,11 +814,12 @@ placement fix.**
    else can be verified against the instrument that matters. Start by diffing
    what taints in `hydro_sign_final_create` between the two targets - 21.0% vs
    12.0% coverage says the two builds lose the secret in different places.
-3. **Close gap B** (§3c), in two measured halves: B1 naming, expected to reduce
-   switches by substituting a named object for a whole-caller clobber at the
-   two-thirds of sites that take the blunt fallback today; then B2 consumption,
-   which is what actually closes the leak. The target is libhydrogen's natural
-   seed reaching the 0.03% the keygen-buffer seed already achieves.
+3. ~~**Close gap B**~~ **DONE, and insufficient.** B1 and B2 both landed and both
+   close their repros; libhydrogen does not move because of a third gap.
+   **The next actual step is a `TargetInstrInfo` hook for register-register
+   address arithmetic**, so provenance survives `out + i * RATE` and
+   `hydro_hash_final` can record a precise arg-pointee effect instead of TOP.
+   Without it neither half of gap B can help on real code.
 4. **Re-measure `-taint-frame-addr-args` on libsecp256k1** and decide its
    default. Only worth doing after B, since A alone moves nothing.
 5. Re-run the experiment 08 oracle after each step. It is the only instrument

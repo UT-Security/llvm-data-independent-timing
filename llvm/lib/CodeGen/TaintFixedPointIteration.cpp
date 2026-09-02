@@ -163,18 +163,26 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           // oracle measures 97.61% of libhydrogen's secret-carrying operations
           // committing with PSTATE.DIT clear under a natural seed
           // (paper_experiments/08-seed-ground-truth).
-          if (TaintFrameAddrArgs && PtrParam)
-            if (auto FI = S.getFrameRef(PhysReg))
-              if (S.anyTaintedStackCellForFI(*FI) &&
+          if (PtrParam)
+            if (auto B = S.getPointerBase(PhysReg)) {
+              const bool IsFrame = B->K == TaintState::PointerBase::Frame;
+              const bool PointsAtSecret =
+                  IsFrame ? (TaintFrameAddrArgs &&
+                             S.anyTaintedStackCellForFI(B->Index))
+                          : (TaintArgPointeeArgs &&
+                             S.isTaintedArgPointee((unsigned)B->Index));
+              if (PointsAtSecret &&
                   CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
                 SummaryChanged = true;
                 LLVM_DEBUG(dbgs()
                            << "  caller " << MF.getName() << " -> callee "
                            << Callee->getName() << ": arg " << ArgIdx
-                           << " now pointee-tainted (frame object " << *FI
-                           << " holds a secret, via " << printReg(PhysReg, TRI)
-                           << ")\n");
+                           << " now pointee-tainted ("
+                           << (IsFrame ? "frame object " : "our own arg ")
+                           << B->Index << " holds a secret, via "
+                           << printReg(PhysReg, TRI) << ")\n");
               }
+            }
           if (S.isPointeeTainted(PhysReg) &&
               CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
             SummaryChanged = true;

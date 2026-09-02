@@ -100,6 +100,12 @@ extern cl::opt<bool> TaintFrameAddrArgs;
 /// provenance is wrong. See docs/design/frame-address-gap.md.
 extern cl::opt<bool> TaintArgProvenance;
 
+/// Treat a call argument that points at a tainted ARG POINTEE as passing a
+/// secret (B2) - the consumption half, and the one that actually closes the
+/// leak. Additive, so it costs switches; measure it separately from B1. A no-op
+/// unless TaintArgProvenance also named the object in the first place.
+extern cl::opt<bool> TaintArgPointeeArgs;
+
 /// Stamp the hardening-wide tail-call disable (\see TaintNoTailCalls) on every
 /// definition in \p M, and return how many functions were stamped.
 ///

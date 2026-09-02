@@ -18,6 +18,7 @@ secret-dependent instructions run with `PSTATE.DIT` clear.
 | `gapA.c` | caller taints its own frame object and passes the address in |
 | `gapB.c` | the same callee reached two ways, one that works and one that does not |
 | `gapB_only.c` | gap B with the working caller deleted, so nothing masks it |
+| `gapB_interior.c` | gap B as it appears in real code: an INTERIOR pointer into the caller's own argument (`&csig[32]`), which following copies alone does not reach |
 
 `gapB.c` is the one to read: `via_local` and `via_argptr` call the *same*
 `produce` and the *same* `consume`, and only the first is protected.
