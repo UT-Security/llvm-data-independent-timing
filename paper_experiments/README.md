@@ -27,6 +27,7 @@ were run.
 | 06 | [switch-model generality](06-switch-model-generality/) | - | experiments 02 and 03's workloads | **MSR DIT implementation - measures TRANSFERABILITY** | **complete, gem5** |
 | 07 | [annotation cost](07-annotation-cost/) | - | libsodium signing path | **seed DEPTH - measures DEVELOPER cost** | **complete, silicon** |
 | 08 | [seed ground truth](08-seed-ground-truth/) | - | libhydrogen signing, their exact source | **none - compares our taint set against an INDEPENDENT one** | **complete** |
+| 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon** |
 
 ## Published pages
 
@@ -56,8 +57,10 @@ Skia filters are **not** a crossover experiment - a control that fails the
 framework's first question (blanket DIT is already free on it), kept in
 `docs/results/`.
 
-**libsodium is BOTH**, which is worth stating rather than filing under one
-heading. Its own primitives fail the first question - blanket is free on aead,
+**libsodium is BOTH**, and it is now two experiments rather than a footnote: 02 is
+the flow with a public lane, where the pass beats blanket by 21%; 09 is the
+library alone, run the way the closest prior work (CIO, ASPLOS'24) ran it, where
+blanket wins on 5 of 6. Same library, opposite verdicts - which is the point. Its own primitives fail the first question - blanket is free on aead,
 x25519, sha512, salsa20 and hmac_sha512, and on ed25519 it is a *speedup*
 (-2.96%), so no placement can win. But libsodium *inside a flow with a public
 lane* is experiment 02, where blanket reaches +32.64% and the pass beats it by

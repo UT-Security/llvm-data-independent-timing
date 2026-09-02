@@ -1,0 +1,126 @@
+UNCOVERED secret-branch func=sodium_memzero bb=0 : CBZX renamable $x1, %bb.3
+UNCOVERED secret-branch func=sodium_memzero bb=1 : CBZW killed renamable $w0, %bb.3
+UNCOVERED secret-branch func=stream_ref_ref bb=0 : CBZX renamable $x1, %bb.2
+UNCOVERED secret-branch func=stream_ietf_ext_ref bb=0 : CBZX renamable $x1, %bb.2
+UNCOVERED secret-branch func=stream_ref_xor_ic_ref bb=0 : CBZX renamable $x8, %bb.2
+UNCOVERED secret-branch func=stream_ietf_ext_ref_xor_ic bb=0 : CBZX renamable $x8, %bb.2
+UNCOVERED secret-branch func=chacha20_encrypt_bytes_ref bb=7 : CBZX killed renamable $x14, %bb.9
+UNCOVERED secret-address func=chacha20_encrypt_bytes_ref bb=15 : renamable $w14 = LDRBBroX renamable $x1, renamable $x8, 0, 0 :: (load (s8) from %ir.arrayidx35)
+UNCOVERED secret-address func=chacha20_encrypt_bytes_ref bb=15 : STRBBroX killed renamable $w14, renamable $x22, killed renamable $x8, 0, 0 :: (store (s8) into %ir.arrayidx37)
+UNCOVERED secret-branch func=chacha20_encrypt_bytes_ref bb=29 : CBZX killed renamable $x12, %bb.33
+UNCOVERED secret-address func=chacha20_encrypt_bytes_ref bb=31 : early-clobber renamable $x14, renamable $d0 = LDRDpost killed renamable $x14(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv4, align 1)
+UNCOVERED secret-address func=chacha20_encrypt_bytes_ref bb=31 : early-clobber renamable $x12 = STRDpost killed renamable $d0, killed renamable $x12(tied-def 0), 8 :: (store (s64) into %ir.lsr.iv1, align 1)
+UNCOVERED secret-address func=chacha20_encrypt_bytes_ref bb=34 : renamable $w9 = LDRBBroX renamable $x22, renamable $x8, 0, 0 :: (load (s8) from %ir.arrayidx285)
+UNCOVERED secret-address func=chacha20_encrypt_bytes_ref bb=34 : STRBBroX killed renamable $w9, renamable $x0, renamable $x8, 0, 0 :: (store (s8) into %ir.arrayidx287)
+UNCOVERED secret-branch func=crypto_onetimeauth_poly1305_donna bb=3 : CBZX renamable $x20, %bb.7
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna bb=5 : early-clobber renamable $x21, renamable $w10 = LDRBBpost killed renamable $x21(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv3)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna bb=5 : STRBBroX killed renamable $w10, renamable $x8, killed renamable $x11, 0, 0 :: (store (s8) into %ir.scevgep2)
+UNCOVERED secret-branch func=crypto_onetimeauth_poly1305_donna_verify bb=3 : CBZX renamable $x20, %bb.7
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_verify bb=5 : early-clobber renamable $x21, renamable $w10 = LDRBBpost killed renamable $x21(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv3)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_verify bb=5 : STRBBroX killed renamable $w10, renamable $x8, killed renamable $x11, 0, 0 :: (store (s8) into %ir.scevgep2)
+UNCOVERED secret-branch func=crypto_onetimeauth_poly1305_donna_update bb=0 : CBNZX renamable $x9, %bb.2
+UNCOVERED secret-branch func=crypto_onetimeauth_poly1305_donna_update bb=2 : CBNZX renamable $x8, %bb.4
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : renamable $w14 = LDURBBi renamable $x13, -3 :: (load (s8) from %ir.scevgep41)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : STRBBui killed renamable $w14, killed renamable $x15, 72 :: (store (s8) into %ir.scevgep22)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : renamable $w14 = LDURBBi renamable $x13, -2 :: (load (s8) from %ir.scevgep49)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : STRBBui killed renamable $w14, killed renamable $x15, 73 :: (store (s8) into %ir.scevgep28)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : renamable $w15 = LDURBBi renamable $x13, -1 :: (load (s8) from %ir.scevgep53)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : STRBBui killed renamable $w15, killed renamable $x14, 74 :: (store (s8) into %ir.scevgep34)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : renamable $w14 = LDRBBui renamable $x13, 0 :: (load (s8) from %ir.scevgep39)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : STRBBui killed renamable $w14, killed renamable $x15, 75 :: (store (s8) into %ir.scevgep37)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : renamable $w14 = LDRBBui renamable $x13, 1 :: (load (s8) from %ir.scevgep51)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : STRBBui killed renamable $w14, killed renamable $x15, 76 :: (store (s8) into %ir.scevgep31)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : renamable $w15 = LDRBBui renamable $x13, 2 :: (load (s8) from %ir.scevgep47)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : STRBBui killed renamable $w15, killed renamable $x14, 77 :: (store (s8) into %ir.scevgep25)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : renamable $w14 = LDRBBui renamable $x13, 3 :: (load (s8) from %ir.scevgep45)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : STRBBui killed renamable $w14, killed renamable $x15, 78 :: (store (s8) into %ir.scevgep19)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : renamable $w13 = LDRBBui killed renamable $x13, 4 :: (load (s8) from %ir.scevgep43)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=7 : STRBBui killed renamable $w13, killed renamable $x14, 79 :: (store (s8) into %ir.scevgep16)
+UNCOVERED secret-branch func=crypto_onetimeauth_poly1305_donna_update bb=8 : CBZX renamable $x9, %bb.11
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=10 : early-clobber renamable $x10, renamable $w12 = LDRBBpost killed renamable $x10(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv10)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=10 : STRBBroX killed renamable $w12, renamable $x11, killed renamable $x13, 0, 0 :: (store (s8) into %ir.scevgep8)
+UNCOVERED secret-branch func=crypto_onetimeauth_poly1305_donna_update bb=17 : CBZX renamable $x19, %bb.21
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=19 : early-clobber renamable $x21, renamable $w10 = LDRBBpost killed renamable $x21(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv3)
+UNCOVERED secret-address func=crypto_onetimeauth_poly1305_donna_update bb=19 : STRBBroX killed renamable $w10, renamable $x8, killed renamable $x11, 0, 0 :: (store (s8) into %ir.scevgep2)
+UNCOVERED secret-branch func=poly1305_finish bb=0 : CBZX renamable $x8, %bb.4
+UNCOVERED secret-address func=poly1305_finish bb=1 : STRBBroX renamable $w21, killed renamable $x9, renamable $x8, 0, 0 :: (store (s8) into %ir.arrayidx)
+UNCOVERED secret-branch func=crypto_hash_sha512_update bb=0 : CBZX renamable $x2, %bb.52
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=14 : early-clobber renamable $x13, renamable $d0 = LDRDpost killed renamable $x13(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv42, align 1)
+UNCOVERED secret-branch func=crypto_hash_sha512_update bb=23 : CBZX killed renamable $x10, %bb.27
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=25 : early-clobber renamable $x12, renamable $d0 = LDRDpost killed renamable $x12(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv12, align 1)
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=25 : early-clobber renamable $x11 = STRDpost killed renamable $d0, killed renamable $x11(tied-def 0), 8 :: (store (s64) into %ir.lsr.iv9, align 1)
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=28 : early-clobber renamable $x9, renamable $w11 = LDRBBpost killed renamable $x9(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv4)
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=28 : early-clobber renamable $x8 = STRBBpost killed renamable $w11, killed renamable $x8(tied-def 0), 1 :: (store (s8) into %ir.lsr.iv1)
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=29 : early-clobber renamable $x10, renamable $w11 = LDRBBpost killed renamable $x10(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv34)
+UNCOVERED secret-branch func=crypto_hash_sha512_update bb=33 : CBZX renamable $x21, %bb.51
+UNCOVERED secret-branch func=crypto_hash_sha512_update bb=45 : CBZX killed renamable $x9, %bb.36
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=47 : early-clobber renamable $x11, renamable $d0 = LDRDpost killed renamable $x11(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv28, align 1)
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=47 : early-clobber renamable $x10 = STRDpost killed renamable $d0, killed renamable $x10(tied-def 0), 8 :: (store (s64) into %ir.lsr.iv25, align 1)
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=50 : early-clobber renamable $x8, renamable $w11 = LDRBBpost killed renamable $x8(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv20)
+UNCOVERED secret-address func=crypto_hash_sha512_update bb=50 : early-clobber renamable $x10 = STRBBpost killed renamable $w11, killed renamable $x10(tied-def 0), 1 :: (store (s8) into %ir.lsr.iv17)
+UNCOVERED secret-branch func=sodium_memcmp bb=0 : CBZX renamable $x19, %bb.3
+UNCOVERED secret-address func=sodium_memcmp bb=2 : early-clobber renamable $x20, renamable $w9 = LDRBBpost killed renamable $x20(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv1)
+UNCOVERED secret-address func=argon2_encode_string bb=16 : STRBBroX $wzr, killed renamable $x24, killed renamable $x19, 0, 0 :: (store (s8) into %ir.scevgep)
+UNCOVERED secret-address func=argon2_encode_string bb=28 : early-clobber renamable $x19 = STRHHpost killed renamable $w8, killed renamable $x19(tied-def 0), 1 :: (store (s16) into %ir.add.ptr181, align 1)
+UNCOVERED secret-branch func=sodium_bin2base64 bb=8 : CBNZX renamable $x3, %bb.10
+UNCOVERED secret-branch func=sodium_bin2base64 bb=11 : CBNZX renamable $x3, %bb.13
+UNCOVERED secret-branch func=crypto_pwhash_argon2id bb=4 : CBNZX killed renamable $x8, %bb.6
+UNCOVERED secret-branch func=argon2_hash bb=2 : CBZX killed renamable $x8, %bb.4
+UNCOVERED secret-branch func=argon2_hash bb=12 : CBZX renamable $x22, %bb.16
+UNCOVERED secret-branch func=argon2_hash bb=13 : CBZX renamable $x23, %bb.16
+UNCOVERED secret-branch func=argon2_hash bb=14 : CBZW killed renamable $w0, %bb.16
+UNCOVERED secret-branch func=crypto_pwhash_argon2id_str_verify bb=2 : CBNZW renamable $w0, %bb.4
+UNCOVERED secret-branch func=crypto_pwhash_argon2i_str_verify bb=2 : CBNZW renamable $w0, %bb.4
+UNCOVERED secret-address func=crypto_auth_hmacsha512_init bb=14 : early-clobber renamable $x11, renamable $d0 = LDRDpost killed renamable $x11(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv28, align 1)
+UNCOVERED secret-address func=crypto_auth_hmacsha512_init bb=17 : early-clobber renamable $x8, renamable $w11 = LDRBBpost killed renamable $x8(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv20)
+UNCOVERED secret-address func=crypto_auth_hmacsha512_init bb=29 : early-clobber renamable $x11, renamable $d0 = LDRDpost killed renamable $x11(tied-def 0), 8 :: (load (s64) from %ir.lsr.iv12, align 1)
+UNCOVERED secret-address func=crypto_auth_hmacsha512_init bb=32 : early-clobber renamable $x8, renamable $w11 = LDRBBpost killed renamable $x8(tied-def 0), 1 :: (load (s8) from %ir.lsr.iv4)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : renamable $q21 = LDRQui renamable $x13, 0 :: (load (s128) from %ir.add.ptr96.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : renamable $q22 = LDRQui renamable $x13, 1 :: (load (s128) from %ir.arrayidx39.1.i859.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : renamable $q21 = LDRQui renamable $x13, 2 :: (load (s128) from %ir.arrayidx39.2.i862.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : renamable $q22 = LDRQui renamable $x13, 3 :: (load (s128) from %ir.arrayidx39.3.i865.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : renamable $q5 = LDRQui renamable $x13, 4 :: (load (s128) from %ir.arrayidx39.4.i868.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : renamable $q22 = LDRQui killed renamable $x13, 5 :: (load (s128) from %ir.arrayidx39.5.i871.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : STRQui killed renamable $q16, renamable $x12, 0 :: (store (s128) into %ir.add.ptr95.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : STRQui killed renamable $q18, renamable $x12, 1 :: (store (s128) into %ir.ts.sroa.9.0.dst.sroa_idx.i873.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : STRQui killed renamable $q21, renamable $x12, 2 :: (store (s128) into %ir.ts.sroa.15.0.dst.sroa_idx.i874.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : STRQui killed renamable $q17, renamable $x12, 3 :: (store (s128) into %ir.ts.sroa.21.0.dst.sroa_idx.i875.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : STRQui killed renamable $q7, renamable $x12, 4 :: (store (s128) into %ir.ts.sroa.27.0.dst.sroa_idx.i876.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=30 : STRQui killed renamable $q6, killed renamable $x12, 5 :: (store (s128) into %ir.ts.sroa.33.0.dst.sroa_idx.i877.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q30 = LDRQui renamable $x14, 0 :: (load (s128) from %ir.add.ptr106.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q31 = LDRQui renamable $x14, 1 :: (load (s128) from %ir.arrayidx39.1.i933.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q30 = LDRQui renamable $x14, 2 :: (load (s128) from %ir.arrayidx39.2.i936.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q31 = LDRQui renamable $x14, 3 :: (load (s128) from %ir.arrayidx39.3.i939.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q30 = LDRQui renamable $x14, 4 :: (load (s128) from %ir.arrayidx39.4.i942.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q31 = LDRQui killed renamable $x14, 5 :: (load (s128) from %ir.arrayidx39.5.i945.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : STRQui killed renamable $q26, renamable $x5, 0 :: (store (s128) into %ir.add.ptr105.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : STRQui killed renamable $q27, renamable $x5, 1 :: (store (s128) into %ir.ts.sroa.9.0.dst.sroa_idx.i947.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : STRQui killed renamable $q24, renamable $x5, 2 :: (store (s128) into %ir.ts.sroa.15.0.dst.sroa_idx.i948.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : STRQui killed renamable $q25, renamable $x5, 3 :: (store (s128) into %ir.ts.sroa.21.0.dst.sroa_idx.i949.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : STRQui killed renamable $q23, renamable $x5, 4 :: (store (s128) into %ir.ts.sroa.27.0.dst.sroa_idx.i950.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : STRQui killed renamable $q22, renamable $x5, 5 :: (store (s128) into %ir.ts.sroa.33.0.dst.sroa_idx.i951.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q22 = LDURQi renamable $x5, -96 :: (load (s128) from %ir.add.ptr110.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q24 = LDURQi renamable $x5, -80 :: (load (s128) from %ir.add.ptr119.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q26 = LDURQi renamable $x5, -64 :: (load (s128) from %ir.add.ptr119.1.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q31 = LDURQi renamable $x5, -48 :: (load (s128) from %ir.add.ptr119.2.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q31 = LDURQi renamable $x5, -32 :: (load (s128) from %ir.add.ptr119.3.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=35 : renamable $q8 = LDURQi killed renamable $x5, -16 :: (load (s128) from %ir.add.ptr119.4.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=37 : renamable $q0 = LDURQi renamable $x12, -96 :: (load (s128) from %ir.add.ptr133.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=37 : renamable $q3 = LDURQi renamable $x12, -80 :: (load (s128) from %ir.add.ptr142.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=37 : renamable $q7 = LDURQi renamable $x12, -64 :: (load (s128) from %ir.add.ptr142.1.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=37 : renamable $q16 = LDURQi renamable $x12, -48 :: (load (s128) from %ir.add.ptr142.2.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=37 : renamable $q17 = LDURQi renamable $x12, -32 :: (load (s128) from %ir.add.ptr142.3.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=37 : renamable $q18 = LDURQi killed renamable $x12, -16 :: (load (s128) from %ir.add.ptr142.4.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=46 : renamable $q7 = LDRQroX renamable $x11, renamable $x14, 0, 0 :: (load (s128) from %ir.scevgep13)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=46 : renamable $q7 = LDRQroX renamable $x12, renamable $x14, 0, 0 :: (load (s128) from %ir.scevgep17, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=46 : STRQroX killed renamable $q7, renamable $x13, renamable $x14, 0, 0 :: (store (s128) into %ir.scevgep21, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=47 : renamable $q7 = LDRQui renamable $x10, 0 :: (load (s128) from %ir.add.ptr161.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=47 : renamable $q16 = LDRQui renamable $x10, 1 :: (load (s128) from %ir.add.ptr180.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=47 : renamable $q17 = LDRQui renamable $x10, 2 :: (load (s128) from %ir.add.ptr180.1.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=47 : renamable $q20 = LDRQui killed renamable $x10, 3 :: (load (s128) from %ir.add.ptr180.2.i, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=48 : renamable $q7 = LDRQui renamable $x11, 0 :: (load (s128) from %ir.scevgep8, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=48 : STURQi renamable $q5, renamable $x9, -16 :: (store (s128) into %ir.scevgep7, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=48 : renamable $q16 = LDRQui killed renamable $x11, 1 :: (load (s128) from %ir.scevgep10, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=48 : STRQui renamable $q6, killed renamable $x9, 0 :: (store (s128) into %ir.scevgep5, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=53 : renamable $q5 = LDRQroX renamable $x3, renamable $x23, 0, 0 :: (load (s128) from %ir.scevgep, align 8)
+UNCOVERED secret-address func=crypto_aead_aes256gcm_encrypt_detached_afternm bb=53 : STRQroX renamable $q4, renamable $x0, renamable $x23, 0, 0 :: (store (s128) into %ir.scevgep1, align 8)

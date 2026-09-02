@@ -1,0 +1,103 @@
+[1] taint-stop cross-tu  in=sodium_memzero src=llvm-link callee=memset_s
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+      repair    seed the TU that defines it:
+                  memset_s,0,pointee
+                  memset_s,1
+                  memset_s,3
+[2] taint-stop indirect  in=stream_ref_ref src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[3] taint-stop indirect  in=stream_ietf_ext_ref src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[4] taint-stop indirect  in=poly1305_finish src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[5] taint-stop indirect  in=randombytes_buf src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[6] taint-stop indirect  in=crypto_sign_ed25519 src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[7] taint-stop indirect  in=argon2_encode_string src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[8] taint-stop cross-tu  in=argon2_encode_string src=llvm-link callee=__memcpy_chk
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+      repair    seed the TU that defines it:
+                  __memcpy_chk,1
+                  __memcpy_chk,2
+[9] taint-stop cross-tu  in=argon2_encode_string src=llvm-link callee=strlen
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+      repair    seed the TU that defines it:
+                  strlen,0,pointee
+[10] taint-stop indirect  in=sodium_bin2base64 src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[11] taint-stop indirect  in=crypto_pwhash_argon2id src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[12] taint-stop indirect  in=argon2_hash src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[13] taint-stop cross-tu  in=argon2_verify src=llvm-link callee=free
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+      repair    seed the TU that defines it:
+                  free,0
+[14] taint-stop indirect  in=crypto_stream_chacha20_ietf src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[15] taint-stop indirect  in=crypto_onetimeauth_poly1305_init src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[16] taint-stop indirect  in=crypto_onetimeauth_poly1305_update src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[17] taint-stop indirect  in=crypto_onetimeauth_poly1305_final src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[18] taint-stop indirect  in=crypto_stream_chacha20_ietf_xor_ic src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[19] taint-stop indirect  in=crypto_aead_chacha20poly1305_ietf_decrypt_detached src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[20] taint-stop indirect  in=crypto_onetimeauth_poly1305 src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[21] taint-stop indirect  in=crypto_onetimeauth_poly1305_verify src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[22] taint-stop indirect  in=crypto_aead_aes256gcm_encrypt_detached_afternm src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost
+[23] taint-stop indirect  in=crypto_aead_aes256gcm_decrypt_detached_afternm src=llvm-link callee=<indirect>
+      severity  moderate
+      action    the secret is passed to a callee this pass cannot see; DIT is enabled so the callee inherits protection
+      cost      no placement happens inside the callee - it runs entirely protected, and any narrowing it could have done is lost

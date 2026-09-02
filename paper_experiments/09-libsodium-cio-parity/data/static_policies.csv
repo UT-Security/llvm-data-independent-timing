@@ -1,0 +1,7 @@
+policy,flags,msr_dit_switches,functions_instrumented,text_bytes,text_vs_base_pct,infoloss_records,infoloss_severe,escape_sites,uncovered_sites
+baseline,(none - MIR round-trip control),0,0,247312,0.00,23,0,34,126
+hardened,-taint-dit-placement=region,521,108,249460,0.87,23,0,34,126
+func,-taint-dit-placement=function,569,108,249644,0.94,23,0,34,126
+fine,-taint-dit-placement=region -taint-dit-switch-cyc=0 -taint-dit-loop-hoist=0,631,108,249972,1.08,23,0,34,126
+nogate,-taint-dit-placement=region -taint-no-modset-gate,1308,288,252680,2.17,23,0,34,126
+narrow,-taint-dit-placement=region (on indirect-call-resolved IR),749,164,250136,1.24,16,0,,

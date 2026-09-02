@@ -1,0 +1,7 @@
+benchmark,cio_mitigation,cio_overhead_x,source
+argon2id,SS+CS,27.84,"Flanders et al. ASPLOS'24, worst case"
+ed25519,SS+CS,20.32,"Flanders et al. ASPLOS'24"
+ed25519,CS,16.73,"Flanders et al. ASPLOS'24"
+libsodium_text,SS,1.62,"363 kB -> 588 kB"
+libsodium_text,CS,3.08,"363 kB -> 1118 kB"
+libsodium_text,SS+CS,3.66,"363 kB -> 1327 kB"

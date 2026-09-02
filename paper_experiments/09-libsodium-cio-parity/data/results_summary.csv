@@ -1,0 +1,7 @@
+benchmark,cycles_per_op_unhardened,reps,mad_pct,C_vs_base_pct,P_vs_base_pct,F_vs_base_pct,X_vs_base_pct,N_vs_base_pct,pass_switches_per_op,pass_extra_cycles_per_op,cycles_per_switch
+ed25519,37508,15,0.12,+0.17,+11.94,+10.57,+24.75,+12.02,109,4487,41.2
+chacha20_poly1305_encrypt,3701,15,0.33,-0.54,+114.26,+111.83,+153.44,+114.32,105,4225,40.3
+chacha20_poly1305_decrypt,3729,15,0.48,-0.60,+123.56,+119.03,+165.98,+123.43,103,4611,44.8
+aesni256gcm_encrypt,2876,15,0.57,-0.59,+35.34,+33.79,+50.91,+35.06,15,1020,66.3
+aesni256gcm_decrypt,2969,15,0.91,+1.95,+34.24,+32.82,+38.33,+34.34,18,1017,56.3
+argon2id,191171059,15,0.23,-0.33,-0.17,-0.34,+0.04,+0.03,-197187,-362178,1.8
