@@ -106,6 +106,10 @@ extern cl::opt<bool> TaintArgProvenance;
 /// unless TaintArgProvenance also named the object in the first place.
 extern cl::opt<bool> TaintArgPointeeArgs;
 
+/// Model the memory effect of libc movers (memcpy/memmove/mempcpy) instead of
+/// treating them as opaque external calls that clobber all caller memory.
+extern cl::opt<bool> TaintLibcModel;
+
 /// Stamp the hardening-wide tail-call disable (\see TaintNoTailCalls) on every
 /// definition in \p M, and return how many functions were stamped.
 ///

@@ -472,6 +472,84 @@ otherwise have to rediscover and redeclare identically. Extending the seed synta
 with an effect form (`memcpy,0,writes-from,1`) would work, but it would push a
 compiler-owned fact onto every user.
 
+### The libc model (`-taint-libc-model`, default OFF)
+
+`getLibcMoveModel` recognises `memcpy`/`memmove`/`mempcpy` and applies their
+contract instead of collapsing to TOP: dst's bytes come from src, and nothing
+else caller-visible changes. So the call makes memory secret **iff the source is
+secret**, and when it does it makes exactly ONE object secret - the fact blunt
+TOP throws away. If the destination cannot be named, it falls back to TOP, which
+is the right answer rather than a failure.
+
+Four things keep it honest. The callee must be a **declaration** (a definition in
+this TU is analysed for real). A **secret-dependent length** falls back to TOP,
+since which bytes were overwritten would itself be secret. When a declaration
+exists its **signature is checked**, so a local function sharing the name is not
+given libc semantics. And the `str*` family is **excluded**: `strcat` also reads
+dst and the n-forms write a length derived from the source, both different
+shapes.
+
+**`Callee` is usually null here, and that is the normal case.** A C `memcpy`
+reaches -O2 as the intrinsic `llvm.memcpy.p0.p0.i64`, which ISel lowers to a
+libcall against the bare symbol `memcpy`; the module declares only the intrinsic,
+so `M.getFunction("memcpy")` is null. Matching falls back to the symbol name,
+which is the same reserved-identifier argument `callCannotMakeMemorySecret` uses
+for `operator delete`.
+
+**Measured: it produces the missing fact.** On libhydrogen,
+`hydro_hash_final`'s summary goes
+
+| | mod-set |
+|---|---|
+| without | `arg0 UNKNOWN(TOP)` |
+| **with** | **`arg0 arg1 UNKNOWN(TOP)`** |
+
+`arg1` is the output buffer - exactly the fact B2 needs and the one whose absence
+this whole section was about.
+
+#### Two more ordering bugs, same family, and the pattern is now clear
+
+Finding this required fixing two more instances of the read-before-kill trap,
+both of which made a rule silently inert rather than wrong:
+
+- **A CALL implicitly defines x0** and clobbers the caller-saved registers, so
+  the provenance kill wipes the very argument registers the call handling then
+  wants to name. Both the P1b/B1 application and the libc model were reading
+  post-kill. Fixed with a `PreCallArgBases` snapshot taken before the kill.
+- **`taintedCallArguments` had the same problem**, which is worse because gap A
+  and B2 both live inside it: the frame-address and arg-pointee rules could never
+  see a base at a call. A call's arguments are now read from the state ENTERING
+  it. The fixed-point iteration gets this right for free by using `replayTaint`'s
+  `Pre` hook; the in-function paths had no such luxury.
+
+**Four ordering bugs across four features, every one silent, none caught by the
+47 tests.** The shape is always the same: this instruction's defs are killed
+before something else reads its sources. Anything added to this block should be
+assumed to have the bug until a repro says otherwise.
+
+And one plain omission worth recording because it wasted a cycle: the
+`TargetInstrInfo` hook's opcode switch listed `ADDXrs` but not **`ADDXrr`**, and
+`ADDXrr` is what `p + i` actually lowers to. The hook was inert on the real
+workload while passing every test.
+
+### It still does not close libhydrogen, and the honest count is now four gaps
+
+With every flag on, the caller-side result is unchanged from gap A alone:
+46 switches, `hydro_sign_final_create` at 12.0%, 2 curve functions.
+
+The next link is visible in the log and is **gap A failing at the inner call**:
+
+```
+call to hydro_hash_final writes secret through a pointer arg
+  but this call site passes no secret: clobber suppressed (callsite-gated)
+```
+
+`hydro_sign_prehash` passes `&st`, a frame object the inlined `hydro_hash_init`
+filled with the secret. For the gate to admit the call, that frame object's cells
+must be tainted AND `&st` must resolve to it. One of those is not holding, and
+which one is not yet established. **Do not guess at it - that is how the last two
+diagnoses in this file turned out wrong.**
+
 ### Prior art for §3c (partial)
 
 Searched 2026-09-02. **Andromeda, TaintDroid and all GCC quotes below were
@@ -861,12 +939,11 @@ placement fix.**
    12.0% coverage says the two builds lose the secret in different places.
 3. ~~**Close gap B**~~ **DONE, and insufficient.** B1 and B2 both landed and both
    close their repros; libhydrogen does not move because of a third gap.
-   The `TargetInstrInfo` hook for register-register address arithmetic landed
-   and more than doubled the naming reach (blunt 1,253 -> 494), but it was NOT
-   the blocker. **The next actual step is the libc model table** (P1 in
-   `memory-summaries.md`): `hydro_hash_final` fills its output buffer with
-   `memcpy`, an external callee, so its summary collapses to `UNKNOWN(TOP)` and
-   B2 has no precise fact to consume.
+   The `TargetInstrInfo` hook landed (blunt 1,253 -> 494) and so did the libc
+   model, which does produce the missing `arg1` on `hydro_hash_final`. Neither
+   closed libhydrogen. **The next step is to establish why the gate still calls
+   the `hydro_hash_final` call site secret-free** when `&st` is passed - by
+   measurement, not by another guess.
 4. **Re-measure `-taint-frame-addr-args` on libsecp256k1** and decide its
    default. Only worth doing after B, since A alone moves nothing.
 5. Re-run the experiment 08 oracle after each step. It is the only instrument

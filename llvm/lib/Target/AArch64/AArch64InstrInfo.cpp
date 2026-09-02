@@ -7497,14 +7497,16 @@ AArch64InstrInfo::getTimingModeSwitch(const MachineInstr &MI) const {
 
 bool AArch64InstrInfo::getPointerDisplacementBases(
     const MachineInstr &MI, SmallVectorImpl<Register> &Bases) const {
-  // 64-bit ADD with a register operand. AArch64 has no plain "ADDXrr": a
-  // register-register add is ADDXrs with a shift amount of zero, and an add of a
-  // narrower index is ADDXrx (`add x0, x1, w2, uxtw`), which is what indexing by
-  // a 32-bit loop variable lowers to.
+  // 64-bit ADD with a register operand. ADDXrr is the plain register-register
+  // form and is what `p + i` actually lowers to - omitting it made this hook
+  // silently inert on the real workload, since ADDXrs only appears when there is
+  // a shift. ADDXrx/ADDXrx64 cover an add of a narrower index
+  // (`add x0, x1, w2, uxtw`), which is how a 32-bit loop variable indexes.
   //
   // ADDXri is NOT handled here - that is isAddImmediate's job, and it gives the
   // caller a constant displacement this hook cannot.
   switch (MI.getOpcode()) {
+  case AArch64::ADDXrr:
   case AArch64::ADDXrs:
   case AArch64::ADDXrx:
   case AArch64::ADDXrx64:
