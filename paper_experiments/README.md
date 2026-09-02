@@ -44,7 +44,7 @@ One artifact per experiment. Republish through the recorded URL (`Artifact` with
 | 06 | Switch Model Transfer | https://claude.ai/code/artifact/b6c89530-d27f-455c-a7bc-e93b3ab7c952 |
 | 07 | The Annotation Loop | https://claude.ai/code/artifact/ac6058f5-25ba-4a38-bf2e-6a385652ffb3 |
 | 08 | Two Analyses, One Library | https://claude.ai/code/artifact/2a789196-2274-42fc-9922-b624f0808762 |
-| 09 | Nothing to Recover | https://claude.ai/code/artifact/842a1394-e976-4587-861c-076657829a48 |
+| 09 | Nothing to Recover | https://claude.ai/code/artifact/24709335-fc81-4a36-8eca-0c64fcc6cf8a |
 
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6
 
