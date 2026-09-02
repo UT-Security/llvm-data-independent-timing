@@ -345,6 +345,63 @@ The ratio form makes the shape plainer than percentages do:
 `ns/op` is what was measured; `cyc/op` is derived from it at the gate-measured
 4,408 MHz.
 
+### The original host, re-measured (M5, 2026-09-02)
+
+Apple **M5** (Mac17,2), same protocol, same seven arms, `CHEAP_TIMER=1`.
+`data/m5_results_ratios.csv` carries both timers. This is the run the correction
+was for: M4 diagnosed the instrument, M5 is where the published headline came
+from, so the before/after is now same-machine rather than cross-host.
+
+| benchmark | ns/op | cyc/op | blanket | pass | func | old def | resolved | nopsw |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| ed25519 sign | 7,993 | 36,690 | **1.0057x** | 1.1342x | 1.1251x | 1.2745x | 1.1307x | 1.0068x |
+| chacha20-poly1305 enc | 244 | 1,119 | **1.0070x** | 4.8326x | 4.7516x | 6.0872x | 4.8106x | 0.9972x |
+| chacha20-poly1305 dec | 257 | 1,180 | **1.0217x** | 4.9040x | 4.7916x | 6.2127x | 4.9214x | 0.9960x |
+| aes256-gcm enc | 55 | 252 | **1.0096x** | 5.2735x | 5.1441x | 7.1021x | 5.2663x | 1.0769x |
+| aes256-gcm dec | 75 | 345 | **1.0116x** | 4.1435x | 4.0735x | 4.5052x | 4.1886x | 1.0066x |
+| argon2id | 43,119,611 | 197,919,014 | **0.9977x** | 1.0002x | 0.9977x | 1.0008x | 1.0004x | 1.0002x |
+
+**Every conclusion replicates, and two of them are now cross-host facts rather
+than single-machine observations:**
+
+- **Blanket is free on both.** 1.0057x-1.0217x here against 1.0015x-1.0207x on
+  M4, below 1 on argon2id both times. This is the load-bearing claim and the two
+  hosts agree to within two points on every row.
+- **Coarser wins on both.** `func` < `pass` on all six rows, both machines.
+- **argon2id is free in every arm on both.**
+
+**Where the hosts DIFFER, and it is the switch itself.** M5's pass costs
+**4.83x** on chacha where M4's costs 3.43x, and **5.27x** on AES against 3.34x.
+Same binaries and the same executed switch counts, so this is not placement: it
+is **~43.6 cycles per executed switch on M5 against ~33.4 on M4**, measured from
+the timed-region counters on each host. The pre-2026-08-24 defaults reach
+**7.10x** here. A cost model calibrated in cycles therefore has to be calibrated
+per core, which is an argument for `-taint-dit-switch-cyc` being a knob rather
+than a constant.
+
+**The layout term reproduces where it matters.** Arm `Z` is within +/-0.7% of 1.0
+on five rows and **1.0769x on aes256-gcm encrypt**, against **1.0870x** on M4 -
+the same effect on the same benchmark on a second machine, so instrumenting a
+55-tick region really does cost something through code movement alone, and an
+`A`-vs-`P` comparison books it as DIT cost. That is the whole reason arm `Z`
+exists.
+
+**This host's instrumentation offset is 2,521 cycles**, not M4's 3,234
+(`data/m5_offset_probe.txt`, 5 of 5 passes at full clock). Two instruments agree
+on it: the probe measures 2,521 directly, and subtracting the two timers'
+baselines implies **2,585-2,738** on the four benchmarks where the offset is a
+large enough fraction to resolve. Assuming M4's number here would have
+over-subtracted by 713 cycles - more than the entire corrected aes256-gcm
+baseline of 252.
+
+> The first M5 attempt at this table was **void** and is worth recording. It ran
+> while another session held nine `gem5.opt` processes on this 10-core machine:
+> the offset probe discarded all five sweeps at a depressed 3,720 MHz, and the
+> harness carried on into the timing runs regardless. `utils/run_m5_corrected.sh`
+> now refuses to start when anything else is above 50% CPU, and treats the
+> probe's `NO VALID PASSES` as fatal. Native timing needs an exclusive machine;
+> gem5 is exempt because it is deterministic, native is not.
+
 ### Running this on another host
 
 The M4 numbers above came from the corrected timer and the seven-arm set. To get
@@ -371,7 +428,7 @@ runs never collide:
 |---|---|
 | original M5 | `cio_benchmarks_O2.csv`, `ditprobe_gates.csv`, `results_summary.csv`, ... |
 | M4 | `m4_cio_benchmarks_{kperf,cntvct}_timed.csv`, `m4_results_summary.csv`, `m4_results_ratios.csv`, ... |
-| a re-run on M5 | `m5_*`, matching the M4 names - do NOT overwrite the unprefixed originals, which are what the published headline table above was computed from |
+| re-run on M5 | `m5_*` (done 2026-09-02, section above). The unprefixed originals are untouched: they are what the published headline table was computed from, and keeping them is how the correction stays auditable |
 
 Two things worth checking on any new host, because both bit here: gate 1 is a
 ratio whose ceiling is that core's L1 load-to-use latency, so read it as
