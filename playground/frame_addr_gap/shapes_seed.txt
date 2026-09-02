@@ -1,0 +1,2 @@
+inline_consume,1,pointee
+pass_on,1,pointee
