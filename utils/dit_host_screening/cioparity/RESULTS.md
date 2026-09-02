@@ -62,11 +62,46 @@ addresses.
 | aes256-gcm encrypt | +0.3 | **24.4** |
 | aes256-gcm decrypt | +5.8 | **36.9** |
 
-Independent reference points, none from this run: 34.3 and 76.3 cyc/write
-(experiment 06, gem5, mbedTLS at two toggle rates), ~41 cyc/switch (experiment
-09, Apple M5 **silicon**, this library), ~24 cyc/switch (experiment 02, M5).
-Ours sits inside that 19-76 spread. Ordering and proportionality transfer;
-magnitudes are workload-dependent.
+### Against silicon, in the quantity that survives an instrument change
+
+**Compare cycles per switch, not percentages.** A per-switch figure is a
+DIFFERENCE divided by a count, so a fixed per-region instrument cost cancels
+exactly; a percentage puts that cost in the denominator and compresses the
+ratio. This is not a hypothetical distinction: experiment 09's own M5 numbers
+were understated **4x on chacha and 13-15x on AES** by 2,521-3,234 cycles of
+`kpc_get_thread_counters()` sitting inside the timed region, and the per-switch
+column was the part unaffected.
+
+| instrument | cycles per serialising switch |
+|---|---|
+| Apple M5, this library (corrected) | **43.6** |
+| Apple M4, this library (corrected) | **33.4** |
+| **gem5 Neoverse-V2, this run** | **19.0 - 36.9** |
+| experiment 06, gem5, mbedTLS at two toggle rates | 34.3 and 76.3 |
+| experiment 02, Apple M5 | ~24 |
+
+**This corrects a claim in an earlier version of this file.** It read "our
+19-37 sits inside a 19-76 spread" against a stale ~41 for M5. With both hosts
+re-measured, gem5's serialising switch is cheaper than *both* pieces of silicon,
+which strengthens rather than weakens the point below: gem5's serialising model
+is the **optimistic** end, not the conservative one experiment 06 records it as.
+
+The pass-arm percentages are shown for completeness and should not be compared
+across instruments without the per-switch column beside them:
+
+| benchmark | M5 | M4 | gem5 | M5 base | gem5 base |
+|---|---|---|---|---|---|
+| chacha20-poly1305 encrypt | 4.83x | 3.43x | **1.81x** | 1,119 | 2,227 |
+| chacha20-poly1305 decrypt | 4.90x | 3.62x | **1.91x** | 1,180 | 2,270 |
+| aes256-gcm encrypt | 5.27x | 3.34x | **1.29x** | 252 | 1,219 |
+| aes256-gcm decrypt | 4.14x | 2.95x | **1.51x** | 345 | 1,088 |
+| ed25519 sign | 1.13x | 1.09x | **1.01x** | 36,690 | 78,044 |
+| argon2id | 1.000x | 0.996x | **1.014x** | 197.9M | 326.6M |
+
+gem5 reads far lower, and the gap decomposes exactly: its baseline is ~2x
+slower (which dilutes any ratio) and its switch is ~2.3x cheaper. 2 x 2.3 = 4.6,
+against the 4.7x observed on chacha encrypt. Ordering and proportionality
+transfer; absolute percentages do not.
 
 ## Toggle rate is the explanatory variable, over a 30,000x span
 
@@ -137,6 +172,20 @@ totals read `fine` +47.70% against `taint` +51.38%, because `fine` happened to
 draw a -6.82% layout term. Layout-free, `fine`'s DIT cost is +54.52% against
 `taint`'s +50.86%. `fine` executes MORE switches (18 vs 15) at the SAME dwell
 (94% vs 96%) - it is strictly worse placement - and still measured 6.7% faster.
+
+### The same confound was found independently, on silicon
+
+While this study was running, experiment 09 added **arm Z** on both Apple hosts:
+the same idea, a NOP-switch layout control. It reads within +/-0.7% of 1.0 on
+five rows and **1.0769x on M5 / 1.0870x on M4 for aes256-gcm encrypt** - the same
+benchmark where the layout term is largest here. Three machines, two instruments,
+same effect on the same row, found in parallel and independently.
+
+That matters more than either result alone. A 7-8% layout term on silicon is not
+a simulator artifact and not a gem5 modelling choice; it is what instrumenting a
+252-tick region costs through code movement, and an A-vs-P comparison books it as
+DIT cost. It is the strongest available argument that per-policy layout twins
+belong in the rig permanently rather than as a one-off control.
 
 **RESOLUTION LIMIT: about 10 points, not sub-point.** The aes-gcm encrypt row
 swings 6 points across alignment settings and flips its winner, because the twin
@@ -222,7 +271,14 @@ exact checks. All enforced in `run_cio_gem5.py`; **all passing** across 240 runs
 6. **Pass arms toggle > 0** - or placement inserted nothing that executes.
 7. **Mode clear at exit for every arm, set for `blanket`** - on separate
    `-DDIT_READBACK` binaries (see below).
-8. **Tail-call audit**: no function carrying `msr DIT` may tail-call out. 159
+8. **Instrument offset measured, not assumed: 6 cycles.** The M5 rig's timer cost
+   2,521-3,234 cycles per region and sat in every denominator. Ours is
+   `m5_reset_stats` / `m5_dump_reset_stats`, measured the same way with an EMPTY
+   region: **6 cycles, 5 instructions** (`pmull_test/`-style probe, 30 regions,
+   exact every time), against a 1,088-2,270 cycle baseline. Correcting it out of
+   every denominator would move results by at most **0.28 points**
+   (+80.72% -> +80.94%), so it is recorded rather than applied.
+9. **Tail-call audit**: no function carrying `msr DIT` may tail-call out. 159
    tail calls in the plain `-O2` control, **exactly 6 survivors** in every
    hardened arm - the same six experiment 09's README lists - all in functions
    with no `msr DIT`. The `-O2` control is what proves the detector works.

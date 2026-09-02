@@ -8,3 +8,6 @@ seeds: CIO libsodium.uarch_checker.config, 21 entry points, 108 functions
 arms: base blanket taint taintnop taintfn taintfnnop fine finenop
 alignment sweeps: none (v2) / 16B (a16) / 64B (a64), -align-all-nofallthru-blocks
 runs: 80 per alignment setting, 240 total, all gates passing
+silicon comparison: m5_results_ratios.csv / m4_results_ratios.csv, cntvct timer
+  (kperf columns carry 2521-3234 cyc of counter-read overhead; not used)
+roi marker offset, this rig: 6 cycles / 5 insts, empty-region probe
