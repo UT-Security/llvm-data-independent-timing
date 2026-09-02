@@ -1,0 +1,13 @@
+benchmark,timer,units,base_per_op,base_cycles_per_op,reps,mad_pct,C_vs_base_pct,P_vs_base_pct,F_vs_base_pct,X_vs_base_pct,N_vs_base_pct,Z_vs_base_pct,pass_switches_per_op,pass_extra_cycles_per_op,cycles_per_switch
+ed25519,kperf,kperf_cycles,38107,38107,15,0.15,+0.71,+8.24,+7.54,+12.89,+8.44,,95,3141,33.1
+chacha20_poly1305_encrypt,kperf,kperf_cycles,4476,4476,15,1.05,+1.34,+60.78,+59.51,+84.92,+60.58,,112,2720,24.3
+chacha20_poly1305_decrypt,kperf,kperf_cycles,4502,4502,15,1.08,+1.40,+66.18,+64.65,+92.88,+65.81,,103,2979,28.9
+argon2id,kperf,kperf_cycles,211401385,211401385,15,0.37,-0.03,+0.08,-0.04,-0.09,-0.19,,467646,170938,noise
+aesni256gcm_encrypt,kperf,kperf_cycles,3720,3720,15,0.40,+0.41,+15.36,+14.71,+27.64,+15.17,,26,572,noise
+aesni256gcm_decrypt,kperf,kperf_cycles,3876,3876,15,0.38,+0.89,+14.36,+14.15,+18.58,+14.41,,22,557,noise
+ed25519,cntvct,cntvct_ticks_1ns,7828,34506,15,0.53,+0.87,+9.46,+8.84,+14.57,+9.00,-0.38,98,3263,33.4
+chacha20_poly1305_encrypt,cntvct,cntvct_ticks_1ns,251,1108,15,1.56,+1.27,+243.16,+241.17,+341.34,+242.88,-2.40,107,2694,25.2
+chacha20_poly1305_decrypt,cntvct,cntvct_ticks_1ns,256,1129,15,0.38,+2.07,+262.17,+258.59,+371.64,+263.06,+0.24,104,2960,28.5
+argon2id,cntvct,cntvct_ticks_1ns,50489010,222555555,15,0.32,-0.19,-0.37,-0.42,-0.45,-0.51,-0.50,-436482,-827309,noise
+aesni256gcm_encrypt,cntvct,cntvct_ticks_1ns,62,272,15,1.48,+0.15,+233.89,+231.65,+403.91,+236.72,+8.70,26,636,noise
+aesni256gcm_decrypt,cntvct,cntvct_ticks_1ns,82,360,15,0.71,+0.81,+194.96,+190.16,+240.14,+197.26,-1.62,14,702,noise

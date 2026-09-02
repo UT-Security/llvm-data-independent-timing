@@ -1,0 +1,133 @@
+kperf per-region instrumentation offset, measured on Apple M4 (Mac16,10)
+========================================================================
+2026-09-02, root, utils/cio_offset_probe.c, built with the same flags as
+taint_libsodium_sudo_run.sh part 2 and going through eval_util.h's timer macros
+so it measures the instrument the rig actually used.
+
+WHAT THIS IS. CIO's drivers time one crypto call as
+    start = START_CYCLE_TIMER; op(); end = STOP_CYCLE_TIMER;
+and under root those macros are kpc_get_thread_counters() -- a call into the
+kperf driver, not a register read, with the counter sampled part-way through. So
+the tail of the opening call and the head of the closing one land BETWEEN the
+two timestamps and are charged to the crypto. Every sample carries that as a
+fixed additive offset.
+
+It cancels in arm-vs-arm DIFFERENCES (extra cycles/op, cycles per switch) but
+NOT in RATIOS, where it sits in the denominator -- and on the fast primitives it
+IS most of the denominator. Consequences are recorded in ../README.md.
+
+METHOD. Region cost against a payload of known cycle cost (a dependent ADD
+chain, one retire per cycle). Sweeping the payload gives
+    measured = slope * payload + intercept
+The intercept is the offset. The slope must be ~1.0 under kperf, and is the
+check that makes the intercept mean anything: it says the instrument ADDS to the
+payload rather than perturbing it, so a single subtractable offset exists.
+
+LIMIT. The payload is register-only, so slope ~1.0 shows the syscall does not
+perturb REGISTER work. It says nothing about cache, TLB or branch-predictor
+state, all of which a real crypto call depends on. If the syscall evicts lines
+the crypto then refills, that cost is NOT in the intercept. So
+(measured - intercept) is an UPPER bound on the uninstrumented cost and a direct
+CNTVCT_EL0 measurement is a lower one. Extending the sweep with a cache-resident
+payload would close this and has not been done.
+
+
+RUN 1 -- single sweep
+---------------------
+   payload       median         mean median-payload
+         0         3300       3314.4         3300
+       128         3368       3369.6         3240
+       256         3504       3514.6         3248
+       512         3791       3802.1         3279
+      1024         4292       4295.4         3268
+      2048         5310       5333.9         3262
+      4096         7360       7372.3         3264
+
+cycle source: kperf   core clock: 2706 MHz
+fit: measured = 0.9989 * payload + 3267.1 cycles
+  slope     0.9989  expected 1.0000  -> OK, offset is additive
+  INTERCEPT 3267.1 cycles
+            ^ the per-region instrumentation offset
+SHIM exit dit=0 cycles=kperf tot_cyc=73757030 tot_ins=28
+
+The 2706 MHz reading is why run 2 exists. The rig's own ditprobe gate read
+4406-4415 MHz on all 150 reps, i.e. P-cores, and a syscall costs a different
+NUMBER OF CYCLES on an E-core. One clock sample taken after the sweep cannot say
+which cluster the sweep sat on, so the probe was changed to sample the clock next
+to every point and discard any pass that runs below full clock.
+
+
+RUN 2 -- five passes, clock sampled per point, low-clock passes discarded
+-------------------------------------------------------------------------
+cycle source: kperf
+
+  pass   payload       median  med-payload        MHz  cluster
+     1         0         3349         3349       1798     E !!
+     1       128         3432         3304       2135     E !!
+     1       256         3562         3306       2342     E !!
+     1       512         3783         3271       2519     E !!
+     1      1024         4296         3272       2775     E !!
+     1      2048         5287         3239       2859     E !!
+     1      4096         7343         3247       3090     E !!
+  -> pass 1: slope 0.9805 (exp 1.0000) intercept 3306 cycles  [E-CORE, DISCARDED]
+
+     2         0         3283         3283       3143     E !!
+     2       128         3374         3246       3301     E !!
+     2       256         3497         3241       3446     E !!
+     2       512         3753         3241       3757     E !!
+     2      1024         4266         3242       3757     E !!
+     2      2048         5287         3239       3937     E !!
+     2      4096         7333         3237       4105        P
+  -> pass 2: slope 0.9949 (exp 1.0000) intercept 3253 cycles  [E-CORE, DISCARDED]
+
+     3         0         3234         3234       4213        P
+     3       128         3360         3232       4381        P
+     3       256         3477         3221       4358        P
+     3       512         3743         3231       4409        P
+     3      1024         4285         3261       4465        P
+     3      2048         5309         3261       4465        P
+     3      4096         7348         3252       4428        P
+  -> pass 3: slope 1.0068 (exp 1.0000) intercept 3234 cycles  [P-core]
+
+     4         0         3253         3253       4465        P
+     4       128         3383         3255       4465        P
+     4       256         3511         3255       4465        P
+     4       512         3747         3235       4452        P
+     4      1024         4264         3240       4427        P
+     4      2048         5284         3236       4427        P
+     4      4096         7337         3241       4452        P
+  -> pass 4: slope 0.9968 (exp 1.0000) intercept 3249 cycles  [P-core]
+
+     5         0         3254         3254       4465        P
+     5       128         3363         3235       4427        P
+     5       256         3472         3216       4452        P
+     5       512         3720         3208       4452        P
+     5      1024         4245         3221       4429        P
+     5      2048         5262         3214       4392        P
+     5      4096         7306         3210       4465        P
+  -> pass 5: slope 0.9940 (exp 1.0000) intercept 3229 cycles  [P-core]
+
+================================================================
+valid P-core passes: 3 of 5
+INSTRUMENTATION OFFSET  median 3234 cycles   (range 3229 - 3249)
+
+
+RESULT
+------
+  offset      3234 cycles/region   (3 valid passes, 3229-3249, +/-0.3%)
+  slope       0.9940 - 1.0068      additive, so subtractable
+
+A LOW CLOCK IS NOT NECESSARILY AN E-CORE, and the "E !!" labels above are wrong.
+Passes 1 and 2 ramp 1798 -> 3090 and 3143 -> 4105 MHz ACROSS the sweep: that is a
+P-core coming up under DVFS from idle, not cluster migration. The probe cannot
+tell the two apart, so it now says "low clock" and discards without claiming
+which (utils/cio_offset_probe.c was corrected after this run; the labels here are
+the output as captured).
+
+Discarding those passes was right anyway, but note the offset barely depends on
+it: every pass, ramping or not, landed in 3229-3306 cycles. That insensitivity is
+a result, not an assumption -- which is why the discard stays in the tool.
+
+The earlier indirect estimate, from differencing kperf cycles against wall-clock
+CNTVCT for four benchmarks, was 3333/3359/3455/3517 -- about 5% high, because
+wall-clock includes preemption where kperf counts thread cycles only. Use 3234.

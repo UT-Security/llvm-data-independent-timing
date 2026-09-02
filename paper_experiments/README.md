@@ -27,7 +27,7 @@ were run.
 | 06 | [switch-model generality](06-switch-model-generality/) | - | experiments 02 and 03's workloads | **MSR DIT implementation - measures TRANSFERABILITY** | **complete, gem5** |
 | 07 | [annotation cost](07-annotation-cost/) | - | libsodium signing path | **seed DEPTH - measures DEVELOPER cost** | **complete, silicon** |
 | 08 | [seed ground truth](08-seed-ground-truth/) | - | libhydrogen signing, their exact source | **none - compares our taint set against an INDEPENDENT one** | **complete** |
-| 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon** |
+| 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon x2 (M5 + M4); percentages corrected 4-15x, conclusions unchanged** |
 
 ## Published pages
 

@@ -1,0 +1,7 @@
+policy,flags,msr_dit_switches,functions_instrumented,text_bytes,text_vs_base_pct,infoloss_records,infoloss_severe
+baseline,"(none - MIR round-trip control)",0,0,247312,0.00,23,0
+hardened,"-taint-dit-placement=region",521,108,249460,0.87,23,0
+func,"-taint-dit-placement=function",569,108,249644,0.94,23,0
+fine,"-taint-dit-placement=region -taint-dit-switch-cyc=0 -taint-dit-loop-hoist=0",631,108,249972,1.08,23,0
+narrow,"-taint-dit-placement=region (on indirect-call-resolved IR)",749,164,250136,1.14,16,0
+nopsw,"-taint-dit-placement=region + -taint-dit-nop-switches at emission (control for hardened)",0,0,249460,0.87,23,0

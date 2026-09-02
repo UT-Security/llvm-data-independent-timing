@@ -7,9 +7,21 @@ gates failed rather than letting a plausible-looking number through.
 import collections, csv, os, statistics as st, sys
 
 OUT = os.environ.get("OUT") or (sys.argv[1] if len(sys.argv) > 1 else ".")
-ORDER = ["A", "C", "P", "F", "X", "N"]
+
+_opt = "-O?"   # the driver optimisation level; read from provenance just below
+# CIO's drivers are built at whatever CIO_OPT the run used (-O0 is their own
+# choice, -O2 is how an application would build them); the level changes the
+# numbers, so read it back rather than hardcoding a label in the heading.
+try:
+    for _l in open(os.path.join(OUT, "provenance.txt")):
+        if _l.startswith("cio driver opt:"):
+            _opt = _l.split(":", 1)[1].strip() or _opt
+except OSError:
+    pass
+ORDER = ["A", "C", "P", "F", "X", "N", "Z"]
 NAME = {"A": "unhardened", "C": "blanket DIT", "P": "pass (shipped)",
-        "F": "whole-function", "X": "pass (old defaults)", "N": "pass (resolved)"}
+        "F": "whole-function", "X": "pass (old defaults)", "N": "pass (resolved)",
+        "Z": "pass, switches NOPed (control for P)"}
 
 
 def load(path, keyfn, valfn):
@@ -96,9 +108,13 @@ ours, ours_dit = load(os.path.join(OUT, "ours.csv"),
                       lambda r: float(r['value']))
 import csv as _csv
 try:
-    _src = {r.get("cycle_src", "?") for r in _csv.DictReader(open(os.path.join(OUT, "cio.csv")))}
+    _rr = list(_csv.DictReader(open(os.path.join(OUT, "cio.csv"))))
+    _src = {r.get("cycle_src", "?") for r in _rr}
+    # timer_src is absent from runs made before the cheap-timer split; those
+    # differenced the kperf read, so that is the correct fallback.
+    _tsrc = {r.get("timer_src") or "kperf" for r in _rr}
 except FileNotFoundError:
-    _src = set()
+    _src = set(); _tsrc = set()
 cio, cio_dit = load(os.path.join(OUT, "cio.csv"),
                     lambda r: (r['benchmark'], r['arm']),
                     lambda r: float(r['mean_ticks']))
@@ -114,8 +130,27 @@ if probe:
     mhz, bit = probe.get('CoreMHz', {}), probe.get('DitBit', {})
     if c.get('A') and c.get('C'):
         r = c['C'] / c['A']
-        print(f"  1. DIT visible          Const A={c['A']:.0f} C={c['C']:.0f} -> {r:.3f}x "
-              f"{'PASS (>3.5x)' if r > 3.5 else 'FAIL - instrument cannot see DIT'}")
+        # The RATIO is not portable and must not be the gate. Const-off is
+        # value-predicted at ~1 cycle/hop on every host that predicts at all;
+        # Const-on falls back to L1 load-to-use. So the ratio's CEILING is the
+        # L1 latency in cycles -- 4 on M5, 3 on M4 -- and a fixed ">3.5x" test
+        # is unsatisfiable on a 3-cycle-L1 core no matter how well DIT works.
+        # Measured: M5 222->873 ps at 4597 MHz = 1.02->4.01 cyc/hop, 3.932x;
+        # M4 227->680 ps at 4406 MHz = 1.00->3.00 cyc/hop, 2.996x. Same
+        # phenomenon, and in both cases Const-on lands on top of Perm.
+        # Gate on cycles/hop instead: predicted ~1, unpredicted ~= Perm.
+        g = mhz.get('A') or mhz.get('C')
+        if g:
+            off, on = c['A'] * 1e-3 * g / 1e3, c['C'] * 1e-3 * g / 1e3
+            pm = (p.get('A', 0) or 0) * 1e-3 * g / 1e3
+            ok = off < 2.0 and (pm == 0 or on > pm * 0.9)
+            print(f"  1. DIT visible          Const {off:.2f} -> {on:.2f} cyc/hop "
+                  f"({r:.3f}x, Perm {pm:.2f}) "
+                  f"{'PASS' if ok else 'FAIL - instrument cannot see DIT'}")
+            print(f"       predicted <2 cyc/hop with DIT off, and DIT on must reach Perm")
+        else:
+            print(f"  1. DIT visible          Const A={c['A']:.0f} C={c['C']:.0f} -> {r:.3f}x "
+                  f"(no CoreMHz row; cannot express in cyc/hop)")
     if p.get('A') and p.get('C'):
         r = p['C'] / p['A']
         print(f"  2. negative control     Perm  {r:.4f}x "
@@ -123,7 +158,7 @@ if probe:
     if mhz:
         lo, hi = min(mhz.values()), max(mhz.values())
         print(f"  3. P-core residency     CoreMHz {lo:.0f}-{hi:.0f} "
-              f"{'PASS' if lo > 4000 else 'FAIL - a rep ran on an E-core'}")
+              f"{'PASS' if lo > 4000 else 'FAIL - a rep ran below P-core clock (E-cluster, or DVFS ramp)'}")
     if bit:
         ok = bit.get('A') == 0 and bit.get('C') == 1
         print(f"  4. mode readback        DitBit A={bit.get('A')} C={bit.get('C')} "
@@ -132,12 +167,24 @@ if probe:
 table("PART 1 - our 13 primitives (-O2 drivers)", ours, ours_dit,
       "cntvct_el0 ticks/op (~1 ns), or ps/hop for ditprobe. TIME, not cycles.",
       blanket_exits_set=False)
-table("PART 2 - CIO's benchmarks, their parameters (-O0 drivers, mean of "
+# What the driver DIFFERENCED is timer_src; cycle_src describes the counter
+# accumulators only. They differ whenever CHEAP_TIMER=1, and it is the timer
+# that sets the units of every number in this table.
+if _tsrc == {"kperf"}:
+    _u = ("REAL CYCLES via kperf -- each sample carries the ~3234-cycle region "
+          "read offset, which cancels in arm differences but NOT in the "
+          "percentages below (72-87% of the chacha/AES baselines). See "
+          "utils/cio_offset_probe.c")
+elif _tsrc == {"cntvct"}:
+    _u = ("cntvct_el0 TICKS, not cycles -- see cntfrq_el0 in provenance.txt "
+          "(1 ns/tick on M4; NOT hw.tbfrequency, which is the 24 MHz Mach "
+          "timebase and disagrees). Region offset ~21 cycles, so the "
+          "percentages are sound; the absolute column is TIME, not cycles")
+else:
+    _u = f"MIXED timer sources {_tsrc} -- do not compare across arms"
+table(f"PART 2 - CIO's benchmarks, their parameters ({_opt} drivers, mean of "
       "per-iteration counts)", cio, cio_dit,
-      ("REAL CYCLES via kperf" if _src == {"kperf"} else
-       ("cntvct_el0 ticks (~41.67 ns steps) -- run under sudo -E for real cycles"
-        if _src == {"cntvct"} else f"MIXED cycle sources {_src} -- do not compare across arms")) +
-      ", mean over their iteration count (CIO's own statistic)",
+      _u + ", mean over their iteration count (CIO's own statistic)",
       blanket_exits_set=True)
 
 # ---- counter table: what cntvct could never show -------------------------

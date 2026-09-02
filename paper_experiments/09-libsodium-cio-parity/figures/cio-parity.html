@@ -9,6 +9,7 @@
   --rule:#D6DCDF; --rule-soft:#E4E9EB;
   --free:#1B7F6B; --free-soft:#CFE6DF;
   --cost:#B4472B; --cost-soft:#F0D5CC;
+  --rev:#8A6A1F; --rev-soft:#F2E3C4;
   --shadow:0 1px 2px rgba(17,23,28,.06),0 8px 24px -12px rgba(17,23,28,.18);
 }
 @media (prefers-color-scheme:dark){
@@ -18,6 +19,7 @@
     --rule:#2A343B; --rule-soft:#222B31;
     --free:#4FC3A6; --free-soft:#1E3A35;
     --cost:#E8825F; --cost-soft:#3D2620;
+    --rev:#D9AE55; --rev-soft:#3A2F16;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
   }
 }
@@ -27,6 +29,7 @@
   --rule:#2A343B; --rule-soft:#222B31;
   --free:#4FC3A6; --free-soft:#1E3A35;
   --cost:#E8825F; --cost-soft:#3D2620;
+  --rev:#D9AE55; --rev-soft:#3A2F16;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
 }
 *{box-sizing:border-box}
@@ -96,6 +99,8 @@ th:first-child,td:first-child{text-align:left}
 td{padding:10px 14px;border-bottom:1px solid var(--rule-soft);text-align:right;
   font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
 td:first-child{font-family:Archivo,sans-serif;font-size:.85rem}
+td small{display:block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;
+  color:var(--faint);margin-top:2px;font-weight:400}
 tr:last-child td{border-bottom:none}
 .free-t{color:var(--free);font-weight:500}
 .cost-t{color:var(--cost);font-weight:500}
@@ -120,6 +125,15 @@ caption{caption-side:bottom;text-align:left;padding:11px 14px;font-size:.76rem;
 :root[data-theme="dark"] .pass,:root:not([data-theme="light"]) .pass{border-color:transparent}
 
 .kill{border-left:2px solid var(--cost);padding:2px 0 2px 20px;margin:24px 0}
+.kill.rev{border-left-color:var(--rev)}
+.kill.rev .h{color:var(--rev)}
+.rev-t{color:var(--rev);font-weight:500}
+.was{color:var(--faint);text-decoration:line-through;font-size:.92em}
+.factor{color:var(--rev);font-weight:600}
+.hostmark{font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--faint);font-weight:500}
+tr.m5 td{color:var(--faint)}
+tr.m5 td:first-child{color:var(--faint)}
 .kill p{margin:0 0 .6rem;font-size:.95rem}
 .kill p:last-child{margin:0}
 .kill .h{font-family:Archivo,sans-serif;font-weight:600;font-size:.9rem;color:var(--cost)}
@@ -144,22 +158,37 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
   <h1>Nothing to Recover</h1>
   <p class="lede">Run the closest prior work&rsquo;s experiment on their library, with their seeds
   and their drivers, and the first question answers itself. Blanket <code>PSTATE.DIT</code> costs
-  <b>&minus;0.60% to +1.95%</b> on all six benchmarks. There is no headroom &mdash; so every
-  selective placement policy spends switches to recover something worth nothing, and loses by
-  <b>12% to 124%</b>.</p>
+  <b>&minus;0.60% to +2.07%</b> on all six benchmarks, on two different chips. There is no headroom
+  &mdash; so every selective placement policy spends switches to recover something worth nothing, and
+  loses by <b>9% to 404%</b>.</p>
   <div class="meta">
-    <span>Apple M5 &middot; Mac17,2</span>
-    <span>kperf FIXED_CYCLES</span>
+    <span>Apple M5 &middot; Mac17,2 &middot; 2026-09-01</span>
+    <span>Apple M4 &middot; Mac16,10 &middot; 2026-09-02</span>
+    <span>kperf, root</span>
     <span>15 reps &middot; median</span>
     <span>libsodium 1.0.21 &middot; --disable-asm</span>
-    <span>2026-09-01</span>
   </div>
 </header>
+
+<div class="kill rev">
+  <p class="h">The percentages first published here were understated by 4&times; to 15&times;.</p>
+  <p>Each sample was timed by the two <code>kpc_get_thread_counters()</code> calls bracketing the
+  measured call &mdash; and those are calls into the kperf driver, not register reads. Their cost
+  lands <em>inside</em> the timed region: <b>3,234 cycles</b>, measured directly by fitting region
+  cost against a payload of known length. That is 72% of the chacha baseline and 87% of the AES one.
+  It cancels in the arm-vs-arm differences, so the switch decomposition below always held; it sits in
+  the <em>denominator</em> of every percentage, which did not.</p>
+  <p>Re-timed with a 21-cycle counter, on a second chip, with a NOP-switch control added. <b>All three
+  conclusions survive &mdash; blanket is free, coarser beats finer, argon2id is free in every arm.</b>
+  Only their magnitudes changed, and they changed in the direction that makes this experiment&rsquo;s
+  argument stronger, not weaker.</p>
+</div>
 
 <section>
   <div class="sechead"><h2>The whole result, on one scale</h2><span class="tag">vs unhardened control</span></div>
   <p class="sub">Cost of blanket DIT against cost of the shipped selective pass, drawn to a single
-  shared scale. Blanket is the thin marks at the zero line.</p>
+  shared scale, from the corrected M4 measurement. Blanket is the thin marks at the zero line &mdash;
+  and on this scale it is very nearly the line itself.</p>
 
   <div class="bars" id="bars"></div>
   <div class="blegend">
@@ -169,40 +198,95 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
 </section>
 
 <section>
-  <div class="sechead"><h2>Every arm</h2><span class="tag">median of per-run means</span></div>
+  <div class="sechead"><h2>Every arm</h2><span class="tag">Apple M4, corrected timer</span></div>
   <p class="sub">CIO&rsquo;s six drivers at their own iteration counts. <b>A</b> is the MIR
-  round-trip control, not the stock build &mdash; the 3-phase round-trip perturbs codegen by itself.</p>
+  round-trip control, not the stock build &mdash; the 3-phase round-trip perturbs codegen by itself.
+  <b>Z</b> is new: arm P with all 521 <code>msr DIT</code> emitted as <code>nop</code>, so it isolates
+  what the switches cost from what moving the code costs.</p>
   <div class="scroll">
     <table>
-      <thead><tr><th>benchmark</th><th>cycles/op</th><th>C blanket</th><th>P pass</th>
-      <th>F function</th><th>X old defaults</th><th>N resolved</th><th>MAD</th></tr></thead>
+      <thead><tr><th>benchmark</th><th>ns/op</th><th>C blanket</th><th>P pass</th>
+      <th>F function</th><th>X old defaults</th><th>N resolved</th><th>Z nop control</th>
+      <th>MAD</th></tr></thead>
       <tbody id="tbl"></tbody>
-      <caption>Arm order rotates every rep. MAD is the median absolute deviation of the 15 per-rep
-      means, worst arm shown.</caption>
+      <caption>Absolute column is <span class="mono">CNTVCT_EL0</span> ticks &mdash; 1&nbsp;ns each on
+      this chip, where <span class="mono">CNTFRQ_EL0</span> is 1&nbsp;GHz (not the 24&nbsp;MHz Mach
+      timebase). Cycle equivalents under each name, converted at the measured 4,408&nbsp;MHz. Arm order
+      rotates every rep; MAD is the median absolute deviation of the 15 per-rep means, worst arm shown.</caption>
     </table>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><h2>What the denominator was doing</h2><span class="tag">same chip, same binaries, one changed timer</span></div>
+  <p class="sub">A percentage is a ratio, so it never needed cycles at all &mdash; and the counter read
+  that produced them cost more than the crypto it was measuring. Re-timed with
+  <span class="mono">CNTVCT_EL0</span>, two instructions and a 21-cycle offset instead of 3,234.
+  Nothing else changed: same host, same archives, same drivers, same reps.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>benchmark</th><th>offset, as share of the old baseline</th>
+      <th>P, kperf-timed</th><th>P, corrected</th><th>understated by</th></tr></thead>
+      <tbody>
+        <tr><td>ed25519 sign</td><td>8.5%</td><td class="was">+8.24%</td>
+            <td class="cost-t">+9.46%</td><td>1.1&times;</td></tr>
+        <tr><td>chacha20-poly1305 encrypt</td><td class="rev-t">72.3%</td><td class="was">+60.78%</td>
+            <td class="cost-t">+243.16%</td><td class="factor">4.0&times;</td></tr>
+        <tr><td>chacha20-poly1305 decrypt</td><td class="rev-t">71.8%</td><td class="was">+66.18%</td>
+            <td class="cost-t">+262.17%</td><td class="factor">4.0&times;</td></tr>
+        <tr><td>aes256-gcm encrypt</td><td class="rev-t">86.9%</td><td class="was">+15.36%</td>
+            <td class="cost-t">+233.89%</td><td class="factor">15.2&times;</td></tr>
+        <tr><td>aes256-gcm decrypt</td><td class="rev-t">83.4%</td><td class="was">+14.36%</td>
+            <td class="cost-t">+194.96%</td><td class="factor">13.6&times;</td></tr>
+        <tr><td>argon2id</td><td>0.002%</td><td class="was">+0.08%</td>
+            <td class="free-t">&minus;0.37%</td><td>&mdash;</td></tr>
+      </tbody>
+      <caption>The offset is 3,234 cycles per region on this chip &mdash; three valid full-clock
+      passes, 3,229&ndash;3,249, slope 0.9940&ndash;1.0068 against a known payload, so it is additive
+      and subtractable. It is a property of the instrument, not the chip: the M5 run carries its own,
+      inferred at roughly 2,600 cycles, and both chips agree chacha&rsquo;s true cost is
+      ~1,100&ndash;1,250 cycles.</caption>
+    </table>
+  </div>
+  <div class="pair">
+    <div class="note"><h3>Why this is a denominator fix</h3><p>Extra cycles per op is a
+    <em>difference</em>, so the offset has to cancel and the timer swap has to leave it alone. It
+    does: ed25519 3,141&nbsp;&rarr;&nbsp;3,263, chacha encrypt 2,720&nbsp;&rarr;&nbsp;2,694, decrypt
+    2,979&nbsp;&rarr;&nbsp;2,960. The numerators held; the ratios moved.</p></div>
+    <div class="note"><h3>It cuts the right way</h3><p>This experiment argues that where the secret
+    fraction reaches 100% there is nothing for placement to recover. Fixing the denominator makes
+    selective placement look <em>worse</em> on four of six rows &mdash; the correction strengthens the
+    claim it corrects.</p></div>
   </div>
 </section>
 
 <section>
   <div class="sechead"><h2>Where the cost goes</h2><span class="tag">counters, timed region only</span></div>
   <p class="sub">Instruction counts read inside the timed call attribute the overhead exactly.
-  Absolute counts carry a constant instrumentation offset; differences between arms cancel it.</p>
+  Absolute counts carry that constant offset; differences between arms cancel it, which is why this
+  section survived the correction untouched.</p>
   <div class="scroll">
     <table>
       <thead><tr><th>benchmark</th><th>executed switches/op</th><th>extra cycles/op</th>
       <th>cycles per switch</th></tr></thead>
       <tbody>
-        <tr><td>ed25519 sign</td><td>109</td><td>+4,487</td><td class="cost-t">41.2</td></tr>
-        <tr><td>chacha20-poly1305 encrypt</td><td>105</td><td>+4,225</td><td class="cost-t">40.3</td></tr>
-        <tr><td>chacha20-poly1305 decrypt</td><td>103</td><td>+4,611</td><td class="cost-t">44.8</td></tr>
-        <tr><td>aes256-gcm encrypt</td><td>15</td><td>+1,020</td><td>66.3</td></tr>
-        <tr><td>aes256-gcm decrypt</td><td>18</td><td>+1,017</td><td>56.3</td></tr>
+        <tr><td>ed25519 sign</td><td>98</td><td>+3,263</td><td class="cost-t">33.4</td></tr>
+        <tr><td>chacha20-poly1305 encrypt</td><td>107</td><td>+2,694</td><td class="cost-t">25.2</td></tr>
+        <tr><td>chacha20-poly1305 decrypt</td><td>104</td><td>+2,960</td><td class="cost-t">28.5</td></tr>
+        <tr><td>aes256-gcm encrypt</td><td>26</td><td>+636</td><td>24.7</td></tr>
+        <tr><td>aes256-gcm decrypt</td><td>14</td><td>+702</td><td>&mdash;</td></tr>
         <tr><td>argon2id</td><td>~0 (noise)</td><td>~0</td><td>&mdash;</td></tr>
+        <tr class="m5"><td>&nbsp;&nbsp;M5, for comparison</td><td>109 / 105 / 103</td>
+            <td>+4,487 / +4,225 / +4,611</td><td>41.2 / 40.3 / 44.8</td></tr>
       </tbody>
       <caption>The evidence is the <em>consistency</em> of the last column across independent
-      benchmarks (40.3 / 41.2 / 44.8), not per-row agreement &mdash; cycles-per-switch is derived by
-      dividing measured cycles by measured switches, so multiplying it back proves nothing. The AES
-      rows rest on 15&ndash;18 switches and are too noisy to support the claim.</caption>
+      benchmarks, not per-row agreement &mdash; cycles-per-switch is derived by dividing measured
+      cycles by measured switches, so multiplying it back proves nothing. A switch costs
+      <b>25&ndash;33 cycles</b> here against 40&ndash;45 on M5, and the figure holds across both
+      timers on this chip. <b>The AES rows still cannot carry it</b>, on either chip: differencing
+      in-region instruction counts over a ~300-cycle region returned 26 and 22 switches/op in one M4
+      run and 26 and 14 in the other, from identical binaries, so aes256-gcm decrypt is left
+      blank rather than quoted.</caption>
     </table>
   </div>
   <div class="pair">
@@ -210,8 +294,31 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
     and <b>0&nbsp;&plusmn;&nbsp;60 cycles</b> per operation, measured the same way. The cost is switch
     serialisation alone &mdash; which is what &ldquo;blanket is free&rdquo; implies.</p></div>
     <div class="note"><h3>Coarser wins, everywhere</h3><p>Whole-function placement (F) beats region
-    placement (P) on all six. With dwell at zero, narrowing coverage buys nothing and you only pay
-    toggles, so fewer toggles is strictly better.</p></div>
+    placement (P) on all six, on both chips. With dwell at zero, narrowing coverage buys nothing and
+    you only pay toggles, so fewer toggles is strictly better.</p></div>
+  </div>
+
+  <h3 style="margin-top:34px">Switches, or just moving the code?</h3>
+  <p class="sub">Arm A differs from P by 521 instructions and therefore by every address after the
+  first switch, so A-vs-P confounds the mode switching with the code movement. Arm Z has P&rsquo;s
+  exact instruction count and addresses &mdash; byte-identical but for 521 opcodes &mdash; so the two
+  terms separate.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>benchmark</th><th>Z vs A &mdash; layout alone</th>
+      <th>P vs Z &mdash; switch execution</th><th>P vs A &mdash; total</th></tr></thead>
+      <tbody>
+        <tr><td>ed25519 sign</td><td class="free-t">&minus;0.38%</td><td class="cost-t">+9.88%</td><td>+9.46%</td></tr>
+        <tr><td>chacha20-poly1305 encrypt</td><td class="free-t">&minus;2.40%</td><td class="cost-t">+251.59%</td><td>+243.16%</td></tr>
+        <tr><td>chacha20-poly1305 decrypt</td><td class="free-t">+0.24%</td><td class="cost-t">+261.30%</td><td>+262.17%</td></tr>
+        <tr><td>aes256-gcm encrypt</td><td class="rev-t">+8.70%</td><td class="cost-t">+207.18%</td><td>+233.89%</td></tr>
+        <tr><td>aes256-gcm decrypt</td><td class="free-t">&minus;1.62%</td><td class="cost-t">+199.81%</td><td>+194.96%</td></tr>
+        <tr><td>argon2id</td><td class="free-t">&minus;0.50%</td><td class="free-t">+0.13%</td><td>&minus;0.37%</td></tr>
+      </tbody>
+      <caption>Layout is negligible except on <b>aes256-gcm encrypt, where it is +8.70%</b> &mdash;
+      about six times that row&rsquo;s MAD. On the shortest region code movement is a real effect, and
+      an A-vs-P comparison books it as DIT cost. That is what the control is for.</caption>
+    </table>
   </div>
 </section>
 
@@ -225,9 +332,9 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
       <thead><tr><th></th><th>CIO, published</th><th>blanket DIT</th><th>our pass</th></tr></thead>
       <tbody>
         <tr><td>ed25519</td><td class="cost-t">20.32&times; / 16.73&times;</td>
-            <td class="free-t">1.0017&times;</td><td>1.119&times;</td></tr>
+            <td class="free-t">1.0087&times;</td><td>1.095&times;</td></tr>
         <tr><td>argon2id</td><td class="cost-t">27.84&times;</td>
-            <td class="free-t">0.997&times;</td><td>0.998&times;</td></tr>
+            <td class="free-t">0.998&times;</td><td>0.996&times;</td></tr>
         <tr><td>libsodium <span class="mono">__text</span></td>
             <td class="cost-t">+62% / +208% / +266%</td><td class="free-t">0%</td><td>+0.87%</td></tr>
       </tbody>
@@ -235,7 +342,8 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
   </div>
   <p class="col">The interesting comparison is not that we beat them. It is that <b>blanket beats
   them by roughly 400&times;</b>, and our selective placement then gives back a factor of 70 to
-  protect strictly less code.</p>
+  protect strictly less code. That verdict is unchanged by the correction; on the short AEAD calls the
+  corrected numbers make selective placement give back rather more.</p>
 </section>
 
 <section>
@@ -244,14 +352,17 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
   positive one. <span class="mono">ditprobe</span> runs interleaved with every benchmark, same arms,
   same rotation.</p>
   <div class="gates">
-    <div class="gate"><span class="k">3.932&times;</span><span class="d">Value-predictable pointer
-      chase, 222 &rarr; 873 ps/hop with the mode on. The instrument can see DIT.</span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">1.00 &rarr; 3.00 cyc/hop</span><span class="d">A chase whose
+      loaded value never changes runs at one cycle per hop, faster than any L1 can answer, because the
+      core predicts the value; with the mode set it falls back to L1 latency and lands exactly on the
+      permutation chase. The instrument can see DIT. <span class="hostmark">M5 1.02 &rarr; 4.01</span></span><span class="pass">PASS</span></div>
     <div class="gate"><span class="k">1.0000&times;</span><span class="d">Random-permutation chase,
-      nothing to predict. Negative control stays flat.</span><span class="pass">PASS</span></div>
-    <div class="gate"><span class="k">4597&ndash;4598 MHz</span><span class="d">Dependent-ADD clock
-      probe on every arm. QoS is a bias, not a binding, so residency is checked per rep.</span><span class="pass">PASS</span></div>
+      nothing to predict. Negative control stays flat. <span class="hostmark">both hosts</span></span><span class="pass">PASS</span></div>
+    <div class="gate"><span class="k">4403&ndash;4415 MHz</span><span class="d">Dependent-ADD clock
+      probe on every arm. QoS is a bias, not a binding, so residency is checked per rep.
+      <span class="hostmark">M5 4597&ndash;4598</span></span><span class="pass">PASS</span></div>
     <div class="gate"><span class="k">DIT 0 / 1</span><span class="d"><code>PSTATE.DIT</code> read
-      back inside the region: 0 for every arm, 1 for blanket.</span><span class="pass">PASS</span></div>
+      back inside the region: 0 for every arm, 1 for blanket. <span class="hostmark">both hosts</span></span><span class="pass">PASS</span></div>
     <div class="gate"><span class="k">&plusmn;0.23%</span><span class="d">Retired instructions,
       blanket vs baseline. The arms run the same work, so the cycle ratios mean something.</span><span class="pass">PASS</span></div>
     <div class="gate"><span class="k">86 / 86</span><span class="d"><span class="mono">make check</span>
@@ -260,6 +371,16 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
       <span class="mono">TCRETURN</span>s survive <span class="mono">-disable-tail-calls</span>
       (<span class="mono">musttail</span> and the late outliner bypass it); all six are libc calls in
       functions carrying no <span class="mono">msr DIT</span>, so no mode is left set.</span><span class="pass">PASS</span></div>
+  </div>
+  <div class="kill rev">
+    <p class="h">Gate 1 had to be restated, and the old form could never have passed here.</p>
+    <p>It asserted a ratio, <span class="mono">&gt;3.5&times;</span>, fitted to M5. But the chase
+    starts at one cycle per hop and ends at L1 load-to-use, so the ratio&rsquo;s ceiling <em>is</em>
+    the L1 latency in cycles &mdash; four on M5, three on M4. A <span class="mono">&gt;3.5&times;</span>
+    test is therefore unsatisfiable on a three-cycle-L1 core no matter how well the mode works, and it
+    duly printed <span class="mono">FAIL &mdash; instrument cannot see DIT</span> on a run where DIT
+    plainly worked. The gate now asserts cycles per hop, which is the portable form. Compare it across
+    chips that way, never as picoseconds and never as a ratio.</p>
   </div>
 </section>
 
@@ -279,6 +400,13 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
     <code>additional_data_sz = 0; //strtol(...)</code> &mdash; the Makefile passes AD&nbsp;=&nbsp;100
     and the driver ignores it. Reproduced exactly; the label is wrong in their Makefile, not in the
     measurement.</li>
+    <li><b>Two pieces of this rig are reconstructions, not the originals.</b> The gate instrument
+    and the indirect-call-resolution recipe behind arm N were never committed and the M5 machine&rsquo;s
+    copies are gone. Arm N is rebuilt to hit the recorded statics exactly &mdash; 749 switches, 164
+    functions, 250,136 bytes, 16 information-loss records &mdash; but matching numbers is the evidence,
+    not matching method. Rebuilding the gate the obvious way, as a <em>strided</em> chase, returns a
+    flat 1.00&times; that reads like a hardware finding and is really a broken instrument: the
+    predictor is a constant-value predictor, and only a self-referencing node is predicted.</li>
     <li><b>Dynamic verification is now done, on two of the six paths.</b> The gem5 shadow-taint
     oracle reports <b>zero under-taints</b> in both hardened arms &mdash; 294,164 secret operations in
     ed25519 signing and 7,170 in chacha20-poly1305, every one of them executing with the mode set,
@@ -299,22 +427,29 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
 </section>
 
 <footer>
-  <span class="mono">paper_experiments/09-libsodium-cio-parity</span> &middot; raw data, seed files and
-  the escape, uncovered and information-loss reports ship in <span class="mono">data/</span> &middot;
-  rerun with <span class="mono">utils/taint_libsodium_sudo_run.sh</span>
+  <span class="mono">paper_experiments/09-libsodium-cio-parity</span> &middot; both runs, the offset
+  measurement, seed files and the escape, uncovered and information-loss reports ship in
+  <span class="mono">data/</span> &middot; rerun with
+  <span class="mono">utils/taint_libsodium_sudo_run.sh</span>, corrected timer via
+  <span class="mono">CHEAP_TIMER=1</span> &middot; offset measured by
+  <span class="mono">utils/cio_offset_probe.c</span>
 </footer>
 </div>
 
 <script>
+// Apple M4, CNTVCT-timed (the corrected measurement). ns is what was measured;
+// cyc is the equivalent at the gate-measured 4,408 MHz, shown for continuity
+// with the M5 figures. data/m4_results_summary.csv carries both timers.
 const ROWS=[
- {n:"ed25519 sign",             d:"crypto_sign, 100 B message", cyc:"37,508",      C:0.17, P:11.94, F:10.57, X:24.75, N:12.02, mad:"0.12%"},
- {n:"chacha20-poly1305 encrypt",d:"100 B, AD 0",                cyc:"3,701",       C:-0.54,P:114.26,F:111.83,X:153.44,N:114.32,mad:"0.33%"},
- {n:"chacha20-poly1305 decrypt",d:"100 B, AD 0",                cyc:"3,729",       C:-0.60,P:123.56,F:119.03,X:165.98,N:123.43,mad:"0.48%"},
- {n:"aes256-gcm encrypt",       d:"key expanded per call",      cyc:"2,876",       C:-0.59,P:35.34, F:33.79, X:50.91, N:35.06, mad:"0.57%"},
- {n:"aes256-gcm decrypt",       d:"key expanded per call",      cyc:"2,969",       C:1.95, P:34.24, F:32.82, X:38.33, N:34.34, mad:"0.91%"},
- {n:"argon2id",                 d:"interactive: 2 pass, 64 MiB",cyc:"191,171,059", C:-0.33,P:-0.17, F:-0.34, X:0.04,  N:0.03,  mad:"0.23%"}
+ {n:"ed25519 sign",             d:"crypto_sign, 100 B message", ns:"7,828",      cyc:"34,506",      C:0.87, P:9.46,  F:8.84,  X:14.57, N:9.00,  Z:-0.38,mad:"0.53%"},
+ {n:"chacha20-poly1305 encrypt",d:"100 B, AD 0",                ns:"251",        cyc:"1,108",       C:1.27, P:243.16,F:241.17,X:341.34,N:242.88,Z:-2.40,mad:"1.56%"},
+ {n:"chacha20-poly1305 decrypt",d:"100 B, AD 0",                ns:"256",        cyc:"1,129",       C:2.07, P:262.17,F:258.59,X:371.64,N:263.06,Z:0.24, mad:"0.38%"},
+ {n:"aes256-gcm encrypt",       d:"key expanded per call",      ns:"62",         cyc:"272",         C:0.15, P:233.89,F:231.65,X:403.91,N:236.72,Z:8.70, mad:"1.48%"},
+ {n:"aes256-gcm decrypt",       d:"key expanded per call",      ns:"82",         cyc:"360",         C:0.81, P:194.96,F:190.16,X:240.14,N:197.26,Z:-1.62,mad:"0.71%"},
+ {n:"argon2id",                 d:"interactive: 2 pass, 64 MiB",ns:"50,489,010", cyc:"222,555,555", C:-0.19,P:-0.37, F:-0.42, X:-0.45, N:-0.51, Z:-0.50,mad:"0.32%"}
 ];
-const MAX=170, fmt=v=>(v>=0?"+":"−")+Math.abs(v).toFixed(2)+"%";
+// P reaches +262%, so the shared scale runs to 270 rather than the old 170.
+const MAX=270, fmt=v=>(v>=0?"+":"−")+Math.abs(v).toFixed(2)+"%";
 
 // two stacked half-height bars per row: blanket above, pass below, same zero line
 document.getElementById("bars").innerHTML=ROWS.map(r=>{
@@ -325,13 +460,15 @@ document.getElementById("bars").innerHTML=ROWS.map(r=>{
            `<span class="v${out?" out":""}">${fmt(v)}</span></div>`;
   };
   return `<div class="brow">
-    <div class="bname">${r.n}<small>${r.d} &middot; ${r.cyc} cyc</small></div>
+    <div class="bname">${r.n}<small>${r.d} &middot; ${r.ns} ns &asymp; ${r.cyc} cyc</small></div>
     <div class="track"><div class="zero"></div>${bar(r.C,"free",0)}${bar(r.P,"cost",17)}</div>
   </div>`;
 }).join("");
 
 document.getElementById("tbl").innerHTML=ROWS.map(r=>{
-  const c=v=>`<td class="${v>2?"cost-t":(Math.abs(v)<2?"free-t":"")}">${fmt(v)}</td>`;
-  return `<tr><td>${r.n}</td><td>${r.cyc}</td>${c(r.C)}${c(r.P)}${c(r.F)}${c(r.X)}${c(r.N)}<td>${r.mad}</td></tr>`;
+  // anything at or under +2% reads as free; above that it is a cost.
+  const c=v=>`<td class="${v>2?"cost-t":"free-t"}">${fmt(v)}</td>`;
+  return `<tr><td>${r.n}<small>&asymp; ${r.cyc} cyc</small></td><td>${r.ns}</td>`+
+         `${c(r.C)}${c(r.P)}${c(r.F)}${c(r.X)}${c(r.N)}${c(r.Z)}<td>${r.mad}</td></tr>`;
 }).join("");
 </script>

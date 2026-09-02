@@ -65,6 +65,7 @@ static int cio_shim_kperf_ok = 0;
  */
 static unsigned long long cio_shim_reg_cyc = 0, cio_shim_reg_ins = 0;
 static unsigned long long cio_shim_t0_cyc = 0, cio_shim_t0_ins = 0;
+static unsigned long long cio_shim_t0_timer = 0;   /* what the DRIVER differences */
 static unsigned long long cio_shim_reg_n = 0;
 
 static inline uint64_t cio_shim_instrs(void) {
@@ -135,19 +136,78 @@ static inline void cio_shim_read2(unsigned long long *cyc, unsigned long long *i
     *cyc = c; *ins = 0;
 }
 
-static inline void cio_shim_region_begin(void) {
-    cio_shim_read2(&cio_shim_t0_cyc, &cio_shim_t0_ins);
+static inline uint64_t cio_shim_cntvct(void) {
+    uint64_t c;
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(c));
+    return c;
 }
-/* returns the END cycle count, so the driver's (end - start) is unchanged */
+
+/* CHEAP TIMER (-DCIO_SHIM_CHEAP_TIMER), and why it exists.
+ *
+ * kpc_get_thread_counters() is a call into the kperf driver, not a register
+ * read, and the counter is sampled part-way through it. So the tail of the
+ * opening call and the head of the closing one land BETWEEN the two timestamps
+ * and are charged to the crypto. Measured on M4 2026-09-02 with
+ * utils/cio_offset_probe.c: 3234 cycles per region, additive (slope 0.9989
+ * against a known payload), stable to +/-0.3%.
+ *
+ * That offset cancels in arm-vs-arm DIFFERENCES but not in RATIOS, because it
+ * sits in the denominator -- and on the fast primitives it IS the denominator:
+ * 72% of the measured chacha20-poly1305 baseline and 87% of aes256-gcm's. It
+ * therefore deflates every percentage in the headline table, by 3.6-3.9x on
+ * chacha and 6-14x on AES. (ed25519 is 8.5% and argon2id 0.002%, so those two
+ * rows were never materially affected.)
+ *
+ * The fix is to notice that the percentage columns are RATIOS and therefore
+ * unit-free: they never needed cycles. CNTVCT_EL0 is two instructions and
+ * carries a 21-cycle offset instead of 3234 -- 154x better, and 0.14 cycles/op
+ * once averaged over CIO's 1000 iterations.
+ *
+ * ORDERING IS THE WHOLE TRICK. The expensive kperf read is moved OUTSIDE the
+ * window the driver differences: last thing before the region opens, first
+ * thing after it closes.
+ *
+ *     region_begin:  [kperf read] [cntvct read -> t0]
+ *                    ... the measured call ...
+ *     region_end:    [cntvct read -> t1] [kperf read]
+ *
+ * so t1 - t0 holds the call plus two register reads, while reg_cyc/reg_ins
+ * still bracket everything and keep their own offset -- harmless, because they
+ * are only ever consumed as differences between arms.
+ *
+ * OPT-IN, DELIBERATELY. Default keeps the kperf timing that produced
+ * paper_experiments/09, so those numbers stay reproducible byte-for-byte. Turn
+ * this on and the driver's samples change UNITS, from cycles to CNTVCT ticks
+ * (1 ns on M4; ~41.67 ns on the 24 MHz hosts -- check CNTFRQ_EL0, do not
+ * assume). Ratios are unaffected; any absolute "cycles/op" column is not, and
+ * must either be converted at the measured core clock or relabelled. The exit
+ * line reports timer= so the choice is recorded with the results. */
+static inline void cio_shim_region_begin(void) {
+#ifdef CIO_SHIM_CHEAP_TIMER
+    cio_shim_read2(&cio_shim_t0_cyc, &cio_shim_t0_ins);   /* expensive: first */
+    cio_shim_t0_timer = cio_shim_cntvct();                /* cheap: last */
+#else
+    cio_shim_read2(&cio_shim_t0_cyc, &cio_shim_t0_ins);
+    cio_shim_t0_timer = cio_shim_t0_cyc;
+#endif
+}
+/* returns the END timer value, so the driver's (end - start) is unchanged */
 static inline uint64_t cio_shim_region_end(void) {
     unsigned long long c = 0, i = 0;
+#ifdef CIO_SHIM_CHEAP_TIMER
+    uint64_t t1 = cio_shim_cntvct();                      /* cheap: first */
+    cio_shim_read2(&c, &i);                               /* expensive: after */
+#endif
+#ifndef CIO_SHIM_CHEAP_TIMER
     cio_shim_read2(&c, &i);
+    uint64_t t1 = c;
+#endif
     if (cio_shim_t0_cyc && c > cio_shim_t0_cyc) {
         cio_shim_reg_cyc += c - cio_shim_t0_cyc;
         cio_shim_reg_ins += i - cio_shim_t0_ins;
         cio_shim_reg_n++;
     }
-    return c;
+    return t1;
 }
 
 __attribute__((destructor)) static void cio_shim_end(void) {
@@ -180,9 +240,14 @@ __attribute__((destructor)) static void cio_shim_end(void) {
         }
     }
 #endif
-    fprintf(stderr, "SHIM exit dit=%lu cycles=%s tot_cyc=%llu tot_ins=%llu "
+#ifdef CIO_SHIM_CHEAP_TIMER
+    const char *timer = "cntvct";
+#else
+    const char *timer = src;   /* the driver differenced the counter reads */
+#endif
+    fprintf(stderr, "SHIM exit dit=%lu cycles=%s timer=%s tot_cyc=%llu tot_ins=%llu "
                     "map_stall=%llu flush=%llu reg_cyc=%llu reg_ins=%llu reg_n=%llu\n",
-            cio_shim_dit_get(), src, cyc, ins, stall, flush,
+            cio_shim_dit_get(), src, timer, cyc, ins, stall, flush,
             cio_shim_reg_cyc, cio_shim_reg_ins, cio_shim_reg_n);
 }
 
