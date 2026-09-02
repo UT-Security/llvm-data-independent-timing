@@ -97,6 +97,8 @@ th:first-child,td:first-child{text-align:left}
 td{padding:10px 14px;border-bottom:1px solid var(--rule-soft);text-align:right;
   font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
 td:first-child{font-family:Archivo,sans-serif;font-size:.85rem}
+td small{display:block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;
+  color:var(--faint);margin-top:2px;font-weight:400}
 tr:last-child td{border-bottom:none}
 td.free{color:var(--free);font-weight:500}
 td.cost{color:var(--cost);font-weight:500}
@@ -165,6 +167,7 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
     <span>libsodium 1.0.21 &middot; --disable-asm</span>
     <span>CIO's 6 drivers, unmodified</span>
     <span>deterministic &middot; no reps</span>
+    <span>silicon column: M5 + M4, corrected</span>
     <span>2026-09-02</span>
   </div>
 </header>
@@ -287,14 +290,38 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
       stops mattering: the three policies spread over 25 points serialising and
       <b>3 points</b> renamed.</p></div>
     <div class="panel"><span class="k cost">19&ndash;37</span>
-      <p>cycles for a <b>serialising</b> one. Independent reference points bracket
-      this: 34.3 and 76.3 (experiment 06, gem5), <b>~41 and ~24 on Apple silicon</b>
-      (experiments 09 and 02).</p></div>
+      <p>cycles for a <b>serialising</b> one &mdash; below <b>both</b> pieces of
+      silicon this library has been measured on, 43.6 on the M5 and 33.4 on the
+      M4.</p></div>
   </div>
+
+  <div class="scroll">
+  <table>
+    <caption>Cycles per serialising switch is the quantity to compare across
+    instruments: a difference divided by a count, so a fixed per-region timer cost
+    cancels exactly instead of compressing a ratio.</caption>
+    <thead><tr><th>instrument</th><th>cycles / serialising switch</th></tr></thead>
+    <tbody>
+      <tr><td>Apple M5, this library <small>corrected</small></td><td class="cost">43.6</td></tr>
+      <tr><td>Apple M4, this library <small>corrected</small></td><td class="cost">33.4</td></tr>
+      <tr><td>gem5 Neoverse-V2 <small>this run</small></td><td class="cost">19.0 &ndash; 36.9</td></tr>
+      <tr><td>experiment 06, gem5, mbedTLS <small>two toggle rates</small></td><td class="dim">34.3 / 76.3</td></tr>
+      <tr><td>experiment 02, Apple M5</td><td class="dim">~24</td></tr>
+    </tbody>
+  </table>
+  </div>
+
   <div class="note"><b>gem5's serialising model is the optimistic end, not the conservative
-  one.</b> Experiment 06 records it as conservative. Measured against the M5's ~41 cycles,
-  our 19&ndash;37 is consistently below real silicon &mdash; worth correcting before the model
-  is used to bound anything.</div>
+  one.</b> Experiment 06 records it as conservative. Against both re-measured hosts our
+  19&ndash;37 sits below real silicon, so a bound taken from this model is not a safe upper
+  bound &mdash; worth correcting before it is used as one.</div>
+
+  <div class="note"><b>Percentages do not survive an instrument change; this column did.</b>
+  Experiment 09's own M5 percentages were understated <b>4&times; on chacha and
+  13&ndash;15&times; on AES</b> by 2,521&ndash;3,234 cycles of counter-read overhead sitting
+  inside the timed region. The per-switch figures were unaffected, which is why they lead
+  here. This rig's own marker cost was measured the same way and is <b>6 cycles</b>;
+  correcting it out would move every result by at most 0.28 points.</div>
 </section>
 
 <section>
@@ -352,6 +379,14 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
     </div>
   </div>
 
+  <div class="note"><b>Found independently on silicon, in parallel.</b> Experiment 09 added
+  the same control on both Apple hosts &mdash; arm Z, a NOP-switch layout twin &mdash; and it
+  reads <b>1.0769&times; on M5 and 1.0870&times; on M4</b> for aes256-gcm encrypt, the same
+  benchmark where the term is largest here. Three machines, two instruments, same effect on
+  the same row. A 7&ndash;8% layout term on real silicon is not a simulator artifact: it is
+  what instrumenting a 252-tick region costs through code movement alone, and an A-vs-P
+  comparison books it as DIT cost.</div>
+
   <div class="note flag"><b>The headline is immune to this.</b> Renamed versus serialising is
   one binary under two machine configurations, so layout cancels identically. It is the only
   comparison in the study with that property &mdash; which is a good reason it is the one
@@ -383,6 +418,12 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
       must. Identical for all three policies, so no policy is fast because it skipped a
       secret.</span>
       <span class="s">PASS</span></div>
+    <div class="gate"><span class="g">6 cycles</span>
+      <span class="d">Cost of the ROI markers themselves, measured with an empty region
+      rather than assumed. The silicon rig's timer cost 2,521&ndash;3,234 cycles and sat in
+      every denominator; correcting ours out would move results by at most 0.28
+      points.</span>
+      <span class="s">MEASURED</span></div>
     <div class="gate"><span class="g">100% / 0%</span>
       <span class="d">Region residency for blanket and for the layout twins, from a
       <code>ditCycles</code> counter added for this study. The five existing counters price
