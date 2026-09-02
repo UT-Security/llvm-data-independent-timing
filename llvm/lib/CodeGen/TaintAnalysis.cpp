@@ -264,6 +264,13 @@ cl::opt<std::string> llvm::TaintDITJoinReportFile(
 // operations (97.61%) committing with PSTATE.DIT clear on libhydrogen's signing
 // path under the seed a developer would naturally write. See
 // paper_experiments/08-seed-ground-truth.
+cl::opt<bool> llvm::TaintArgProvenance(
+    "taint-arg-provenance",
+    cl::desc("Name the object an incoming pointer argument points at, so a "
+             "callee's arg-pointee mod-set applies to that object instead of "
+             "clobbering all of the caller's memory (B1)"),
+    cl::init(false), cl::Hidden);
+
 cl::opt<bool> llvm::TaintFrameAddrArgs(
     "taint-frame-addr-args",
     cl::desc("Treat a call argument that points at a tainted frame object as "
@@ -1010,15 +1017,24 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
   // narrow: no arithmetic on an existing frame pointer is followed, because a
   // computed offset could leave the object and mis-attributing provenance is the
   // one direction that under-taints.
-  if (FOM && !FOM->empty()) {
+  // Arg provenance (B1) needs the same kill/copy walk but no frame map, so it
+  // must not be gated on the frame map being non-empty: a leaf that only
+  // forwards a pointer argument has no frame objects at all and is exactly the
+  // case B1 exists for.
+  if ((FOM && !FOM->empty()) || TaintArgProvenance) {
     const TargetInstrInfo *TIIp = MI.getMF()->getSubtarget().getInstrInfo();
     for (const MachineOperand &MO : MI.all_defs())
       if (MO.isReg() && MO.getReg().isValid())
         S.clearFrameRef(MO.getReg());
     if (MI.isCopy() && MI.getOperand(1).isReg()) {
-      if (auto FI = S.getFrameRef(MI.getOperand(1).getReg()))
-        S.setFrameRef(MI.getOperand(0).getReg(), *FI);
-    } else if (auto AI = matchAddImm(MI, TIIp)) {
+      // A copy carries provenance of EITHER kind. Nothing else does: pointer
+      // arithmetic is deliberately not followed, because a computed offset can
+      // leave the object and mis-attributing is the one direction that
+      // under-taints.
+      if (auto B = S.getPointerBase(MI.getOperand(1).getReg()))
+        S.setPointerBase(MI.getOperand(0).getReg(), *B);
+    } else if (auto AI = FOM && !FOM->empty() ? matchAddImm(MI, TIIp)
+                                              : std::nullopt) {
       const MachineFunction *MFp = MI.getMF();
       Register FP = TRI->getFrameRegister(*MFp);
       Register SP = MFp->getSubtarget()
@@ -1252,10 +1268,28 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           LLVM_DEBUG(dbgs()
                      << "      load from pointee-tainted unknown mem\n");
         }
-        if (HeapPoisoned || anyRegUseOfKind(TaintKind::Pointee, MI, S) ||
+        // B1: a load through one of OUR OWN pointer arguments, whose pointee a
+        // callee filled with a secret. Whole-object, because the call site could
+        // not know which bytes the callee wrote.
+        //
+        // Strictly ADDITIVE, and it must stay that way. An earlier revision made
+        // this a separate `else if (CI.K == CellInfo::Arg)` branch, which
+        // intercepted argument-based loads before they reached
+        // anyRegUseOfKind(Pointee) below - the primary way pointee taint reaches
+        // a loaded value. That silently UNDER-TAINTED: on
+        // playground/frame_addr_gap/gapB_only.c the secret multiply in `produce`
+        // fell from need=12 to need=4. Never divert a load away from an existing
+        // taint source; only add to it.
+        const bool ArgPointeeTainted = TaintArgProvenance &&
+                                       CI.K == CellInfo::Arg &&
+                                       S.isTaintedArgPointee(CI.ArgNo);
+        if (HeapPoisoned || ArgPointeeTainted ||
+            anyRegUseOfKind(TaintKind::Pointee, MI, S) ||
             unknownMemMayTaintLoad(*MMO, S.TaintedUnknownMemValues, AA)) {
           ShouldTaint = true;
-          LLVM_DEBUG(dbgs() << "      load from tainted unknown/heap mem\n");
+          LLVM_DEBUG(dbgs() << "      load from tainted unknown/heap mem"
+                            << (ArgPointeeTainted ? " (tainted arg pointee)" : "")
+                            << "\n");
         } else {
           LLVM_DEBUG(dbgs()
                      << "      load from untainted unknown/heap mem"
@@ -1376,42 +1410,55 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           // instead of collapsing to a whole-caller clobber. Falls back to the
           // blunt clobber for any index whose pointer provenance is unknown, so
           // this is never less conservative than P1a.
-          bool AllResolved = FOM && !FOM->empty();
-          SmallVector<int, 4> Objs;
+          // Name the object this caller passed for each argument the callee
+          // writes through. Two bases are nameable post-PEI - one of our frame
+          // objects (P1b), or the object one of OUR OWN pointer arguments points
+          // at (B1). The second is what stops the fallback below from firing on
+          // a caller that is itself just forwarding a buffer.
+          bool AllResolved = (FOM && !FOM->empty()) || TaintArgProvenance;
+          SmallVector<TaintState::PointerBase, 4> Objs;
           if (AllResolved) {
-            const MachineFunction *MFa = MI.getMF();
             for (unsigned Idx : ME.WritesSecretThroughArgPointee) {
-              std::optional<int> Found;
+              std::optional<TaintState::PointerBase> Found;
               for (const MachineOperand &MO : MI.uses()) {
                 if (!MO.isReg() || MO.isDef() || !MO.getReg().isValid() ||
                     !MO.getReg().isPhysical())
                   continue;
                 if (TRI->getEncodingValue(MO.getReg()) != Idx)
                   continue;
-                if (auto FI = S.getFrameRef(MO.getReg()))
-                  Found = FI;
+                Found = S.getPointerBase(MO.getReg());
                 break;
               }
-              if (!Found) {
+              // An Arg base is only usable when B1 is on; otherwise fall back,
+              // so the flag really is a no-op when off.
+              if (!Found || (Found->K == TaintState::PointerBase::Arg &&
+                             !TaintArgProvenance)) {
                 AllResolved = false;
                 break;
               }
               Objs.push_back(*Found);
             }
-            (void)MFa;
           }
           if (AllResolved) {
             const MachineFrameInfo &MFI = MI.getMF()->getFrameInfo();
-            for (int FI : Objs) {
-              int64_t Sz = MFI.getObjectSize(FI);
+            for (TaintState::PointerBase B : Objs) {
+              if (B.K == TaintState::PointerBase::Arg) {
+                // We cannot name the object either - but our caller can, and
+                // re-exporting this as WritesSecretThroughArgPointee at exit is
+                // what hands it the chance. Same one-hop-per-edge composition
+                // GCC's ipa-modref does with parm_index.
+                S.setTaintedArgPointee((unsigned)B.Index);
+                continue;
+              }
+              int64_t Sz = MFI.getObjectSize(B.Index);
               if (Sz > 0)
-                S.setTaintedStackCell(FI, 0, (uint64_t)Sz);
+                S.setTaintedStackCell(B.Index, 0, (uint64_t)Sz);
               else
                 S.setExternalMemClobbered();
             }
             LLVM_DEBUG(dbgs()
                        << "        call to " << Callee->getName()
-                       << " writes secret through a pointer arg (P1b: tainted "
+                       << " writes secret through a pointer arg (P1b/B1: named "
                        << Objs.size() << " caller object(s) precisely)\n");
           } else {
           S.setExternalMemClobbered();
@@ -1704,6 +1751,14 @@ FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
     // other than its parameters, none of its effects may be gated away.
     if (S.hasNonArgSourcedTaint())
       ME.NonArgSourced = true;
+    // B1: our own pointer argument's pointee now holds a secret, so as far as
+    // OUR caller is concerned this function writes a secret through that
+    // argument. Re-exporting it here is the step that makes the naming compose
+    // up the call graph - one hop per edge, resolved by whoever can name the
+    // object at the next level.
+    if (TaintArgProvenance)
+      for (unsigned ArgNo : S.taintedArgPointees())
+        ME.WritesSecretThroughArgPointee.insert(ArgNo);
     return true;
   };
 
@@ -2079,6 +2134,46 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
     LLVM_DEBUG(dbgs() << "  Seeded " << Seeded
                       << " incoming fixed frame object(s) as tainted (secret "
                          "arrived in a stack argument)\n");
+  }
+
+  // B1 provenance seed: name the object each incoming POINTER argument points
+  // at. Unlike the taint seeding below this is unconditional on anything being
+  // secret - it is provenance, and it has to be in place before the first call
+  // site so a forwarded buffer can be named there.
+  //
+  // AAPCS64 assigns integer and pointer arguments to X0-X7 IN ORDER, so a
+  // register's encoding is its argument index only when every argument takes a
+  // GPR. A float or vector argument takes a V register and shifts the
+  // correspondence; an aggregate may be passed indirectly. Rather than guess,
+  // skip any signature that is not all-integer/pointer: naming the WRONG object
+  // is an under-taint, the one direction that loses the secret, so this is the
+  // one place the usual "over-approximate" instinct does not apply.
+  if (TaintArgProvenance && !F.isVarArg()) {
+    bool AllGPRArgs = true;
+    for (const Argument &A : F.args())
+      if (!A.getType()->isIntegerTy() && !A.getType()->isPointerTy()) {
+        AllGPRArgs = false;
+        break;
+      }
+    if (AllGPRArgs) {
+      for (const auto &[PhysReg, VirtReg] : MRI.liveins()) {
+        unsigned ArgIdx = TRI->getEncodingValue(PhysReg);
+        if (ArgIdx > 7 || ArgIdx >= F.arg_size())
+          continue;
+        if (!F.getArg(ArgIdx)->getType()->isPointerTy())
+          continue;
+        Seed.setArgRef(PhysReg, ArgIdx);
+        if (VirtReg.isValid())
+          Seed.setArgRef(VirtReg, ArgIdx);
+        LLVM_DEBUG(dbgs() << "  " << printReg(PhysReg, TRI)
+                          << " points at the object of arg " << ArgIdx
+                          << " (B1 provenance)\n");
+      }
+    } else {
+      LLVM_DEBUG(dbgs() << "  arg provenance skipped: signature is not all "
+                           "integer/pointer, so register encoding is not the "
+                           "argument index\n");
+    }
   }
 
   for (const auto &[PhysReg, VirtReg] : MRI.liveins()) {

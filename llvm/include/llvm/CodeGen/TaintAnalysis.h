@@ -93,6 +93,13 @@ extern cl::opt<bool> TaintNoTailCalls;
 /// docs/design/p1b-frame-provenance.md §4.
 extern cl::opt<bool> TaintFrameAddrArgs;
 
+/// Track WHICH object an incoming pointer argument points at, so a callee's
+/// arg-pointee mod-set can be applied to that object instead of collapsing to a
+/// whole-caller clobber (B1). DEFAULT OFF pending measurement - it REDUCES
+/// over-approximation, which is the direction that can lose a secret if the
+/// provenance is wrong. See docs/design/frame-address-gap.md.
+extern cl::opt<bool> TaintArgProvenance;
+
 /// Stamp the hardening-wide tail-call disable (\see TaintNoTailCalls) on every
 /// definition in \p M, and return how many functions were stamped.
 ///
@@ -177,20 +184,52 @@ enum class TaintKind {
 /// values whose pointee memory is secret. AddressTaintedRegs tracks values that
 /// may be used as secret-dependent memory addresses.
 struct TaintState {
+  /// The object a register-held pointer refers to. See PointerBases.
+  struct PointerBase {
+    enum Kind : uint8_t { Frame, Arg };
+    Kind K = Frame;
+    int Index = 0; ///< frame index when Frame, argument number when Arg
+    bool operator==(const PointerBase &O) const {
+      return K == O.K && Index == O.Index;
+    }
+    bool operator!=(const PointerBase &O) const { return !(*this == O); }
+  };
+
   SparseBitVector<> TaintedRegs;
   SparseBitVector<> PointeeTaintedRegs;
   SparseBitVector<> AddressTaintedRegs;
   bool OutgoingArgSecret = false;
   bool NonArgSourcedTaint = false;
 
-  /// Register -> the frame object it points into (P1b). Records WHICH object a
-  /// frame-derived pointer refers to, which is what lets a callee's arg-pointee
-  /// mod-set be applied to the one object the caller passed rather than to the
-  /// whole frame.
+  /// Register -> WHICH object the pointer it holds refers to. Post-prologepilog
+  /// there are exactly two nameable bases, and neither is an IR value:
+  ///
+  ///   Frame(FI)  an object in THIS function's frame - `$sp + imm` (P1b).
+  ///   Arg(k)     the object this function's incoming pointer argument k points
+  ///              at. The caller named it; we cannot, but we can say "the same
+  ///              object argument k was given" and let OUR caller resolve it one
+  ///              level up (B1).
+  ///
+  /// Naming the second is what lets a callee's arg-pointee mod-set be applied to
+  /// the one object the caller passed instead of collapsing to a whole-caller
+  /// clobber. GCC's `ipa-modref` carries the same pair as a `parm_index` that is
+  /// either a real parameter or a negative sentinel; see
+  /// docs/design/frame-address-gap.md.
+  ///
   /// Absent = unknown, and every consumer must fall back to its conservative
-  /// path on absent. Excluded from empty()/countRegs(): it is provenance, not
-  /// taint.
-  SmallDenseMap<unsigned, int, 8> FrameRefs{};
+  /// path on absent. ONE map, so a def kills provenance of both kinds at once.
+  /// Excluded from isBottom()/countRegs(): it is provenance, not taint.
+  SmallDenseMap<unsigned, PointerBase, 8> PointerBases{};
+
+  /// Argument numbers whose POINTEE this function has been told holds a secret
+  /// (B1). Whole-object granularity: the call site cannot know which bytes of
+  /// the passed object a callee wrote, so it records the object.
+  ///
+  /// This IS taint, not provenance - it participates in isBottom(), ==, and the
+  /// join - and at function exit it is re-exported as
+  /// FunctionMemEffects::WritesSecretThroughArgPointee, which is what makes the
+  /// naming compose up the call graph.
+  SparseBitVector<> TaintedArgPointees;
   DenseSet<StackCell> TaintedStackCells;
   DenseSet<StackCell> PointeeTaintedStackCells;
   DenseSet<GlobalCell> TaintedGlobalCells;
@@ -234,7 +273,8 @@ public:
            PointeeTaintedStackCells.empty() && TaintedGlobalCells.empty() &&
            TaintedUnknownMemValues.empty() &&
            PointeeTaintedUnknownMemValues.empty() && !UnknownMemTainted &&
-           TaintedWholeGlobals.empty() && !ExternalMemClobbered;
+           TaintedWholeGlobals.empty() && !ExternalMemClobbered &&
+           TaintedArgPointees.empty();
   }
 
   bool operator==(const TaintState &O) const {
@@ -243,7 +283,8 @@ public:
            AddressTaintedRegs == O.AddressTaintedRegs &&
            OutgoingArgSecret == O.OutgoingArgSecret &&
            NonArgSourcedTaint == O.NonArgSourcedTaint &&
-           FrameRefs == O.FrameRefs &&
+           PointerBases == O.PointerBases &&
+           TaintedArgPointees == O.TaintedArgPointees &&
            TaintedStackCells == O.TaintedStackCells &&
            PointeeTaintedStackCells == O.PointeeTaintedStackCells &&
            TaintedGlobalCells == O.TaintedGlobalCells &&
@@ -270,16 +311,19 @@ public:
     // object if every incoming path agrees which one. Disagreement, or presence
     // on only one path, drops to unknown - the conservative direction, since
     // unknown means "fall back to the whole-frame clobber".
-    if (!FrameRefs.empty()) {
+    if (!PointerBases.empty()) {
       SmallVector<unsigned, 8> Drop;
-      for (const auto &KV : FrameRefs) {
-        auto It = O.FrameRefs.find(KV.first);
-        if (It == O.FrameRefs.end() || It->second != KV.second)
+      for (const auto &KV : PointerBases) {
+        auto It = O.PointerBases.find(KV.first);
+        if (It == O.PointerBases.end() || It->second != KV.second)
           Drop.push_back(KV.first);
       }
       for (unsigned R : Drop)
-        FrameRefs.erase(R);
+        PointerBases.erase(R);
     }
+    // Arg-pointee taint UNIONS: it is taint, and any path reaching this point
+    // with the object secret makes it secret here.
+    TaintedArgPointees |= O.TaintedArgPointees;
     mergeSet(TaintedStackCells, O.TaintedStackCells);
     mergeSet(PointeeTaintedStackCells, O.PointeeTaintedStackCells);
     mergeSet(TaintedGlobalCells, O.TaintedGlobalCells);
@@ -328,13 +372,40 @@ public:
   void clearOutgoingArgSecret() { OutgoingArgSecret = false; }
   bool isOutgoingArgSecret() const { return OutgoingArgSecret; }
 
-  /// The frame object R points into, if the analysis knows it (P1b).
-  std::optional<int> getFrameRef(Register R) const {
-    auto It = FrameRefs.find(R.id());
-    return It == FrameRefs.end() ? std::nullopt : std::optional<int>(It->second);
+  /// The object R points at, if the analysis knows it.
+  std::optional<PointerBase> getPointerBase(Register R) const {
+    auto It = PointerBases.find(R.id());
+    return It == PointerBases.end() ? std::nullopt
+                                    : std::optional<PointerBase>(It->second);
   }
-  void setFrameRef(Register R, int FI) { FrameRefs[R.id()] = FI; }
-  void clearFrameRef(Register R) { FrameRefs.erase(R.id()); }
+  /// The frame object R points into, if the analysis knows it AND it is a frame
+  /// object (P1b). Deliberately narrow: a caller that can only act on a frame
+  /// index must not be handed an argument number.
+  std::optional<int> getFrameRef(Register R) const {
+    auto It = PointerBases.find(R.id());
+    if (It == PointerBases.end() || It->second.K != PointerBase::Frame)
+      return std::nullopt;
+    return It->second.Index;
+  }
+  void setFrameRef(Register R, int FI) {
+    PointerBases[R.id()] = {PointerBase::Frame, FI};
+  }
+  void setPointerBase(Register R, PointerBase B) { PointerBases[R.id()] = B; }
+  void setArgRef(Register R, unsigned ArgNo) {
+    PointerBases[R.id()] = {PointerBase::Arg, (int)ArgNo};
+  }
+  /// Kills provenance of BOTH kinds - one map, so a def cannot leave a stale
+  /// base of the other kind behind.
+  void clearFrameRef(Register R) { PointerBases.erase(R.id()); }
+
+  /// The pointee of incoming pointer argument ArgNo holds a secret (B1).
+  void setTaintedArgPointee(unsigned ArgNo) { TaintedArgPointees.set(ArgNo); }
+  bool isTaintedArgPointee(unsigned ArgNo) const {
+    return TaintedArgPointees.test(ArgNo);
+  }
+  const SparseBitVector<> &taintedArgPointees() const {
+    return TaintedArgPointees;
+  }
 
   /// The register bitvector holding taint of kind K.
   SparseBitVector<> &regs(TaintKind K) {
