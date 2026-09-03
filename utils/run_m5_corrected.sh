@@ -3,7 +3,15 @@
 # Experiment 09 on Apple M5, following the protocol in the experiment README
 # ("Running this on another host"). One command:
 #
-#   sudo -E bash utils/run_m5_corrected.sh
+#   sudo -E bash utils/run_m5_corrected.sh                 # arms already built
+#   sudo -E env BUILD_ARMS=1 bash utils/run_m5_corrected.sh # from a source tree
+#
+# PREREQUISITES not built here even under BUILD_ARMS=1, because both are policy
+# decisions rather than steps:
+#   - a PINNED toolchain. Point LLVM_BIN at a snapshot copy, not at a live build
+#     tree: rebuilding the compiler mid-run silently mixes two compilers into one
+#     measurement, which cost three runs on 2026-08-30.
+#   - a libsodium 1.0.21 source tree at $WORK (taint_libsodium_eval.sh fetches it).
 #
 # WHY. The published M5 headline table timed each sample between two
 # kpc_get_thread_counters() calls -- calls into the kperf driver, not register
@@ -62,6 +70,40 @@ if [[ "${BUSY:-0}" -gt 1 ]]; then
   red "Stop them, or set ALLOW_BUSY=1 to measure anyway (the numbers will not be usable)."
   [[ "${ALLOW_BUSY:-0}" == 1 ]] || exit 1
 fi
+
+# ---- the arms this run consumes ---------------------------------------------
+# BUILD_ARMS=1 builds the whole chain from a libsodium source tree; otherwise the
+# archives must already exist and each missing one names the command that makes
+# it. Without this check the run either dies deep inside part 2 or, worse, uses
+# whatever stale archive happens to be on disk.
+#
+# The chain, and why it is three scripts rather than one: the library build is
+# slow and shared with the non-root rig, arm N needs its own IR rewrite, and arm
+# Z reuses the hardened MIR so it provably carries the same placement decisions.
+POLICIES_M5="hardened:-taint-dit-placement=region;func:-taint-dit-placement=function;fine:-taint-dit-placement=region -taint-dit-switch-cyc=0 -taint-dit-loop-hoist=0"
+
+if [[ "${BUILD_ARMS:-0}" == 1 ]]; then
+  info "BUILD_ARMS=1: build libsodium and arms A/P/F/X from source (slow)"
+  POLICIES_OVERRIDE="$POLICIES_M5" \
+    bash "$REPO_ROOT/utils/taint_libsodium_eval.sh" \
+    || { red "libsodium build failed"; exit 1; }
+  info "build arm N (indirect calls resolved)"
+  bash "$REPO_ROOT/utils/taint_libsodium_narrow.sh" || { red "arm N build failed"; exit 1; }
+fi
+
+miss=0
+for a in baseline hardened func fine narrow; do
+  [[ -f "$WORK/libsodium-$a.a" ]] && continue
+  case "$a" in
+    narrow) red "missing $WORK/libsodium-$a.a -- utils/taint_libsodium_narrow.sh" ;;
+    *)      red "missing $WORK/libsodium-$a.a -- utils/taint_libsodium_eval.sh with"
+            red "    POLICIES_OVERRIDE=\"$POLICIES_M5\"" ;;
+  esac; miss=1
+done
+[[ -f "$WORK/libsodium.hardened.mir" ]] || {
+  red "missing $WORK/libsodium.hardened.mir (arm Z reuses it) -- taint_libsodium_eval.sh analyze"
+  miss=1; }
+[[ "$miss" -eq 0 ]] || { red ""; red "Or re-run with BUILD_ARMS=1 to build the whole chain."; exit 1; }
 
 # ---- the CIO drivers must be REGENERATED, not assumed -----------------------
 # They live in an untracked $CIO_DIR, and eval_util.h's timer macros have to
