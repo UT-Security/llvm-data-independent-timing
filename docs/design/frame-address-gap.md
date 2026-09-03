@@ -753,6 +753,60 @@ published output runs with PSTATE.DIT set**, on this path, under this driver, in
 gem5. That is as far as this instrument can go, and the residual is a missing
 annotation kind rather than a missing analysis.
 
+### Declassification (`sinktaint`) - landed, and it cannot close the residual
+
+Seed form: `func,argno,declassify`. Taint arriving on that parameter is dropped -
+the caller may pass a secret-derived value and the callee asserts it is public by
+then. Unsound by construction; that is what declassification is.
+
+**Scoped to the PARAMETER, not the object, and libhydrogen is the argument for
+that.** `related-work.md` §3a records CryptoMPK's version as unsound because one
+declassified field declassifies the whole `AliasObject`. Here that failure is not
+hypothetical: `hydro_sign_prehash` keeps the ephemeral SECRET at `&csig[32]`
+while `csig` is the public signature buffer -
+
+```c
+uint8_t *sig    = &csig[hydro_sign_NONCEBYTES];
+uint8_t *eph_sk = sig;                       /* the secret lives in the output */
+```
+
+so declassifying the `csig` OBJECT would strip protection from the very secret
+this file spent its length getting protected. A parameter tag stops taint at one
+call boundary and says nothing about the storage.
+
+**Measured effect: it reduces over-protection.** libhydrogen, declassifying
+`hydro_sign_challenge`'s `nonce` and `pk`, both genuinely public:
+
+| | need | switches |
+|---|---|---|
+| without | 245,334 | 311 |
+| with | **235,158** | 309 |
+
+10,176 fewer operations demanded protection, 4.1%. Modest against CryptoMPK's
+reported 3.1x, but this workload has only two declassifiable inputs.
+
+#### It does NOT take the oracle's 126 to zero, and it never can
+
+This is the part worth being exact about, because it was the stated goal.
+
+The oracle counts *an operation with a secret-DERIVED operand executing with DIT
+clear*. Declassification tells the COMPILER not to protect certain
+secret-derived values. It therefore leaves those operations exactly where they
+were - at DIT clear - and the oracle keeps counting them. Measured: **126 before,
+126 after**, switches 279 either way.
+
+**Declassification is a change to the specification, not to the code.** The
+residual is not a defect the compiler can fix; it is a disagreement about what
+counts as a leak. To make the oracle agree it would need a matching
+`m5_taint_declassify(ptr, len)`, mirroring `m5_taint_seed` - and then the zero it
+reported would be *conditional on that assertion*, not independent of it. That is
+the standard IFC arrangement and it is honest, but it must be labelled: "sound
+modulo the declassification" is a weaker claim than "sound".
+
+**So the residual 126 stands as measured**, and the right way to report it is by
+naming what they are - the published nonce and challenge - rather than by
+asserting them away.
+
 ### Prior art for §3c (partial)
 
 Searched 2026-09-02. **Andromeda, TaintDroid and all GCC quotes below were

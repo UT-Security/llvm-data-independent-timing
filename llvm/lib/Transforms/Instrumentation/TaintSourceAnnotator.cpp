@@ -59,6 +59,7 @@ struct TaintSource {
   std::string FuncName;
   llvm::SmallSet<unsigned, 4> TaintedArgs;
   llvm::SmallSet<unsigned, 4> PointeeTaintedArgs;
+  llvm::SmallSet<unsigned, 4> DeclassifiedArgs;
 };
 
 static Expected<StringMap<TaintSource>>
@@ -112,10 +113,24 @@ parseTaintSourcesFile(StringRef Filename) {
       TS.TaintedArgs.insert(ArgNo);
     } else if (Kind == "pointee") {
       TS.PointeeTaintedArgs.insert(ArgNo);
+    } else if (Kind == "declassify") {
+      // DECLASSIFICATION (CryptoMPK's `sinktaint`): taint arriving on this
+      // parameter is dropped. The caller may hand it a secret-derived value;
+      // this function is asserting that the value is public by then.
+      //
+      // Scoped to the PARAMETER, deliberately not to the object it points at.
+      // Object granularity is what makes CryptoMPK's version unsound, and
+      // libhydrogen shows exactly why: `hydro_sign_prehash` keeps the ephemeral
+      // SECRET at `&csig[32]` while `csig` is the public signature buffer, so
+      // declassifying that object would strip protection from the secret it
+      // temporarily holds. A parameter tag cannot do that - it stops taint at
+      // one call boundary and says nothing about the storage.
+      TS.DeclassifiedArgs.insert(ArgNo);
     } else {
       return createStringError(
           inconvertibleErrorCode(),
-          "Invalid taint kind '%s' at line %u (expected data or pointee)",
+          "Invalid taint kind '%s' at line %u (expected data, pointee or "
+          "declassify)",
           Kind.str().c_str(), I.line_number());
     }
   }
@@ -228,6 +243,11 @@ PreservedAnalyses TaintSourceAnnotatorPass::run(Module &M,
             !Arg.hasAttribute("tainted-pointee")) {
           Arg.addAttr(
               llvm::Attribute::get(Arg.getContext(), "tainted-pointee"));
+          Changed = true;
+        }
+        if (It->second.DeclassifiedArgs.contains(Arg.getArgNo()) &&
+            !Arg.hasAttribute("declassified")) {
+          Arg.addAttr(llvm::Attribute::get(Arg.getContext(), "declassified"));
           Changed = true;
         }
       }

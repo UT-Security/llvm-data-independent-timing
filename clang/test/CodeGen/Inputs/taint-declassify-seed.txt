@@ -1,0 +1,2 @@
+entry,0,pointee
+publish,0,declassify
