@@ -1,6 +1,6 @@
 # Serialised vs renamed `MSR DIT`, on experiment 09's benchmarks
 
-**Status: complete, gem5. All gates pass.** Measured 2026-09-02 on a Neoverse-N1
+**Status: complete, gem5. All gates pass. Bit-reproducible across machines and work dirs.** Measured 2026-09-02 on a Neoverse-N1
 host (aarch64 Linux, 160 cores, **no FEAT_DIT** - which is why gem5 is the only
 instrument available here). libsodium 1.0.21 `--disable-asm`, CIO's own drivers
 byte-for-byte, CIO's own seeds. Simulator: gem5-DIT `2acf7637bc` plus two
@@ -35,11 +35,11 @@ implements the mode write:
 
 | benchmark | renamed | serialising |
 |---|---|---|
-| chacha20-poly1305 encrypt | **-0.90%** | **+80.72%** |
-| chacha20-poly1305 decrypt | **+3.66%** | **+91.07%** |
-| aes256-gcm encrypt | **-0.75%** | **+28.94%** |
-| aes256-gcm decrypt | **+8.46%** | **+51.38%** |
-| ed25519 sign | **-1.59%** | **+1.33%** |
+| chacha20-poly1305 encrypt | **-0.28%** | **+81.85%** |
+| chacha20-poly1305 decrypt | **+2.57%** | **+89.06%** |
+| aes256-gcm encrypt | **-0.76%** | **+29.01%** |
+| aes256-gcm decrypt | **+8.23%** | **+51.06%** |
+| ed25519 sign | **-1.39%** | **+1.70%** |
 | argon2id | **+1.35%** | **+1.42%** |
 
 Experiment 09's inference is confirmed causally rather than by a
@@ -56,11 +56,18 @@ addresses.
 
 | benchmark | renamed | serialising |
 |---|---|---|
-| chacha20-poly1305 decrypt | +0.2 | **20.4** |
+| chacha20-poly1305 decrypt | +0.1 | **20.3** |
 | chacha20-poly1305 encrypt | -0.3 | **19.0** |
-| ed25519 sign | -0.2 | **26.7** |
-| aes256-gcm encrypt | +0.3 | **24.4** |
-| aes256-gcm decrypt | +5.8 | **36.9** |
+| aes256-gcm encrypt | +0.3 | **24.5** |
+| aes256-gcm decrypt | +6.0 | **37.1** |
+| ed25519 sign | +10.7 (+/-9) | 39.0 (+/-9) |
+
+ed25519's per-switch figures carry **+/-9 cycles and should not be quoted**: 85
+switches against a 78,000-cycle region means 1% of layout jitter is 780 cycles,
+9 per switch. Pinning `__FILE__` alone (see Reproducibility) moved its renamed
+figure from -0.2 to +10.7 while chacha and aes-encrypt moved by 0.1 or less.
+The claim rests on the rows that can resolve it. aes-gcm decrypt's renamed +6.0
+is its dwell term showing through (blanket alone is +8.41% there).
 
 ### Against silicon, in the quantity that survives an instrument change
 
@@ -76,7 +83,7 @@ column was the part unaffected.
 |---|---|
 | Apple M5, this library (corrected) | **43.6** |
 | Apple M4, this library (corrected) | **33.4** |
-| **gem5 Neoverse-V2, this run** | **19.0 - 36.9** |
+| **gem5 Neoverse-V2, this run** | **19.0 - 37.1** |
 | experiment 06, gem5, mbedTLS at two toggle rates | 34.3 and 76.3 |
 | experiment 02, Apple M5 | ~24 |
 
@@ -91,11 +98,11 @@ across instruments without the per-switch column beside them:
 
 | benchmark | M5 | M4 | gem5 | M5 base | gem5 base |
 |---|---|---|---|---|---|
-| chacha20-poly1305 encrypt | 4.83x | 3.43x | **1.81x** | 1,119 | 2,227 |
-| chacha20-poly1305 decrypt | 4.90x | 3.62x | **1.91x** | 1,180 | 2,270 |
+| chacha20-poly1305 encrypt | 4.83x | 3.43x | **1.82x** | 1,119 | 2,212 |
+| chacha20-poly1305 decrypt | 4.90x | 3.62x | **1.89x** | 1,180 | 2,291 |
 | aes256-gcm encrypt | 5.27x | 3.34x | **1.29x** | 252 | 1,219 |
-| aes256-gcm decrypt | 4.14x | 2.95x | **1.51x** | 345 | 1,088 |
-| ed25519 sign | 1.13x | 1.09x | **1.01x** | 36,690 | 78,044 |
+| aes256-gcm decrypt | 4.14x | 2.95x | **1.51x** | 345 | 1,090 |
+| ed25519 sign | 1.13x | 1.09x | **1.02x** | 36,690 | 78,459 |
 | argon2id | 1.000x | 0.996x | **1.014x** | 197.9M | 326.6M |
 
 gem5 reads far lower, and the gap decomposes exactly: its baseline is ~2x
@@ -111,10 +118,10 @@ extends that axis at **both** ends:
 
 | benchmark | writes / Mcycle (baseline) | serialising penalty |
 |---|---|---|
-| chacha20-poly1305 decrypt | 43,176 | +87.42 |
-| chacha20-poly1305 encrypt | 42,217 | +81.62 |
-| aes256-gcm decrypt | 13,787 | +42.92 |
-| ed25519 sign | 1,089 | +2.92 |
+| chacha20-poly1305 decrypt | 42,728 | +86.48 |
+| chacha20-poly1305 encrypt | 42,494 | +82.13 |
+| aes256-gcm decrypt | 13,758 | +42.83 |
+| ed25519 sign | 1,093 | +3.09 |
 | **argon2id** | **1.3** | **+0.07** |
 
 argon2id is the null endpoint and the cleanest confirmation: 438 executed
@@ -161,11 +168,16 @@ ranking is **identical on 4 of 5 benchmarks**:
 
 | benchmark | taint | taintfn | fine | winner (all 3 alignments) |
 |---|---|---|---|---|
-| ed25519 | +2.91 / +2.78 / +1.44 | +3.10 / +2.98 / +2.63 | +5.78 / +7.38 / +5.57 | taint |
-| chacha20 enc | +80.34 / +81.04 / +78.02 | +86.63 / +85.81 / +82.72 | +102.54 / +104.19 / +98.39 | taint |
-| chacha20 dec | +88.13 / +81.11 / +77.56 | +89.12 / +85.01 / +81.88 | +106.50 / +103.27 / +98.53 | taint |
-| aes-gcm dec | +50.86 / +50.53 / +50.75 | +55.04 / +54.57 / +55.02 | +54.52 / +52.76 / +53.51 | taint |
-| aes-gcm enc | +30.00 / +29.90 / +30.71 | +30.72 / +31.25 / **+24.47** | +48.22 / +49.42 / +48.58 | taint, taint, **taintfn** |
+| ed25519 | +4.26 | +2.50 | +4.42 | taintfn, by 1.8 - inside the resolution limit |
+| chacha20 enc | +80.85 | +86.29 | +102.58 | taint |
+| chacha20 dec | +86.90 | +87.72 | +108.94 | taint |
+| aes-gcm dec | +51.09 | +54.66 | +54.33 | taint |
+| aes-gcm enc | +30.08 | +30.79 | +48.28 | taint |
+
+Canonical (bit-reproducible) sweep. The pre-fix sweeps at three alignment
+settings gave the same ranking on 4 of 5 rows at every setting, with the
+sub-resolution row moving between `taint` and `taintfn`; the alignment sweeps
+are being regenerated through the fixed rig.
 
 **Without the twins, the aes-gcm decrypt cell gave the opposite answer**: raw
 totals read `fine` +47.70% against `taint` +51.38%, because `fine` happened to
@@ -253,6 +265,34 @@ narrows very little here, which is consistent with experiment 09's `f_secret ~
 buys no dynamic advantage. On aes-gcm decrypt `taint` and `fine` dwell within
 0.7 points of each other, which is what falsified the "narrower regions dwell
 less" explanation.
+
+## Reproducibility: bit-identical, and it had to be earned
+
+`reproduce.sh` regenerates every `gem5_*` file in one command. Its first run
+from a differently named work directory did NOT reproduce: 67 of 80 cells moved,
+**0.18% median / 2.57% worst**, and one gate failed. The archives built by the
+pass were byte-identical, so placement was never in question; two paths were
+leaking into the *driver* binary:
+
+- CIO's drivers use `assert()`, whose `__FILE__` was the absolute source path.
+  An 8-character-longer work-dir name lengthened `.rodata` and moved every
+  address after it. Drivers now compile from a bare relative name inside the
+  staging dir, so `__FILE__` is `eval_ed25519.c` everywhere.
+- The equal-width `argv[0]` trick fixed the file name but not the directory
+  prefix (71 vs 63 characters). `argv[0]` now lives under `/tmp/cio_<hash>/`,
+  the same length on every machine.
+
+With both pinned: **45 of 45 driver binaries byte-identical** across two work
+dirs, and **two full 80-cell sweeps from two work dirs identical in every cell
+on every counter**. The gate failure was the leak, not the simulator: the same
+binary is deterministic across repeated runs and inert under the switch model
+once its paths are equal.
+
+The canonical data is the fixed sweep. Against the pre-fix sweep it differs by
+**0.06% median / 3.32% worst** - the pinned `__FILE__` is itself a layout
+change - and no ranking or conclusion moved except ed25519's sub-resolution
+policy order. This is the rig's own documented trap, a 0.84% shift from an
+`argv[0]` length change, which turned out to have been only half-closed.
 
 ## Gates
 

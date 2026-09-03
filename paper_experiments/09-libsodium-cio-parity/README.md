@@ -306,15 +306,15 @@ noise.
 
 | benchmark | renamed switch | serialising switch | committed switches/op |
 |---|---|---|---|
-| chacha20-poly1305 encrypt | **-0.90%** | **+80.72%** | 94 |
-| chacha20-poly1305 decrypt | **+3.66%** | **+91.07%** | 98 |
-| aes256-gcm encrypt | **-0.75%** | **+28.94%** | 15 |
-| aes256-gcm decrypt | **+8.46%** | **+51.38%** | 15 |
-| ed25519 sign | **-1.59%** | **+1.33%** | 85 |
+| chacha20-poly1305 encrypt | **-0.28%** | **+81.85%** | 94 |
+| chacha20-poly1305 decrypt | **+2.57%** | **+89.06%** | 98 |
+| aes256-gcm encrypt | **-0.76%** | **+29.01%** | 15 |
+| aes256-gcm decrypt | **+8.23%** | **+51.06%** | 15 |
+| ed25519 sign | **-1.39%** | **+1.70%** | 85 |
 | argon2id | **+1.35%** | **+1.42%** | 438 |
 
 **The decomposition is confirmed causally rather than by ratio.** A renamed
-switch costs -0.3 to +5.8 cycles; a serialising one costs 19.0 to 36.9. The
+switch costs -0.3 to +0.3 cycles where the rig can resolve it; a serialising one costs 19.0 to 37.1. The
 comparison is immune to code-layout effects because it is one binary under two
 machine configurations.
 
@@ -327,20 +327,20 @@ Three things this settles that silicon could not:
   `pass_switches_per_op = -197187` here - noise divided by noise, rendered
   honestly as "~0 (noise)" in the table above. The real figure is **438**, and
   at 1.3 writes per million cycles the serialising penalty is +0.07 points.
-  Together with chacha20's 43,176 that is a 30,000x span on experiment 06's
+  Together with chacha20's 42,728 that is a 30,000x span on experiment 06's
   toggle-rate axis, whose previous range was 86 to 4,601.
 - **Placement granularity is a consequence of serialisation, not a property of
-  placement.** Under a serialising switch the three policies spread over 25
-  points; renamed, they collapse into 3. On a core that renames the write the
+  placement.** Under a serialising switch the three policies spread over 25.3
+  points; renamed, they collapse into 3.2. On a core that renames the write the
   policy choice is nearly free.
 
 **Reading 2 above holds on gem5 too, but only once code layout is controlled.**
 Inserting a switch moves all downstream code by exactly 4.00 bytes, and the
-resulting cache-line displacement is worth **-6.82% to +7.89%** - larger than
+resulting cache-line displacement is worth **-6.94% to +4.52%** - larger than
 the policy differences it is measured against. Comparing raw totals made `fine`
 appear to beat `region` on aes256-gcm decrypt; against a per-policy layout twin
 (same placement, `HINT #0` in place of each switch, byte-identical addresses)
-`fine` is 3.7 points *worse*, executing more switches at the same dwell. The
+`fine` is 3.2 points *worse*, executing more switches at the same dwell. The
 `func < region` ordering then holds on 4 of 5 benchmarks at three different
 alignment settings.
 
@@ -652,6 +652,34 @@ sudo -E env LLVM_BIN=<toolchain>/bin CIO_DIR=~/Documents/cio-eval \
 
 `CHEAP_TIMER=1` is the corrected timer and is OFF by default, so the original
 numbers above stay reproducible byte-for-byte.
+
+### Reproducing the gem5 numbers
+
+One command regenerates every `data/gem5_*` file from a clean machine:
+
+```sh
+CIO=<counter-optimization/cio checkout> utils/dit_host_screening/cioparity/reproduce.sh
+```
+
+`SKIP_ARGON=1` drops the six-hour argon2id stage; `SKIP_ALIGN=1` drops the two
+alignment sweeps that back the layout-spread claim only. The headline needs
+neither and takes about fifteen minutes on 160 cores.
+
+It needs a gem5 carrying two patches that are not upstream (PMULL at size=3,
+without which AES-GCM panics on GHASH; and `commit.ditCycles`), and it refuses
+to start against a stock gem5 rather than quietly producing a four-benchmark
+result that looks complete. Every gate in `run_cio_gem5.py` is a hard stop.
+
+**It reproduces bit-for-bit, and that had to be earned.** The first run from a
+differently named work directory shifted 67 of 80 cells by 0.2% (median) to
+2.6% (worst) and failed a gate. Two paths were leaking into the binary: CIO's
+drivers use `assert()`, whose `__FILE__` is the absolute source path, so a
+longer work-dir name lengthened `.rodata` and moved every address after it; and
+the equal-width `argv[0]` trick fixed the file name but not the directory
+prefix. Both are now pinned (drivers compile from a bare relative name;
+`argv[0]` lives under `/tmp/cio_<hash>/`), and two sweeps from two work dirs
+are byte-identical. The rig's own documented trap - a 0.84% shift from an
+argv[0] length change - was only half-closed until this.
 
 ## Known limits
 
