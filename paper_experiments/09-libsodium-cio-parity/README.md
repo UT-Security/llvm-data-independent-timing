@@ -23,6 +23,14 @@ benchmarks. It is a separate page rather than a merge because it is a separate
 instrument answering a question silicon cannot: the two are complementary, not
 alternative readings of one run.
 
+**Third page, all three instruments on one axis:**
+https://claude.ai/code/artifact/628ee41e-ccf2-4090-8c2e-f7acd6740d20
+Source: `figures/three-instruments.html`. *Three Instruments, One Ordering* puts
+M4, M5 and both gem5 switch models on one log-scale figure, per benchmark, with
+placement granularity on the x axis from blanket through function and region to
+the old fine defaults. Built from `m4_results_ratios.csv`, `m5_results_ratios.csv`
+(cntvct rows) and `gem5_switch_model.csv`; the table view carries every value.
+
 ---
 
 ## The claim

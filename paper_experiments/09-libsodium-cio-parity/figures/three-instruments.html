@@ -1,0 +1,227 @@
+<title>Three Instruments, One Ordering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F2F4F5; --surface:#FFFFFF; --sunk:#E9EDEF;
+  --ink:#11171C; --muted:#5A6670; --faint:#8695A0;
+  --rule:#D6DCDF; --rule-soft:#E4E9EB; --grid:#EDF0F2; --base:#B9C2C8;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --shadow:0 1px 2px rgba(17,23,28,.06),0 8px 24px -12px rgba(17,23,28,.18);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+    --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+    --rule:#2A343B; --rule-soft:#222B31; --grid:#1F282E; --base:#3E4A53;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+  --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+  --rule:#2A343B; --rule-soft:#222B31; --grid:#1F282E; --base:#3E4A53;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px 80px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+header{padding:64px 0 28px}
+.eyebrow{font-size:.7rem;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin:0 0 1.1rem}
+h1{font-size:clamp(2rem,4.5vw,3rem);line-height:1.05;letter-spacing:-.025em;font-weight:700;margin:0 0 .6rem;text-wrap:balance}
+.lede{font-size:1.1rem;line-height:1.5;max-width:66ch;margin:0 0 1.2rem;color:var(--ink)}
+.lede b{font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:0 24px;padding-top:16px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--faint)}
+.meta span{white-space:nowrap}
+h2{font-size:1.2rem;font-weight:600;letter-spacing:-.01em;margin:0 0 4px}
+.sub{color:var(--muted);font-size:.93rem;margin:0 0 18px;max-width:68ch}
+/* legend: mirrors the mark, always present for >= 2 series */
+.legend{display:flex;flex-wrap:wrap;gap:6px 26px;margin:0 0 14px;font-size:.84rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:34px;height:14px;overflow:visible}
+.figure{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:18px 18px 10px;
+  box-shadow:var(--shadow);position:relative;overflow-x:auto}
+svg.chart{width:100%;height:auto;display:block;min-width:720px}
+.panel{fill:none}
+.ptitle{font:600 .78rem Archivo,sans-serif;fill:var(--ink)}
+.grid{stroke:var(--grid);stroke-width:1}
+.base{stroke:var(--base);stroke-width:1}
+.tick,.xlab{font:.68rem "IBM Plex Mono",monospace;fill:var(--faint);font-variant-numeric:tabular-nums}
+.xlab{font-family:Archivo,sans-serif;font-size:.72rem;fill:var(--muted)}
+.dlab{font:500 .7rem "IBM Plex Mono",monospace;fill:var(--muted);font-variant-numeric:tabular-nums}
+.line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.line.s1{stroke:var(--s1)} .line.s2{stroke:var(--s2)} .line.s3{stroke:var(--s3)}
+.line.hollow{stroke-opacity:.45}
+.ring{fill:var(--surface)}
+.mark.s1{fill:var(--s1)} .mark.s2{fill:var(--s2)} .mark.s3{fill:var(--s3)}
+.mark.hollow{fill:var(--surface);stroke-width:2}
+.mark.hollow.s3{stroke:var(--s3)}
+.hit{fill:transparent;cursor:crosshair;outline:none}
+.hit:focus-visible{fill:var(--s1);fill-opacity:.06}
+.hit:hover{fill:var(--ink);fill-opacity:.03}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--surface);border-radius:6px;
+  padding:9px 12px;font-size:.78rem;line-height:1.45;min-width:180px;box-shadow:var(--shadow);z-index:2}
+.tip .h{font-weight:600;margin-bottom:5px;opacity:.85}
+.tip .r{display:flex;justify-content:space-between;gap:16px;align-items:center}
+.tip .r i{display:inline-block;width:14px;height:2px;margin-right:6px;vertical-align:middle;border-radius:1px}
+.tip .r b{font-family:"IBM Plex Mono",monospace;font-weight:500;font-variant-numeric:tabular-nums}
+.axisnote{font-size:.78rem;color:var(--faint);margin:10px 0 0;font-family:"IBM Plex Mono",monospace}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:26px 0 0}
+.note{border-left:2px solid var(--rule);padding:2px 0 2px 16px;font-size:.92rem;color:var(--muted)}
+.note b{color:var(--ink);font-weight:600}
+.tbtn{margin:22px 0 0;background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:6px;
+  padding:8px 14px;font:500 .84rem Archivo,sans-serif;cursor:pointer}
+.tbtn:hover{background:var(--sunk)} .tbtn:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+.scroll{overflow-x:auto;margin:14px 0 0;border:1px solid var(--rule);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.82rem}
+th{font-size:.66rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);text-align:right;
+  padding:11px 13px;border-bottom:1px solid var(--rule);white-space:nowrap}
+th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
+td{padding:8px 13px;border-bottom:1px solid var(--rule-soft);text-align:right;
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child{font-family:Archivo,sans-serif} tr:last-child td{border-bottom:none}
+footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-family:"IBM Plex Mono",monospace;
+  font-size:.7rem;color:var(--faint);line-height:1.8}
+@media (max-width:640px){.figure{padding:12px 10px 6px}}
+</style>
+<div class="wrap">
+<header>
+  <p class="eyebrow">Experiment 09 &middot; libsodium &middot; three instruments</p>
+  <h1>Three Instruments, One Ordering</h1>
+  <p class="lede">The pass's overhead against baseline, by <b>placement granularity</b> from coarse to fine,
+  on Apple M4, Apple M5, and gem5 under both <code class="mono">MSR DIT</code> models. Every instrument that
+  serialises the switch tells the same story: <b>coarser is cheaper</b>, and finer costs more. The one
+  that renames it is flat at 1.0&times;, whatever the placement.</p>
+  <div class="meta"><span>M4 / M5: cntvct timer, corrected</span><span>gem5: Neoverse-V2 FDP, bit-reproducible sweep</span>
+  <span>ratio vs each instrument's own baseline</span><span>log axis</span><span>2026-09-03</span></div>
+</header>
+
+<section>
+  <h2>Overhead by granularity, per benchmark</h2>
+  <p class="sub">Each panel is one of CIO's six benchmarks. Left to right: blanket (mode set once, no
+  switches), whole-function placement, region placement (the shipped default), and the pre-2026-08-24
+  defaults (finest). Hover or focus a column for all four values.</p>
+  <div class="legend" aria-label="legend">
+    <span><svg viewBox="0 0 34 14"><line x1="2" y1="7" x2="32" y2="7" stroke="var(--s1)" stroke-width="2"/><circle cx="17" cy="7" r="4.5" fill="var(--s1)"/></svg>M4 silicon</span>
+    <span><svg viewBox="0 0 34 14"><line x1="2" y1="7" x2="32" y2="7" stroke="var(--s2)" stroke-width="2"/><circle cx="17" cy="7" r="4.5" fill="var(--s2)"/></svg>M5 silicon</span>
+    <span><svg viewBox="0 0 34 14"><line x1="2" y1="7" x2="32" y2="7" stroke="var(--s3)" stroke-width="2"/><circle cx="17" cy="7" r="4.5" fill="var(--s3)"/></svg>gem5, serialising switch</span>
+    <span><svg viewBox="0 0 34 14"><line x1="2" y1="7" x2="32" y2="7" stroke="var(--s3)" stroke-width="2" stroke-opacity=".45"/><circle cx="17" cy="7" r="4.5" fill="var(--surface)" stroke="var(--s3)" stroke-width="2"/></svg>gem5, renamed switch</span>
+  </div>
+  <div class="figure" id="fig">
+<svg class="chart" viewBox="0 0 972 486" role="img" aria-labelledby="chart-title chart-desc">
+<title id="chart-title">Pass overhead by placement granularity, on three instruments</title>
+<desc id="chart-desc">Six panels, one per benchmark. Overhead ratio against baseline on a log axis, for blanket, function, region and fine placement, measured on Apple M4, Apple M5 and gem5 under both switch models. The full values are in the table below the chart.</desc>
+<g transform="translate(0,0)"><rect class="panel" x="0" y="0" width="300" height="230" rx="6"/><text class="ptitle" x="44" y="16">ed25519 sign</text><line class="base" x1="44" x2="286" y1="190.5" y2="190.5"/><text class="tick" x="38" y="194.0" text-anchor="end">1×</text><line class="grid" x1="44" x2="286" y1="159.5" y2="159.5"/><text class="tick" x="38" y="163.0" text-anchor="end">1.5×</text><line class="grid" x1="44" x2="286" y1="137.5" y2="137.5"/><text class="tick" x="38" y="141.0" text-anchor="end">2×</text><line class="grid" x1="44" x2="286" y1="106.5" y2="106.5"/><text class="tick" x="38" y="110.0" text-anchor="end">3×</text><line class="grid" x1="44" x2="286" y1="84.5" y2="84.5"/><text class="tick" x="38" y="88.0" text-anchor="end">4×</text><line class="grid" x1="44" x2="286" y1="53.5" y2="53.5"/><text class="tick" x="38" y="57.0" text-anchor="end">6×</text><line class="grid" x1="44" x2="286" y1="31.5" y2="31.5"/><text class="tick" x="38" y="35.0" text-anchor="end">8×</text><text class="xlab" x="74.2" y="212" text-anchor="middle">blanket</text><text class="xlab" x="134.8" y="212" text-anchor="middle">function</text><text class="xlab" x="195.2" y="212" text-anchor="middle">region</text><text class="xlab" x="255.8" y="212" text-anchor="middle">fine</text><polyline class="line s1" points="74.2,189.8 134.8,184.0 195.2,183.5 255.8,180.1"/><polyline class="line s2" points="74.2,190.0 134.8,181.4 195.2,180.8 255.8,171.9"/><polyline class="line s3" points="74.2,189.5 134.8,189.3 195.2,189.2 255.8,185.8"/><polyline class="line s3 hollow" points="74.2,189.4 134.8,190.9 195.2,191.5 255.8,190.0"/><circle class="ring" cx="74.2" cy="189.8" r="6.5"/><circle class="mark s1" cx="74.2" cy="189.8" r="4.5"/><circle class="ring" cx="134.8" cy="184.0" r="6.5"/><circle class="mark s1" cx="134.8" cy="184.0" r="4.5"/><circle class="ring" cx="195.2" cy="183.5" r="6.5"/><circle class="mark s1" cx="195.2" cy="183.5" r="4.5"/><circle class="ring" cx="255.8" cy="180.1" r="6.5"/><circle class="mark s1" cx="255.8" cy="180.1" r="4.5"/><circle class="ring" cx="74.2" cy="190.0" r="6.5"/><circle class="mark s2" cx="74.2" cy="190.0" r="4.5"/><circle class="ring" cx="134.8" cy="181.4" r="6.5"/><circle class="mark s2" cx="134.8" cy="181.4" r="4.5"/><circle class="ring" cx="195.2" cy="180.8" r="6.5"/><circle class="mark s2" cx="195.2" cy="180.8" r="4.5"/><circle class="ring" cx="255.8" cy="171.9" r="6.5"/><circle class="mark s2" cx="255.8" cy="171.9" r="4.5"/><circle class="ring" cx="74.2" cy="189.5" r="6.5"/><circle class="mark s3" cx="74.2" cy="189.5" r="4.5"/><circle class="ring" cx="134.8" cy="189.3" r="6.5"/><circle class="mark s3" cx="134.8" cy="189.3" r="4.5"/><circle class="ring" cx="195.2" cy="189.2" r="6.5"/><circle class="mark s3" cx="195.2" cy="189.2" r="4.5"/><circle class="ring" cx="255.8" cy="185.8" r="6.5"/><circle class="mark s3" cx="255.8" cy="185.8" r="4.5"/><circle class="ring" cx="74.2" cy="189.4" r="6.5"/><circle class="mark s3 hollow" cx="74.2" cy="189.4" r="4.5"/><circle class="ring" cx="134.8" cy="190.9" r="6.5"/><circle class="mark s3 hollow" cx="134.8" cy="190.9" r="4.5"/><circle class="ring" cx="195.2" cy="191.5" r="6.5"/><circle class="mark s3 hollow" cx="195.2" cy="191.5" r="4.5"/><circle class="ring" cx="255.8" cy="190.0" r="6.5"/><circle class="mark s3 hollow" cx="255.8" cy="190.0" r="4.5"/><text class="dlab" x="264.8" y="175.4">1.27×</text><text class="dlab" x="264.8" y="193.5">1.01×</text><rect class="hit" x="44.0" y="26" width="60.5" height="170" tabindex="0" data-bench="ed25519 sign" data-arm="blanket" data-vals='{&quot;M4&quot;: 1.0087, &quot;M5&quot;: 1.0057, &quot;gem5 serialising&quot;: 1.013029579729537, &quot;gem5 renamed&quot;: 1.0132455183104347}'/><rect class="hit" x="104.5" y="26" width="60.5" height="170" tabindex="0" data-bench="ed25519 sign" data-arm="function" data-vals='{&quot;M4&quot;: 1.0884, &quot;M5&quot;: 1.1251, &quot;gem5 serialising&quot;: 1.0153959066785434, &quot;gem5 renamed&quot;: 0.9941670876183647}'/><rect class="hit" x="165.0" y="26" width="60.5" height="170" tabindex="0" data-bench="ed25519 sign" data-arm="region" data-vals='{&quot;M4&quot;: 1.0946, &quot;M5&quot;: 1.1342, &quot;gem5 serialising&quot;: 1.0169820269691865, &quot;gem5 renamed&quot;: 0.9860796736242592}'/><rect class="hit" x="225.5" y="26" width="60.5" height="170" tabindex="0" data-bench="ed25519 sign" data-arm="fine" data-vals='{&quot;M4&quot;: 1.1457, &quot;M5&quot;: 1.2745, &quot;gem5 serialising&quot;: 1.0626183324143093, &quot;gem5 renamed&quot;: 1.006167103042549}'/></g>
+<g transform="translate(322,0)"><rect class="panel" x="0" y="0" width="300" height="230" rx="6"/><text class="ptitle" x="44" y="16">chacha20-poly1305 encrypt</text><line class="base" x1="44" x2="286" y1="190.5" y2="190.5"/><line class="grid" x1="44" x2="286" y1="159.5" y2="159.5"/><line class="grid" x1="44" x2="286" y1="137.5" y2="137.5"/><line class="grid" x1="44" x2="286" y1="106.5" y2="106.5"/><line class="grid" x1="44" x2="286" y1="84.5" y2="84.5"/><line class="grid" x1="44" x2="286" y1="53.5" y2="53.5"/><line class="grid" x1="44" x2="286" y1="31.5" y2="31.5"/><text class="xlab" x="74.2" y="212" text-anchor="middle">blanket</text><text class="xlab" x="134.8" y="212" text-anchor="middle">function</text><text class="xlab" x="195.2" y="212" text-anchor="middle">region</text><text class="xlab" x="255.8" y="212" text-anchor="middle">fine</text><polyline class="line s1" points="74.2,189.5 134.8,96.7 195.2,96.2 255.8,77.0"/><polyline class="line s2" points="74.2,189.9 134.8,71.3 195.2,70.1 255.8,52.4"/><polyline class="line s3" points="74.2,189.2 134.8,142.3 195.2,144.8 255.8,134.8"/><polyline class="line s3 hollow" points="74.2,189.2 134.8,190.4 195.2,190.7 255.8,188.3"/><circle class="ring" cx="74.2" cy="189.5" r="6.5"/><circle class="mark s1" cx="74.2" cy="189.5" r="4.5"/><circle class="ring" cx="134.8" cy="96.7" r="6.5"/><circle class="mark s1" cx="134.8" cy="96.7" r="4.5"/><circle class="ring" cx="195.2" cy="96.2" r="6.5"/><circle class="mark s1" cx="195.2" cy="96.2" r="4.5"/><circle class="ring" cx="255.8" cy="77.0" r="6.5"/><circle class="mark s1" cx="255.8" cy="77.0" r="4.5"/><circle class="ring" cx="74.2" cy="189.9" r="6.5"/><circle class="mark s2" cx="74.2" cy="189.9" r="4.5"/><circle class="ring" cx="134.8" cy="71.3" r="6.5"/><circle class="mark s2" cx="134.8" cy="71.3" r="4.5"/><circle class="ring" cx="195.2" cy="70.1" r="6.5"/><circle class="mark s2" cx="195.2" cy="70.1" r="4.5"/><circle class="ring" cx="255.8" cy="52.4" r="6.5"/><circle class="mark s2" cx="255.8" cy="52.4" r="4.5"/><circle class="ring" cx="74.2" cy="189.2" r="6.5"/><circle class="mark s3" cx="74.2" cy="189.2" r="4.5"/><circle class="ring" cx="134.8" cy="142.3" r="6.5"/><circle class="mark s3" cx="134.8" cy="142.3" r="4.5"/><circle class="ring" cx="195.2" cy="144.8" r="6.5"/><circle class="mark s3" cx="195.2" cy="144.8" r="4.5"/><circle class="ring" cx="255.8" cy="134.8" r="6.5"/><circle class="mark s3" cx="255.8" cy="134.8" r="4.5"/><circle class="ring" cx="74.2" cy="189.2" r="6.5"/><circle class="mark s3 hollow" cx="74.2" cy="189.2" r="4.5"/><circle class="ring" cx="134.8" cy="190.4" r="6.5"/><circle class="mark s3 hollow" cx="134.8" cy="190.4" r="4.5"/><circle class="ring" cx="195.2" cy="190.7" r="6.5"/><circle class="mark s3 hollow" cx="195.2" cy="190.7" r="4.5"/><circle class="ring" cx="255.8" cy="188.3" r="6.5"/><circle class="mark s3 hollow" cx="255.8" cy="188.3" r="4.5"/><text class="dlab" x="264.8" y="55.9">6.09×</text><text class="dlab" x="264.8" y="191.8">1.03×</text><rect class="hit" x="44.0" y="26" width="60.5" height="170" tabindex="0" data-bench="chacha20-poly1305 encrypt" data-arm="blanket" data-vals='{&quot;M4&quot;: 1.0127, &quot;M5&quot;: 1.007, &quot;gem5 serialising&quot;: 1.0166357759594955, &quot;gem5 renamed&quot;: 1.0166357759594955}'/><rect class="hit" x="104.5" y="26" width="60.5" height="170" tabindex="0" data-bench="chacha20-poly1305 encrypt" data-arm="function" data-vals='{&quot;M4&quot;: 3.4117, &quot;M5&quot;: 4.7516, &quot;gem5 serialising&quot;: 1.8789385651643233, &quot;gem5 renamed&quot;: 1.0011301478233352}'/><rect class="hit" x="165.0" y="26" width="60.5" height="170" tabindex="0" data-bench="chacha20-poly1305 encrypt" data-arm="region" data-vals='{&quot;M4&quot;: 3.4316, &quot;M5&quot;: 4.8326, &quot;gem5 serialising&quot;: 1.8184530536594188, &quot;gem5 renamed&quot;: 0.9971972333981286}'/><rect class="hit" x="225.5" y="26" width="60.5" height="170" tabindex="0" data-bench="chacha20-poly1305 encrypt" data-arm="fine" data-vals='{&quot;M4&quot;: 4.4134, &quot;M5&quot;: 6.0872, &quot;gem5 serialising&quot;: 2.07101848921839, &quot;gem5 renamed&quot;: 1.0290674020161839}'/></g>
+<g transform="translate(644,0)"><rect class="panel" x="0" y="0" width="300" height="230" rx="6"/><text class="ptitle" x="44" y="16">chacha20-poly1305 decrypt</text><line class="base" x1="44" x2="286" y1="190.5" y2="190.5"/><line class="grid" x1="44" x2="286" y1="159.5" y2="159.5"/><line class="grid" x1="44" x2="286" y1="137.5" y2="137.5"/><line class="grid" x1="44" x2="286" y1="106.5" y2="106.5"/><line class="grid" x1="44" x2="286" y1="84.5" y2="84.5"/><line class="grid" x1="44" x2="286" y1="53.5" y2="53.5"/><line class="grid" x1="44" x2="286" y1="31.5" y2="31.5"/><text class="xlab" x="74.2" y="212" text-anchor="middle">blanket</text><text class="xlab" x="134.8" y="212" text-anchor="middle">function</text><text class="xlab" x="195.2" y="212" text-anchor="middle">region</text><text class="xlab" x="255.8" y="212" text-anchor="middle">fine</text><polyline class="line s1" points="74.2,188.9 134.8,92.9 195.2,92.1 255.8,71.9"/><polyline class="line s2" points="74.2,188.8 134.8,70.7 195.2,68.9 255.8,50.9"/><polyline class="line s3" points="74.2,188.1 134.8,141.4 195.2,141.8 255.8,133.0"/><polyline class="line s3 hollow" points="74.2,188.1 134.8,188.4 195.2,188.5 255.8,187.1"/><circle class="ring" cx="74.2" cy="188.9" r="6.5"/><circle class="mark s1" cx="74.2" cy="188.9" r="4.5"/><circle class="ring" cx="134.8" cy="92.9" r="6.5"/><circle class="mark s1" cx="134.8" cy="92.9" r="4.5"/><circle class="ring" cx="195.2" cy="92.1" r="6.5"/><circle class="mark s1" cx="195.2" cy="92.1" r="4.5"/><circle class="ring" cx="255.8" cy="71.9" r="6.5"/><circle class="mark s1" cx="255.8" cy="71.9" r="4.5"/><circle class="ring" cx="74.2" cy="188.8" r="6.5"/><circle class="mark s2" cx="74.2" cy="188.8" r="4.5"/><circle class="ring" cx="134.8" cy="70.7" r="6.5"/><circle class="mark s2" cx="134.8" cy="70.7" r="4.5"/><circle class="ring" cx="195.2" cy="68.9" r="6.5"/><circle class="mark s2" cx="195.2" cy="68.9" r="4.5"/><circle class="ring" cx="255.8" cy="50.9" r="6.5"/><circle class="mark s2" cx="255.8" cy="50.9" r="4.5"/><circle class="ring" cx="74.2" cy="188.1" r="6.5"/><circle class="mark s3" cx="74.2" cy="188.1" r="4.5"/><circle class="ring" cx="134.8" cy="141.4" r="6.5"/><circle class="mark s3" cx="134.8" cy="141.4" r="4.5"/><circle class="ring" cx="195.2" cy="141.8" r="6.5"/><circle class="mark s3" cx="195.2" cy="141.8" r="4.5"/><circle class="ring" cx="255.8" cy="133.0" r="6.5"/><circle class="mark s3" cx="255.8" cy="133.0" r="4.5"/><circle class="ring" cx="74.2" cy="188.1" r="6.5"/><circle class="mark s3 hollow" cx="74.2" cy="188.1" r="4.5"/><circle class="ring" cx="134.8" cy="188.4" r="6.5"/><circle class="mark s3 hollow" cx="134.8" cy="188.4" r="4.5"/><circle class="ring" cx="195.2" cy="188.5" r="6.5"/><circle class="mark s3 hollow" cx="195.2" cy="188.5" r="4.5"/><circle class="ring" cx="255.8" cy="187.1" r="6.5"/><circle class="mark s3 hollow" cx="255.8" cy="187.1" r="4.5"/><text class="dlab" x="264.8" y="54.4">6.21×</text><text class="dlab" x="264.8" y="190.6">1.04×</text><rect class="hit" x="44.0" y="26" width="60.5" height="170" tabindex="0" data-bench="chacha20-poly1305 decrypt" data-arm="blanket" data-vals='{&quot;M4&quot;: 1.0207, &quot;M5&quot;: 1.0217, &quot;gem5 serialising&quot;: 1.0316096965469133, &quot;gem5 renamed&quot;: 1.0316096965469133}'/><rect class="hit" x="104.5" y="26" width="60.5" height="170" tabindex="0" data-bench="chacha20-poly1305 decrypt" data-arm="function" data-vals='{&quot;M4&quot;: 3.5859, &quot;M5&quot;: 4.7916, &quot;gem5 serialising&quot;: 1.9001569584931985, &quot;gem5 renamed&quot;: 1.0269881409138473}'/><rect class="hit" x="165.0" y="26" width="60.5" height="170" tabindex="0" data-bench="chacha20-poly1305 decrypt" data-arm="region" data-vals='{&quot;M4&quot;: 3.6217, &quot;M5&quot;: 4.904, &quot;gem5 serialising&quot;: 1.8905650505755145, &quot;gem5 renamed&quot;: 1.0257237530519707}'/><rect class="hit" x="225.5" y="26" width="60.5" height="170" tabindex="0" data-bench="chacha20-poly1305 decrypt" data-arm="fine" data-vals='{&quot;M4&quot;: 4.7164, &quot;M5&quot;: 6.2127, &quot;gem5 serialising&quot;: 2.121642832228811, &quot;gem5 renamed&quot;: 1.0446459713986747}'/></g>
+<g transform="translate(0,256)"><rect class="panel" x="0" y="0" width="300" height="230" rx="6"/><text class="ptitle" x="44" y="16">aes256-gcm encrypt</text><line class="base" x1="44" x2="286" y1="190.5" y2="190.5"/><text class="tick" x="38" y="194.0" text-anchor="end">1×</text><line class="grid" x1="44" x2="286" y1="159.5" y2="159.5"/><text class="tick" x="38" y="163.0" text-anchor="end">1.5×</text><line class="grid" x1="44" x2="286" y1="137.5" y2="137.5"/><text class="tick" x="38" y="141.0" text-anchor="end">2×</text><line class="grid" x1="44" x2="286" y1="106.5" y2="106.5"/><text class="tick" x="38" y="110.0" text-anchor="end">3×</text><line class="grid" x1="44" x2="286" y1="84.5" y2="84.5"/><text class="tick" x="38" y="88.0" text-anchor="end">4×</text><line class="grid" x1="44" x2="286" y1="53.5" y2="53.5"/><text class="tick" x="38" y="57.0" text-anchor="end">6×</text><line class="grid" x1="44" x2="286" y1="31.5" y2="31.5"/><text class="tick" x="38" y="35.0" text-anchor="end">8×</text><text class="xlab" x="74.2" y="212" text-anchor="middle">blanket</text><text class="xlab" x="134.8" y="212" text-anchor="middle">function</text><text class="xlab" x="195.2" y="212" text-anchor="middle">region</text><text class="xlab" x="255.8" y="212" text-anchor="middle">fine</text><polyline class="line s1" points="74.2,190.3 134.8,98.8 195.2,98.3 255.8,66.9"/><polyline class="line s2" points="74.2,189.7 134.8,65.3 195.2,63.4 255.8,40.6"/><polyline class="line s3" points="74.2,190.3 134.8,170.2 195.2,171.0 255.8,160.1"/><polyline class="line s3 hollow" points="74.2,190.3 134.8,191.0 195.2,191.0 255.8,190.1"/><circle class="ring" cx="74.2" cy="190.3" r="6.5"/><circle class="mark s1" cx="74.2" cy="190.3" r="4.5"/><circle class="ring" cx="134.8" cy="98.8" r="6.5"/><circle class="mark s1" cx="134.8" cy="98.8" r="4.5"/><circle class="ring" cx="195.2" cy="98.3" r="6.5"/><circle class="mark s1" cx="195.2" cy="98.3" r="4.5"/><circle class="ring" cx="255.8" cy="66.9" r="6.5"/><circle class="mark s1" cx="255.8" cy="66.9" r="4.5"/><circle class="ring" cx="74.2" cy="189.7" r="6.5"/><circle class="mark s2" cx="74.2" cy="189.7" r="4.5"/><circle class="ring" cx="134.8" cy="65.3" r="6.5"/><circle class="mark s2" cx="134.8" cy="65.3" r="4.5"/><circle class="ring" cx="195.2" cy="63.4" r="6.5"/><circle class="mark s2" cx="195.2" cy="63.4" r="4.5"/><circle class="ring" cx="255.8" cy="40.6" r="6.5"/><circle class="mark s2" cx="255.8" cy="40.6" r="4.5"/><circle class="ring" cx="74.2" cy="190.3" r="6.5"/><circle class="mark s3" cx="74.2" cy="190.3" r="4.5"/><circle class="ring" cx="134.8" cy="170.2" r="6.5"/><circle class="mark s3" cx="134.8" cy="170.2" r="4.5"/><circle class="ring" cx="195.2" cy="171.0" r="6.5"/><circle class="mark s3" cx="195.2" cy="171.0" r="4.5"/><circle class="ring" cx="255.8" cy="160.1" r="6.5"/><circle class="mark s3" cx="255.8" cy="160.1" r="4.5"/><circle class="ring" cx="74.2" cy="190.3" r="6.5"/><circle class="mark s3 hollow" cx="74.2" cy="190.3" r="4.5"/><circle class="ring" cx="134.8" cy="191.0" r="6.5"/><circle class="mark s3 hollow" cx="134.8" cy="191.0" r="4.5"/><circle class="ring" cx="195.2" cy="191.0" r="6.5"/><circle class="mark s3 hollow" cx="195.2" cy="191.0" r="4.5"/><circle class="ring" cx="255.8" cy="190.1" r="6.5"/><circle class="mark s3 hollow" cx="255.8" cy="190.1" r="4.5"/><text class="dlab" x="264.8" y="44.1">7.10×</text><text class="dlab" x="264.8" y="193.6">1.00×</text><rect class="hit" x="44.0" y="26" width="60.5" height="170" tabindex="0" data-bench="aes256-gcm encrypt" data-arm="blanket" data-vals='{&quot;M4&quot;: 1.0015, &quot;M5&quot;: 1.0096, &quot;gem5 serialising&quot;: 1.001394242598212, &quot;gem5 renamed&quot;: 1.001394242598212}'/><rect class="hit" x="104.5" y="26" width="60.5" height="170" tabindex="0" data-bench="aes256-gcm encrypt" data-arm="function" data-vals='{&quot;M4&quot;: 3.3165, &quot;M5&quot;: 5.1441, &quot;gem5 serialising&quot;: 1.3040269006807186, &quot;gem5 renamed&quot;: 0.9923726728450751}'/><rect class="hit" x="165.0" y="26" width="60.5" height="170" tabindex="0" data-bench="aes256-gcm encrypt" data-arm="region" data-vals='{&quot;M4&quot;: 3.3389, &quot;M5&quot;: 5.2735, &quot;gem5 serialising&quot;: 1.2900844746985975, &quot;gem5 renamed&quot;: 0.9923726728450751}'/><rect class="hit" x="225.5" y="26" width="60.5" height="170" tabindex="0" data-bench="aes256-gcm encrypt" data-arm="fine" data-vals='{&quot;M4&quot;: 5.0391, &quot;M5&quot;: 7.1021, &quot;gem5 serialising&quot;: 1.4867546953169852, &quot;gem5 renamed&quot;: 1.0046748134175347}'/></g>
+<g transform="translate(322,256)"><rect class="panel" x="0" y="0" width="300" height="230" rx="6"/><text class="ptitle" x="44" y="16">aes256-gcm decrypt</text><line class="base" x1="44" x2="286" y1="190.5" y2="190.5"/><line class="grid" x1="44" x2="286" y1="159.5" y2="159.5"/><line class="grid" x1="44" x2="286" y1="137.5" y2="137.5"/><line class="grid" x1="44" x2="286" y1="106.5" y2="106.5"/><line class="grid" x1="44" x2="286" y1="84.5" y2="84.5"/><line class="grid" x1="44" x2="286" y1="53.5" y2="53.5"/><line class="grid" x1="44" x2="286" y1="31.5" y2="31.5"/><text class="xlab" x="74.2" y="212" text-anchor="middle">blanket</text><text class="xlab" x="134.8" y="212" text-anchor="middle">function</text><text class="xlab" x="195.2" y="212" text-anchor="middle">region</text><text class="xlab" x="255.8" y="212" text-anchor="middle">fine</text><polyline class="line s1" points="74.2,189.8 134.8,109.0 195.2,107.8 255.8,96.9"/><polyline class="line s2" points="74.2,189.6 134.8,83.1 195.2,81.8 255.8,75.4"/><polyline class="line s3" points="74.2,184.3 134.8,156.9 195.2,158.9 255.8,160.8"/><polyline class="line s3 hollow" points="74.2,184.3 134.8,182.1 195.2,184.4 255.8,189.7"/><circle class="ring" cx="74.2" cy="189.8" r="6.5"/><circle class="mark s1" cx="74.2" cy="189.8" r="4.5"/><circle class="ring" cx="134.8" cy="109.0" r="6.5"/><circle class="mark s1" cx="134.8" cy="109.0" r="4.5"/><circle class="ring" cx="195.2" cy="107.8" r="6.5"/><circle class="mark s1" cx="195.2" cy="107.8" r="4.5"/><circle class="ring" cx="255.8" cy="96.9" r="6.5"/><circle class="mark s1" cx="255.8" cy="96.9" r="4.5"/><circle class="ring" cx="74.2" cy="189.6" r="6.5"/><circle class="mark s2" cx="74.2" cy="189.6" r="4.5"/><circle class="ring" cx="134.8" cy="83.1" r="6.5"/><circle class="mark s2" cx="134.8" cy="83.1" r="4.5"/><circle class="ring" cx="195.2" cy="81.8" r="6.5"/><circle class="mark s2" cx="195.2" cy="81.8" r="4.5"/><circle class="ring" cx="255.8" cy="75.4" r="6.5"/><circle class="mark s2" cx="255.8" cy="75.4" r="4.5"/><circle class="ring" cx="74.2" cy="184.3" r="6.5"/><circle class="mark s3" cx="74.2" cy="184.3" r="4.5"/><circle class="ring" cx="134.8" cy="156.9" r="6.5"/><circle class="mark s3" cx="134.8" cy="156.9" r="4.5"/><circle class="ring" cx="195.2" cy="158.9" r="6.5"/><circle class="mark s3" cx="195.2" cy="158.9" r="4.5"/><circle class="ring" cx="255.8" cy="160.8" r="6.5"/><circle class="mark s3" cx="255.8" cy="160.8" r="4.5"/><circle class="ring" cx="74.2" cy="184.3" r="6.5"/><circle class="mark s3 hollow" cx="74.2" cy="184.3" r="4.5"/><circle class="ring" cx="134.8" cy="182.1" r="6.5"/><circle class="mark s3 hollow" cx="134.8" cy="182.1" r="4.5"/><circle class="ring" cx="195.2" cy="184.4" r="6.5"/><circle class="mark s3 hollow" cx="195.2" cy="184.4" r="4.5"/><circle class="ring" cx="255.8" cy="189.7" r="6.5"/><circle class="mark s3 hollow" cx="255.8" cy="189.7" r="4.5"/><text class="dlab" x="264.8" y="78.9">4.51×</text><text class="dlab" x="264.8" y="193.2">1.01×</text><rect class="hit" x="44.0" y="26" width="60.5" height="170" tabindex="0" data-bench="aes256-gcm decrypt" data-arm="blanket" data-vals='{&quot;M4&quot;: 1.0081, &quot;M5&quot;: 1.0116, &quot;gem5 serialising&quot;: 1.0841052921214345, &quot;gem5 renamed&quot;: 1.0841052921214345}'/><rect class="hit" x="104.5" y="26" width="60.5" height="170" tabindex="0" data-bench="aes256-gcm decrypt" data-arm="function" data-vals='{&quot;M4&quot;: 2.9016, &quot;M5&quot;: 4.0735, &quot;gem5 serialising&quot;: 1.5518664587728148, &quot;gem5 renamed&quot;: 1.1148307805191233}'/><rect class="hit" x="165.0" y="26" width="60.5" height="170" tabindex="0" data-bench="aes256-gcm decrypt" data-arm="region" data-vals='{&quot;M4&quot;: 2.9496, &quot;M5&quot;: 4.1435, &quot;gem5 serialising&quot;: 1.5105934146565165, &quot;gem5 renamed&quot;: 1.0822709346051547}'/><rect class="hit" x="225.5" y="26" width="60.5" height="170" tabindex="0" data-bench="aes256-gcm decrypt" data-arm="fine" data-vals='{&quot;M4&quot;: 3.4014, &quot;M5&quot;: 4.5052, &quot;gem5 serialising&quot;: 1.4739062643309182, &quot;gem5 renamed&quot;: 1.0098138127120977}'/></g>
+<g transform="translate(644,256)"><rect class="panel" x="0" y="0" width="300" height="230" rx="6"/><text class="ptitle" x="44" y="16">argon2id</text><line class="base" x1="44" x2="286" y1="190.5" y2="190.5"/><line class="grid" x1="44" x2="286" y1="159.5" y2="159.5"/><line class="grid" x1="44" x2="286" y1="137.5" y2="137.5"/><line class="grid" x1="44" x2="286" y1="106.5" y2="106.5"/><line class="grid" x1="44" x2="286" y1="84.5" y2="84.5"/><line class="grid" x1="44" x2="286" y1="53.5" y2="53.5"/><line class="grid" x1="44" x2="286" y1="31.5" y2="31.5"/><text class="xlab" x="74.2" y="212" text-anchor="middle">blanket</text><text class="xlab" x="134.8" y="212" text-anchor="middle">function</text><text class="xlab" x="195.2" y="212" text-anchor="middle">region</text><text class="xlab" x="255.8" y="212" text-anchor="middle">fine</text><polyline class="line s1" points="74.2,190.6 134.8,190.8 195.2,190.7 255.8,190.8"/><polyline class="line s2" points="74.2,190.6 134.8,190.6 195.2,190.4 255.8,190.4"/><polyline class="line s3" points="74.2,189.8 134.8,191.7 195.2,189.4 255.8,190.1"/><polyline class="line s3 hollow" points="74.2,189.8 134.8,191.6 195.2,189.4 255.8,190.1"/><circle class="ring" cx="74.2" cy="190.6" r="6.5"/><circle class="mark s1" cx="74.2" cy="190.6" r="4.5"/><circle class="ring" cx="134.8" cy="190.8" r="6.5"/><circle class="mark s1" cx="134.8" cy="190.8" r="4.5"/><circle class="ring" cx="195.2" cy="190.7" r="6.5"/><circle class="mark s1" cx="195.2" cy="190.7" r="4.5"/><circle class="ring" cx="255.8" cy="190.8" r="6.5"/><circle class="mark s1" cx="255.8" cy="190.8" r="4.5"/><circle class="ring" cx="74.2" cy="190.6" r="6.5"/><circle class="mark s2" cx="74.2" cy="190.6" r="4.5"/><circle class="ring" cx="134.8" cy="190.6" r="6.5"/><circle class="mark s2" cx="134.8" cy="190.6" r="4.5"/><circle class="ring" cx="195.2" cy="190.4" r="6.5"/><circle class="mark s2" cx="195.2" cy="190.4" r="4.5"/><circle class="ring" cx="255.8" cy="190.4" r="6.5"/><circle class="mark s2" cx="255.8" cy="190.4" r="4.5"/><circle class="ring" cx="74.2" cy="189.8" r="6.5"/><circle class="mark s3" cx="74.2" cy="189.8" r="4.5"/><circle class="ring" cx="134.8" cy="191.7" r="6.5"/><circle class="mark s3" cx="134.8" cy="191.7" r="4.5"/><circle class="ring" cx="195.2" cy="189.4" r="6.5"/><circle class="mark s3" cx="195.2" cy="189.4" r="4.5"/><circle class="ring" cx="255.8" cy="190.1" r="6.5"/><circle class="mark s3" cx="255.8" cy="190.1" r="4.5"/><circle class="ring" cx="74.2" cy="189.8" r="6.5"/><circle class="mark s3 hollow" cx="74.2" cy="189.8" r="4.5"/><circle class="ring" cx="134.8" cy="191.6" r="6.5"/><circle class="mark s3 hollow" cx="134.8" cy="191.6" r="4.5"/><circle class="ring" cx="195.2" cy="189.4" r="6.5"/><circle class="mark s3 hollow" cx="195.2" cy="189.4" r="4.5"/><circle class="ring" cx="255.8" cy="190.1" r="6.5"/><circle class="mark s3 hollow" cx="255.8" cy="190.1" r="4.5"/><text class="dlab" x="264.8" y="193.9">all ≈ 1.0×</text><rect class="hit" x="44.0" y="26" width="60.5" height="170" tabindex="0" data-bench="argon2id" data-arm="blanket" data-vals='{&quot;M4&quot;: 0.9981, &quot;M5&quot;: 0.9977, &quot;gem5 serialising&quot;: 1.0082862686029292, &quot;gem5 renamed&quot;: 1.0082862686029292}'/><rect class="hit" x="104.5" y="26" width="60.5" height="170" tabindex="0" data-bench="argon2id" data-arm="function" data-vals='{&quot;M4&quot;: 0.9958, &quot;M5&quot;: 0.9977, &quot;gem5 serialising&quot;: 0.9841223018069372, &quot;gem5 renamed&quot;: 0.9848419475320582}'/><rect class="hit" x="165.0" y="26" width="60.5" height="170" tabindex="0" data-bench="argon2id" data-arm="region" data-vals='{&quot;M4&quot;: 0.9963, &quot;M5&quot;: 1.0002, &quot;gem5 serialising&quot;: 1.014169641844288, &quot;gem5 renamed&quot;: 1.0135291406152047}'/><rect class="hit" x="225.5" y="26" width="60.5" height="170" tabindex="0" data-bench="argon2id" data-arm="fine" data-vals='{&quot;M4&quot;: 0.9955, &quot;M5&quot;: 1.0008, &quot;gem5 serialising&quot;: 1.0049045950438933, &quot;gem5 renamed&quot;: 1.0046905506542074}'/></g>
+</svg>
+    <div class="tip" id="tip" hidden></div>
+    <p class="axisnote">y: overhead vs baseline, log scale &middot; 1&times; is the baseline itself &middot; labels mark the M5 and gem5-renamed values at the finest placement</p>
+  </div>
+
+  <div class="notes">
+    <div class="note"><b>Why a log axis.</b> The values run from 0.98&times; to 7.10&times;. On a linear
+    axis every &asymp;1.0&times; point would collapse into the baseline, and those points are the
+    result: blanket is free everywhere, and the renamed switch makes every placement free.</div>
+    <div class="note"><b>The M5 is the steepest and gem5 the shallowest</b> because the switch itself
+    costs 43.6, 33.4 and 19&ndash;37 cycles on the three, and gem5's baseline is 2&ndash;4&times; longer.
+    Same ordering on all three; the magnitudes are per-core.</div>
+    <div class="note"><b>Function vs region on gem5 is inside the rig's resolution.</b> Those two sit
+    within a point or two of each other; the rig resolves cross-policy gaps of ~10 points, not one.
+    The fine arm's gap is real on every instrument.</div>
+    <div class="note"><b>Layout is controlled, not ignored.</b> Silicon carries a NOP-switch twin (arm Z:
+    1.077&times; on M5, 1.087&times; on M4 for aes-gcm encrypt); gem5 carries one twin per policy.
+    These ratios are the raw arms; the twin-corrected placement ranking is in the write-up.</div>
+  </div>
+
+  <button class="tbtn" id="tbtn" aria-expanded="false" aria-controls="tbl">Show the values as a table</button>
+  <div class="scroll" id="tbl" hidden>
+    <table>
+      <thead><tr><th>benchmark</th><th>placement</th><th>M4</th><th>M5</th><th>gem5 serialising</th><th>gem5 renamed</th></tr></thead>
+      <tbody>
+<tr><td>ed25519 sign</td><td>blanket</td><td>1.01×</td><td>1.01×</td><td>1.01×</td><td>1.01×</td></tr>
+<tr><td>ed25519 sign</td><td>function</td><td>1.09×</td><td>1.13×</td><td>1.02×</td><td>0.99×</td></tr>
+<tr><td>ed25519 sign</td><td>region</td><td>1.09×</td><td>1.13×</td><td>1.02×</td><td>0.99×</td></tr>
+<tr><td>ed25519 sign</td><td>fine</td><td>1.15×</td><td>1.27×</td><td>1.06×</td><td>1.01×</td></tr>
+<tr><td>chacha20-poly1305 encrypt</td><td>blanket</td><td>1.01×</td><td>1.01×</td><td>1.02×</td><td>1.02×</td></tr>
+<tr><td>chacha20-poly1305 encrypt</td><td>function</td><td>3.41×</td><td>4.75×</td><td>1.88×</td><td>1.00×</td></tr>
+<tr><td>chacha20-poly1305 encrypt</td><td>region</td><td>3.43×</td><td>4.83×</td><td>1.82×</td><td>1.00×</td></tr>
+<tr><td>chacha20-poly1305 encrypt</td><td>fine</td><td>4.41×</td><td>6.09×</td><td>2.07×</td><td>1.03×</td></tr>
+<tr><td>chacha20-poly1305 decrypt</td><td>blanket</td><td>1.02×</td><td>1.02×</td><td>1.03×</td><td>1.03×</td></tr>
+<tr><td>chacha20-poly1305 decrypt</td><td>function</td><td>3.59×</td><td>4.79×</td><td>1.90×</td><td>1.03×</td></tr>
+<tr><td>chacha20-poly1305 decrypt</td><td>region</td><td>3.62×</td><td>4.90×</td><td>1.89×</td><td>1.03×</td></tr>
+<tr><td>chacha20-poly1305 decrypt</td><td>fine</td><td>4.72×</td><td>6.21×</td><td>2.12×</td><td>1.04×</td></tr>
+<tr><td>aes256-gcm encrypt</td><td>blanket</td><td>1.00×</td><td>1.01×</td><td>1.00×</td><td>1.00×</td></tr>
+<tr><td>aes256-gcm encrypt</td><td>function</td><td>3.32×</td><td>5.14×</td><td>1.30×</td><td>0.99×</td></tr>
+<tr><td>aes256-gcm encrypt</td><td>region</td><td>3.34×</td><td>5.27×</td><td>1.29×</td><td>0.99×</td></tr>
+<tr><td>aes256-gcm encrypt</td><td>fine</td><td>5.04×</td><td>7.10×</td><td>1.49×</td><td>1.00×</td></tr>
+<tr><td>aes256-gcm decrypt</td><td>blanket</td><td>1.01×</td><td>1.01×</td><td>1.08×</td><td>1.08×</td></tr>
+<tr><td>aes256-gcm decrypt</td><td>function</td><td>2.90×</td><td>4.07×</td><td>1.55×</td><td>1.11×</td></tr>
+<tr><td>aes256-gcm decrypt</td><td>region</td><td>2.95×</td><td>4.14×</td><td>1.51×</td><td>1.08×</td></tr>
+<tr><td>aes256-gcm decrypt</td><td>fine</td><td>3.40×</td><td>4.51×</td><td>1.47×</td><td>1.01×</td></tr>
+<tr><td>argon2id</td><td>blanket</td><td>1.00×</td><td>1.00×</td><td>1.01×</td><td>1.01×</td></tr>
+<tr><td>argon2id</td><td>function</td><td>1.00×</td><td>1.00×</td><td>0.98×</td><td>0.98×</td></tr>
+<tr><td>argon2id</td><td>region</td><td>1.00×</td><td>1.00×</td><td>1.01×</td><td>1.01×</td></tr>
+<tr><td>argon2id</td><td>fine</td><td>1.00×</td><td>1.00×</td><td>1.00×</td><td>1.00×</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  M4 and M5 from paper_experiments/09-libsodium-cio-parity/data/m{4,5}_results_ratios.csv (cntvct rows) &middot;
+  gem5 from data/gem5_switch_model.csv, plus gem5_argon2id.csv (pre-fix sweep; re-run in progress)<br>
+  arms: C blanket &middot; F function &middot; P region &middot; X old defaults &mdash; identical placement on all three instruments
+  (108 functions, 21/21 seeded entry points)
+</footer>
+</div>
+<script>
+(function(){
+  var fig=document.getElementById('fig'), tip=document.getElementById('tip');
+  var order=[["M4","M4 silicon","var(--s1)"],["M5","M5 silicon","var(--s2)"],
+             ["gem5 serialising","gem5 serialising","var(--s3)"],["gem5 renamed","gem5 renamed","var(--s3)"]];
+  function show(el,ev){
+    var vals; try{ vals=JSON.parse(el.getAttribute('data-vals')); }catch(e){ return; }
+    while(tip.firstChild) tip.removeChild(tip.firstChild);
+    var h=document.createElement('div'); h.className='h';
+    h.textContent=el.getAttribute('data-bench')+' · '+el.getAttribute('data-arm')+' placement'; tip.appendChild(h);
+    order.forEach(function(o){
+      var r=document.createElement('div'); r.className='r';
+      var l=document.createElement('span'); var k=document.createElement('i'); k.style.background=o[2];
+      if(o[0]==='gem5 renamed') k.style.opacity='.45';
+      l.appendChild(k); l.appendChild(document.createTextNode(o[1]));
+      var b=document.createElement('b'); var v=vals[o[0]];
+      b.textContent = (v==null) ? '—' : (Math.round(v*1000)/1000).toFixed(3)+'×';
+      r.appendChild(l); r.appendChild(b); tip.appendChild(r);
+    });
+    tip.hidden=false;
+    var fr=fig.getBoundingClientRect(), er=el.getBoundingClientRect();
+    var left=er.left-fr.left+er.width/2-90, top=er.top-fr.top-tip.offsetHeight-8;
+    if(top<0) top=er.bottom-fr.top+8;
+    left=Math.max(6,Math.min(left,fr.width-tip.offsetWidth-6));
+    tip.style.left=left+'px'; tip.style.top=top+'px';
+  }
+  function hide(){ tip.hidden=true; }
+  fig.querySelectorAll('.hit').forEach(function(el){
+    el.addEventListener('pointerenter',function(e){show(el,e)});
+    el.addEventListener('pointerleave',hide);
+    el.addEventListener('focus',function(e){show(el,e)});
+    el.addEventListener('blur',hide);
+  });
+  var btn=document.getElementById('tbtn'), tbl=document.getElementById('tbl');
+  btn.addEventListener('click',function(){
+    var open=tbl.hidden; tbl.hidden=!open;
+    btn.setAttribute('aria-expanded', open?'true':'false');
+    btn.textContent = open ? 'Hide the table' : 'Show the values as a table';
+  });
+})();
+</script>
