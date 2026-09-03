@@ -710,6 +710,49 @@ precautionary.** The shipped answer for this workload is the seed line the
 information-loss report already prints. That is also the cheapest answer, needs
 no new analysis, and is the one the compiler can suggest on its own.
 
+### The residual 126: not a leak, and not fixable by taint analysis
+
+The best arm leaks 126 operations. Attributed:
+
+| ops | site |
+|---|---|
+| 112 | `hydro_hash_update`, `buf[state->buf_off + i] ^= in[i]`, inlined into `hydro_sign_challenge` at `sign.h:30` |
+| 12 | `hydro_hash_final`, `memcpy(out + i * gimli_RATE, buf, gimli_RATE)` |
+| 2 | `main`, the harness reading `sig[0]` |
+
+**A hypothesis that was tested and REFUTED.** libhydrogen's 64-byte `sk` is
+`[32-byte secret scalar][32-byte PUBLIC key]` - `hydro_sign_prehash` does
+`pk = &sk[32]` and `hydro_sign_challenge` absorbs that `pk` into a hash - so
+seeding all 64 bytes marks the public key secret. That looked like the whole
+residual. Reseeding only the secret half changed the under-taint count **not at
+all**: 126 either way, with 32 fewer *protected* ops (the pk bytes no longer
+tracked). Recorded because it is a plausible story that happens to be wrong.
+
+**What it actually is: declassification.** `sign.h:30` is
+`hydro_hash_update(&st, nonce, ...)`, and two lines earlier
+`hydro_x25519_scalarmult_base_uniform(nonce, eph_sk)` computes that nonce from
+the ephemeral secret. So `nonce` IS secret-derived - and it is `csig[0..32)`,
+**published as half the signature**. The challenge written at `hash.h:110` is the
+same: `c = H(R, A, M)`, a public value. The two `main` ops are the harness
+reading `sig[0]`.
+
+All 126 are values the scheme **publishes on purpose**. The scalar multiply that
+*derives* the nonce from the secret is protected (that is the part that must be
+constant-time); absorbing the already-public result into a hash afterwards leaks
+nothing, because it is about to be transmitted.
+
+**So the taint analysis is not wrong here, and no amount of provenance work will
+change the number.** The oracle counts them because it tracks derivation and has
+no notion of a value becoming public. The missing feature is a declassification
+tag - CryptoMPK's `sinktaint`, which `related-work.md` §3a already records as
+"the one thing to take from them outright" and which we do not have.
+
+**Revised soundness statement for this benchmark.** With the seed line the
+information-loss report prints, **every secret-carrying operation that is not a
+published output runs with PSTATE.DIT set**, on this path, under this driver, in
+gem5. That is as far as this instrument can go, and the residual is a missing
+annotation kind rather than a missing analysis.
+
 ### Prior art for §3c (partial)
 
 Searched 2026-09-02. **Andromeda, TaintDroid and all GCC quotes below were
