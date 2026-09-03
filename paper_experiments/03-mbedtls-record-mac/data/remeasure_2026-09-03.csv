@@ -1,0 +1,19 @@
+# Re-measurement after the phi fix (getCellFromMMO looks through PHI nodes,
+# docs/design/frame-address-gap.md). That fix is unflagged and default-on, and it
+# took this library from 41 to 49 msr DIT - concentrated in exactly the path this
+# experiment measures (mbedtls_md_finish 6->8, mbedtls_md_hmac_update 1->3).
+#
+# Apple M5, mbedTLS 3.6.2, ilp public lane, REPS 7/7/11 over three runs, machine
+# otherwise idle. Columns are medians across runs, with the min/max of the three.
+# region_vs_blanket is computed as (1+region)/(1+blanket)-1, both being vs no-DIT.
+#
+# HEADLINE UNCHANGED: region still beats function everywhere, growing with region
+# size to about -13%. WHAT MOVED: the region-vs-blanket crossover, which was at
+# 1,024 B and is now between 1,024 and 4,096 B - consistent with +19.5% more
+# switches hurting most where regions are small.
+chunk_bytes,region_vs_function_pct,rvf_min,rvf_max,rvf_recorded,region_vs_blanket_pct,rvb_min,rvb_max,rvb_recorded
+64,-0.36,-0.49,-0.34,-1.17,47.9,45,48,33.2
+256,-3.03,-3.32,-2.90,-2.64,24.1,22,24,16.9
+1024,-6.81,-7.21,-5.00,-7.56,3.1,2,4,-0.6
+4096,-12.54,-12.72,-11.93,-12.70,-10.1,-10,-9,-10.8
+16384,-13.56,-13.68,-9.79,-13.84,-12.9,-13,-9,-13.4
