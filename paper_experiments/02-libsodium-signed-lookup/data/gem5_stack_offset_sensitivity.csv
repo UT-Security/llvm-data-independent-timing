@@ -1,0 +1,11 @@
+# provenance: run 2026-09-03 on an aarch64 Linux host (Neoverse-N1, native static build, no sysroot); gem5-DIT 6608290fbd with the signed_lookup rig changes of 2026-09-03; clang from llvm-data-independent-timing 2049d4d4e9b2 build; libsodium 1.0.21 with the CIO chacha20_ref.c rename patch; gem5.fast built 2026-09-02 01:12.
+# METHOD: the same binary (retired ed25519 driver, L=500, 37 requests) run with only the length of argv[0] changed. gem5 SE puts argv[0] on the initial stack, so its length shifts stack alignment for the whole run; the signing code's stack buffers then land differently against the value predictor and DMP. Cycles moved -4%..+4% for both arms, so every table in this experiment is the median over 5 such offsets.
+arm,argv0_len,cycles
+base,175,2864438
+base,177,2929130
+base,183,2936750
+base,193,2816808
+blanket,178,2776379
+blanket,180,2832490
+blanket,186,2966691
+blanket,196,2827745

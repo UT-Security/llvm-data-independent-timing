@@ -1,10 +1,16 @@
-# Mechanism: gem5, public lane alone (--nosign). The counter silicon cannot expose.
-L,arm,insts,cycles,ipc,vp_predictions,vp_preds_per_1k_insts
-500,nodit,14100009,12935761,1.090,3594253,254.91
-500,blanket,14100009,26742062,0.527,11998,0.85
-5000,nodit,14010009,12237089,1.145,3993729,285.06
-5000,blanket,14010009,27851361,0.503,1197,0.09
-20000,nodit,14002509,12158571,1.152,3998592,285.56
-20000,blanket,14002509,27964899,0.501,297,0.02
-60000,nodit,13860834,12030037,1.152,3959291,285.65
-60000,blanket,13860834,27707791,0.500,59,0.00
+# provenance: run 2026-09-03 on an aarch64 Linux host (Neoverse-N1, native static build, no sysroot); gem5-DIT 6608290fbd with the signed_lookup rig changes of 2026-09-03; clang from llvm-data-independent-timing 2049d4d4e9b2 build; libsodium 1.0.21 with the CIO chacha20_ref.c rename patch; gem5.fast built 2026-09-02 01:12.
+# CANONICAL lane, public lane alone (--nosecret): value predictor totals with and without DIT.
+# Mechanism: gem5, public lane alone (--nosecret).
+L,pred_q4,arm,insts,cycles,ipc,vp_predictions,vp_preds_per_1k_insts
+10,3,nodit,297611,123312,2.413,51623,173.46
+10,3,blanket,297611,167403,1.778,11202,37.64
+50,3,nodit,1119011,877438,1.275,96096,85.88
+50,3,blanket,1119011,1186524,0.943,10494,9.38
+200,3,nodit,3611891,4023969,0.898,389599,107.87
+200,3,blanket,3611891,5281939,0.684,8883,2.46
+1000,3,nodit,9409491,11292314,0.833,1182008,125.62
+1000,3,blanket,9409491,14845538,0.634,4683,0.50
+5000,3,nodit,14008811,17071864,0.821,1751833,125.05
+5000,3,blanket,14008811,22431803,0.625,1395,0.10
+20000,3,nodit,15402431,18868862,0.816,1925132,124.99
+20000,3,blanket,15402431,24730990,0.623,380,0.02
