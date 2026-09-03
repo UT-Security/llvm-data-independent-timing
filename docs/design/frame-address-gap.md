@@ -1249,6 +1249,40 @@ That costs no performance, needs no policy decision, and turns a silent 97.61%
 into a line the developer can act on. **It should land before either half of the
 placement fix.**
 
+## 6b. What to ship
+
+**Ship exactly what is in the tree now.** Nothing here needs a default changed.
+
+| change | ship as | why |
+|---|---|---|
+| **phi fix** in `getCellFromMMO` | **ON, unflagged** | a bug fix, not a knob: free on both workloads (libsodium 134 -> 134, libhydrogen 27 -> 28) and 8x more protected operations |
+| `-taint-frame-addr-args` (gap A) | **OFF** | +13.4% switches on libsodium, and 14,000x worse on libhydrogen's best config |
+| `-taint-arg-provenance` (B1) | **OFF** | free, but closes no leak alone; its value is as B2's substrate |
+| `-taint-arg-pointee-args` (B2) | **OFF** | closes gap B on the repros and regresses the real workload |
+| `-taint-libc-model` | **OFF** | produces the right fact; same regression when acted on |
+| `declassify` seed kind | **available, opt-in** | costs nothing unused, and is the only way to say "this is published" |
+| placement defaults | **unchanged** | nothing measured here bears on them |
+
+**The reason the four flags stay off is one mechanism, not four coincidences.**
+Each of them makes the analysis name the secret more accurately; more accurate
+naming narrows the regions; narrower regions give up the incidental blanket
+coverage that was protecting the curve. The net was negative every time it was
+measured against the oracle, by three to five orders of magnitude. **That is a
+property of the placement policy, not of the analyses** - which is the real
+finding to carry forward.
+
+**Two caveats on this recommendation.**
+
+- **The flag evidence is mostly one workload.** libhydrogen carried the oracle
+  measurements; libsodium has cost numbers for two of the four; **libsecp256k1
+  was never re-measured**, and that is where gap A's historical false positives
+  were. The mechanism argument generalises, the numbers do not.
+- **The seed decides, not the config.** On libhydrogen the shipped default leaves
+  **80.85%** of secret operations unprotected with the annotation a developer
+  writes first, and **0.03%** after one more line. No flag setting moves it as
+  far as that line does. Shipping guidance therefore has to be "read the
+  information-loss report and act on it", not "pick these flags".
+
 ## 7. Order of work
 
 1. **Report the gap** (§6). Unconditional, no cost, closes the tooling hole, and
