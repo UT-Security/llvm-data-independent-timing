@@ -41,6 +41,44 @@ And the knob is region size, not secret fraction: total bytes fixed at 8 MB,
 `f_secret` held at 54-74%, chunk swept 64 B -> 16 KB so the region moves 256x and
 the region *count* moves the other way.
 
+## Re-measured 2026-09-03 after the phi fix
+
+The phi fix (`docs/design/frame-address-gap.md`) is unflagged and default-on, and
+it took this library from **41 to 49** `msr DIT` - concentrated in exactly the
+path this experiment measures (`mbedtls_md_finish` 6 -> 8,
+`mbedtls_md_hmac_update` 1 -> 3). Three runs, machine idle, `data/remeasure_2026-09-03.csv`.
+
+**The headline is unchanged.** Region still beats function at every point,
+growing with region size, and the numbers land on the recorded ones within
+run-to-run spread:
+
+| chunk | region vs function, now | recorded |
+|---|---|---|
+| 64 B | -0.36% | -1.17% |
+| 256 B | -3.03% | -2.64% |
+| 1,024 B | -6.81% | -7.56% |
+| 4,096 B | -12.54% | -12.70% |
+| 16,384 B | -13.56% | -13.84% |
+
+**What moved is the crossover against blanket.** Region's absolute cost rose where
+toggling dominates, which is what +19.5% more switches should do:
+
+| chunk | region vs blanket, now | recorded |
+|---|---|---|
+| 64 B | **+47.9%** | +33.2% |
+| 256 B | **+24.1%** | +16.9% |
+| 1,024 B | **+3.1%** | **-0.6%** <- was the crossover |
+| 4,096 B | -10.1% | -10.8% |
+| 16,384 B | -12.9% | -13.4% |
+
+**The crossover has moved from 1,024 B to somewhere between 1,024 and 4,096 B.**
+The large-chunk end is unchanged; only the small-region regime got worse, which is
+the regime where switch count is the cost.
+
+**A note on variance.** Run-to-run spread at 16,384 B is -9.8% to -13.7% on the
+same binaries - single runs do not resolve that end of the sweep, and the table
+above reports medians of three. The recorded figures sit inside that spread.
+
 ## Headline results
 
 | chunk | us per secret region | **region vs function** | region vs blanket |

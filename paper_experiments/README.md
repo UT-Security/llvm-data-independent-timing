@@ -45,7 +45,8 @@ scope. Checked:
 | 04 | libsecp256k1 | **verified unaffected** - oracle re-run reproduces exactly: 4,647,778 protected, 40 clear, 2 sites, both in the harness, zero inside the library |
 | 02, 07, 09 | libsodium | **verified unaffected** - 134 switches either side, and the whole-library disassembly differs by exactly one `msr DIT, #0` moved four instructions within one epilogue (8 lines of 60,911) |
 | 08 | libhydrogen | **AFFECTED, already re-measured** - this is the experiment the fix came out of. Oracle 97.61% -> 80.85% unprotected on the natural seed, and the info-loss report's own repair line went from doing nothing to reaching 0.03% |
-| **03, 06** | mbedTLS | **AFFECTED** - rebuilt and compared: **41 -> 49 switches**, concentrated in the path 03 actually measures (`mbedtls_md_finish` 6 -> 8, `mbedtls_md_hmac_update` 1 -> 3). 4.9% of the library's instructions differ. 06 reuses 03's binaries, so it moves with it |
+| **03** | mbedTLS | **AFFECTED, re-measured 2026-09-03.** 41 -> 49 switches, in exactly the path it measures. **Headline intact** - region still beats function everywhere, -13.6% at 16 KB. **The blanket crossover moved** from 1,024 B to between 1,024 and 4,096 B, the small-region regime being where switch count is the cost |
+| **06** | mbedTLS | **AFFECTED, not re-run** - reuses 03's binaries, and its gem5 arms need rebuilding on the current compiler |
 | 01 | Bitcoin Core | **cannot be settled by comparison** - see below |
 | 05 | nginx + OpenSSL | **not settled** - the hardened objects are no longer on disk, so there is nothing to compare against; needs an OpenSSL rebuild |
 
