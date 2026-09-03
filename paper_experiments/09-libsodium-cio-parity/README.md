@@ -323,7 +323,7 @@ noise.
 | aes256-gcm encrypt | **-0.76%** | **+29.01%** | 15 |
 | aes256-gcm decrypt | **+8.23%** | **+51.06%** | 15 |
 | ed25519 sign | **-1.39%** | **+1.70%** | 85 |
-| argon2id | **+1.35%** | **+1.42%** | 438 |
+| argon2id | **+2.04%** | **+1.97%** | 438 |
 
 **The decomposition is confirmed causally rather than by ratio.** A renamed
 switch costs -0.3 to +0.3 cycles where the rig can resolve it; a serialising one costs 19.0 to 37.1. The
@@ -338,7 +338,9 @@ Three things this settles that silicon could not:
 - **argon2id's switch count.** `data/results_summary.csv` records
   `pass_switches_per_op = -197187` here - noise divided by noise, rendered
   honestly as "~0 (noise)" in the table above. The real figure is **438**, and
-  at 1.3 writes per million cycles the serialising penalty is +0.07 points.
+  at 1.35 writes per million cycles the serialising penalty is -0.07 points -
+  zero within noise - and `ditCycles` reads 100% in every hardened arm, which is
+  the dynamic confirmation that the whole hashing kernel runs with the mode on.
   Together with chacha20's 42,728 that is a 30,000x span on experiment 06's
   toggle-rate axis, whose previous range was 86 to 4,601.
 - **Placement granularity is a consequence of serialisation, not a property of
