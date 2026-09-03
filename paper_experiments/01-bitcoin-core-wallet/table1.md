@@ -28,7 +28,7 @@ Table 1: Selective vs blanket DIT across the secret fraction of one Bitcoin Core
 WalletCreateTxUsePresetInputsAndCoinSelection, Apple silicon, 20 paired reps per cell, rotated arm order.
 Median per-rep ratio; n/20 = reps where the first-named arm is slower; exact two-sided sign test.
 
-| K (inputs) | f_secret | baseline | C_public | C_whole | pass vs base | pass vs blanket | sign test | verdict | switch cost |
+| K (inputs) | f_secret | baseline | C_public | C_whole | pass vs base | pass vs blanket | sign test | verdict | pass vs nop |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 3.7% | 15.12 ms | +3.94% | +3.25% | +0.10% | **-3.52%** | 1/20 *** | pass | -0.64% |
 | 4 | 5.8% | 15.62 ms | +4.37% | +3.74% | +0.78% | **-2.81%** | 0/20 *** | pass | +0.95% |
@@ -64,7 +64,7 @@ reaches p<0.05, so 8/20 is a tie however its median reads).
 | `C_whole` | always/baseline | blanket DIT over the whole call |
 | `pass vs base` | pass/baseline | the shipped pass's absolute overhead |
 | `pass vs blanket` | pass/always | **the headline**; negative = selective placement wins |
-| `switch cost` | pass/passnop | the `msr DIT` instruction's own cost, placement held identical |
+| `pass vs nop` | pass/passnop | **NOT the switch cost** - see below. The switch PLUS DIT dwell over the regions the pass protects |
 
 ---
 
@@ -75,11 +75,31 @@ Significant wins through f=29.8%, a tie at 45.0%, significant losses from 61.2%.
 The framework's ~20% threshold is too pessimistic: the pass still wins
 significantly at 29.8% (-1.93%, 1/20).
 
-**The mechanism is visible in the last column.** Switch cost climbs monotonically
--0.64% -> +5.98% as K grows, because each additional signature is one more DIT
-region. The public-lane prize (`C_public`) meanwhile stays flat at +3.0..4.4%.
-The crossover is those two lines meeting: a fixed prize against a linearly
-growing toggle bill.
+**The mechanism is visible in the last column, but it is not what this table
+originally said it was.** `pass vs nop` climbs monotonically -0.64% -> +5.98% as
+K grows while the public-lane prize (`C_public`) stays flat at +3.0..4.4%, and
+the crossover is those two lines meeting: **a fixed prize against a growing
+cost.** That much holds.
+
+What that growing cost *is* was wrong. It was described as the toggle bill, one
+more DIT region per signature. It is not. `passnop` emits `HINT #0` in place of
+every inserted `MSR DIT`, so `PSTATE.DIT` is never set and that arm loses the
+**protection** along with the switch. The column is therefore
+
+    switch cost  +  DIT dwell over the regions the pass protects
+
+and dwell grows with the secret lane, which is most of the climb. This
+experiment's own gem5 flow (README, "the two lanes in one flow") isolates
+serialisation by running one binary under two switch models -- same codegen,
+same dwell, only the `MSR DIT` implementation differing -- and measures
+**+1.21% at K=400 against the +5.98% this column reports**, at 31 to 37 cycles
+per committed switch. Even crediting dwell at this experiment's own independently
+measured `C_secret` (+3.39% of the 47.4 ms secret lane), roughly a third of the
+column remains unaccounted for.
+
+**None of this touches the crossover.** `pass vs blanket` compares two arms that
+both protect the secret lane, so the dwell term is present in both and cancels.
+The verdict column, the sign tests and the crossover position are unaffected.
 
 **Blanket DIT is nearly flat in f** (`C_whole` +2.84..+4.32%), which is the
 control that says the ratio is moving because the pass's cost moves, not because
@@ -106,7 +126,10 @@ the workload got more DIT-sensitive.
 3. **Closure is OK but not tight.** Implied `C_secret` median +4.83% against the
    independently measured +3.39%, spread 3.55 pp over the four voting points
    (f >= 25%). Within the analyser's gate, but the +1.44 pp gap is unexplained.
-4. **gem5 cannot confirm the magnitude here.** It reproduces silicon's always-on
+4. **The last column is not the switch cost.** See "Reading it" above. The
+   crossover is unaffected; the mechanism sentence was wrong from 2026-08-31 to
+   2026-09-02 and is corrected here.
+5. **gem5 cannot confirm the magnitude here.** It reproduces silicon's always-on
    cost on the coin-selection kernel (+11.06% vs +13.01%) but reads ~zero on
    ECDSA signing. This is a silicon-only result; the renamed-switch
    counterfactual still wants a gem5 arm.

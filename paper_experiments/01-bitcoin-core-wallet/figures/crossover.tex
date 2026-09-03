@@ -22,8 +22,17 @@
     construction.
     \textbf{(b)}~Why. The prize---what blanket DIT costs on the public lane
     alone---is flat in $f$, because blanket DIT protects everything either way.
-    The pass's toggle bill grows linearly, because each additional signature is
-    one more DIT region. Their crossing in~(b) is the zero crossing in~(a).
+    The pass's own cost grows with the secret lane it protects, and their
+    crossing in~(b) is the zero crossing in~(a).
+    The growing curve is \texttt{pass/passnop}. It is \emph{not} the switch
+    cost: the NOP arm emits \texttt{HINT~\#0} in place of every inserted
+    \texttt{MSR~DIT}, so \texttt{PSTATE.DIT} is never set and that arm loses
+    the protection as well as the switch. The curve is the switch \emph{plus}
+    DIT dwell over the protected regions. Running one binary under two
+    \textsc{msr dit} implementations in gem5 isolates serialisation at
+    $+1.21\%$ at $K=400$, against the $+5.98\%$ this curve reports.
+    Panel~(a) is unaffected: \texttt{pass} and \texttt{blanket} both protect
+    the secret lane, so the dwell term is present in both and cancels.
     Numbers are identical to Table~\ref{tab:crossover}; the plotting script
     asserts this.%
   }
