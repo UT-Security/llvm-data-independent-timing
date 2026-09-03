@@ -667,6 +667,49 @@ default path gains 8x the protected operations on the signing workload and costs
 nothing measurable in switches on the cost workload - which is the shape of a
 missing-information bug being fixed, not of a precision knob being traded.
 
+### Re-running the flags against the fixed baseline: they help, and they are still wrong
+
+Every flag in this file was measured against a baseline that was losing taint at
+a phi. Re-measured on the oracle now that it is not:
+
+| arm | switches | under-taint ops | unprotected |
+|---|---|---|---|
+| `create` - natural seed, no flags | 25 | 368,821 | 80.85% |
+| `createflags` - natural seed + A + B1 + B2 + libc | 188 | **31,746** | **6.96%** |
+| `repair` - natural seed **+ one seed line**, no flags | 279 | **126** | **0.03%** |
+| `repairflags` - that seed line **and** all four flags | 188 | 31,746 | 6.96% |
+
+**The flags went from worthless to a 11.6x reduction** in under-taint on the
+natural seed - 80.85% to 6.96%. So they were never useless; they were downstream
+of a blocker, and against a broken baseline a real fix is indistinguishable from
+a no-op. That is worth remembering before concluding any of them was a bad idea.
+
+**And the one-line seed still beats all four of them, by 230x.** 0.03% against
+6.96%.
+
+**Worse, the flags make the seed worse.** Row 4 is the seed line *and* the flags:
+it lands on 6.96%, not 0.03%. Adding precision to a build that was already
+correct **cost 250x in leaked operations** while removing 91 switches
+(279 -> 188).
+
+The mechanism is visible in that trade: more precise taint means narrower
+placement, and narrower placement gives up the incidental coverage the imprecise
+version was providing. A function that was `AlwaysEnteredWithDIT` under a
+blunter analysis stops being so, narrows, and the operations that were protected
+by inheritance are exposed. The residual is exactly where you would expect -
+`hydro_x25519_sub` 11,776 ops, `_propagate` 7,168, `_adc` 5,632 - limb
+arithmetic that the coarse version blanketed and the precise version does not.
+
+**This is a sharper form of experiment 07's finding.** There, more faithful
+analysis made the pass *slower*. Here it makes it *less protective in absolute
+terms*, because precision and blanket coverage pull in opposite directions and
+the imprecise arm was winning on coverage by accident.
+
+**Conclusion: all four flags stay OFF, and the reason is now measured rather than
+precautionary.** The shipped answer for this workload is the seed line the
+information-loss report already prints. That is also the cheapest answer, needs
+no new analysis, and is the one the compiler can suggest on its own.
+
 ### Prior art for §3c (partial)
 
 Searched 2026-09-02. **Andromeda, TaintDroid and all GCC quotes below were
