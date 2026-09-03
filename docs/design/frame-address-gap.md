@@ -822,19 +822,55 @@ that computes it stays protected**; only the transmitted result is declassified,
 and only after it exists. Everything upstream keeps its taint, so this cannot
 paper over the thing it would be most tempting to paper over.
 
-**What the 6 remaining are is NOT established.** They are at the `memcpy` in
-`hydro_hash_final`, which is one out-of-line body shared by two call sites - one
-writing the public `challenge`, one writing the secret `eph_sk` - so the
-symbolizer cannot attribute them. The count halved (12 -> 6) when the nonce was
-declassified, which suggests the surviving half is the `eph_sk` write, and that
-would make them a **placement gap rather than a taint gap**: `hash_final` is
-instrumented and some of its instructions still execute with DIT clear. Worth
-chasing, not yet chased.
+#### The 6, resolved
+
+They are the inlined `memcpy(out + i * gimli_RATE, buf, gimli_RATE)` in
+`hydro_hash_final` - a 16-byte NEON copy - and the disassembly shows exactly
+where they sit:
+
+```
+23a1f4: msr DIT, #0x0        <-- off
+23a30c: ldr q0, [x19]        <-- 2 under-taint ops   (x19 = buf = state->state)
+23a314: str q0, [x23], #0x10 <-- 4 under-taint ops
+23a330: msr DIT, #0x1        <-- back on, after the copy
+```
+
+**A TAINT gap, not a placement gap**, which is the opposite of what the earlier
+guess said. `hydro_hash_final`'s own accounting is `need=6 ... coverage=9.6` - the
+analysis marks only six instructions in the whole function and this loop is not
+among them. It never asked for the copy to be covered, so placement did nothing
+wrong.
+
+The reason is in the seed. The repair line is `hydro_hash_final,1,pointee`, which
+names `out` - where the secret GOES. The load above reads `x19 = state->state`,
+which is **arg 0**, where the secret COMES FROM, and nothing marks that. The
+caller knows (`&st` is a tainted frame object of `hydro_sign_final_create`); the
+callee is never told.
+
+#### Both available fixes make it dramatically worse
+
+| configuration | under-taint | switches |
+|---|---|---|
+| repair seed + declassify | **6** | 279 |
+| + also seed `hydro_hash_final,0,pointee` | **368,680** | 32 |
+| + `-taint-frame-addr-args` (gap A) instead | **86,568** | 57 |
+
+61,000x and 14,000x worse, both while *removing* switches. This is the
+precision-narrows-placement dynamic from the flag re-run, at its sharpest: naming
+the secret more accurately shrinks the regions, the shrunken regions give up the
+incidental blanket coverage that was protecting the curve, and the net is far
+more leaked than gained.
+
+**So the 6 are real, identified, and not currently closable.** The configuration
+that reaches them is a local optimum, and both routes out of it cost three to
+five orders of magnitude. That is the finding, not a step on the way to zero:
+whatever closes these has to add coverage without narrowing anything, which none
+of the mechanisms in this file can do.
 
 **And the honest label on the 6.** It is a number obtained WITH a declassification
-the oracle did not verify. "126 unexplained" became "6 unexplained plus one
-assertion I am making about the protocol". That is progress in understanding and
-not, by itself, progress in soundness.
+the oracle did not verify. "126 unexplained" became "6 explained, plus one
+assertion about the protocol". The 6 are now understood; they are simply not
+fixable by anything here.
 
 ### Prior art for §3c (partial)
 
