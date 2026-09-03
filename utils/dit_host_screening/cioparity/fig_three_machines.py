@@ -106,13 +106,15 @@ def bar(xc, v, col, hollow):
 
 
 for gi, (b, lab) in enumerate(BENCH):
+    # Every bar carries its value: this is a static paper figure with no tooltip
+    # or table to fall back on, and the coarse-grain values ARE the "blanket is
+    # free" claim. Vertical so eight labels per group never collide.
     for mi, (k, _, col, hol) in enumerate(MACH):
-        bar(gi + offs[mi], V[k][b]["blanket"], col, hol)
-    for mi, (k, _, col, hol) in enumerate(MACH):
-        v = V[k][b]["pass"]
-        bar(gi + offs[4 + mi], v, col, hol)
-        ax.text(gi + offs[4 + mi], v + 0.08, f"{v:.2f}×", ha="center", va="bottom", rotation=90,
-                fontsize=6.0, color=MUTED, family="DejaVu Sans Mono", zorder=4)
+        for si, (arm, o) in enumerate((("blanket", offs[mi]), ("pass", offs[4 + mi]))):
+            v = V[k][b][arm]
+            bar(gi + o, v, col, hol)
+            ax.text(gi + o, v + 0.08, f"{v:.2f}×", ha="center", va="bottom", rotation=90,
+                    fontsize=6.0, color=MUTED, family="DejaVu Sans Mono", zorder=4)
     ax.text(gi + (offs[0] + offs[3]) / 2, -0.22, "coarse grain", ha="center", va="top", fontsize=5.8, color=FAINT, clip_on=False)
     ax.text(gi + (offs[4] + offs[7]) / 2, -0.22, "fine grain", ha="center", va="top", fontsize=5.8, color=FAINT, clip_on=False)
 
