@@ -4,7 +4,19 @@
 Two panels sharing one x-axis (the measured secret fraction):
 
   (a) the result     - pass vs blanket, crossing zero inside one wallet call
-  (b) the mechanism  - a flat public-lane prize meeting a growing toggle bill
+  (b) the mechanism  - a flat public-lane prize meeting a growing cost
+
+CORRECTED 2026-09-02. Panel (b)'s second curve was labelled "switch cost" and
+described as the toggle bill. It is `pass/passnop`, and `passnop` emits HINT #0
+in place of every inserted MSR DIT, so PSTATE.DIT is never set and that arm
+loses the PROTECTION as well as the switch. The curve is switch cost PLUS DIT
+dwell over the regions the pass protects, and dwell grows with the secret lane.
+This experiment's own gem5 flow isolates serialisation on one binary under two
+switch models and measures +1.21% at K=400 against the +5.98% this curve
+reports. The panel
+still shows a fixed prize meeting a growing cost -- that part held -- but the
+growing cost is not toggles. Panel (a) is unaffected: pass vs blanket compares
+two arms that both protect, so dwell is in both and cancels.
 
 Panel (b) explains panel (a): the two lines in (b) cross at roughly the f where
 (a) crosses zero, which is the claim ("a fixed prize against a linearly growing
@@ -33,7 +45,7 @@ MUTED = "#898781"
 GRID = "#e1e0d9"
 AXIS = "#c3c2b7"
 SERIES_1 = "#2a78d6"   # slot 1, blue    - the prize / "pass wins" pole
-SERIES_2 = "#eb6834"   # slot 2, orange  - the toggle bill
+SERIES_2 = "#eb6834"   # slot 2, orange  - the pass's own cost (switch + dwell)
 POLE_HI = "#e34948"    # slot 8, red     - "blanket wins" pole of the diverging pair
 
 # ---- statistics, identical definitions to table_wallet_sweep.py -------------
@@ -96,7 +108,7 @@ def build(rows):
 
 
 # ---- the committed table, as a regression gate ------------------------------
-# K: (f_secret, pass-vs-blanket, C_public, switch cost) from ../table1.md
+# K: (f_secret, pass-vs-blanket, C_public, pass-vs-nop) from ../table1.md
 TABLE1 = {
     1:   (3.7,  -3.52, 3.94, -0.64),
     4:   (5.8,  -2.81, 4.37, +0.95),
@@ -221,22 +233,24 @@ def panel_b(ax, tab):
             label="$C_{public}$  (public lane, blanket)")
     ax.plot(f, sw, "--s", color=SERIES_2, linewidth=1.6, markersize=4.6,
             markeredgecolor=SURFACE, markeredgewidth=1.1, zorder=4,
-            dashes=(4, 2), label="switch cost  (pass / NOP arm)")
+            dashes=(4, 2), label="pass / NOP arm  (switch + DIT dwell)")
 
     ax.set_xlabel("secret fraction of the call, $f$ (%)")
     ax.set_ylabel("cost vs no DIT (%)")
-    ax.set_title("(b)  the mechanism: a fixed prize, a growing bill",
+    ax.set_title("(b)  the mechanism: a fixed prize, a growing cost",
                  loc="left", color=INK, pad=24)
-    ax.set_ylim(-1.9, 8.1)
-    ax.set_yticks([0, 2, 4, 6])
+    ax.set_ylim(-2.7, 8.6)
+    ax.set_yticks([0, 2, 4, 6, 8])
 
-    ax.text(1.5, cpub[0] + 1.5, "the prize: flat in $f$", color=SERIES_1,
+    ax.text(1.5, cpub[0] + 2.1, "the prize: flat in $f$", color=SERIES_1,
             fontsize=7.5, fontweight="bold", ha="left")
-    ax.text(f[-1] + 2.5, sw[-1] + 0.85, "the bill: one region\nper signature",
+    ax.text(f[-1] + 2.5, sw[-1] + 1.35, "the cost: mostly DIT dwell\nover the growing secret lane",
             color=SERIES_2, fontsize=7.5, fontweight="bold", ha="right",
             linespacing=1.25)
+    # The switch/dwell split is a caption matter: it comes from a different
+    # instrument (this experiment's gem5 flow) and would be a third encoding here.
 
-    leg = ax.legend(loc="lower right", frameon=False, handlelength=2.2,
+    leg = ax.legend(loc="lower left", frameon=False, handlelength=2.2,
                     borderaxespad=0.3, labelspacing=0.4)
     for txt in leg.get_texts():
         txt.set_color(SECOND)
