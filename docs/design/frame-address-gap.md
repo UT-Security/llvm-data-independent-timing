@@ -803,9 +803,38 @@ reported would be *conditional on that assertion*, not independent of it. That i
 the standard IFC arrangement and it is honest, but it must be labelled: "sound
 modulo the declassification" is a weaker claim than "sound".
 
-**So the residual 126 stands as measured**, and the right way to report it is by
-naming what they are - the published nonce and challenge - rather than by
-asserting them away.
+#### The oracle-side op, and what it settles
+
+`m5_taint_declassify(ptr, len)` (M5OP_RESERVED3) now exists, mirroring
+`m5_taint_seed`. The summary prints `bytes declassified ... ASSERTED public, not
+checked`, because that is the status of the claim.
+
+Placed inside `hydro_sign_prehash` immediately after the scalar multiply that
+produces the nonce - under `HYDRO_ORACLE_DECLASSIFY`, oracle builds only:
+
+| | under-taint | sites | switches |
+|---|---|---|---|
+| repair seed | 126 | 8 | 279 |
+| **+ declassify the nonce** | **6** | **2** | 279 |
+
+The placement is the whole point. `R = g^r` is secret-derived and **the multiply
+that computes it stays protected**; only the transmitted result is declassified,
+and only after it exists. Everything upstream keeps its taint, so this cannot
+paper over the thing it would be most tempting to paper over.
+
+**What the 6 remaining are is NOT established.** They are at the `memcpy` in
+`hydro_hash_final`, which is one out-of-line body shared by two call sites - one
+writing the public `challenge`, one writing the secret `eph_sk` - so the
+symbolizer cannot attribute them. The count halved (12 -> 6) when the nonce was
+declassified, which suggests the surviving half is the `eph_sk` write, and that
+would make them a **placement gap rather than a taint gap**: `hash_final` is
+instrumented and some of its instructions still execute with DIT clear. Worth
+chasing, not yet chased.
+
+**And the honest label on the 6.** It is a number obtained WITH a declassification
+the oracle did not verify. "126 unexplained" became "6 unexplained plus one
+assertion I am making about the protocol". That is progress in understanding and
+not, by itself, progress in soundness.
 
 ### Prior art for §3c (partial)
 
