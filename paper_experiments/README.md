@@ -45,15 +45,26 @@ scope. Checked:
 | 04 | libsecp256k1 | **verified unaffected** - oracle re-run reproduces exactly: 4,647,778 protected, 40 clear, 2 sites, both in the harness, zero inside the library |
 | 02, 07, 09 | libsodium | **verified unaffected** - 134 switches either side, and the whole-library disassembly differs by exactly one `msr DIT, #0` moved four instructions within one epilogue (8 lines of 60,911) |
 | 08 | libhydrogen | **AFFECTED, already re-measured** - this is the experiment the fix came out of. Oracle 97.61% -> 80.85% unprotected on the natural seed, and the info-loss report's own repair line went from doing nothing to reaching 0.03% |
-| 01 | Bitcoin Core | **not re-checked** |
-| 03, 06 | mbedTLS | **not re-checked** (06 reuses 03's binaries) |
-| 05 | nginx + OpenSSL | **not re-checked** |
+| **03, 06** | mbedTLS | **AFFECTED** - rebuilt and compared: **41 -> 49 switches**, concentrated in the path 03 actually measures (`mbedtls_md_finish` 6 -> 8, `mbedtls_md_hmac_update` 1 -> 3). 4.9% of the library's instructions differ. 06 reuses 03's binaries, so it moves with it |
+| 01 | Bitcoin Core | **cannot be settled by comparison** - see below |
+| 05 | nginx + OpenSSL | **not settled** - the hardened objects are no longer on disk, so there is nothing to compare against; needs an OpenSSL rebuild |
 
-**The cheap way to settle the remaining three** is a switch-count and
-disassembly comparison against the recorded arm, as done for libsodium above: if
-the code is unchanged the timing conclusions are unchanged, and only if it moved
-does anything need re-running. That is much cheaper than re-running the
-measurements and answers the same question.
+**01 is a different problem from the other two.** Its recorded arm
+(`build-hoist`) was built **2026-08-18**, and its `-ftaint-harden` seed lived in
+a scratchpad that has since been deleted, so the binary is not reproducible as
+built. It therefore predates far more than the phi fix - a comparison against it
+would attribute weeks of change to one commit. What 01 needs is a **full
+re-measurement on the current compiler**, not a diff. Its secret lane is
+libsecp256k1, which experiment 04 verifies is unaffected, and its wallet lib
+carries **0** switches, so the expected movement is small - but that is an
+argument, not a measurement.
+
+**The general lesson, worth more than the individual answers.** A switch-count
+and disassembly diff against the recorded arm settles this cheaply *when the arm
+is still on disk and reproducible*. Two of the four checks failed that
+precondition. Keeping the arm, or at minimum the seed file and the compiler
+hash, is what makes an experiment auditable later; `utils/dit_host_screening/btc/`
+has 01's seed but the build tree's copy pointed at a temp path.
 
 ## Published pages
 
