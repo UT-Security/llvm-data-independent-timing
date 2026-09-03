@@ -40,7 +40,7 @@ implements the mode write:
 | aes256-gcm encrypt | **-0.76%** | **+29.01%** |
 | aes256-gcm decrypt | **+8.23%** | **+51.06%** |
 | ed25519 sign | **-1.39%** | **+1.70%** |
-| argon2id | **+1.35%** | **+1.42%** |
+| argon2id | **+2.04%** | **+1.97%** |
 
 Experiment 09's inference is confirmed causally rather than by a
 self-reproducing ratio. **This comparison is immune to the layout confound
@@ -122,7 +122,7 @@ extends that axis at **both** ends:
 | chacha20-poly1305 encrypt | 42,494 | +82.13 |
 | aes256-gcm decrypt | 13,758 | +42.83 |
 | ed25519 sign | 1,093 | +3.09 |
-| **argon2id** | **1.3** | **+0.07** |
+| **argon2id** | **1.35** | **-0.07** |
 
 argon2id is the null endpoint and the cleanest confirmation: 438 executed
 switches amortised over 326 million cycles cost nothing measurable. It also
@@ -248,7 +248,7 @@ region default - wins on 4 of 5, and is tied within noise on the fifth.**
 Experiment 09's "coarser beats finer" holds on gem5 too. `fine`
 (`switch-cyc=0`, no loop hoist) is 20-50 points worse everywhere.
 
-argon2id is the exception that proves the rule: at 1.3 writes/Mcycle every
+argon2id is the exception that proves the rule: at 1.35 writes/Mcycle every
 policy is within 3 points of every other, because there is nothing to rank.
 
 ## Dwell, measured directly
@@ -260,6 +260,7 @@ policy is within 3 points of every other, because there is nothing to rank.
 | ed25519 | 99% | 99% | 99% | 100% |
 | chacha20 enc/dec | 90% | 90% | 87-88% | 100% |
 | aes-gcm enc/dec | 96% | 95% | 91-94% | 100% |
+| argon2id | **100%** | **100%** | **100%** | 100% |
 
 **Every policy is close to blanket on these workloads.** Region placement
 narrows very little here, which is consistent with experiment 09's `f_secret ~
@@ -267,6 +268,13 @@ narrows very little here, which is consistent with experiment 09's `f_secret ~
 buys no dynamic advantage. On aes-gcm decrypt `taint` and `fine` dwell within
 0.7 points of each other, which is what falsified the "narrower regions dwell
 less" explanation.
+
+**argon2id at 100% in every hardened arm is the dynamic confirmation of the
+memory-leak finding.** The static analysis said taint never reaches the hashing
+kernel and the mode stays set across it by way of an over-tainted variant flag;
+`ditCycles` now shows the entire 325M-cycle operation running with the mode on,
+under region, function and fine placement alike. Every hardened arm is blanket
+here, measured rather than inferred.
 
 ## Reproducibility: bit-identical, and it had to be earned
 
@@ -391,9 +399,10 @@ byte-identical to the one the sweeps measured, 524 `msr DIT` either way.
 
 ## Limits
 
-- **argon2id is one operation per cell** (326M cycles), and `commit.ditCycles`
-  was not available in the simulator used for that sweep, so its dwell column is
-  absent.
+- **argon2id is one operation per cell** (325M cycles, 620.6M instructions). One
+  is exact on a deterministic simulator; the re-run through the fixed rig
+  reproduces 438 switches to the count and a serialising term of -0.07 points
+  against the pre-fix +0.07, both zero within noise.
 - **This is the whole-library path, not the shipped per-TU flag.** Hardening per
   TU with `clang -ftaint-harden` yields 134 static switches and **3 committed
   writes per signature**, because taint cannot cross a TU boundary so the mode is
