@@ -128,6 +128,16 @@ gate. It did not.
 | gate + fallback | 408 | **628** |
 
 Both got *worse*, and `ecdsa_verify` went from 0 back to 12 in the combination.
+
+> **2026-09-03: the `ecdsa_verify` symptom no longer reproduces.** Re-swept on the
+> current tree (`secp256k1.c`, seed `secp256k1_ecdsa_sign,3,pointee`, compiler
+> pinned): base 20 switches, `-taint-frame-addr-args` 157, and **`ecdsa_verify` is
+> 0 in both** - and in every other flag combination tried. The COST is real and
+> larger than recorded here relative to its baseline (7.85x); what has gone is the
+> false-positive symptom, presumably absorbed by the mod-set call-site gate, the
+> strict source condition and return-call-site gating, all of which postdate this
+> section. Do not quote the "0 back to 12" line as current behaviour.
+> See `frame-address-gap.md` §6b.
 The mechanism: P1b now taints **specific stack cells** where P1a set an opaque
 `ExternalMemClobbered`, so `anyTaintedStackCellForFI` finds real per-object taint
 and more frame addresses resolve to genuinely-secret objects. Precision in one

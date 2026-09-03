@@ -1273,10 +1273,29 @@ finding to carry forward.
 
 **Two caveats on this recommendation.**
 
-- **The flag evidence is mostly one workload.** libhydrogen carried the oracle
-  measurements; libsodium has cost numbers for two of the four; **libsecp256k1
-  was never re-measured**, and that is where gap A's historical false positives
-  were. The mechanism argument generalises, the numbers do not.
+- **libsecp256k1 is now measured too**, and it agrees. Full sweep, `secp256k1.c`,
+  seed `secp256k1_ecdsa_sign,3,pointee`:
+
+  | arm | `msr DIT` | `ecdsa_verify` | `ecdsa_sign` |
+  |---|---|---|---|
+  | base | 20 | 0 | 3 |
+  | **gap A** | **157** | **0** | 3 |
+  | B1 | 20 | 0 | 3 |
+  | B1 + B2 | 20 | 0 | 3 |
+  | libc model | 20 | 0 | 3 |
+  | all four | 157 | 0 | 3 |
+
+  **Gap A costs 7.85x here** - 20 to 157 switches, far worse than the +13.4% it
+  cost on libsodium - and **the other three are completely inert**, with `all`
+  equal to `gap A` exactly. So the recommendation holds on the workload it had
+  not been checked against, and for gap A it holds more strongly.
+
+  **The historical false positives do NOT reproduce.**
+  `p1b-frame-provenance.md` §4 records `ecdsa_verify` going "from 0 back to 12"
+  under this rule; it is **0 in every arm here**. The cost is real and large; the
+  symptom that made it alarming is gone, presumably absorbed by the mod-set gate,
+  the strict source condition and return-call-site gating, all of which postdate
+  that measurement. Corrected there.
 - **The seed decides, not the config.** On libhydrogen the shipped default leaves
   **80.85%** of secret operations unprotected with the annotation a developer
   writes first, and **0.03%** after one more line. No flag setting moves it as
