@@ -149,7 +149,7 @@ cache-line placement, different BTB indices, different fetch-group boundaries -
 none of it anything to do with DIT. You would get the same from inserting 524 of
 any 4-byte instruction.
 
-Measured spread of that effect alone: **-6.82% to +7.89%, a 14.7-point range**,
+Measured spread of that effect alone: **-6.94% to +4.52%, an 11.5-point range**,
 against policy differences of 1-8 points. It is large enough to invert a
 ranking, and it did.
 
@@ -163,8 +163,8 @@ no estimation, no cost.
 
 This is exact, and the evidence is that it survives regimes where raw layout
 differs wildly. Re-running the whole sweep at three alignment settings (none,
-16B, 64B), whose layout terms differ by up to 14.7 points, the layout-free
-ranking is **identical on 4 of 5 benchmarks**:
+16B, 64B), whose layout terms differ by up to 11.5 points, the layout-free
+ranking is **identical on every row whose gap exceeds the resolution limit**:
 
 | benchmark | taint | taintfn | fine | winner (all 3 alignments) |
 |---|---|---|---|---|
@@ -174,15 +174,17 @@ ranking is **identical on 4 of 5 benchmarks**:
 | aes-gcm dec | +51.09 | +54.66 | +54.33 | taint |
 | aes-gcm enc | +30.08 | +30.79 | +48.28 | taint |
 
-Canonical (bit-reproducible) sweep. The pre-fix sweeps at three alignment
-settings gave the same ranking on 4 of 5 rows at every setting, with the
-sub-resolution row moving between `taint` and `taintfn`; the alignment sweeps
-are being regenerated through the fixed rig.
+Canonical (bit-reproducible) sweep. Re-run at 16B and 64B block alignment
+through the same fixed rig, the ranking is identical on the three rows whose
+gaps exceed the resolution limit (both chacha20 rows and aes-gcm decrypt:
+`taint` at every setting) and flips between `taint` and `taintfn` on the two
+rows whose gap is 1-2 points (ed25519, aes-gcm encrypt) - which is what a
+~10-point resolution limit predicts.
 
 **Without the twins, the aes-gcm decrypt cell gave the opposite answer**: raw
-totals read `fine` +47.70% against `taint` +51.38%, because `fine` happened to
-draw a -6.82% layout term. Layout-free, `fine`'s DIT cost is +54.52% against
-`taint`'s +50.86%. `fine` executes MORE switches (18 vs 15) at the SAME dwell
+totals read `fine` +47.39% against `taint` +51.06%, because `fine` happened to
+draw a -6.94% layout term. Layout-free, `fine`'s DIT cost is +54.33% against
+`taint`'s +51.09%. `fine` executes MORE switches (18 vs 15) at the SAME dwell
 (94% vs 96%) - it is strictly worse placement - and still measured 6.7% faster.
 
 ### The same confound was found independently, on silicon
@@ -220,19 +222,19 @@ privilege:
 
 | metric | no alignment | 16B | **64B** |
 |---|---|---|---|
-| layout spread (max-min) | 14.71 pts | 9.45 | **2.87** |
-| worst \|layout\| | 7.89% | 5.86% | **2.24%** |
-| mean \|layout\| | 2.05% | 1.66% | **0.74%** |
+| layout spread (max-min) | 11.46 pts | 7.93 | **2.93** |
+| worst \|layout\| | 6.94% | 5.70% | **1.98%** |
+| mean \|layout\| | 1.97% | 1.84% | **0.75%** |
 | **code size** | - | +0.79% | **+4.16%** |
-| **runtime, base arm** | - | - | **-0.05% to +6.99%** |
+| **runtime, base arm** | - | - | **+0.30% to +4.83%** |
 
 That 16B does little while 64B works confirms the mechanism is **I-cache line
 placement**, not instruction-bundle alignment: 16B does not control which cache
-line a block starts in, so it merely reshuffles the lottery (it moved the worst
-outlier from aes-dec/`fine` to aes-enc/`taintfn`).
+line a block starts in, so it merely reshuffles the lottery (the worst
+cell only moves from one benchmark to another).
 
 **Recommendation: 64B alignment ON as an evaluation flag, OFF as a shipping
-default.** It buys measurement stability by making every build up to 7% slower
+default.** It buys measurement stability by making every build up to 5% slower
 and 4% bigger, and it does not reduce the layout cost DIT actually incurs - it
 makes it uniform, which benefits the experimenter, not the binary. The blunt
 `-align-all-nofallthru-blocks` was used here; a targeted version aligning only
