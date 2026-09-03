@@ -418,6 +418,15 @@ X86/AMDGPU only), so lowering and emission remain on the legacy PM.
   **non-debug build was byte-identical before and after the fix**, so no measurement
   taken without `-g` is affected. Same failure shape as the plain-return carve-out
   in `needsDIT`, which the FP fallback had swept in via `RET ... implicit $d0`.
+- **A loop-carried pointer is a PHI, and `getUnderlyingObject` stops at one**, so
+  before 2026-09-02 every `buf[i]` inside a loop was classified unknown/heap
+  rather than as a cell of the object the loop walks. Measured in one libhydrogen
+  function: **753 of 777** unresolved accesses. `getCellFromMMO` now falls back to
+  `getUnderlyingObjects` (plural) and accepts the answer only when every path
+  agrees on one object. Free (libsodium 134 -> 134 switches) and worth **8x** the
+  protected operations on libhydrogen signing; the gem5 oracle went 97.61% ->
+  80.85% unprotected, and the info-loss report's own suggested repair line went
+  from doing nothing to reaching 0.03%. See `docs/design/frame-address-gap.md`.
 - `taint-annotate` runs at the **OptimizerLast** extension point so attributes survive
   the -O2 middle-end.
 - **Never classify instructions by mnemonic string.** A store's payload-register count
