@@ -3615,11 +3615,20 @@ struct DITAccounting {
   // exactly the case that matters - convolve's 14 toggles look cheap statically
   // and cost 7.16x when executed per pixel.
   uint64_t WNeed = 0, WUnderDIT = 0, WTotal = 0;
+  // Instructions that MUST run with DIT=1 and DO NOT. This is the soundness
+  // number, and Need/UnderDIT cannot substitute for it: those two are tallied
+  // independently, so a policy can cover the right COUNT of instructions while
+  // covering the wrong ONES and still show Need <= UnderDIT. Any non-zero value
+  // here means a secret executes unprotected, which makes every performance
+  // comparison against that policy meaningless - a policy that skips work looks
+  // faster for the worst possible reason.
+  uint64_t NeedUncovered = 0, WNeedUncovered = 0;
 
   void add(const DITAccounting &O) {
     Need += O.Need; UnderDIT += O.UnderDIT; Total += O.Total;
     Switches += O.Switches;
     WNeed += O.WNeed; WUnderDIT += O.WUnderDIT; WTotal += O.WTotal;
+    NeedUncovered += O.NeedUncovered; WNeedUncovered += O.WNeedUncovered;
   }
 };
 } // namespace
@@ -3673,6 +3682,9 @@ static DITAccounting computeDITAccounting(MachineFunction &MF,
                 if (CurOn) {
                   ++A.UnderDIT;
                   A.WUnderDIT += W;
+                } else if (IsNeed) {
+                  ++A.NeedUncovered;
+                  A.WNeedUncovered += W;
                 }
                 if (clobbersDIT(MI, TSI, M))
                   CurOn = false;
@@ -3695,7 +3707,9 @@ static void reportDITAccounting(MachineFunction &MF, const DITAccounting &A,
      << " coverage=" << format("%.1f", pct(A.UnderDIT, A.Total))
      << " wneed=" << A.WNeed << " wunderdit=" << A.WUnderDIT
      << " wtotal=" << A.WTotal
-     << " wprecision=" << format("%.1f", pct(A.WNeed, A.WUnderDIT)) << "\n";
+     << " wprecision=" << format("%.1f", pct(A.WNeed, A.WUnderDIT))
+     << " needuncovered=" << A.NeedUncovered
+     << " wneeduncovered=" << A.WNeedUncovered << "\n";
 }
 
 // Write one line of DIT accounting for this function, if the report was asked
@@ -4196,7 +4210,8 @@ void llvm::reportInfoLoss(raw_ostream *OS, TaintLossSeverity Sev,
                           StringRef Kind, const Function &Where,
                           StringRef CalleeName, const DebugLoc &DL,
                           StringRef Action, StringRef Cost, StringRef Repair) {
-  const char *SevStr = Sev == TaintLossSeverity::Severe     ? "SEVERE"
+  const char *SevStr = Sev == TaintLossSeverity::Unsound    ? "UNSOUND"
+                       : Sev == TaintLossSeverity::Severe   ? "SEVERE"
                        : Sev == TaintLossSeverity::Moderate ? "moderate"
                                                             : "info";
   if (OS) {

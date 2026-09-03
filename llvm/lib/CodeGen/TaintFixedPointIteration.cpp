@@ -31,6 +31,7 @@
 #include "llvm/CodeGen/TaintAnalysis.h"
 #include "llvm/CodeGen/TaintSummaryInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Function.h"
@@ -47,6 +48,69 @@ using namespace llvm;
 /// Walk every call instruction in MF and propagate argument taint into
 /// the callee's summary.
 ///
+/// True if this state has a secret somewhere in memory the analysis is tracking
+/// - a tainted or pointee-tainted stack cell, or a call-induced clobber. Used
+/// only to decide whether a MEMORY information-loss record is worth emitting;
+/// it deliberately does NOT feed taint propagation, because the whole-frame
+/// version of that reasoning cost +44 points against the mod-set gate and was
+/// removed (docs/design/frame-addr-fallback.md).
+static bool frameMayHoldSecret(const TaintState &S) {
+  // The UNKNOWN sets matter as much as the resolved cells, and omitting them
+  // was this predicate's first bug: at -O2 a user local's MMO underlying object
+  // is frequently not a resolvable frame cell, so the secret lands in
+  // TaintedUnknownMemValues instead of TaintedStackCells (the case
+  // frame-addr-fallback.md records as "they fall through to Unknown"). Checking
+  // only the resolved cells therefore missed libsodium's argon2id entirely -
+  // `argon2_hash` stores the password pointer into a stack-allocated
+  // argon2_context and passes its address to `argon2_ctx`, and no record was
+  // emitted. A secret in memory the analysis CANNOT pin down is strictly more
+  // reason to warn than one it can.
+  //
+  // Globals are deliberately excluded: a callee can reach a global without the
+  // caller passing anything, so a frame-address argument is not the mechanism
+  // and the record would not be actionable.
+  return S.isExternalMemClobbered() || S.UnknownMemTainted ||
+         !S.TaintedStackCells.empty() || !S.PointeeTaintedStackCells.empty() ||
+         !S.TaintedUnknownMemValues.empty() ||
+         !S.PointeeTaintedUnknownMemValues.empty();
+}
+
+/// True if `Reg`, as it reaches `Call`, was computed from the frame base - i.e.
+/// it is the address of a local, the `$sp + imm` that prologepilog leaves behind
+/// after erasing the FrameIndex.
+///
+/// Walks back to the defining instruction within the call's own block and asks
+/// whether that instruction reads SP or FP. Deliberately gives up (returns
+/// false) when the def is not in this block or the budget runs out: this drives
+/// a DIAGNOSTIC, so a missed record costs a line of report while a guessed one
+/// costs the reader's trust in every other line.
+static bool argIsFrameAddress(const MachineInstr &Call, Register Reg,
+                              const TargetRegisterInfo *TRI) {
+  const MachineFunction &MF = *Call.getMF();
+  const Register FP = TRI->getFrameRegister(MF);
+  const Register SP =
+      MF.getSubtarget().getTargetLowering()->getStackPointerRegisterToSaveRestore();
+  unsigned Budget = 64;
+  // getPrevNode() rather than a reverse iterator: MachineInstr::getReverseIterator
+  // and MachineBasicBlock::rend() are different iterator families (ilist_iterator
+  // vs MachineInstrBundleIterator) and will not compare.
+  for (const MachineInstr *Prev = Call.getPrevNode(); Prev && Budget;
+       Prev = Prev->getPrevNode(), --Budget) {
+    const MachineInstr &Def = *Prev;
+    if (!Def.definesRegister(Reg, TRI))
+      continue;
+    for (const MachineOperand &MO : Def.uses()) {
+      if (!MO.isReg() || !MO.getReg().isValid())
+        continue;
+      if ((SP.isValid() && TRI->regsOverlap(MO.getReg(), SP)) ||
+          (FP.isValid() && TRI->regsOverlap(MO.getReg(), FP)))
+        return true;
+    }
+    return false; // defined here, but not from the frame base
+  }
+  return false;
+}
+
 /// For each call site we:
 ///   1. Replay taint state up to the call instruction (using TR.IN + propagate)
 ///   2. For each physical argument register that is tainted at the call,
@@ -720,6 +784,70 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 // as a passed argument. (propagateArgTaintToCallees uses Pre for
                 // the same reason.)
                 CallArgTaint Arg = taintedCallArguments(MI, State, TRI);
+
+                // (M) MEMORY under-taint. Arriving here with no tainted
+                // argument does NOT mean nothing was passed. The analysis runs
+                // post-prologepilog, where a local's address is a bare
+                // `$sp + imm` with no FrameIndex and no memory operand, so
+                // `f(&local_secret)` transfers no register taint at all and the
+                // callee is analysed clean. Register taint and memory-cell
+                // taint are two universes joined by exactly one bridge -
+                // pointee taint seeded on a pointer ARGUMENT - and taking the
+                // address of a local is not on that bridge.
+                //
+                // This is the documented open gap at the KNOWN GAP comment in
+                // propagateArgTaintToCallees. It is reported here rather than
+                // fixed because the whole-frame fallback that used to bridge it
+                // (`-taint-frame-addr-args`) made nearly every call site look
+                // secret-passing, which stopped the mod-set gate firing:
+                // +45.32% against +0.66% with the gate alone. See
+                // docs/design/frame-addr-fallback.md.
+                //
+                // Until then the loss must at least be VISIBLE. Every other
+                // record in this report is an over-approximation - the callee
+                // inherits DIT and runs protected - so a reader who sees a
+                // clean report reasonably concludes coverage is complete. This
+                // one is the opposite direction: the callee may run with the
+                // mode clear and nothing else will say so. Measured instance:
+                // libsodium's argon2id, where the password reaches
+                // `argon2_ctx` inside a stack-allocated `argon2_context` and
+                // the entire hashing kernel - `argon2_initialize`,
+                // `argon2_fill_memory_blocks`, `argon2_fill_segment_ref` -
+                // carries zero switches and appears nowhere in any report.
+                if (MI.isCall() && !Arg.any() && LossOS &&
+                    frameMayHoldSecret(State)) {
+                  const Function *MemCallee = findCalledFunction(M, MI);
+                  for (const MachineOperand &MO : MI.uses()) {
+                    if (!MO.isReg() || MO.isDef() || !MO.getReg().isValid() ||
+                        !MO.getReg().isPhysical())
+                      continue;
+                    if (TRI->getEncodingValue(MO.getReg()) > 7)
+                      continue; // not an argument-passing register
+                    if (State.isPointeeTainted(MO.getReg()) ||
+                        State.isTainted(MO.getReg()))
+                      continue; // already transferred by the normal path
+                    if (!argIsFrameAddress(MI, MO.getReg(), TRI))
+                      continue;
+                    reportInfoLoss(
+                        LossOS, TaintLossSeverity::Unsound, "memory", F,
+                        MemCallee ? MemCallee->getName()
+                                  : StringRef("<indirect>"),
+                        MI.getDebugLoc(),
+                        "a frame address is passed to the callee while this "
+                        "frame holds a secret, but the pointer register carries "
+                        "no pointee taint, so NOTHING is transferred and the "
+                        "callee is analysed clean",
+                        "if the callee reads the secret through that pointer it "
+                        "runs with PSTATE.DIT clear and no other record will "
+                        "say so - this is an UNDER-approximation, unlike every "
+                        "other record in this report",
+                        "seed the callee directly on the argument that receives "
+                        "the frame address, or re-enable per-object frame "
+                        "provenance (docs/design/p1b-frame-provenance.md)");
+                    break; // one record per call site is enough
+                  }
+                }
+
                 if (!MI.isCall() || !Arg.any())
                   return true;
 

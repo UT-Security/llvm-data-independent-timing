@@ -1,0 +1,13 @@
+date: 2026-09-02T17:49:34Z
+host: aarch64 Neoverse-N1 160 cores, FEAT_DIT: no
+gem5: 2ca3920ec1 on branch ditcycles
+  = base 2acf7637bc + PMULL64 (b328f8e719) + ditCycles (2ca3920ec1)
+llvm: c9b8dd0cfa4e + memory info-loss category + needuncovered counter (uncommitted)
+libsodium: 1.0.21 --disable-asm, whole-library bitcode via llvm-link
+seeds: CIO libsodium.uarch_checker.config, 21 entry points, 108 functions
+arms: base blanket taint taintnop taintfn taintfnnop fine finenop
+alignment sweeps: none (v2) / 16B (a16) / 64B (a64), -align-all-nofallthru-blocks
+runs: 80 per alignment setting, 240 total, all gates passing
+silicon comparison: m5_results_ratios.csv / m4_results_ratios.csv, cntvct timer
+  (kperf columns carry 2521-3234 cyc of counter-read overhead; not used)
+roi marker offset, this rig: 6 cycles / 5 insts, empty-region probe
