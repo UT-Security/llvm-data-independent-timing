@@ -1,32 +1,32 @@
-# provenance: run 2026-09-03 on an aarch64 Linux host (Neoverse-N1, native static build, no sysroot); gem5-DIT 6608290fbd with the signed_lookup rig changes of 2026-09-03; clang from llvm-data-independent-timing 2049d4d4e9b2 build; libsodium 1.0.21 with the CIO chacha20_ref.c rename patch; gem5.fast built 2026-09-02 01:12.
-# CANONICAL lane: hashed chase, LVP-predictable header on 3 of 4 iterations (pred_q4=3), chacha20-poly1305 secret op.
+# provenance: run 2026-09-03 on aarch64 Linux (beckham), native static build; gem5-DIT 52e2505e44+dirty; clang from llvm-data-independent-timing 9d698b0ddaa2 (/home/rgangar/.treehouse/llvm-data-independent-timing-7b712d/2/llvm-data-independent-timing/build); gem5.fast built 2026-09-02 01:12 ; WORK=/tmp/claude-1000/-home-rgangar--treehouse-llvm-data-independent-timing-7b712d-3-llvm-data-independent-timing/72b2fbfa-c077-449a-b7d8-81732464925f/scratchpad/gem5/repro
+# CANONICAL lane: hashed chase, LVP-predictable header on 3 of 4 iterations (pred_q4=3), chacha20-poly1305 secret op. vs_base_pct is cycles; the paper figure uses IPC overhead = nodit ipc / arm ipc - 1 from the ipc column.
 # gem5 Neoverse-V2 FDP, --eves --dmp --comp-simp, gem5.fast. Full flow (lookups + one chacha20-poly1305 AEAD encrypt of a 100-byte record),
 # CIO-parity seeds with the chacha rename patch; pass library built with -fno-optimize-sibling-calls.
 # switch=serialising is --no-speculative-dit. dit_writes is commit.ditWrites (committed mode writes).
 # f_secret_pct = (full - nosign) / full on the nodit arm's cycles, same iter.
 # cycles = median over 5 stack offset(s) (argv[0] lengths); spread_pct = (max-min)/median across them.
 L,pred_q4,f_secret_pct,arm,switch,cycles,insts,ipc,vs_base_pct,dit_writes,requests,n_offsets,spread_pct
-10,3,96.9,nodit,-,3965845,7987211,2.014,0.00,0,1600,5,1.94
-10,3,96.9,blanket,-,4009746,7987211,1.992,1.11,0,1600,5,0.02
-10,3,96.9,pass,renamed,4064410,8163211,2.008,2.49,78400,1600,5,0.76
-10,3,96.9,pass,serialising,5742229,8163211,1.422,44.79,78400,1600,5,0.05
-50,3,81.5,nodit,-,4740148,8328011,1.757,0.00,0,1500,5,2.61
-50,3,81.5,blanket,-,5166103,8328011,1.612,8.99,0,1500,5,0.97
-50,3,81.5,pass,renamed,4864254,8493011,1.746,2.62,73500,1500,5,1.71
-50,3,81.5,pass,serialising,6395104,8493011,1.328,34.91,73500,1500,5,0.07
-200,3,44.9,nodit,-,7303595,9715511,1.330,0.00,0,1270,5,0.61
-200,3,44.9,blanket,-,8698174,9715511,1.117,19.09,0,1270,5,0.00
-200,3,44.9,pass,renamed,7292962,9855211,1.351,-0.15,62230,1270,5,0.75
-200,3,44.9,pass,serialising,8692744,9855211,1.134,19.02,62230,1270,5,0.02
-1000,3,13.5,nodit,-,13052881,12629511,0.968,0.00,0,670,5,0.17
-1000,3,13.5,blanket,-,16643343,12629511,0.759,27.51,0,670,5,0.00
-1000,3,13.5,pass,renamed,13136306,12703211,0.967,0.64,32830,670,5,0.44
-1000,3,13.5,pass,serialising,13815096,12703211,0.920,5.84,32830,670,5,0.02
-5000,3,3.2,nodit,-,17630414,14970011,0.849,0.00,0,200,5,0.20
-5000,3,3.2,blanket,-,22980481,14970011,0.651,30.35,0,200,5,0.01
-5000,3,3.2,pass,renamed,17642028,14992011,0.850,0.07,9800,200,5,0.03
-5000,3,3.2,pass,serialising,17893334,14992011,0.838,1.49,9800,200,5,0.02
-20000,3,0.8,nodit,-,19023495,15666761,0.824,0.00,0,55,5,0.33
-20000,3,0.8,blanket,-,24879395,15666761,0.630,30.78,0,55,5,0.00
-20000,3,0.8,pass,renamed,19018027,15672811,0.824,-0.03,2695,55,5,0.10
-20000,3,0.8,pass,serialising,19115741,15672811,0.820,0.48,2695,55,5,0.21
+10,3,96.8,nodit,-,3989763,7980810,2.000,0.00,0,1600,5,1.09
+10,3,96.8,blanket,-,4281080,7980810,1.864,7.30,0,1600,5,0.15
+10,3,96.8,pass,renamed,4086803,8156810,1.996,2.43,78400,1600,5,2.20
+10,3,96.8,pass,serialising,5759444,8156810,1.416,44.36,78400,1600,5,0.04
+50,3,81.2,nodit,-,4760689,8322010,1.748,0.00,0,1500,5,1.25
+50,3,81.2,blanket,-,5362933,8322010,1.552,12.65,0,1500,5,0.58
+50,3,81.2,pass,renamed,4811066,8487010,1.764,1.06,73500,1500,5,0.19
+50,3,81.2,pass,serialising,6412171,8487010,1.324,34.69,73500,1500,5,0.20
+200,3,45.0,nodit,-,7294186,9710430,1.331,0.00,0,1270,5,1.22
+200,3,45.0,blanket,-,8770914,9710430,1.107,20.25,0,1270,5,0.63
+200,3,45.0,pass,renamed,7326171,9850130,1.345,0.44,62230,1270,5,0.23
+200,3,45.0,pass,serialising,8707381,9850130,1.131,19.37,62230,1270,5,0.69
+1000,3,13.1,nodit,-,13059685,12626830,0.967,0.00,0,670,5,0.21
+1000,3,13.1,blanket,-,16685900,12626830,0.757,27.77,0,670,5,0.21
+1000,3,13.1,pass,renamed,13099862,12700530,0.970,0.31,32830,670,5,0.15
+1000,3,13.1,pass,serialising,13811623,12700530,0.920,5.76,32830,670,5,1.04
+5000,3,2.6,nodit,-,17619689,14969210,0.850,0.00,0,200,5,1.12
+5000,3,2.6,blanket,-,22988060,14969210,0.651,30.47,0,200,5,0.04
+5000,3,2.6,pass,renamed,17675108,14991210,0.848,0.31,9800,200,5,0.21
+5000,3,2.6,pass,serialising,17893257,14991210,0.838,1.55,9800,200,5,1.39
+20000,3,0.6,nodit,-,18943759,15666540,0.827,0.00,0,55,5,1.36
+20000,3,0.6,blanket,-,24883971,15666540,0.630,31.36,0,55,5,0.00
+20000,3,0.6,pass,renamed,19031535,15672590,0.824,0.46,2695,55,5,0.98
+20000,3,0.6,pass,serialising,19074483,15672590,0.822,0.69,2695,55,5,1.36

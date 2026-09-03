@@ -1,16 +1,16 @@
-# provenance: run 2026-09-03 on an aarch64 Linux host (Neoverse-N1, native static build, no sysroot); gem5-DIT 6608290fbd with the signed_lookup rig changes of 2026-09-03; clang from llvm-data-independent-timing 2049d4d4e9b2 build; libsodium 1.0.21 with the CIO chacha20_ref.c rename patch; gem5.fast built 2026-09-02 01:12.
+# provenance: run 2026-09-03 on aarch64 Linux (beckham), native static build; gem5-DIT 52e2505e44+dirty; clang from llvm-data-independent-timing 9d698b0ddaa2 (/home/rgangar/.treehouse/llvm-data-independent-timing-7b712d/2/llvm-data-independent-timing/build); gem5.fast built 2026-09-02 01:12 ; WORK=/tmp/claude-1000/-home-rgangar--treehouse-llvm-data-independent-timing-7b712d-3-llvm-data-independent-timing/72b2fbfa-c077-449a-b7d8-81732464925f/scratchpad/gem5/repro
 # CANONICAL lane, public lane alone (--nosecret): value predictor totals with and without DIT.
 # Mechanism: gem5, public lane alone (--nosecret).
 L,pred_q4,arm,insts,cycles,ipc,vp_predictions,vp_preds_per_1k_insts
-10,3,nodit,297611,123312,2.413,51623,173.46
-10,3,blanket,297611,167403,1.778,11202,37.64
-50,3,nodit,1119011,877438,1.275,96096,85.88
-50,3,blanket,1119011,1186524,0.943,10494,9.38
-200,3,nodit,3611891,4023969,0.898,389599,107.87
-200,3,blanket,3611891,5281939,0.684,8883,2.46
-1000,3,nodit,9409491,11292314,0.833,1182008,125.62
-1000,3,blanket,9409491,14845538,0.634,4683,0.50
-5000,3,nodit,14008811,17071864,0.821,1751833,125.05
-5000,3,blanket,14008811,22431803,0.625,1395,0.10
-20000,3,nodit,15402431,18868862,0.816,1925132,124.99
-20000,3,blanket,15402431,24730990,0.623,380,0.02
+10,3,nodit,297610,126460,2.353,48380,162.56
+10,3,blanket,297610,171546,1.735,10216,34.33
+50,3,nodit,1119010,895888,1.249,98927,88.41
+50,3,blanket,1119010,1202224,0.931,9878,8.83
+200,3,nodit,3611890,4014068,0.900,394816,109.31
+200,3,blanket,3611890,5284369,0.684,7728,2.14
+1000,3,nodit,9409490,11349064,0.829,1173975,124.76
+1000,3,blanket,9409490,14845876,0.634,4020,0.43
+5000,3,nodit,14008810,17154399,0.817,1948825,139.11
+5000,3,blanket,14008810,22431811,0.625,995,0.07
+20000,3,nodit,15402430,18822076,0.818,1924868,124.97
+20000,3,blanket,15402430,24731971,0.623,270,0.02
