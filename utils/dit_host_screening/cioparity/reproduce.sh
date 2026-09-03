@@ -19,7 +19,7 @@
 #                                operation is 326M cycles.
 #   data/gem5_align{16,64}.csv   the same sweep at two block-alignment settings.
 #                                Only needed to reproduce the layout-spread
-#                                claim (14.71 -> 2.87 points); skip with
+#                                claim (11.46 -> 2.93 points); skip with
 #                                SKIP_ALIGN=1 and the headline is unaffected.
 #   data/gem5_analysis.txt       analyze.py over the above.
 #
