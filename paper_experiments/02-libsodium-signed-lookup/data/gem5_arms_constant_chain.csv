@@ -1,0 +1,32 @@
+# provenance: run 2026-09-03 on an aarch64 Linux host (Neoverse-N1, native static build, no sysroot); gem5-DIT 6608290fbd with the signed_lookup rig changes of 2026-09-03; clang from llvm-data-independent-timing 2049d4d4e9b2 build; libsodium 1.0.21 with the CIO chacha20_ref.c rename patch; gem5.fast built 2026-09-02 01:12.
+# BUG ERA, AEAD secret op on the ORIGINAL lookup chain that collapses to one table entry: blanket +127% is the value predictor losing a constant load. Evidence for the 2026-09-03 chain fix, not a result.
+# gem5 Neoverse-V2 FDP, --eves --dmp --comp-simp, gem5.fast. Full flow (lookups + one chacha20-poly1305 AEAD encrypt of a 100-byte record),
+# driver calling the crypto_sign wrapper; pass library built with -fno-optimize-sibling-calls.
+# switch=serialising is --no-speculative-dit. dit_writes is commit.ditWrites (committed mode writes).
+# f_secret_pct = (full - nosign) / full on the nodit arm's cycles, same iter.
+# cycles = median over 5 stack offset(s) (argv[0] lengths); spread_pct = (max-min)/median across them.
+L,f_secret_pct,arm,switch,cycles,insts,ipc,vs_base_pct,dit_writes,requests,n_offsets,spread_pct
+10,98.0,nodit,-,3899700,7848012,2.012,0.00,0,1600,5,0.70
+10,98.0,blanket,-,3943922,7848012,1.990,1.13,0,1600,5,1.49
+10,98.0,pass,renamed,3797772,8024012,2.113,-2.61,78400,1600,5,3.49
+10,98.0,pass,serialising,5721550,8024012,1.402,46.72,78400,1600,5,0.03
+50,86.8,nodit,-,4424728,7777512,1.758,0.00,0,1500,5,6.69
+50,86.8,blanket,-,4614294,7777512,1.686,4.28,0,1500,5,0.91
+50,86.8,pass,renamed,4437245,7942512,1.790,0.28,73500,1500,5,3.53
+50,86.8,pass,serialising,6088166,7942512,1.305,37.59,73500,1500,5,2.66
+200,63.3,nodit,-,4904666,7918462,1.614,0.00,0,1270,5,2.18
+200,63.3,blanket,-,6619448,7918462,1.196,34.96,0,1270,5,0.79
+200,63.3,pass,renamed,4824511,8058162,1.670,-1.63,62230,1270,5,3.67
+200,63.3,pass,serialising,6057337,8058162,1.330,23.50,62230,1270,5,4.87
+1000,27.8,nodit,-,5847466,7929462,1.356,0.00,0,670,5,1.18
+1000,27.8,blanket,-,10906470,7929462,0.727,86.52,0,670,5,0.10
+1000,27.8,pass,renamed,5810587,8003162,1.377,-0.63,32830,670,5,2.91
+1000,27.8,pass,serialising,6465724,8003162,1.238,10.57,32830,670,5,1.59
+5000,7.4,nodit,-,6608591,7967012,1.206,0.00,0,200,5,0.16
+5000,7.4,blanket,-,14482291,7967012,0.550,119.14,0,200,5,0.05
+5000,7.4,pass,renamed,6609868,7989012,1.209,0.02,9800,200,5,1.64
+5000,7.4,pass,serialising,6831078,7989012,1.170,3.37,9800,200,5,0.91
+20000,2.2,nodit,-,6836241,7965937,1.165,0.00,0,55,5,0.06
+20000,2.2,blanket,-,15527127,7965937,0.513,127.13,0,55,5,0.06
+20000,2.2,pass,renamed,6853318,7971987,1.163,0.25,2695,55,5,1.38
+20000,2.2,pass,serialising,6898056,7971987,1.156,0.90,2695,55,5,0.91

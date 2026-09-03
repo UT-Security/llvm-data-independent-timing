@@ -20,7 +20,7 @@ were run.
 | # | workload | public lane | secret lane | knob | status |
 |---|---|---|---|---|---|
 | 01 | [Bitcoin Core wallet](01-bitcoin-core-wallet/) | coin selection, 4 solvers | `CKey::Sign` per input | inputs per tx | **complete, both instruments** |
-| 02 | [libsodium signed lookup](02-libsodium-signed-lookup/) | table lookups, value-dependent chain | `crypto_sign_ed25519` per request | lookups per signature | **complete, both instruments** |
+| 02 | [libsodium signed lookup](02-libsodium-signed-lookup/) | hashed pointer chase, 75% of critical-path loads LVP-predictable | chacha20-poly1305 AEAD per record (ed25519 until 2026-09-03) | lookups per record; also the LVP-predictable fraction, and the switch implementation | **gem5 complete on the new rig (2026-09-03), silicon pending** |
 | 03 | [mbedTLS record MAC](03-mbedtls-record-mac/) | per-record bookkeeping, in the SAME function | `mbedtls_md_hmac` per record | **bytes per record (region SIZE)** | **complete, silicon** |
 | 04 | [libsecp256k1 soundness](04-libsecp256k1-soundness/) | - | ECDSA signing, key seeded | **none - measures PROTECTION, not cost** | **complete, gem5** |
 | 05 | [nginx TLS 1.3](05-nginx-tls-deployed/) | request handling, cert verify | TLS 1.3 key schedule | **none - a DEPLOYED server, measures REACH** | **complete, silicon** |
@@ -75,7 +75,7 @@ One artifact per experiment. Republish through the recorded URL (`Artifact` with
 | # | page | url |
 |---|---|---|
 | 01 | The Secret-Fraction Crossover | https://claude.ai/code/artifact/692f3b7d-18fe-4707-ab8a-3d5b84478c12 |
-| 02 | Signed-Lookup Crossover | https://claude.ai/code/artifact/52f2f6b1-8324-4907-a6d0-a3548558a895 |
+| 02 | Signed-Lookup Crossover (retired driver; current figures are `02-libsodium-signed-lookup/figures/*.png`) | https://claude.ai/code/artifact/52f2f6b1-8324-4907-a6d0-a3548558a895 |
 | 03 | Fine Grain Crossover | https://claude.ai/code/artifact/a7949ca8-dba2-48c8-b583-9fdad41d8f8f |
 | 04 | Soundness Ledger | https://claude.ai/code/artifact/f8e0b663-444d-450b-ad3c-1b31cffe44f0 |
 | 05 | The Reach Limit | https://claude.ai/code/artifact/dc90173e-f6f9-431e-8b11-e34321eb2dd7 |
@@ -99,16 +99,22 @@ framework's first question (blanket DIT is already free on it), kept in
 `docs/results/`.
 
 **libsodium is BOTH**, and it is now two experiments rather than a footnote: 02 is
-the flow with a public lane, where the pass beats blanket by 21%; 09 is the
-library alone, run the way the closest prior work (CIO, ASPLOS'24) ran it, where
-blanket wins on 5 of 6. Same library, opposite verdicts - which is the point. Its own primitives fail the first question: blanket costs
+the flow with a public lane; 09 is the library alone, run the way the closest
+prior work (CIO, ASPLOS'24) ran it, where blanket wins on 5 of 6. In 02 (gem5,
+rig of 2026-09-03, IPC overhead) blanket costs the public lane up to +31%,
+renamed placement is within 2% of unhardened at every secret fraction, and
+serialising placement crosses blanket just under 45% secret - so which of the
+three wins is decided by the
+flow's public lane and by the switch implementation, not by the library. Its own primitives fail the first question: blanket costs
 **+0.00% to +1.99% across all 13** (`09-libsodium-cio-parity/data/primitives_13_silicon.csv`,
 19 measurements, ed25519 sign +0.19%), so there is no headroom and no placement
 can win. (**Corrected 2026-09-02.** This sentence previously called ed25519 "a
 *speedup* (-2.96%)". Nothing in the tree supports that figure; the measured
 value is +0.19%, and the 13-primitive CSV it comes from was unreferenced.) But libsodium *inside a flow with a public
-lane* is experiment 02, where blanket reaches +32.64% and the pass beats it by
-21%. The library is not the workload; the flow is.
+lane* is experiment 02, where blanket reaches +31% on gem5 and renamed placement
+is free. The library is not the workload; the flow is. (02's earlier silicon
+numbers, +32.64% and -21%, were measured on a lookup chain that collapsed to a
+constant load and are retired; see its README.)
 
 ## Conventions
 
