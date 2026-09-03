@@ -90,7 +90,15 @@ BENCHES = {
     "chacha20_poly1305_decrypt":  (50, 10, 100),
     "aesni256gcm_encrypt":        (50, 10, 100),
     "aesni256gcm_decrypt":        (50, 10, 100),
+    # argon2id: ONE measured op and ONE warmup. gem5 is deterministic, so a
+    # settled region is exact and every extra op is another 326M cycles for
+    # nothing; warmup=10 here would be ten hours per cell. Its driver's argv is
+    # <niter> <nwarmup> <password> <OUT_SIZE> <ccfile>, so the third slot is the
+    # output size, not AD - 32 bytes, CIO's value. Not in the default sweep: run
+    # it with --benches argon2id (reproduce.sh does).
+    "argon2id":                   (1, 1, 32),
 }
+DEFAULT_BENCHES = [b for b in BENCHES if b != "argon2id"]
 
 STAT_RE = re.compile(r"^(\S+)\s+([-\d.]+(?:e[-+]?\d+)?|nan|inf|-inf)\s")
 
@@ -134,7 +142,12 @@ def canon(src, *key):
     the whole run: one byte-identical binary measured 287,318 / 285,068 / 284,936
     cycles at a 1-, 36- and 18-char name -- 0.84% from the file name alone."""
     slot = hashlib.md5("/".join(map(str, key)).encode()).hexdigest()[:8]
-    c = WORK / "canon" / slot / "b"
+    # The slot fixes the LAST component's width; the prefix must be fixed too, or
+    # two sweeps in differently named WORK dirs run with different argv[0]
+    # lengths and are not comparable (measured: 71 vs 63 chars, 0.2-2.6% shift).
+    # /tmp/<12-hex of WORK> is the same length for every WORK on every machine.
+    root = pathlib.Path("/tmp") / ("cio_" + hashlib.md5(str(WORK).encode()).hexdigest()[:12])
+    c = root / slot / "b"
     c.parent.mkdir(parents=True, exist_ok=True)
     if c.exists():
         c.unlink()
@@ -331,7 +344,7 @@ def gates(results, arms, cfgs):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--benches", default=",".join(BENCHES))
+    ap.add_argument("--benches", default=",".join(DEFAULT_BENCHES))
     ap.add_argument("--arms", default=",".join(ARMS))
     ap.add_argument("--configs", default="spec,serdit")
     ap.add_argument("--jobs", type=int, default=100)

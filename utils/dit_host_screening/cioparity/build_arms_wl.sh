@@ -43,6 +43,21 @@ SEEDS="${SEEDS:-$G5/benchmarks/crypto/libsodium_secret.txt}"
 INC="${INC:-$BC/src/libsodium/include}"
 MARCH="${MARCH:-armv8.4-a}"
 LB="$LLVM/bin"
+
+# libm5.a supplies the ROI markers. It is the m5op ABI and is independent of any
+# gem5 source change, so a patched WORKTREE will not have built one - and a
+# missing -lm5 is a link error 40 lines into the arm build rather than a clear
+# message here. Look in $G5 first, then fall back to a sibling gem5 checkout that
+# has one, and say which was used.
+M5LIB="${M5LIB:-}"
+if [[ -z "$M5LIB" ]]; then
+  for c in "$G5" "$HOME/Documents/gem5-DIT" "$G5/.."/gem5-DIT*; do
+    [[ -f "$c/util/m5/build/arm64/out/libm5.a" ]] && { M5LIB="$c/util/m5/build/arm64/out"; break; }
+  done
+fi
+[[ -n "$M5LIB" && -f "$M5LIB/libm5.a" ]] || die \
+  "no libm5.a found. Build it once with: cd \$G5/util/m5 && scons build/arm64/out/libm5.a
+   (it is ABI-only, so any gem5 checkout's copy works; set M5LIB to point at one)"
 # Flags added to EVERY object-emission llc, in every arm including base, so any
 # alignment policy applies identically and cannot itself become a confound.
 # ALIGN=4 -> -align-all-nofallthru-blocks=4 (16B); 6 -> 64B. Empty = off.
@@ -50,7 +65,7 @@ ALIGN="${ALIGN:-}"
 EMIT_FLAGS=()
 [[ -n "$ALIGN" ]] && EMIT_FLAGS=(-align-all-nofallthru-blocks="$ALIGN")
 
-BENCHES="${BENCHES:-ed25519 chacha20_poly1305_encrypt chacha20_poly1305_decrypt aesni256gcm_encrypt aesni256gcm_decrypt}"
+BENCHES="${BENCHES:-ed25519 chacha20_poly1305_encrypt chacha20_poly1305_decrypt aesni256gcm_encrypt aesni256gcm_decrypt argon2id}"
 ARMS="${ARMS:-base blanket nop taint taintnop taintfn taintfnnop fine finenop}"
 
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
@@ -207,12 +222,18 @@ if want link; then
       case "$arm" in blanket) v=base; extra="-DBLANKET_DIT" ;; *) v="$arm"; extra="" ;; esac
       lib="$WORK/libsodium-$v.a"
       [[ -f "$lib" ]] || { warn "skip $b/$arm -- no $lib"; continue; }
-      "$LB/clang" -march="$MARCH" -O2 -std=gnu18 -static -fomit-frame-pointer \
+      # Compiled from INSIDE the staging dir with a bare relative file name. CIO's
+      # drivers use assert(), which embeds __FILE__; given an absolute path that
+      # string is as long as $WORK, so two builds in differently named work dirs
+      # differ in .rodata length and every address after it. Measured: an 8-char
+      # longer WORK moved results 0.2-2.6% and flipped a gate. A bare name makes
+      # __FILE__ "eval_ed25519.c" in every build, wherever WORK is.
+      ( cd "$STAGE" && "$LB/clang" -march="$MARCH" -O2 -std=gnu18 -static -fomit-frame-pointer \
           -DNO_DYN_HIT_COUNTS $extra \
           -I"$G5/include" -I"$INC" \
-          -o "$WORK/bin/eval_${b}.${arm}" "$src" "$R/blanket_ctor.c" \
-          "$lib" -L"$G5/util/m5/build/arm64/out" -lm5 -lm \
-        >"$WORK/bin/.link_${b}_${arm}.log" 2>&1 \
+          -o "$WORK/bin/eval_${b}.${arm}" "eval_$b.c" "$R/blanket_ctor.c" \
+          "$lib" -L"$M5LIB" -lm5 -lm \
+        >"$WORK/bin/.link_${b}_${arm}.log" 2>&1 ) \
         || { warn "link failed $b/$arm"; tail -8 "$WORK/bin/.link_${b}_${arm}.log" >&2; continue; }
     done
     printf '    %-34s %s arms\n' "$b" "$(ls "$WORK/bin/eval_${b}."* 2>/dev/null | wc -l)"
@@ -232,7 +253,7 @@ if want gate; then
         -DNO_DYN_HIT_COUNTS -DDIT_READBACK $extra \
         -I"$G5/include" -I"$INC" \
         -o "$WORK/bin/gate_${b}.${arm}" "$WORK/src/eval_$b.c" "$R/blanket_ctor.c" \
-        "$lib" -L"$G5/util/m5/build/arm64/out" -lm5 -lm >/dev/null 2>&1 \
+        "$lib" -L"$M5LIB" -lm5 -lm >/dev/null 2>&1 \
       || { warn "gate build failed $arm"; continue; }
   done
   fail=0

@@ -157,16 +157,16 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
 <header>
   <p class="eyebrow">Experiment 09 &middot; libsodium, CIO parity &middot; switch-model counterfactual</p>
   <h1>The Cost Is the Switch</h1>
-  <p class="lede col">Take the hardened binary that costs <b>+80.72%</b> on libsodium's
+  <p class="lede col">Take the hardened binary that costs <b>+81.85%</b> on libsodium's
   chacha20-poly1305, change nothing about it, and run it on a core that
   <b>renames</b> the <code>MSR DIT</code> write instead of serialising it. The
-  overhead becomes <b>&minus;0.90%</b>. Same code, same input, one mechanism &mdash;
+  overhead becomes <b>&minus;0.28%</b>. Same code, same input, one mechanism &mdash;
   and it accounts for essentially all of it.</p>
   <div class="meta">
     <span>gem5 &middot; Neoverse-V2 FDP</span>
     <span>libsodium 1.0.21 &middot; --disable-asm</span>
     <span>CIO's 6 drivers, unmodified</span>
-    <span>deterministic &middot; no reps</span>
+    <span>deterministic &middot; bit-reproducible</span>
     <span>silicon column: M5 + M4, corrected</span>
     <span>2026-09-02</span>
   </div>
@@ -185,55 +185,55 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
       <div class="bname">chacha20-poly1305 encrypt<small>94 switches/op</small></div>
       <div class="pair">
         <div class="track"><div class="zero"></div>
-          <div class="bar free" style="left:5.110%;width:0.890%"></div>
-          <span class="v free" style="left:6.6%">&minus;0.90%&ensp;renamed</span></div>
+          <div class="bar free" style="left:5.723%;width:0.277%"></div>
+          <span class="v free" style="left:6.6%">&minus;0.28%&ensp;renamed</span></div>
         <div class="track"><div class="zero"></div>
-          <div class="bar cost" style="left:6%;width:79.83%"></div>
-          <span class="v cost" style="left:87.2%">+80.72%</span></div>
+          <div class="bar cost" style="left:6%;width:80.95%"></div>
+          <span class="v cost" style="left:88.3%">+81.85%</span></div>
       </div>
     </div>
     <div class="brow">
       <div class="bname">chacha20-poly1305 decrypt<small>98 switches/op</small></div>
       <div class="pair">
         <div class="track"><div class="zero"></div>
-          <div class="bar free" style="left:6%;width:3.62%"></div>
-          <span class="v free" style="left:10.5%">+3.66%</span></div>
+          <div class="bar free" style="left:6%;width:2.54%"></div>
+          <span class="v free" style="left:9.4%">+2.57%</span></div>
         <div class="track"><div class="zero"></div>
-          <div class="bar cost" style="left:6%;width:90.07%"></div>
-          <span class="v cost" style="left:70%;color:var(--cost)">+91.07%</span></div>
+          <div class="bar cost" style="left:6%;width:88.08%"></div>
+          <span class="v cost" style="left:70%;color:var(--cost)">+89.06%</span></div>
       </div>
     </div>
     <div class="brow">
       <div class="bname">aes256-gcm decrypt<small>15 switches/op</small></div>
       <div class="pair">
         <div class="track"><div class="zero"></div>
-          <div class="bar free" style="left:6%;width:8.37%"></div>
-          <span class="v free" style="left:15.3%">+8.46%</span></div>
+          <div class="bar free" style="left:6%;width:8.14%"></div>
+          <span class="v free" style="left:15.1%">+8.23%</span></div>
         <div class="track"><div class="zero"></div>
-          <div class="bar cost" style="left:6%;width:50.81%"></div>
-          <span class="v cost" style="left:57.8%">+51.38%</span></div>
+          <div class="bar cost" style="left:6%;width:50.50%"></div>
+          <span class="v cost" style="left:57.5%">+51.06%</span></div>
       </div>
     </div>
     <div class="brow">
       <div class="bname">aes256-gcm encrypt<small>15 switches/op</small></div>
       <div class="pair">
         <div class="track"><div class="zero"></div>
-          <div class="bar free" style="left:5.258%;width:0.742%"></div>
-          <span class="v free" style="left:6.6%">&minus;0.75%</span></div>
+          <div class="bar free" style="left:5.248%;width:0.752%"></div>
+          <span class="v free" style="left:6.6%">&minus;0.76%</span></div>
         <div class="track"><div class="zero"></div>
-          <div class="bar cost" style="left:6%;width:28.62%"></div>
-          <span class="v cost" style="left:35.6%">+28.94%</span></div>
+          <div class="bar cost" style="left:6%;width:28.69%"></div>
+          <span class="v cost" style="left:35.7%">+29.01%</span></div>
       </div>
     </div>
     <div class="brow">
       <div class="bname">ed25519 sign<small>85 switches/op</small></div>
       <div class="pair">
         <div class="track"><div class="zero"></div>
-          <div class="bar free" style="left:4.427%;width:1.573%"></div>
-          <span class="v free" style="left:6.6%">&minus;1.59%</span></div>
+          <div class="bar free" style="left:4.625%;width:1.375%"></div>
+          <span class="v free" style="left:6.6%">&minus;1.39%</span></div>
         <div class="track"><div class="zero"></div>
-          <div class="bar cost" style="left:6%;width:1.316%"></div>
-          <span class="v cost" style="left:8.3%">+1.33%</span></div>
+          <div class="bar cost" style="left:6%;width:1.681%"></div>
+          <span class="v cost" style="left:8.7%">+1.70%</span></div>
       </div>
     </div>
     <div class="brow">
@@ -274,11 +274,11 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
     <thead><tr><th>benchmark</th><th>renamed</th><th>serialising</th><th>switches/op</th>
       <th>writes / Mcycle</th></tr></thead>
     <tbody>
-      <tr><td>chacha20-poly1305 encrypt</td><td class="free">&minus;0.3</td><td class="cost">19.0</td><td>94</td><td>42,217</td></tr>
-      <tr><td>chacha20-poly1305 decrypt</td><td class="free">+0.2</td><td class="cost">20.4</td><td>98</td><td>43,176</td></tr>
-      <tr><td>aes256-gcm encrypt</td><td class="free">+0.3</td><td class="cost">24.4</td><td>15</td><td>12,303</td></tr>
-      <tr><td>ed25519 sign</td><td class="free">&minus;0.2</td><td class="cost">26.7</td><td>85</td><td>1,089</td></tr>
-      <tr><td>aes256-gcm decrypt</td><td class="free">+5.8</td><td class="cost">36.9</td><td>15</td><td>13,787</td></tr>
+      <tr><td>chacha20-poly1305 encrypt</td><td class="free">&minus;0.3</td><td class="cost">19.0</td><td>94</td><td>42,494</td></tr>
+      <tr><td>chacha20-poly1305 decrypt</td><td class="free">+0.1</td><td class="cost">20.3</td><td>98</td><td>42,728</td></tr>
+      <tr><td>aes256-gcm encrypt</td><td class="free">+0.3</td><td class="cost">24.5</td><td>15</td><td>12,302</td></tr>
+      <tr><td>ed25519 sign<small>&plusmn;9: 85 switches on a 78k-cycle region</small></td><td class="dim">+10.7</td><td class="dim">39.0</td><td>85</td><td>1,093</td></tr>
+      <tr><td>aes256-gcm decrypt</td><td class="free">+6.0</td><td class="cost">37.1</td><td>15</td><td>13,758</td></tr>
       <tr><td>argon2id</td><td class="dim">&mdash;</td><td class="dim">&mdash;</td><td>438</td><td>1.3</td></tr>
     </tbody>
   </table>
@@ -286,9 +286,9 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
   <div class="grid2">
     <div class="panel"><span class="k free">&asymp;&thinsp;0</span>
       <p>cycles for a <b>renamed</b> switch, across five benchmarks
-      (&minus;0.3 to +5.8). On a core that renames the write, placement granularity
-      stops mattering: the three policies spread over 25 points serialising and
-      <b>3 points</b> renamed.</p></div>
+      (&minus;0.3 to +0.3 where it can be resolved). On a core that renames the write, placement granularity
+      stops mattering: the three policies spread over 25.3 points serialising and
+      <b>3.2 points</b> renamed.</p></div>
     <div class="panel"><span class="k cost">19&ndash;37</span>
       <p>cycles for a <b>serialising</b> one &mdash; below <b>both</b> pieces of
       silicon this library has been measured on, 43.6 on the M5 and 33.4 on the
@@ -336,10 +336,10 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
     hardened cycle, which would be diluted by the overhead it predicts.</caption>
     <thead><tr><th>benchmark</th><th>writes / Mcycle</th><th>serialising penalty</th></tr></thead>
     <tbody>
-      <tr><td>chacha20-poly1305 decrypt</td><td>43,176</td><td class="cost">+87.42</td></tr>
-      <tr><td>chacha20-poly1305 encrypt</td><td>42,217</td><td class="cost">+81.62</td></tr>
-      <tr><td>aes256-gcm decrypt</td><td>13,787</td><td class="cost">+42.92</td></tr>
-      <tr><td>ed25519 sign</td><td>1,089</td><td class="cost">+2.92</td></tr>
+      <tr><td>chacha20-poly1305 decrypt</td><td>42,728</td><td class="cost">+86.48</td></tr>
+      <tr><td>chacha20-poly1305 encrypt</td><td>42,494</td><td class="cost">+82.13</td></tr>
+      <tr><td>aes256-gcm decrypt</td><td>13,758</td><td class="cost">+42.83</td></tr>
+      <tr><td>ed25519 sign</td><td>1,093</td><td class="cost">+3.09</td></tr>
       <tr><td>argon2id</td><td>1.3</td><td class="free">+0.07</td></tr>
     </tbody>
   </table>
@@ -372,9 +372,9 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
       <div class="w">Finer placement wins on aes256-gcm decrypt</div>
       <div class="b">Inserting a switch moves all downstream code by exactly <b>4.00
       bytes</b>; after 524 switches that is 34 cache lines of displacement, worth
-      <b>&minus;6.82% to +7.89%</b> &mdash; larger than the policy differences being measured.
+      <b>&minus;6.94% to +4.52%</b> &mdash; larger than the policy differences being measured.
       The finer policy had simply drawn a favourable layout. Against a per-policy layout twin
-      it is <b>3.7 points worse</b>, executing more switches at the same dwell. Two mechanisms
+      it is <b>3.2 points worse</b>, executing more switches at the same dwell. Two mechanisms
       were proposed for the original result before the controls falsified both.</div>
     </div>
   </div>
