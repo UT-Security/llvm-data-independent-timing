@@ -46,7 +46,7 @@ One artifact per experiment. Republish through the recorded URL (`Artifact` with
 | 08 | Two Analyses, One Library | https://claude.ai/code/artifact/2a789196-2274-42fc-9922-b624f0808762 |
 | 09 | Nothing to Recover | https://claude.ai/code/artifact/24709335-fc81-4a36-8eca-0c64fcc6cf8a |
 | 09b | The Cost Is the Switch (gem5 switch model) | https://claude.ai/code/artifact/6b5dc30a-1296-4d02-a5e2-b723e6c8ed57 |
-| 09c | Three Instruments, One Ordering (M4 + M5 + gem5) | https://claude.ai/code/artifact/628ee41e-ccf2-4090-8c2e-f7acd6740d20 |
+| 09c | DIT overhead on libsodium (paper figure, M4 + M5 + ExpeDITe) | `09-libsodium-cio-parity/figures/three-machines-region.png` |
 
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6
 

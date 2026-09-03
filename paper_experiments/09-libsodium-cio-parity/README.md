@@ -23,13 +23,17 @@ benchmarks. It is a separate page rather than a merge because it is a separate
 instrument answering a question silicon cannot: the two are complementary, not
 alternative readings of one run.
 
-**Third page, all three instruments on one axis:**
-https://claude.ai/code/artifact/628ee41e-ccf2-4090-8c2e-f7acd6740d20
-Source: `figures/three-instruments.html`. *Three Instruments, One Ordering* puts
-M4, M5 and both gem5 switch models on one log-scale figure, per benchmark, with
-placement granularity on the x axis from blanket through function and region to
-the old fine defaults. Built from `m4_results_ratios.csv`, `m5_results_ratios.csv`
-(cntvct rows) and `gem5_switch_model.csv`; the table view carries every value.
+**The paper figure:** `figures/three-machines-region.{png,pdf}`. Grouped bars,
+one group per benchmark: coarse-grain DIT (blanket) on each machine, then
+fine-grain DIT (region placement, the shipped pass) on each machine, as a
+slowdown against each machine's own baseline. Machines are Apple M4, Apple M5,
+and ExpeDITe (the gem5 model) under both `MSR DIT` implementations. Regenerate
+with `utils/dit_host_screening/cioparity/fig_three_machines.py`, which reads
+`m{4,5}_results_ratios.csv` (cntvct rows) and `gem5_switch_model.csv` /
+`gem5_argon2id.csv` directly. Cycles, not IPC: the pass adds only its switches
+(1-2% more instructions, blanket adds none), so the ratio is almost entirely
+cycles, and absolute silicon IPC would carry the unmeasured instruction offset of
+the kperf reads.
 
 ---
 
