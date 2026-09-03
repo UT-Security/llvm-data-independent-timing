@@ -127,7 +127,7 @@ ax.yaxis.grid(True, color=GRID, lw=0.7, zorder=0); ax.set_axisbelow(True)
 for s in ("top", "right", "left"):
     ax.spines[s].set_visible(False)
 ax.spines["bottom"].set_color(GRID); ax.tick_params(axis="both", length=0)
-ax.set_ylabel("Slowdown vs. baseline", fontsize=8.5, color=MUTED)
+ax.set_ylabel("Cycles relative to baseline", fontsize=8.5, color=MUTED)
 handles = [
     Patch(facecolor=SURF, edgecolor=c, linewidth=1.3, label=nm) if h else Patch(facecolor=c, label=nm)
     for _, nm, c, h in MACH]
