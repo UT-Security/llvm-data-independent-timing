@@ -2358,6 +2358,27 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
     }
   }
 
+  // DECLASSIFICATION. A parameter tagged `declassified` drops whatever taint
+  // reaches it: the caller may pass a secret-derived value, and this function
+  // asserts it is public by then. Filtering here rather than at each source
+  // covers both the IR attributes above and the interprocedural summary below,
+  // so there is one place the rule can be reasoned about.
+  //
+  // This is user-asserted and therefore UNSOUND BY CONSTRUCTION - that is what
+  // declassification is. What it must not do is over-reach: the tag is on the
+  // PARAMETER, so it stops taint at one call boundary and says nothing about
+  // the object the pointer refers to, which may hold a secret elsewhere or
+  // later. See TaintSourceAnnotator for why object granularity is wrong here.
+  auto DropDeclassified = [&](SmallVectorImpl<unsigned> &V) {
+    llvm::erase_if(V, [&](unsigned Idx) {
+      if (Idx >= F.arg_size() || !F.getArg(Idx)->hasAttribute("declassified"))
+        return false;
+      LLVM_DEBUG(dbgs() << "  arg " << Idx
+                        << " is DECLASSIFIED: taint dropped here\n");
+      return true;
+    });
+  };
+
   // Source 2: Interprocedural summaries - the module pass stores
   // "identity arg 0 is tainted" in TSI when it sees caller_simple
   // passing a tainted register to identity's first argument.
@@ -2378,6 +2399,9 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
       }
     }
   }
+
+  DropDeclassified(TaintedArgIndices);
+  DropDeclassified(PointeeTaintedArgIndices);
 
   if (TaintedArgIndices.empty() && PointeeTaintedArgIndices.empty() && !TSI) {
     // Intraprocedural mode with no tainted args: nothing to analyze.

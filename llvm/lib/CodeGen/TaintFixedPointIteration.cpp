@@ -187,6 +187,18 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           // (an address computed from a secret), which is secret-dependent
           // ADDRESSING - already outside what PSTATE.DIT covers and already
           // reported separately by -taint-uncovered-report as `secret-address`.
+          // A DECLASSIFIED parameter absorbs taint and reports none: the
+          // callee has asserted that whatever arrives here is public. Skipping
+          // the propagation, rather than filtering later, also keeps the
+          // callee's SUMMARY clean, so nothing downstream re-derives it.
+          if (ArgIdx < Callee->arg_size() &&
+              Callee->getArg(ArgIdx)->hasAttribute("declassified")) {
+            LLVM_DEBUG(dbgs() << "  caller " << MF.getName() << " -> callee "
+                              << Callee->getName() << ": arg " << ArgIdx
+                              << " is DECLASSIFIED, taint stops here\n");
+            continue;
+          }
+
           const bool PtrParam = ArgIdx < Callee->arg_size() &&
                                 Callee->getArg(ArgIdx)->getType()->isPointerTy();
           if (S.isTainted(PhysReg) && PtrParam &&
