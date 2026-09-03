@@ -29,6 +29,32 @@ were run.
 | 08 | [seed ground truth](08-seed-ground-truth/) | - | libhydrogen signing, their exact source | **none - compares our taint set against an INDEPENDENT one** | **complete** |
 | 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon x2 (M5 + M4) + gem5 switch model; percentages corrected 4-15x, conclusions unchanged** |
 
+## Compiler changes and experiment validity
+
+The pass changes under these experiments, so each README records the compiler
+that produced its numbers. When a change lands that could move them, the
+question is which conclusions move - not whether the last digit does.
+
+**2026-09-02, the phi fix** (`getCellFromMMO` now looks through PHI nodes to the
+underlying object; `docs/design/frame-address-gap.md`). It is unflagged and
+default-on, and it changes what the analysis sees, so every experiment was in
+scope. Checked:
+
+| # | workload | status |
+|---|---|---|
+| 04 | libsecp256k1 | **verified unaffected** - oracle re-run reproduces exactly: 4,647,778 protected, 40 clear, 2 sites, both in the harness, zero inside the library |
+| 02, 07, 09 | libsodium | **verified unaffected** - 134 switches either side, and the whole-library disassembly differs by exactly one `msr DIT, #0` moved four instructions within one epilogue (8 lines of 60,911) |
+| 08 | libhydrogen | **AFFECTED, already re-measured** - this is the experiment the fix came out of. Oracle 97.61% -> 80.85% unprotected on the natural seed, and the info-loss report's own repair line went from doing nothing to reaching 0.03% |
+| 01 | Bitcoin Core | **not re-checked** |
+| 03, 06 | mbedTLS | **not re-checked** (06 reuses 03's binaries) |
+| 05 | nginx + OpenSSL | **not re-checked** |
+
+**The cheap way to settle the remaining three** is a switch-count and
+disassembly comparison against the recorded arm, as done for libsodium above: if
+the code is unchanged the timing conclusions are unchanged, and only if it moved
+does anything need re-running. That is much cheaper than re-running the
+measurements and answers the same question.
+
 ## Published pages
 
 One artifact per experiment. Republish through the recorded URL (`Artifact` with
