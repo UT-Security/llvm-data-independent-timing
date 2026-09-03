@@ -46,28 +46,37 @@ instructions that run at full IPC.
 
 | L | f_secret | blanket | pass, renamed | pass, serialising |
 |---|---|---|---|---|
-| 10 | 96.9% | +1.1% | +0.3% | **+41.6%** |
-| 50 | 81.5% | +9.0% | +0.6% | +32.3% |
-| 200 | 44.9% | +19.1% | -1.6% | +17.3% |
-| 1000 | 13.5% | +27.5% | +0.1% | +5.2% |
-| 5000 | 3.2% | +30.4% | -0.1% | +1.3% |
-| 20000 | 0.8% | **+30.8%** | +0.0% | +0.5% |
+| 10 | 96.8% | +7.3% | +0.2% | **+41.2%** |
+| 50 | 81.2% | +12.6% | -0.9% | +32.0% |
+| 200 | 45.0% | +20.2% | -1.0% | +17.7% |
+| 1000 | 13.1% | +27.7% | -0.3% | +5.1% |
+| 5000 | 2.6% | +30.6% | +0.2% | +1.4% |
+| 20000 | 0.6% | **+31.3%** | +0.4% | +0.6% |
 
-Spread across offsets (cycles) is under 2.7% everywhere; the blanket cells at
-large L are bit-identical across offsets.
+Spread across offsets (cycles) is under 2.3% everywhere
+(`data/gem5_stack_offset_spread.csv` has every offset's cycles); the blanket
+cell at L=20,000 is bit-identical across offsets.
+
+**One caveat on the two secret-heavy blanket cells.** Reproducing this table
+from a binary path of a different constant length moved blanket at f=97% from
++1.1% to +7.3% and at f=81% from +9.0% to +12.6%, while every other cell stayed
+within a point. Where the AEAD dominates, blanket's cost depends on where the
+AEAD's stack buffers land against the predictors, and five consecutive one-byte
+offsets sample one alignment class, not all of them. The trend and the other
+four points do not depend on it; the exact value at f>80% does.
 
 **Three readings:**
 
 1. **Blanket's cost is the public lane's lost load predictions.** It climbs from
-   +1% to +31% as the lane grows, and `data/gem5_value_predictor_by_arm.csv`
-   shows why: unhardened makes 120 load-value predictions per request at L=10
-   and 15,096 at L=20,000, blanket makes zero at every L. Nothing else DIT
+   +7% to +31% as the lane grows, and `data/gem5_value_predictor_by_arm.csv`
+   shows why: unhardened makes 113 load-value predictions per request at L=10
+   and 15,092 at L=20,000, blanket makes zero at every L. Nothing else DIT
    gates in this model moves: comp-simp never simplifies anything here, the DMP
    never scans (the table is L1-resident), branch mispredicts are identical.
-2. **Renamed placement is free at every point**, within 1.6% of unhardened. The
+2. **Renamed placement is free at every point**, within 1% of unhardened. The
    public lane runs with DIT clear and keeps every prediction; the secret lane
    pays 49 switches that cost nothing when the mode is renamed.
-3. **Serialising placement crosses blanket just under 45% secret.** Its cost is the
+3. **Serialising placement crosses blanket near 50% secret.** Its cost is the
    switches, 20-25 cycles each, and does not depend on q at all. Under a
    serialising `MSR DIT` selective placement therefore has a crossover of its
    own against blanket; under a renamed one it is strictly better.
@@ -92,12 +101,12 @@ Three findings, each with its data file:
   that one constant losing its predictor: +127% at f=2%
   (`data/gem5_arms_constant_chain.csv`). Hashing the table and taking the index
   from the high bits of a 64-bit state fixes it; on that pure chase blanket is
-  free, +0.5% to -0.0% (`data/gem5_arms_pure_hash_chase.csv`).
+  free, +3.0% at f=97% falling to +0.0% (`data/gem5_arms_pure_hash_chase.csv`).
 - **Predictability is a property, so it is set on purpose.** The M4/M5 have a
   load value predictor because real code is full of same-value loads at the same
   PC (FLOP), and DIT switches it off. The lane reads an LVP-predictable header
-  on a fraction q of iterations; blanket's cost is linear in q, +0.0 / +11.6 /
-  +25.0 / +30.8 / +42.5% at L=20,000 for q = 0, 0.25, 0.5, 0.75, 1
+  on a fraction q of iterations; blanket's cost is linear in q, +0.0 / +11.2 /
+  +25.1 / +31.4 / +40.5% at L=20,000 for q = 0, 0.25, 0.5, 0.75, 1
   (`data/gem5_predictability_sweep.csv`), while renamed placement stays free and
   serialising placement's cost does not move. The canonical lane fixes q=0.75.
   Where real applications sit on this axis is what FLOP's counts and experiment
@@ -121,26 +130,30 @@ All exact, all passing, checked by `run_gem5.py` on every sweep:
 5. **Five stack offsets per cell.** gem5 is deterministic but not
    layout-insensitive: the length of argv[0] alone moved the retired driver's
    L=500 cycles by -4%..+4% for both arms (`data/gem5_stack_offset_sensitivity.csv`).
-   Every number here is a median over 5 argv[0] lengths and carries its spread.
+   Every number here is a median over 5 argv[0] lengths and carries its spread;
+   `data/gem5_stack_offset_spread.csv` records all five. The runner roots the
+   binary path at a constant-length `/tmp` path so reproductions share one
+   argv[0] length.
 
 ## Reproducing
 
-Rig: `benchmarks/signed_lookup/` in gem5-DIT. gem5 on an aarch64 Linux host,
-no sysroot (the macOS cross path is `build.sh`):
+One script, from the committed sources:
 
 ```sh
-export LLVM_BUILD=~/Documents/llvm-data-independent-timing/build
-benchmarks/signed_lookup/build_gem5_linux.sh                 # bin/gem5_{base,blanket,taint}
-python3 benchmarks/signed_lookup/run_gem5.py --offsets 5     # -> $WORK/gem5_arms_off5.csv = data/gem5_arms.csv
-python3 benchmarks/signed_lookup/run_gem5.py --offsets 5 --pred 0,1,2,3,4 --L 200,20000   # the q sweep
+export LLVM_BUILD=~/Documents/llvm-data-independent-timing/build   # the taint clang
+./reproduce.sh              # build, sweep, derive, figures
+./reproduce.sh sweep derive # just the numbers
 ```
 
-150 gem5 processes at once on a 160-core box; the canonical sweep is 210 runs
-and takes about 6 minutes. Silicon (`run_crossover.py`, M5, root for kperf) has
-not been rerun on this lane.
-
-Figures: `/tmp/mplvenv/bin/python utils/dit_host_screening/signed_lookup/fig_exp02.py`
-(needs matplotlib; see the script header for the venv).
+It drives the rig in gem5-DIT (`benchmarks/signed_lookup/build_gem5_linux.sh`,
+`run_gem5.py`; gem5 on an aarch64 Linux host, no sysroot, the macOS cross path
+is `build.sh`), then `utils/dit_host_screening/signed_lookup/derive_exp02.py`
+writes `data/` with a provenance line naming the gem5-DIT and LLVM commits, and
+`fig_exp02.py` draws `figures/`. Four sweeps, 770 gem5 runs, about 25 minutes at
+150 processes on a 160-core box. gem5 is deterministic and the runner roots the
+binary path at a constant-length `/tmp` path, so another machine reproduces
+`data/` up to its simulator and compiler builds. Silicon (`run_crossover.py`,
+M5, root for kperf) has not been rerun on this lane.
 
 ## Known limits
 
@@ -157,15 +170,17 @@ Figures: `/tmp/mplvenv/bin/python utils/dit_host_screening/signed_lookup/fig_exp
 
 | path | what |
 |---|---|
+| `reproduce.sh` | build, sweep, derive, figures, from the committed sources |
 | `data/gem5_arms.csv` | **canonical**: 6 L x 4 arms, both switch models, median of 5 offsets |
 | `data/gem5_value_predictor_by_arm.csv` | what the value predictor did under each arm, per L (figure 2's input) |
 | `data/gem5_value_predictor.csv` | public lane alone, predictor totals with and without DIT |
+| `data/gem5_stack_offset_spread.csv` | the cycles at each of the 5 offsets behind every median |
 | `data/gem5_predictability_sweep.csv` | q = 0..1 at L=200 and 20,000 |
-| `data/gem5_arms_q50.csv` | full L sweep at q=0.5, before the lane was fixed at 0.75 |
+| `data/gem5_arms_q50.csv` | full L sweep at q=0.5 |
 | `data/gem5_arms_pure_hash_chase.csv` | q=0: blanket free on the public lane |
-| `data/gem5_arms_constant_chain.csv` | bug era: the collapsing chain, +127% |
-| `data/gem5_arms_ed25519.csv` | retired secret op on the collapsing chain: switch model irrelevant |
-| `data/gem5_stack_offset_sensitivity.csv` | argv[0] length vs cycles: the reason for 5 offsets |
+| `data/gem5_arms_constant_chain.csv` | **frozen evidence**, bug era: the collapsing chain, +127%; its driver was never committed |
+| `data/gem5_arms_ed25519.csv` | **frozen evidence**: the retired secret op on the collapsing chain, switch model irrelevant; its driver was never committed |
+| `data/gem5_stack_offset_sensitivity.csv` | **frozen evidence**: argv[0] length vs cycles on the retired driver, the reason for 5 offsets |
 | `data/retired-signing-driver/` | the 2026-08-31/09-01 silicon and gem5 data for the retired driver |
 | `figures/overhead-vs-secret-fraction.{png,pdf}` | figure 1: IPC overhead vs secret fraction, three arms |
 | `figures/predictions-suppressed-vs-L.{png,pdf}` | figure 2: load-value predictions per request under each arm; blanket makes none, the pass keeps the public lane's |

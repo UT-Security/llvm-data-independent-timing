@@ -102,8 +102,8 @@ framework's first question (blanket DIT is already free on it), kept in
 the flow with a public lane; 09 is the library alone, run the way the closest
 prior work (CIO, ASPLOS'24) ran it, where blanket wins on 5 of 6. In 02 (gem5,
 rig of 2026-09-03, IPC overhead) blanket costs the public lane up to +31%,
-renamed placement is within 2% of unhardened at every secret fraction, and
-serialising placement crosses blanket just under 45% secret - so which of the
+renamed placement is within 1% of unhardened at every secret fraction, and
+serialising placement crosses blanket near 50% secret - so which of the
 three wins is decided by the
 flow's public lane and by the switch implementation, not by the library. Its own primitives fail the first question: blanket costs
 **+0.00% to +1.99% across all 13** (`09-libsodium-cio-parity/data/primitives_13_silicon.csv`,
