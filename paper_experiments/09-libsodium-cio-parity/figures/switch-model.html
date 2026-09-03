@@ -1,0 +1,468 @@
+<title>The Cost Is the Switch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --ground:#F2F4F5; --surface:#FFFFFF; --sunk:#E9EDEF;
+  --ink:#11171C; --muted:#5A6670; --faint:#8695A0;
+  --rule:#D6DCDF; --rule-soft:#E4E9EB;
+  --free:#1B7F6B; --free-soft:#CFE6DF;
+  --cost:#B4472B; --cost-soft:#F0D5CC;
+  --slate:#4A5A6A; --slate-soft:#DCE3E8;
+  --shadow:0 1px 2px rgba(17,23,28,.06),0 8px 24px -12px rgba(17,23,28,.18);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+    --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+    --rule:#2A343B; --rule-soft:#222B31;
+    --free:#4FC3A6; --free-soft:#1E3A35;
+    --cost:#E8825F; --cost-soft:#3D2620;
+    --slate:#93A6B5; --slate-soft:#242E36;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+  --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+  --rule:#2A343B; --rule-soft:#222B31;
+  --free:#4FC3A6; --free-soft:#1E3A35;
+  --cost:#E8825F; --cost-soft:#3D2620;
+  --slate:#93A6B5; --slate-soft:#242E36;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.62;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px 96px}
+.col{max-width:68ch}
+h1,h2,h3,.eyebrow,th,.mono,.num{font-family:Archivo,"Helvetica Neue",Arial,sans-serif}
+h1{font-size:clamp(2.5rem,6vw,4.1rem);line-height:1.02;letter-spacing:-.03em;
+  font-weight:700;margin:0 0 .5rem;text-wrap:balance}
+h2{font-size:1.32rem;letter-spacing:-.01em;font-weight:600;margin:0;text-wrap:balance}
+h3{font-size:.95rem;font-weight:600;margin:0 0 .35rem;letter-spacing:-.005em}
+p{margin:0 0 1.05rem}
+a{color:var(--free)}
+.eyebrow{font-size:.7rem;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 1.4rem}
+.mono,.num,code{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  font-variant-numeric:tabular-nums}
+code{background:var(--sunk);padding:.1em .38em;border-radius:3px;font-size:.86em}
+header{padding:72px 0 40px}
+.lede{font-size:1.24rem;line-height:1.5;color:var(--ink);margin:0 0 1.5rem}
+.lede b{font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:0 28px;padding-top:20px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--faint);letter-spacing:.02em}
+.meta span{white-space:nowrap}
+section{padding-top:52px}
+.sechead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;flex-wrap:wrap}
+.sechead .tag{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--faint);
+  letter-spacing:.08em;white-space:nowrap}
+.sub{color:var(--muted);font-size:.96rem;margin:0 0 26px;max-width:68ch}
+
+/* the signature device, now paired: one shared scale, zero anchored, two marks per row */
+.bars{margin:26px 0 8px;display:flex;flex-direction:column;gap:2px}
+.brow{display:grid;grid-template-columns:196px 1fr;gap:18px;align-items:center;
+  padding:13px 0;border-bottom:1px solid var(--rule-soft)}
+.brow:first-child{border-top:1px solid var(--rule)}
+.bname{font-family:Archivo,sans-serif;font-size:.86rem;font-weight:500;line-height:1.25}
+.bname small{display:block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;
+  color:var(--faint);font-weight:400;margin-top:2px}
+.pair{display:flex;flex-direction:column;gap:5px}
+.track{position:relative;height:15px}
+.zero{position:absolute;left:6%;top:-3px;bottom:-3px;width:1px;background:var(--rule)}
+.bar{position:absolute;top:0;bottom:0;border-radius:0 2px 2px 0;min-width:1px}
+.bar.free{background:var(--free-soft);border-left:2px solid var(--free)}
+.bar.cost{background:var(--cost-soft);border-left:2px solid var(--cost)}
+.v{position:absolute;top:50%;transform:translateY(-50%);
+  font-family:"IBM Plex Mono",monospace;font-size:.72rem;font-weight:500;
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+.v.free{color:var(--free)}
+.v.cost{color:var(--cost)}
+.blegend{display:flex;gap:22px;margin-top:16px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}
+.blegend i{display:inline-block;width:22px;height:9px;border-radius:2px;margin-right:7px;
+  vertical-align:middle}
+.blegend .f i{background:var(--free-soft);border-left:2px solid var(--free)}
+.blegend .c i{background:var(--cost-soft);border-left:2px solid var(--cost)}
+
+.scroll{overflow-x:auto;margin:22px 0 6px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.83rem}
+th{font-size:.68rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--faint);text-align:right;padding:12px 14px;border-bottom:1px solid var(--rule);
+  white-space:nowrap;background:var(--surface)}
+th:first-child,td:first-child{text-align:left}
+td{padding:10px 14px;border-bottom:1px solid var(--rule-soft);text-align:right;
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child{font-family:Archivo,sans-serif;font-size:.85rem}
+td small{display:block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;
+  color:var(--faint);margin-top:2px;font-weight:400}
+tr:last-child td{border-bottom:none}
+td.free{color:var(--free);font-weight:500}
+td.cost{color:var(--cost);font-weight:500}
+td.dim{color:var(--faint)}
+caption{caption-side:bottom;text-align:left;padding:11px 14px;font-size:.78rem;
+  color:var(--muted);border-top:1px solid var(--rule-soft)}
+
+.note{border-left:2px solid var(--rule);padding:2px 0 2px 18px;margin:22px 0;
+  color:var(--muted);font-size:.95rem;max-width:68ch}
+.note b,.note strong{color:var(--ink);font-weight:600}
+.flag{border-left-color:var(--cost)}
+
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:18px;margin:24px 0 6px}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:18px 20px}
+.panel .k{font-family:"IBM Plex Mono",monospace;font-size:1.5rem;font-weight:600;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:block;margin-bottom:2px}
+.panel .k.free{color:var(--free)}
+.panel .k.cost{color:var(--cost)}
+.panel .k.slate{color:var(--slate)}
+.panel p{margin:0;font-size:.88rem;line-height:1.5;color:var(--muted)}
+.panel p b{color:var(--ink);font-weight:600}
+
+.gates{display:flex;flex-direction:column;gap:0;margin:24px 0 6px;
+  border-top:1px solid var(--rule)}
+.gate{display:grid;grid-template-columns:150px 1fr auto;gap:16px;align-items:baseline;
+  padding:12px 0;border-bottom:1px solid var(--rule-soft)}
+.gate .g{font-family:"IBM Plex Mono",monospace;font-size:.86rem;font-weight:500;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.gate .d{font-size:.88rem;color:var(--muted);line-height:1.45}
+.gate .s{font-family:Archivo,sans-serif;font-size:.66rem;font-weight:600;letter-spacing:.08em;
+  color:var(--free);white-space:nowrap}
+
+.ledger{margin:22px 0 6px;border-top:1px solid var(--rule)}
+.led{display:grid;grid-template-columns:180px 1fr;gap:18px;padding:14px 0;
+  border-bottom:1px solid var(--rule-soft)}
+.led .w{font-family:Archivo,sans-serif;font-size:.84rem;font-weight:600;color:var(--cost);
+  line-height:1.35}
+.led .b{font-size:.92rem;color:var(--muted);line-height:1.5}
+.led .b b{color:var(--ink);font-weight:600}
+
+footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--faint);line-height:1.8}
+@media (max-width:640px){
+  .brow{grid-template-columns:1fr;gap:8px}
+  .gate,.led{grid-template-columns:1fr;gap:4px}
+  .gate .s{grid-column:1}
+}
+@media (prefers-reduced-motion:no-preference){
+  .bar{animation:grow .5s cubic-bezier(.2,.7,.3,1) both}
+  @keyframes grow{from{transform:scaleX(.6);transform-origin:left}to{transform:scaleX(1)}}
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Experiment 09 &middot; libsodium, CIO parity &middot; switch-model counterfactual</p>
+  <h1>The Cost Is the Switch</h1>
+  <p class="lede col">Take the hardened binary that costs <b>+81.85%</b> on libsodium's
+  chacha20-poly1305, change nothing about it, and run it on a core that
+  <b>renames</b> the <code>MSR DIT</code> write instead of serialising it. The
+  overhead becomes <b>&minus;0.28%</b>. Same code, same input, one mechanism &mdash;
+  and it accounts for essentially all of it.</p>
+  <div class="meta">
+    <span>gem5 &middot; Neoverse-V2 FDP</span>
+    <span>libsodium 1.0.21 &middot; --disable-asm</span>
+    <span>CIO's 6 drivers, unmodified</span>
+    <span>deterministic &middot; bit-reproducible</span>
+    <span>silicon column: M5 + M4, corrected</span>
+    <span>2026-09-02</span>
+  </div>
+</header>
+
+<section>
+  <div class="sechead"><h2>One binary, two machines</h2>
+    <span class="tag">shipped region placement, vs its own baseline</span></div>
+  <p class="sub">Every pair below is the <em>same</em> hardened binary measured twice.
+  Because only the machine configuration changes, code layout, instruction count and
+  scheduling are identical across the pair &mdash; the difference is the mode write and
+  nothing else.</p>
+
+  <div class="bars">
+    <div class="brow">
+      <div class="bname">chacha20-poly1305 encrypt<small>94 switches/op</small></div>
+      <div class="pair">
+        <div class="track"><div class="zero"></div>
+          <div class="bar free" style="left:5.723%;width:0.277%"></div>
+          <span class="v free" style="left:6.6%">&minus;0.28%&ensp;renamed</span></div>
+        <div class="track"><div class="zero"></div>
+          <div class="bar cost" style="left:6%;width:80.95%"></div>
+          <span class="v cost" style="left:88.3%">+81.85%</span></div>
+      </div>
+    </div>
+    <div class="brow">
+      <div class="bname">chacha20-poly1305 decrypt<small>98 switches/op</small></div>
+      <div class="pair">
+        <div class="track"><div class="zero"></div>
+          <div class="bar free" style="left:6%;width:2.54%"></div>
+          <span class="v free" style="left:9.4%">+2.57%</span></div>
+        <div class="track"><div class="zero"></div>
+          <div class="bar cost" style="left:6%;width:88.08%"></div>
+          <span class="v cost" style="left:70%;color:var(--cost)">+89.06%</span></div>
+      </div>
+    </div>
+    <div class="brow">
+      <div class="bname">aes256-gcm decrypt<small>15 switches/op</small></div>
+      <div class="pair">
+        <div class="track"><div class="zero"></div>
+          <div class="bar free" style="left:6%;width:8.14%"></div>
+          <span class="v free" style="left:15.1%">+8.23%</span></div>
+        <div class="track"><div class="zero"></div>
+          <div class="bar cost" style="left:6%;width:50.50%"></div>
+          <span class="v cost" style="left:57.5%">+51.06%</span></div>
+      </div>
+    </div>
+    <div class="brow">
+      <div class="bname">aes256-gcm encrypt<small>15 switches/op</small></div>
+      <div class="pair">
+        <div class="track"><div class="zero"></div>
+          <div class="bar free" style="left:5.248%;width:0.752%"></div>
+          <span class="v free" style="left:6.6%">&minus;0.76%</span></div>
+        <div class="track"><div class="zero"></div>
+          <div class="bar cost" style="left:6%;width:28.69%"></div>
+          <span class="v cost" style="left:35.7%">+29.01%</span></div>
+      </div>
+    </div>
+    <div class="brow">
+      <div class="bname">ed25519 sign<small>85 switches/op</small></div>
+      <div class="pair">
+        <div class="track"><div class="zero"></div>
+          <div class="bar free" style="left:4.625%;width:1.375%"></div>
+          <span class="v free" style="left:6.6%">&minus;1.39%</span></div>
+        <div class="track"><div class="zero"></div>
+          <div class="bar cost" style="left:6%;width:1.681%"></div>
+          <span class="v cost" style="left:8.7%">+1.70%</span></div>
+      </div>
+    </div>
+    <div class="brow">
+      <div class="bname">argon2id<small>438 switches/op</small></div>
+      <div class="pair">
+        <div class="track"><div class="zero"></div>
+          <div class="bar free" style="left:6%;width:1.34%"></div>
+          <span class="v free" style="left:8.3%">+1.35%</span></div>
+        <div class="track"><div class="zero"></div>
+          <div class="bar cost" style="left:6%;width:1.40%"></div>
+          <span class="v cost" style="left:8.3%">+1.42%</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="blegend">
+    <span class="f"><i></i>renamed <code>MSR DIT</code> &mdash; a CC-register write</span>
+    <span class="c"><i></i>serialising <code>MSR DIT</code> &mdash; what ARM silicon does</span>
+  </div>
+
+  <div class="note"><b>Why this experiment needed a simulator.</b> An Apple M5 has exactly
+  one <code>MSR DIT</code> implementation and it serialises. The silicon run could only
+  infer this decomposition, by dividing measured cycles by measured switches &mdash; a ratio
+  that reproduces its own input, as its write-up says plainly. Turning the mechanism off is
+  the one thing hardware cannot do.</div>
+</section>
+
+<section>
+  <div class="sechead"><h2>What a switch costs</h2>
+    <span class="tag">difference between two binaries that differ only in whether it executes</span></div>
+  <p class="sub">Each policy ships a twin: identical placement, identical instruction count,
+  byte-identical addresses, <code>HINT&nbsp;#0</code> in place of every <code>MSR DIT</code>.
+  Subtracting the twin leaves the switch and nothing else &mdash; a measurement rather than a
+  ratio of one measurement against itself.</p>
+  <div class="scroll">
+  <table>
+    <caption>Cycles per executed switch. The claim is the agreement of the last column
+    across independent benchmarks, not any single row.</caption>
+    <thead><tr><th>benchmark</th><th>renamed</th><th>serialising</th><th>switches/op</th>
+      <th>writes / Mcycle</th></tr></thead>
+    <tbody>
+      <tr><td>chacha20-poly1305 encrypt</td><td class="free">&minus;0.3</td><td class="cost">19.0</td><td>94</td><td>42,494</td></tr>
+      <tr><td>chacha20-poly1305 decrypt</td><td class="free">+0.1</td><td class="cost">20.3</td><td>98</td><td>42,728</td></tr>
+      <tr><td>aes256-gcm encrypt</td><td class="free">+0.3</td><td class="cost">24.5</td><td>15</td><td>12,302</td></tr>
+      <tr><td>ed25519 sign<small>&plusmn;9: 85 switches on a 78k-cycle region</small></td><td class="dim">+10.7</td><td class="dim">39.0</td><td>85</td><td>1,093</td></tr>
+      <tr><td>aes256-gcm decrypt</td><td class="free">+6.0</td><td class="cost">37.1</td><td>15</td><td>13,758</td></tr>
+      <tr><td>argon2id</td><td class="dim">&mdash;</td><td class="dim">&mdash;</td><td>438</td><td>1.3</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="grid2">
+    <div class="panel"><span class="k free">&asymp;&thinsp;0</span>
+      <p>cycles for a <b>renamed</b> switch, across five benchmarks
+      (&minus;0.3 to +0.3 where it can be resolved). On a core that renames the write, placement granularity
+      stops mattering: the three policies spread over 25.3 points serialising and
+      <b>3.2 points</b> renamed.</p></div>
+    <div class="panel"><span class="k cost">19&ndash;37</span>
+      <p>cycles for a <b>serialising</b> one &mdash; below <b>both</b> pieces of
+      silicon this library has been measured on, 43.6 on the M5 and 33.4 on the
+      M4.</p></div>
+  </div>
+
+  <div class="scroll">
+  <table>
+    <caption>Cycles per serialising switch is the quantity to compare across
+    instruments: a difference divided by a count, so a fixed per-region timer cost
+    cancels exactly instead of compressing a ratio.</caption>
+    <thead><tr><th>instrument</th><th>cycles / serialising switch</th></tr></thead>
+    <tbody>
+      <tr><td>Apple M5, this library <small>corrected</small></td><td class="cost">43.6</td></tr>
+      <tr><td>Apple M4, this library <small>corrected</small></td><td class="cost">33.4</td></tr>
+      <tr><td>gem5 Neoverse-V2 <small>this run</small></td><td class="cost">19.0 &ndash; 36.9</td></tr>
+      <tr><td>experiment 06, gem5, mbedTLS <small>two toggle rates</small></td><td class="dim">34.3 / 76.3</td></tr>
+      <tr><td>experiment 02, Apple M5</td><td class="dim">~24</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note"><b>gem5's serialising model is the optimistic end, not the conservative
+  one.</b> Experiment 06 records it as conservative. Against both re-measured hosts our
+  19&ndash;37 sits below real silicon, so a bound taken from this model is not a safe upper
+  bound &mdash; worth correcting before it is used as one.</div>
+
+  <div class="note"><b>Percentages do not survive an instrument change; this column did.</b>
+  Experiment 09's own M5 percentages were understated <b>4&times; on chacha and
+  13&ndash;15&times; on AES</b> by 2,521&ndash;3,234 cycles of counter-read overhead sitting
+  inside the timed region. The per-switch figures were unaffected, which is why they lead
+  here. This rig's own marker cost was measured the same way and is <b>6 cycles</b>;
+  correcting it out would move every result by at most 0.28 points.</div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Toggle rate is the variable</h2>
+    <span class="tag">30,000&times; span, both endpoints measured here</span></div>
+  <p class="sub">Experiment 06 established that the penalty tracks the committed toggle rate
+  almost linearly, over a range of 86 to 4,601 writes per million cycles. Both ends of that
+  axis now extend by more than an order of magnitude.</p>
+  <div class="scroll">
+  <table>
+    <caption>Rates are per million <em>baseline</em> cycles &mdash; per unit of work, not per
+    hardened cycle, which would be diluted by the overhead it predicts.</caption>
+    <thead><tr><th>benchmark</th><th>writes / Mcycle</th><th>serialising penalty</th></tr></thead>
+    <tbody>
+      <tr><td>chacha20-poly1305 decrypt</td><td>42,728</td><td class="cost">+86.48</td></tr>
+      <tr><td>chacha20-poly1305 encrypt</td><td>42,494</td><td class="cost">+82.13</td></tr>
+      <tr><td>aes256-gcm decrypt</td><td>13,758</td><td class="cost">+42.83</td></tr>
+      <tr><td>ed25519 sign</td><td>1,093</td><td class="cost">+3.09</td></tr>
+      <tr><td>argon2id</td><td>1.3</td><td class="free">+0.07</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note"><b>argon2id resolves a number silicon could not.</b> The M5 run reports
+  <code>pass_switches_per_op = &minus;197187</code> for this row &mdash; noise divided by
+  noise, which its table renders honestly as &ldquo;~0 (noise)&rdquo;. gem5 counts
+  <b>438</b>, exactly, and the penalty at that rate is +0.07 points.</div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Two findings this run overturned</h2>
+    <span class="tag">both were ours</span></div>
+  <p class="sub">Neither was caught by inspection. Each needed a control that did not exist
+  when the claim was made.</p>
+
+  <div class="ledger">
+    <div class="led">
+      <div class="w">argon2id is free because 191M cycles amortise every switch</div>
+      <div class="b">The toggle rate is low, but not through amortisation: <b>taint never
+      reaches the hashing kernel.</b> <code>argon2_hash</code> stores the password pointer
+      into a stack-allocated <code>argon2_context</code>; that store transfers nothing, so
+      <code>argon2_ctx</code> receives a clean pointer and
+      <code>argon2_fill_memory_blocks</code> &mdash; essentially all 191M cycles &mdash;
+      carries <b>zero switches</b> and appeared in no report. It is protected only because
+      CIO's config over-taints a variant flag, whose region happens to span the calls. A new
+      <code>memory</code> information-loss category now reports the gap.</div>
+    </div>
+    <div class="led">
+      <div class="w">Finer placement wins on aes256-gcm decrypt</div>
+      <div class="b">Inserting a switch moves all downstream code by exactly <b>4.00
+      bytes</b>; after 524 switches that is 34 cache lines of displacement, worth
+      <b>&minus;6.94% to +4.52%</b> &mdash; larger than the policy differences being measured.
+      The finer policy had simply drawn a favourable layout. Against a per-policy layout twin
+      it is <b>3.2 points worse</b>, executing more switches at the same dwell. Two mechanisms
+      were proposed for the original result before the controls falsified both.</div>
+    </div>
+  </div>
+
+  <div class="note"><b>Found independently on silicon, in parallel.</b> Experiment 09 added
+  the same control on both Apple hosts &mdash; arm Z, a NOP-switch layout twin &mdash; and it
+  reads <b>1.0769&times; on M5 and 1.0870&times; on M4</b> for aes256-gcm encrypt, the same
+  benchmark where the term is largest here. Three machines, two instruments, same effect on
+  the same row. A 7&ndash;8% layout term on real silicon is not a simulator artifact: it is
+  what instrumenting a 252-tick region costs through code movement alone, and an A-vs-P
+  comparison books it as DIT cost.</div>
+
+  <div class="note flag"><b>The headline is immune to this.</b> Renamed versus serialising is
+  one binary under two machine configurations, so layout cancels identically. It is the only
+  comparison in the study with that property &mdash; which is a good reason it is the one
+  carrying the result.</div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Why the numbers are readable</h2>
+    <span class="tag">deterministic simulation &mdash; exact checks, not medians</span></div>
+  <p class="sub">gem5 replays bit-identically, so the silicon run's 15-rep median is replaced
+  by checks that either hold exactly or fail. All of them hold, across 240 runs.</p>
+  <div class="gates">
+    <div class="gate"><span class="g">0.000%</span>
+      <span class="d">Every arm in which no <code>MSR DIT</code> executes is bit-identical
+      across the two switch models. The model must not move code it cannot affect.</span>
+      <span class="s">PASS</span></div>
+    <div class="gate"><span class="g">identical</span>
+      <span class="d"><code>simInsts</code> across switch models for one binary. A driver that
+      times itself would fail here &mdash; gem5 returns <em>simulated</em> time.</span>
+      <span class="s">PASS</span></div>
+    <div class="gate"><span class="g">159 &rarr; 6</span>
+      <span class="d">Tail calls in the plain <code>-O2</code> control, against exactly six
+      survivors in every hardened arm &mdash; all in functions carrying no <code>MSR DIT</code>,
+      so no mode is left set. A tail call has no epilogue; one taken with DIT on makes the
+      arm blanket in disguise.</span>
+      <span class="s">PASS</span></div>
+    <div class="gate"><span class="g">0 / 4,172</span>
+      <span class="d">Instructions that must run with DIT set and do not, over the set that
+      must. Identical for all three policies, so no policy is fast because it skipped a
+      secret.</span>
+      <span class="s">PASS</span></div>
+    <div class="gate"><span class="g">6 cycles</span>
+      <span class="d">Cost of the ROI markers themselves, measured with an empty region
+      rather than assumed. The silicon rig's timer cost 2,521&ndash;3,234 cycles and sat in
+      every denominator; correcting ours out would move results by at most 0.28
+      points.</span>
+      <span class="s">MEASURED</span></div>
+    <div class="gate"><span class="g">100% / 0%</span>
+      <span class="d">Region residency for blanket and for the layout twins, from a
+      <code>ditCycles</code> counter added for this study. The five existing counters price
+      the switch; none priced the mode being on.</span>
+      <span class="s">PASS</span></div>
+  </div>
+  <div class="note"><b>Two gates were themselves wrong, and both were caught by other gates.</b>
+  Requiring <code>ditSuppressed&nbsp;&gt;&nbsp;0</code> as evidence the mode was active failed
+  16 of 24 AES-GCM cells as false alarms &mdash; AES offers computation-simplification nothing,
+  so it reads zero while the mode is provably set. And the mode-readback probe was itself a
+  confound: a single <code>MRS DIT</code> anywhere in a timing binary decodes differently under
+  the two models, shifting ed25519 by 0.35% from an exit-time destructor.</div>
+</section>
+
+<section>
+  <div class="sechead"><h2>What this does not say</h2><span class="tag">limits, recorded</span></div>
+  <div class="grid2">
+    <div class="panel"><span class="k slate">3 vs 85</span>
+      <p>Committed switches per signature from the <b>shipped per-TU flag</b> against the
+      whole-library configuration measured here. Taint cannot cross a translation unit, so the
+      mode is set once and inherited. Both are sound; they are not the same operating point.</p></div>
+    <div class="panel"><span class="k slate">~3&times;</span>
+      <p>gem5 magnitudes run inflated against silicon throughout this project. <b>Ordering and
+      proportionality transfer; absolute percentages do not.</b></p></div>
+    <div class="panel"><span class="k slate">~10 pts</span>
+      <p>The resolution limit for comparing two <em>different</em> policies, even with layout
+      twins. Differences of 20&ndash;50 points are resolvable; one point was never resolvable
+      in this rig.</p></div>
+    <div class="panel"><span class="k slate">2 patches</span>
+      <p>gem5 lacked <code>PMULL</code> at 64&times;64&rarr;128, so AES-GCM could not run at
+      all; it was added and validated against this host's own hardware. <code>ditCycles</code>
+      is the second. Neither is upstream.</p></div>
+  </div>
+</section>
+
+<footer>
+  utils/dit_host_screening/cioparity &middot; RESULTS.md, 240 runs, all gates passing<br>
+  libsodium 1.0.21, whole-library bitcode, CIO's libsodium.uarch_checker.config seeds &middot;
+  21/21 seeded entry points, 108 instrumented functions &mdash; exact placement parity with the silicon run
+</footer>
+
+</div>

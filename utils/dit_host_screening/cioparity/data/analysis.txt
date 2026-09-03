@@ -1,0 +1,58 @@
+====================================================================================================
+ARMS  cycles/op, and % against `base` (the MIR round-trip control)
+====================================================================================================
+benchmark                   arm            spec cyc/op     spec %   serdit cyc/op   serdit %  switches/op
+chacha20_poly1305_decrypt   base                 2,270     +0.00%           2,270     +0.00%          0.0
+chacha20_poly1305_decrypt   blanket              2,367     +4.27%           2,367     +4.27%          0.0
+chacha20_poly1305_decrypt   nop                  2,337     +2.94%           2,337     +2.94%          0.0
+chacha20_poly1305_decrypt   taint                2,353     +3.66%           4,337    +91.07%         98.0
+chacha20_poly1305_decrypt   taintfn              2,355     +3.77%           4,359    +92.06%         98.0
+chacha20_poly1305_decrypt   fine                 2,398     +5.65%           4,866   +114.39%        134.0
+
+chacha20_poly1305_encrypt   base                 2,227     +0.00%           2,227     +0.00%          0.0
+chacha20_poly1305_encrypt   blanket              2,250     +1.03%           2,249     +1.02%          0.0
+chacha20_poly1305_encrypt   nop                  2,235     +0.38%           2,235     +0.38%          0.0
+chacha20_poly1305_encrypt   taint                2,207     -0.90%           4,024    +80.72%         94.0
+chacha20_poly1305_encrypt   taintfn              2,230     +0.15%           4,157    +86.70%         94.0
+chacha20_poly1305_encrypt   fine                 2,276     +2.22%           4,584   +105.88%        126.0
+
+ed25519                     base                78,044     +0.00%          78,044     +0.00%          0.0
+ed25519                     blanket             78,380     +0.43%          78,065     +0.03%          0.0
+ed25519                     nop                 76,816     -1.57%          76,816     -1.57%          0.0
+ed25519                     taint               76,803     -1.59%          79,084     +1.33%         85.0
+ed25519                     taintfn             77,477     -0.73%          79,266     +1.57%         80.0
+ed25519                     fine                78,304     +0.33%          82,574     +5.80%        195.0
+
+====================================================================================================
+DECOMPOSITION  percentage points of `base`, for the shipped `taint` arm
+====================================================================================================
+benchmark                        layout    renamed  serialising      total     sw/op   wr/Mcyc    floor
+chacha20_poly1305_decrypt        +2.94     +0.71      +87.42    +91.07      98.0     43176    0.00%
+chacha20_poly1305_encrypt        +0.38     -1.28      +81.62    +80.72      94.0     42217    0.00%
+ed25519                          -1.57     -0.02       +2.92     +1.33      85.0      1089    0.00%
+
+
+====================================================================================================
+PER SWITCH  cycles, from a difference between binaries that differ only
+            in whether the switch executes -- not a ratio of one measurement
+====================================================================================================
+benchmark                        renamed   serialising     ratio
+chacha20_poly1305_decrypt            0.2          20.4   ~0 base
+chacha20_poly1305_encrypt           -0.3          19.0   ~0 base
+ed25519                             -0.2          26.7   ~0 base
+median                              -0.2          20.4   ~0 base
+
+  The transferable claim is the CONSISTENCY of these columns across
+  independent benchmarks, not any single row.
+
+  NOT a closure check. rate x cost reproduces the measured total
+  identically -- rate is switches/base-cycles and cost is
+  delta-cycles/switches, so the product is delta-cycles/base-cycles
+  by algebra, whatever the numbers. Printing it as agreement would
+  be the same self-reproducing ratio experiment 09 warns about.
+
+  Independent reference points for the serialising column:
+    34.3 cyc/write  experiment 06, gem5 Neoverse-V2, mbedTLS record MAC
+    76.3 cyc/write  experiment 06, same workload at a 53x lower rate
+    ~41 cyc/switch  experiment 09, Apple M5 silicon, this library
+    ~24 cyc/switch  experiment 02, Apple M5 silicon
