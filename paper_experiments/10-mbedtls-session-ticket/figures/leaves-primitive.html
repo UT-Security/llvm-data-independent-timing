@@ -1,0 +1,531 @@
+<title>The Secret Leaves the Primitive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  :root {
+    --ground:      #F2F4F3;
+    --surface:     #FFFFFF;
+    --surface-alt: #E8ECEA;
+    --ink:         #171B1E;
+    --ink-soft:    #4A555C;
+    --ink-faint:   #7B8790;
+    --rule:        #D3DBD8;
+    --rule-soft:   #E3E9E6;
+    --public:      #0E6F78;
+    --public-bg:   #DCEFF0;
+    --secret:      #A03257;
+    --secret-bg:   #F6E2E9;
+    --est:         #9A5B12;
+    --est-bg:      #F7EBD6;
+    --code-bg:     #EDF1EF;
+    --shadow:      0 1px 2px rgba(23,27,30,.06), 0 8px 24px -16px rgba(23,27,30,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #121615;
+      --surface:     #1B2020;
+      --surface-alt: #232A29;
+      --ink:         #DEE4E1;
+      --ink-soft:    #A4AEAA;
+      --ink-faint:   #7B8682;
+      --rule:        #2D3533;
+      --rule-soft:   #242B29;
+      --public:      #5CC7CE;
+      --public-bg:   #113035;
+      --secret:      #EF8CA9;
+      --secret-bg:   #381F29;
+      --est:         #D9A441;
+      --est-bg:      #3A2C13;
+      --code-bg:     #161B1A;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #121615;
+    --surface:     #1B2020;
+    --surface-alt: #232A29;
+    --ink:         #DEE4E1;
+    --ink-soft:    #A4AEAA;
+    --ink-faint:   #7B8682;
+    --rule:        #2D3533;
+    --rule-soft:   #242B29;
+    --public:      #5CC7CE;
+    --public-bg:   #113035;
+    --secret:      #EF8CA9;
+    --secret-bg:   #381F29;
+    --est:         #D9A441;
+    --est-bg:      #3A2C13;
+    --code-bg:     #161B1A;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 96px; }
+  .col  { max-width: 68ch; }
+
+  h1, h2, h3 { font-family: "Source Serif 4", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 4.4vw, 3.05rem); font-weight: 600; letter-spacing: -.021em; line-height: 1.12; }
+  h2 { font-size: 1.44rem; font-weight: 600; letter-spacing: -.012em; }
+  h3 { font-size: 1.05rem; font-weight: 600; }
+  p  { margin: 0 0 1.05em; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--public); }
+  code, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .88em;
+  }
+  code { background: var(--code-bg); padding: .08em .35em; border-radius: 4px; color: var(--ink); }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule-soft); border-radius: 6px;
+    padding: 14px 16px; overflow-x: auto; margin: 0 0 1.2em;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .82rem; line-height: 1.55; color: var(--ink);
+  }
+  pre .c { color: var(--ink-faint); }
+
+  header { padding: 64px 0 28px; border-bottom: 1px solid var(--rule); margin-bottom: 40px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace; font-size: .74rem; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: 14px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  }
+  .status {
+    display: inline-block; padding: 2px 9px; border-radius: 3px; letter-spacing: .08em;
+    background: var(--est-bg); color: var(--est); font-weight: 600;
+  }
+  .lede { font-size: 1.16rem; line-height: 1.55; color: var(--ink-soft); margin-top: 18px; max-width: 62ch; }
+
+  section { margin-bottom: 52px; }
+  section > h2 { margin-bottom: 14px; }
+  .claim {
+    border-left: 3px solid var(--secret); padding: 4px 0 4px 22px; margin: 22px 0 26px;
+    font-family: "Source Serif 4", Georgia, serif; font-size: 1.12rem; line-height: 1.5; color: var(--ink);
+  }
+  .claim p { color: var(--ink); margin-bottom: .8em; }
+  .claim p:last-child { margin-bottom: 0; }
+
+  ul { padding-left: 1.2em; margin: 0 0 1.05em; color: var(--ink-soft); }
+  li { margin-bottom: .45em; }
+  li::marker { color: var(--ink-faint); }
+
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: 0 0 1.4em; }
+  .tablewrap { overflow-x: auto; margin: 0 0 1.4em; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--rule-soft); }
+  th { font-family: "IBM Plex Mono", monospace; font-size: .72rem; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; border-bottom: 1px solid var(--rule); }
+  td { color: var(--ink-soft); }
+  td:first-child { color: var(--ink); white-space: nowrap; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", monospace; font-size: .82rem; }
+  .num { font-variant-numeric: tabular-nums; }
+  .tag { font-family: "IBM Plex Mono", monospace; font-size: .72rem; letter-spacing: .05em; padding: 1px 7px; border-radius: 3px; white-space: nowrap; }
+  .tag.pub { background: var(--public-bg); color: var(--public); }
+  .tag.sec { background: var(--secret-bg); color: var(--secret); }
+  .tag.est { background: var(--est-bg); color: var(--est); }
+
+  figure { margin: 0 0 1.6em; }
+  figure.wide { background: var(--surface); border: 1px solid var(--rule-soft); border-radius: 8px; padding: 22px 22px 16px; box-shadow: var(--shadow); }
+  figcaption { font-size: .86rem; color: var(--ink-faint); margin-top: 10px; line-height: 1.5; max-width: 80ch; }
+  .svgwrap { overflow-x: auto; }
+  svg text { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  ol.gates { list-style: none; padding: 0; margin: 0 0 1.2em; counter-reset: g -1; }
+  ol.gates li { display: grid; grid-template-columns: 52px 1fr; gap: 14px; padding: 14px 0; border-top: 1px solid var(--rule-soft); margin: 0; }
+  ol.gates li:last-child { border-bottom: 1px solid var(--rule-soft); }
+  ol.gates li::before { counter-increment: g; content: "G" counter(g); font-family: "IBM Plex Mono", monospace; font-size: .8rem; font-weight: 600; color: var(--secret); padding-top: 3px; }
+  ol.gates .gt { font-weight: 600; color: var(--ink); }
+  ol.gates .gs { font-family: "IBM Plex Mono", monospace; font-size: .74rem; color: var(--ink-faint); letter-spacing: .05em; margin-left: 8px; }
+  ol.gates p { margin: 4px 0 0; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+  .panel { background: var(--surface); border: 1px solid var(--rule-soft); border-radius: 8px; padding: 18px 20px; }
+  .panel h3 { margin-bottom: 8px; }
+  .panel p { font-size: .95rem; margin-bottom: .6em; }
+  .panel ul { font-size: .95rem; }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 18px; font-size: .86rem; color: var(--ink-faint); }
+  footer code { font-size: .8rem; }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow"><span>Experiment 10</span><span class="status">Design</span><span class="status" style="background:var(--public-bg);color:var(--public)">G0 static: passed</span><span class="status" style="background:var(--public-bg);color:var(--public)">G1 oracle: passed</span><span>2026-09-03</span></div>
+  <h1>The Secret Leaves the Primitive</h1>
+  <p class="lede">Experiments 09 and 02 both keep the secret inside one library call. This one lets it out: a TLS session ticket is decrypted by AES-GCM and then parsed by ordinary C that no shipping library annotates. Measured on the gem5 shadow-taint oracle: annotating every entry point of the crypto library still leaves the constant-time comparison that gates the handshake running unprotected, 547 operations on every resumption. The pass takes it to zero. It does not reach blanket coverage, and the page says where the rest goes.</p>
+</header>
+
+<section class="col">
+  <h2>The claim</h2>
+  <div class="claim">
+    <p><strong>Coverage.</strong> Annotating the primitive, which is what a developer writes first and what CryptoMPK's policy does by design, leaves every glue operation running with <code>PSTATE.DIT</code> clear. The gem5 shadow-taint oracle counts exactly how many. The pass covers them, because it follows the secret out of the primitive's output buffer.</p>
+    <p><strong>Cost.</strong> It does so at the cost of the glue alone: not the cost of bracketing the whole resumption path, which is what a careful human writes with a scope guard, and not blanket's.</p>
+  </div>
+  <p>The experiment measures the gap between those three placements on a flow where the secret's lifetime is longer than the primitive's. The static gate has been run and is reported below; every other number on this page is a citation or an estimate the remaining gates exist to replace.</p>
+</section>
+
+<section>
+  <h2>Where the secret goes</h2>
+  <div class="col"><p>The server side of a resumed TLS 1.3 handshake in mbedTLS 3.6. Four functions in three translation units carry the resumption key after the decrypt returns. Function names from the 3.6 branch head.</p></div>
+  <figure class="wide">
+    <div class="svgwrap">
+    <svg viewBox="0 0 1040 400" width="1040" height="400" role="img" aria-label="The secret's path through mbedTLS, with three human placements drawn as brackets above it">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--ink-faint)"/>
+        </marker>
+        <pattern id="hatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="6" stroke="var(--secret)" stroke-width="1.2" opacity=".55"/>
+        </pattern>
+      </defs>
+
+      <!-- coverage brackets -->
+      <g font-size="11.5" fill="var(--ink-soft)">
+        <text x="20" y="34" fill="var(--ink-faint)" letter-spacing=".08em">PLACEMENT</text>
+
+        <text x="20" y="62">prim</text>
+        <line x1="236" y1="58" x2="366" y2="58" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="236" y1="53" x2="236" y2="63" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="366" y1="53" x2="366" y2="63" stroke="var(--secret)" stroke-width="2.5"/>
+        <text x="380" y="62" fill="var(--ink-faint)">the primitive only: unsound</text>
+
+        <text x="20" y="90">bracket</text>
+        <line x1="82" y1="86" x2="1020" y2="86" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="82" y1="81" x2="82" y2="91" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="1020" y1="81" x2="1020" y2="91" stroke="var(--secret)" stroke-width="2.5"/>
+        <text x="86" y="104" fill="var(--ink-faint)">the whole handshake step: sound, public work swept in</text>
+
+        <text x="20" y="132">pass</text>
+        <line x1="236" y1="128" x2="366" y2="128" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="236" y1="123" x2="236" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="366" y1="123" x2="366" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="392" y1="128" x2="546" y2="128" stroke="var(--secret)" stroke-width="2.5" stroke-dasharray="5 4"/>
+        <line x1="392" y1="123" x2="392" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="546" y1="123" x2="546" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="572" y1="128" x2="712" y2="128" stroke="var(--secret)" stroke-width="2.5" stroke-dasharray="5 4"/>
+        <line x1="572" y1="123" x2="572" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="712" y1="123" x2="712" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="738" y1="128" x2="866" y2="128" stroke="var(--secret)" stroke-width="2.5" stroke-dasharray="5 4"/>
+        <line x1="738" y1="123" x2="738" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="866" y1="123" x2="866" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="892" y1="128" x2="1020" y2="128" stroke="var(--secret)" stroke-width="2.5" stroke-dasharray="5 4"/>
+        <line x1="892" y1="123" x2="892" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <line x1="1020" y1="123" x2="1020" y2="133" stroke="var(--secret)" stroke-width="2.5"/>
+        <text x="86" y="146" fill="var(--ink-faint)">regions on the secret only; dashed = reached by following the output buffer, expected to need seeds</text>
+      </g>
+
+      <!-- TU lanes -->
+      <g font-size="11" fill="var(--ink-faint)">
+        <rect x="70" y="176" width="150" height="190" rx="6" fill="var(--surface-alt)" opacity=".55"/>
+        <text x="80" y="194">ssl_tls13_server.c</text>
+        <rect x="226" y="176" width="150" height="190" rx="6" fill="var(--surface-alt)" opacity=".55"/>
+        <text x="236" y="194">ssl_ticket.c</text>
+        <rect x="382" y="176" width="174" height="190" rx="6" fill="var(--surface-alt)" opacity=".55"/>
+        <text x="392" y="194">ssl_tls.c</text>
+        <rect x="562" y="176" width="468" height="190" rx="6" fill="var(--surface-alt)" opacity=".55"/>
+        <text x="572" y="194">ssl_tls13_server.c  /  ssl_tls13_keys.c  /  constant_time.c</text>
+      </g>
+
+      <!-- boxes -->
+      <g font-size="11.5">
+        <!-- caller -->
+        <rect x="82" y="214" width="128" height="60" rx="5" fill="var(--public-bg)" stroke="var(--public)"/>
+        <text x="146" y="238" text-anchor="middle" fill="var(--public)">check_identity</text>
+        <text x="146" y="254" text-anchor="middle" fill="var(--public)">_match_ticket</text>
+        <text x="146" y="296" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">public ClientHello</text>
+
+        <!-- fp -->
+        <text x="223" y="236" text-anchor="middle" fill="var(--est)" font-size="10" font-weight="600">fp</text>
+        <line x1="210" y1="244" x2="236" y2="244" stroke="var(--ink-faint)" stroke-width="1.4" stroke-dasharray="3 3" marker-end="url(#arr)"/>
+
+        <!-- primitive -->
+        <rect x="238" y="214" width="126" height="60" rx="5" fill="var(--secret-bg)" stroke="var(--secret)" stroke-width="2"/>
+        <text x="301" y="238" text-anchor="middle" fill="var(--secret)" font-weight="600">psa_aead_decrypt</text>
+        <text x="301" y="254" text-anchor="middle" fill="var(--secret)">the primitive</text>
+        <text x="301" y="296" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">AES-GCM, in place</text>
+        <text x="301" y="311" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">inside ticket_parse</text>
+
+        <line x1="364" y1="244" x2="392" y2="244" stroke="var(--ink-faint)" stroke-width="1.4" marker-end="url(#arr)"/>
+
+        <!-- session load -->
+        <rect x="394" y="214" width="150" height="60" rx="5" fill="url(#hatch)" stroke="var(--secret)" stroke-width="1.4"/>
+        <rect x="394" y="214" width="150" height="60" rx="5" fill="var(--surface)" opacity=".0"/>
+        <text x="469" y="238" text-anchor="middle" fill="var(--ink)">ssl_tls13</text>
+        <text x="469" y="254" text-anchor="middle" fill="var(--ink)">_session_load</text>
+        <text x="469" y="296" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">memcpy(resumption_key)</text>
+        <text x="469" y="311" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">~200-400 cyc</text>
+
+        <line x1="544" y1="244" x2="572" y2="244" stroke="var(--ink-faint)" stroke-width="1.4" marker-end="url(#arr)"/>
+
+        <!-- set_hs_psk -->
+        <rect x="574" y="214" width="136" height="60" rx="5" fill="url(#hatch)" stroke="var(--secret)" stroke-width="1.4"/>
+        <text x="642" y="238" text-anchor="middle" fill="var(--ink)">mbedtls_ssl</text>
+        <text x="642" y="254" text-anchor="middle" fill="var(--ink)">_set_hs_psk</text>
+        <text x="642" y="296" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">copy into handshake</text>
+
+        <line x1="710" y1="244" x2="738" y2="244" stroke="var(--ink-faint)" stroke-width="1.4" marker-end="url(#arr)"/>
+
+        <!-- binder -->
+        <rect x="740" y="214" width="124" height="60" rx="5" fill="var(--secret-bg)" stroke="var(--secret)" stroke-width="1.4"/>
+        <text x="802" y="238" text-anchor="middle" fill="var(--secret)">create_psk</text>
+        <text x="802" y="254" text-anchor="middle" fill="var(--secret)">_binder</text>
+        <text x="802" y="296" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">HKDF, ~2-4 us</text>
+
+        <line x1="864" y1="244" x2="892" y2="244" stroke="var(--ink-faint)" stroke-width="1.4" marker-end="url(#arr)"/>
+
+        <!-- ct_memcmp -->
+        <rect x="894" y="214" width="124" height="60" rx="5" fill="url(#hatch)" stroke="var(--secret)" stroke-width="1.4"/>
+        <text x="956" y="238" text-anchor="middle" fill="var(--ink)">mbedtls_ct</text>
+        <text x="956" y="254" text-anchor="middle" fill="var(--ink)">_memcmp</text>
+        <text x="956" y="296" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">binder, one bit out</text>
+        <text x="956" y="311" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">then the key schedule</text>
+      </g>
+
+      <!-- legend -->
+      <g font-size="10.5" fill="var(--ink-soft)">
+        <rect x="82" y="378" width="14" height="12" rx="2" fill="var(--secret-bg)" stroke="var(--secret)"/>
+        <text x="102" y="388">crypto primitive on the secret</text>
+        <rect x="300" y="378" width="14" height="12" rx="2" fill="url(#hatch)" stroke="var(--secret)"/>
+        <text x="320" y="388">glue: plain C computing on the secret, annotated in no shipping library</text>
+        <rect x="748" y="378" width="14" height="12" rx="2" fill="var(--public-bg)" stroke="var(--public)"/>
+        <text x="768" y="388">public</text>
+        <text x="826" y="388" fill="var(--est)" font-weight="600">fp</text>
+        <text x="842" y="388">function pointer: the pass cannot hoist across it</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>Flow A. A developer annotates the ticket key at the decrypt. Everything to the right of the primitive is the glue, and the caller on the left passes only public bytes into the function pointer, so the analysis sees nothing come back. Cycle figures are estimates from the source, not measurements.</figcaption>
+  </figure>
+  <div class="col">
+    <p><strong>Flow B, the literature anchor.</strong> The same rig in TLS 1.2 mode runs the RSA key exchange: <code>mbedtls_rsa_private</code>, then the constant-time PKCS#1 unpadding, then the version check and fake-premaster select in <code>ssl_parse_encrypted_pms</code>, then the PRF. That is the Bleichenbacher, ROBOT and Marvin glue in the library the attack chain named most recently (CVE-2024-23170). RSA key exchange is deprecated, which is why it is the second flow and not the headline.</p>
+  </div>
+</section>
+
+<section class="col">
+  <h2>Why this shape has backing</h2>
+  <ul>
+    <li><strong>A 25-year attack lineage lives in the glue.</strong> Bleichenbacher 1998, ROBOT 2018, Marvin 2023, Kerberos PKINIT 2024. Marvin's own decomposition is the taxonomy: modexp, then padding check and secret extraction, then secret use and error handling. The leak keeps moving one call up.</li>
+    <li><strong>Every C library ships that glue as straight-line constant-time C</strong>: OpenSSL <code>rsa_pk1.c</code> and <code>tls_pad.c</code>, mbedTLS <code>constant_time.c</code>, wolfSSL, NSS. Straight-line constant-time code is exactly what a value predictor still leaks from, and what <code>PSTATE.DIT</code> exists to protect.</li>
+    <li><strong>The IETF concedes the boundary.</strong> RFC 8446 Appendix E.3: "even a constant-time padding removal function will likely feed the content into data-dependent functions."</li>
+    <li><strong>Tickets are the deployed instance.</strong> About 40% of HTTPS connections at Cloudflare are resumptions; 77.6% of top-1M sites issue tickets; OpenSSL issues two per handshake. No library parses the ticket in constant time. <strong>There is no published attack on ticket parsing</strong>; flow B carries the literature, flow A the deployment.</li>
+    <li><strong>No prior system measured it.</strong> ct-verif and Binsec/Rel verified one glue function without a cost. CryptoMPK declassifies every cipher output by policy, which erases this flow entirely.</li>
+  </ul>
+</section>
+
+<section class="col">
+  <h2>Among the case studies</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>secret's lifetime</th><th>human's best annotation</th><th>who wins</th></tr></thead>
+    <tbody>
+      <tr><td>09</td><td>the whole program</td><td>nothing to annotate</td><td>blanket, by 12-124%</td></tr>
+      <tr><td>02</td><td>one library call inside a flow</td><td>one line at the call</td><td>the pass, by 21%</td></tr>
+      <tr><td><strong>10</strong></td><td><strong>out of the primitive, into glue</strong></td><td><strong>annotate the primitive (unsound) or bracket the phase</strong></td><td><span class="tag est">to be measured</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="col">
+  <h2>Declassification, at protocol-defined points only</h2>
+  <p>Taint is transitive; without declassification the decrypted ticket taints the whole server, since every traffic key descends from the PSK. Each row is one <code>m5_taint_declassify</code> in the oracle and, where the static pass needs it, one parameter-scoped seed. The count ships with the result, and the resulting zero is labelled <em>sound modulo these assertions</em>. Declassification is per field, never per object: 08 showed an object-level rule strips protection from a secret sharing a buffer with a public value, and the ticket plaintext is exactly such a buffer.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>point</th><th>what becomes public</th><th>authority</th></tr></thead>
+    <tbody>
+      <tr><td>after session load</td><td>every field except <code>resumption_key</code></td><td>RFC 5077 section 4; RFC 8446 section 4.6.1</td></tr>
+      <tr><td>binder check</td><td>the one-bit result of <code>mbedtls_ct_memcmp</code></td><td>RFC 8446 section 4.2.11.2</td></tr>
+      <tr><td>ticket age</td><td>the one-bit accept result</td><td>RFC 8446 section 4.2.10</td></tr>
+      <tr><td><code>mbedtls_ssl_read</code></td><td>the application plaintext of a record</td><td>RFC 8446 Appendix E.3</td></tr>
+      <tr><td>transport send</td><td>ciphertext on the wire</td><td>public by definition</td></tr>
+      <tr><td>(B) after key parse</td><td>the RSA public modulus and exponent</td><td>public key</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="col">
+  <h2>Arms</h2>
+  <p><code>off</code>, <code>blanket</code> and <code>bracket</code> share one binary and take the mode from argv, so no codegen difference can contaminate the comparison that matters most.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>arm</th><th>what it is</th><th>coverage expected</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">nodit</td><td>round-trip baseline, <code>-ftaint-harden=&lt;empty&gt;</code></td><td>none</td></tr>
+      <tr><td class="mono">blanket</td><td>DIT set at startup</td><td>everything</td></tr>
+      <tr><td class="mono">bracket</td><td>DIT around the server handshake step that consumes the ticket; a scope guard, as Apple's <code>timingsafe</code> helpers and AWS-LC's caller-level hoisting do</td><td>the path, plus the public work inside it</td></tr>
+      <tr><td class="mono">prim</td><td>the pass, seeded at the primitive only</td><td>the primitive; <strong>the glue is expected uncovered</strong></td></tr>
+      <tr><td class="mono">pass</td><td>seeds grown to oracle parity by the 07 loop, per-TU build</td><td>oracle parity</td></tr>
+      <tr><td class="mono"><s>pass-wl</s></td><td>same seeds on whole-library bitcode. <strong>Dead at G0</strong>: 83% of the library under DIT with any seed set</td><td>blanket with 8,800 switches</td></tr>
+      <tr><td class="mono">func</td><td><code>pass</code> at function placement</td><td>oracle parity</td></tr>
+      <tr><td class="mono">nop</td><td><code>pass</code> with every switch as <code>HINT #0</code></td><td>none: the layout control</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="col">
+  <h2>What the analysis can and cannot see</h2>
+  <div class="two">
+    <div class="panel">
+      <h3>Input flows are reported</h3>
+      <p>A tainted argument reaching a callee in another translation unit keeps DIT on across the call, and <code>-taint-info-loss-report</code> names the seed that would narrow it. This is the loop 07 measured.</p>
+    </div>
+    <div class="panel">
+      <h3>Output flows are not</h3>
+      <p>When a callee takes public inputs and writes a secret through an out-pointer, which is what <code>f_ticket_parse</code> does for its caller, nothing tainted was passed, so nothing is reported. The consumer-side glue is invisible to <code>prim</code> and to the report. Only the oracle finds it. This is the 08 finding on a protocol flow.</p>
+    </div>
+  </div>
+  <p style="margin-top:18px">Within one TU, or the whole library in <code>pass-wl</code>, a callee that writes a secret through a pointer makes the caller treat all memory as secret afterwards. Sound, and the origin of over-protection: after the ticket parse returns, the rest of its caller may run protected. The over-protection count is where <code>pass-wl</code> may lose to <code>pass</code>, and that is a precision result worth having either way.</p>
+  <pre><span class="c"># A, prim: the developer's first annotation</span>
+mbedtls_ssl_ticket_parse,2,pointee
+<span class="c"># A, pass: what the oracle is expected to demand</span>
+mbedtls_ssl_session_load,1,pointee
+mbedtls_ssl_set_hs_psk,1,pointee
+mbedtls_ssl_tls13_create_psk_binder,2,pointee
+mbedtls_ct_memcmp,0,pointee
+ssl_tls13_session_copy_ticket,1,pointee   <span class="c"># found by reading the consumer, not by any report</span>
+<span class="c"># B</span>
+mbedtls_rsa_rsaes_pkcs1_v15_decrypt,0,pointee
+ssl_decrypt_encrypted_pms,3,pointee        <span class="c"># bridges pk_info->decrypt_func</span>
+ssl_compute_master,0,pointee               <span class="c"># bridges handshake->tls_prf</span></pre>
+</section>
+
+<section class="col">
+  <h2>Gate G0, measured</h2>
+  <p>Run 2026-09-03 with the tree's clang on mbedTLS 3.6.2, aarch64 Linux, the design's configuration. Each variant of the whole library builds in 7 seconds. Static counts from the pass's own precision report: <em>need</em> is instructions the analysis says must run under DIT, <em>under DIT</em> is instructions that do, and the difference is collateral.</p>
+  <p><strong>The human's gap is real.</strong> With primitive-only seeds, <code>libmbedtls.a</code> carries zero switches and every glue function on both paths has need = 0, including the constant-time PKCS#1 unpadding in the same file as the RSA primitive. <strong>The pass reaches the glue</strong> once told where the secret leaves:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>function</th><th class="num">need</th><th class="num">under DIT</th><th class="num">collateral</th><th class="num">switches</th></tr></thead>
+    <tbody class="num">
+      <tr><td class="mono">mbedtls_ssl_ticket_parse</td><td>23</td><td>67</td><td>44</td><td>6</td></tr>
+      <tr><td class="mono">ssl_session_load</td><td>134</td><td>269</td><td>135</td><td>14</td></tr>
+      <tr><td class="mono">mbedtls_ssl_session_load</td><td>13</td><td>30</td><td>17</td><td>8</td></tr>
+      <tr><td class="mono">mbedtls_ssl_set_hs_psk</td><td>13</td><td>29</td><td>16</td><td>5</td></tr>
+      <tr><td class="mono">setup_psa_key_derivation</td><td>26</td><td>67</td><td>41</td><td>10</td></tr>
+      <tr><td class="mono">mbedtls_ssl_tls13_create_psk_binder</td><td>12</td><td>32</td><td>20</td><td>9</td></tr>
+      <tr><td class="mono">mbedtls_ssl_tls13_evolve_secret</td><td>15</td><td>45</td><td>30</td><td>10</td></tr>
+      <tr><td class="mono">mbedtls_ct_memcmp</td><td>5</td><td>10</td><td>5</td><td>3</td></tr>
+      <tr><td><strong>flow A</strong></td><td><strong>241</strong></td><td><strong>549</strong></td><td><strong>308</strong></td><td><strong>65</strong></td></tr>
+      <tr><td class="mono">mbedtls_rsa_rsaes_pkcs1_v15_decrypt</td><td>136</td><td>175</td><td>39</td><td>7</td></tr>
+      <tr><td class="mono">ssl_decrypt_encrypted_pms</td><td>6</td><td>15</td><td>9</td><td>3</td></tr>
+      <tr><td class="mono">ssl_parse_encrypted_pms</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+      <tr><td class="mono">ssl_compute_master</td><td>56</td><td>180</td><td>124</td><td>18</td></tr>
+      <tr><td><strong>flow B</strong></td><td><strong>198</strong></td><td><strong>370</strong></td><td><strong>172</strong></td><td><strong>28</strong></td></tr>
+    </tbody>
+  </table></div>
+  <p>Precision inside the glue functions is 30 to 78 percent: the public metadata parsing next to the secret copy is swept in. That is the over-protection G2 will price against the bracket.</p>
+  <div class="two">
+    <div class="panel">
+      <h3>Blind spot 1: the mod-set gate</h3>
+      <p>The RSA version check holds the premaster in a local buffer filled by a callee through an external call. The pass applies a callee's memory clobber only where a secret is passed in, and none is. With <code>-taint-no-modset-gate</code> the version check gets need = 83 and 6 switches, plus 7 more spread into the handshake step.</p>
+    </div>
+    <div class="panel">
+      <h3>Blind spot 2: the function pointer</h3>
+      <p>The ticket parse is indirect, so its caller sees nothing return, gate or no gate. The server's own copy of the resumption key into the negotiation state is an uncovered secret memcpy no report names. Found by reading the file; one seed line covers it.</p>
+    </div>
+  </div>
+  <p style="margin-top:18px">Nine seed lines reach every named site; the annotation loop finds seven. <strong>Whole-library mode is dead:</strong> linking all 108 files and running the pass takes 17 seconds, but 83.3% of the library's instructions end up under DIT with the full seed set, with primitive-only seeds, and with five flow-A seeds alone. The spread is structural: once a caller's memory is TOP every argument is secret, every callee's clobber fires, and TOP is absorbing across the call graph.</p>
+  <p><strong>Verdict.</strong> The probe passed its kill criteria: the glue is not a few dozen memcpy instructions, the pass reaches it, and the human's annotation misses all of it. It did not pass the hope that the pass finds the glue on its own. Next is one oracle run of the primitive-only arm on gem5 for the dynamic count.</p>
+</section>
+
+<section class="col">
+  <h2>Gate G1, measured: what a human annotation cannot reach</h2>
+  <p>Run on the gem5 shadow-taint oracle over a real resumption rig: a TLS 1.3 client and server in one process, one full handshake to mint a ticket, then resumed handshakes as the measured region, with the server's ticket key as the seed. The first attempt used the deployed key exchange and the signal was buried under the ECDHE bignum it performs on every resumption. Pinning the client to pure-PSK resumption removes that and isolates the flow. Data in <code>data/oracle_psk.csv</code>.</p>
+  <p><code>mbedtls_ct_memcmp</code> is the constant-time comparison that decides whether a resumption is accepted. It computes on the secret-derived binder. Operations of it running with <code>PSTATE.DIT</code> clear, per resumption:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>annotation</th><th class="num">binder-compare ops unprotected</th></tr></thead>
+    <tbody class="num">
+      <tr><td>none, unhardened control</td><td>871</td></tr>
+      <tr><td>the primitives: AES, GCM, SHA cores</td><td>547</td></tr>
+      <tr><td><strong>the entire crypto API surface</strong>, 23 entry points</td><td><strong>547</strong></td></tr>
+      <tr><td>the human's scope guard on the server handshake</td><td>355</td></tr>
+      <tr><td><strong>the pass</strong>: API plus 6 glue seeds</td><td><strong>0</strong></td></tr>
+      <tr><td>blanket</td><td>0</td></tr>
+    </tbody>
+  </table></div>
+  <p>That 547 is exact at one, two and four resumptions, a per-resumption invariant rather than an average. <strong>Naming every entry point of the crypto library does not protect the comparison that gates the handshake.</strong> It is not a crypto function and takes no key as an argument. The pass reaches it by following the secret out of the AEAD's output buffer, through the session loader and the PSK copy, into the compare. The human's scope guard is not zero either, because the client computes its own binder outside the bracketed scope: a guard protects exactly what it wraps.</p>
+  <div class="two">
+    <div class="panel">
+      <h3>But the pass is not sound here</h3>
+      <p>Blanket leaves zero secret operations unprotected; the pass leaves 11,126 per resumption at its first seed round. This is a reduction in exposure, from 625,973, not an elimination. The next section measures what closing the rest would cost.</p>
+    </div>
+    <div class="panel">
+      <h3>And the cost prize is small here</h3>
+      <p>A pure-PSK resumption is almost all crypto, so blanket wastes 340,959 non-secret ops per resumption against the pass's 254,520, a factor of 1.34. That is experiment 09's lesson recurring: when the region is nearly all secret, no placement wins on cost. This experiment's contribution is soundness, not speed.</p>
+    </div>
+  </div>
+  <h3 style="margin-top:22px">Why not just make it sound? The residual is a dial, not a wall</h3>
+  <p>I pushed the pass as far toward soundness as its knobs allow: a second seed round naming the operation contexts, then the mod-set gate disabled for maximum conservatism. Both axes move together, every step.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>configuration</th><th class="num">uncovered / res</th><th class="num">wasted / res</th><th class="num">coverage</th></tr></thead>
+    <tbody class="num">
+      <tr><td>unhardened</td><td>625,973</td><td>0</td><td>0%</td></tr>
+      <tr><td>primitives</td><td>43,436</td><td>107,653</td><td>93.06%</td></tr>
+      <tr><td>crypto API</td><td>12,254</td><td>250,207</td><td>98.04%</td></tr>
+      <tr><td>pass, seed round 1</td><td>11,126</td><td>254,520</td><td>98.22%</td></tr>
+      <tr><td>pass, seed round 2</td><td>5,637</td><td>296,930</td><td>99.10%</td></tr>
+      <tr><td>round 2, mod-set gate off</td><td><strong>2,495</strong></td><td>317,524</td><td><strong>99.60%</strong></td></tr>
+      <tr><td>blanket</td><td><strong>0</strong></td><td>340,959</td><td>100%</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>Nothing reaches zero, and the closest configuration costs 93 percent of blanket.</strong> What survives is allocator internals reached from callers the analysis never considered tainted, the rig's transport stubs, and the generator state. So on this workload there is no setting that is both sound and meaningfully cheaper than blanket, which is the evaluation framework's first question answering "use blanket here" rather than a failure of the pass.</p>
+  <p><strong>Which means the comparison that matters is not the pass against blanket.</strong> Where blanket is affordable it is strictly better: sound, and here only 1.34x the pass's over-protection. Selective placement earns its place only where blanket is unaffordable, at +32.6 percent on experiment 02's flow and +33.2 percent on experiment 03's small records, because a deployment that refuses to pay a third of its budget does not run blanket, it runs nothing. There, the pass competes with zero protection. This workload sits on the wrong side of that line and the page says so.</p>
+  <p><strong>Soundness and cheapness are one dial.</strong> Blanket is trivially sound; the only way to cost less is to leave something unprotected; and the mechanism that buys coverage, keeping the bit set across calls the analysis cannot see into, is the mechanism that costs dwell. The libc share of the residual fell from 8,218 to 3,731 without instrumenting libc at all, because a protected caller leaves the bit set and the callee inherits it. Three things sit off the dial and no seeding removes them: the seed set is a human specification the analysis cannot derive, output flows across translation units are invisible to it, and declassification is unsound on purpose.</p>
+  <p style="margin-top:18px"><strong>One caveat on the bulk figures.</strong> The oracle does not clear taint when a buffer is freed and reused, so the total residual of a hardened arm inflates with run length: the pass reads 11,126 uncovered ops per resumption over one resumption and 22,741 over four. The unhardened universe is stable at 1.07x, so the workload is consistent and the growth is the artifact. The figures above are the single-resumption run. The binder-compare count is immune to this, being exact at every run length.</p>
+  <p style="margin-top:18px"><strong>Verdict, stated narrowly.</strong> Among selective placements, the only category that can cost less than blanket, the pass reaches glue that no annotation of the crypto library API reaches, and the binder compare is the named example: 547 unprotected operations per resumption under the strongest human annotation, zero under the pass. It does not achieve blanket coverage, and about a quarter of what it misses is addressable with more seeds rather than being a fundamental limit. On this particular workload, where blanket costs only 1.34x the pass in over-protection, an engineer who wants soundness should just set the bit.</p>
+</section>
+
+<section class="col">
+  <h2>Gates, in the order that fails fastest</h2>
+  <ol class="gates">
+    <li><div><span class="gt">Static</span><span class="gs">minutes</span><p><code>prim</code> must show zero switches in <code>ssl_tls13_session_load</code> and <code>ssl_parse_encrypted_pms</code>; <code>pass</code> must show switches there. Whole-library compile must finish within an hour or <code>pass-wl</code> is dropped and the per-TU seed count is the result.</p></div></li>
+    <li><div><span class="gt">Oracle</span><span class="gs">gem5, hours</span><p><code>prim</code> under-taint in the glue must be non-zero. If it is zero, the glue holds no secret operations and the experiment is vacuous: stop and say so. <code>pass</code>, <code>bracket</code> and <code>blanket</code> must agree at the declassification residue, attributable line by line.</p></div></li>
+    <li><div><span class="gt">Over-protection</span><span class="gs">gem5, report only</span><p>Public instructions under DIT per resumption, per arm. Where the compiler's precision is judged against the bracket.</p></div></li>
+    <li><div><span class="gt">Headroom</span><span class="gs">Apple M5</span><p>Blanket DIT on the r = 0 connection stream. Under about 1% means the server's own public lane has no prize and the crossover is not run on it; the coverage and cost-per-event tables from gem5 are then the result, and the crossover moves to the SQLite composite host (+3.48% measured headroom).</p></div></li>
+    <li><div><span class="gt">Standing controls</span><span class="gs">every run</span><p>Identical checksums across arms from a fixed-seed DRBG; <code>simInsts</code> identical across switch models; zero <code>ditSuppressed</code> in <code>nodit</code>; the NOP arm carries zero <code>msr DIT</code> and matches its twin's size; eight <code>argv[0]</code> lengths averaged; rotated arm order and a duplicate baseline on silicon; an exclusive machine.</p></div></li>
+  </ol>
+</section>
+
+<section class="col">
+  <h2>What is measured</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>quantity</th><th>instrument</th><th>why</th></tr></thead>
+    <tbody>
+      <tr><td>secret ops with DIT clear, by function</td><td>gem5 oracle</td><td>the coverage axis</td></tr>
+      <tr><td>instructions under DIT with no secret operand</td><td>gem5 oracle</td><td>the over-protection axis</td></tr>
+      <tr><td>committed <code>MSR DIT</code> per resumption</td><td>gem5 <code>commit.ditWrites</code></td><td>toggles per unit work</td></tr>
+      <tr><td>cycles per resumed handshake, both switch models</td><td>gem5</td><td>cost per event</td></tr>
+      <tr><td>the five quantities</td><td>both</td><td>as every experiment</td></tr>
+      <tr><td>time per connection at rate r, records K</td><td>M5, kperf</td><td>the crossover, if G3 passes</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="col">
+  <h2>Weaknesses, stated now</h2>
+  <ul>
+    <li><strong>The glue is small.</strong> Hundreds of cycles of parsing beside microseconds of AEAD and HKDF. The cost result will be bounded; the experiment is about where protection lands.</li>
+    <li><strong>No attack on ticket parsing exists.</strong> The page must not imply one.</li>
+    <li><strong>The whole ticket plaintext is tainted by the seed</strong>, and the public fields are declassified by assertion.</li>
+    <li><strong>Function pointers</strong> at <code>f_ticket_parse</code>, <code>decrypt_func</code>, <code>f_rng</code>, <code>tls_prf</code>. Seeds bridge them; the pass cannot hoist across them. Build with <code>MBEDTLS_USE_PSA_CRYPTO</code> so the ticket AEAD dispatches through PSA's switch tables rather than the cipher layer's function pointers.</li>
+    <li><strong>The blunt mod-set</strong> may make <code>pass-wl</code> over-protect the rest of the handshake. If so, that is the result, and it names the next compiler change.</li>
+    <li><strong>Inline assembly</strong> in bignum under <code>MBEDTLS_HAVE_ASM</code> sits inside flow B's primitive. Undefine it for the instrumented build and say so.</li>
+  </ul>
+</section>
+
+<section class="col">
+  <h2>Work plan</h2>
+  <ul>
+    <li><strong>Rig</strong> in gem5-DIT, <code>benchmarks/tls_resume/</code>: the existing two-context handshake harness plus ticket setup on the server, ticket capture and reuse on the client, and flags for flow, resumption pattern, records per connection and mode, with the oracle's seed, declassify and report calls.</li>
+    <li><strong>Build</strong> the eight arms with PSA on, time and assembly off, the stale-object exclusion 03 found, and a whole-library bitcode variant.</li>
+    <li><strong>G0</strong>, then the 07 annotation loop on both flows until the oracle sits at the declassification residue; record seeds per round.</li>
+    <li><strong>gem5 sweep</strong>: eight arms, two flows, two switch models, eight path lengths, 100 resumptions per run. Hours, not days.</li>
+    <li><strong>Silicon</strong>: G3 first; the crossover only if it passes.</li>
+  </ul>
+</section>
+
+<footer>
+  Full design and G0 data: <code>paper_experiments/10-mbedtls-session-ticket/</code>. Probe script: <code>utils/dit_host_screening/decrypt_parse/probe_static.sh</code>. Research memos with every citation: <code>docs/research/decrypt-then-parse-{literature,libraries,applications}.md</code>. mbedTLS function names from branch 3.6 head <code>d6664cea</code>.
+</footer>
+</div>
