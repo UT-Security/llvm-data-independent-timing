@@ -38,6 +38,12 @@ struct FunctionMemEffects {
   /// Specific globals the function may write a secret into. Kept precise so a
   /// direct in-TU call that writes one global does not poison every global.
   SmallPtrSet<const GlobalVariable *, 4> WritesSecretToGlobal;
+  /// Globals this function leaves holding a POINTER TO SECRET MEMORY: a
+  /// pointee-tainted value stored into the global, or a secret stored through
+  /// a pointer that was loaded from the global. Module-wide, like
+  /// WritesSecretToGlobal, because a sibling that reloads the pointer must see
+  /// it (flowprobe C5).
+  SmallPtrSet<const GlobalVariable *, 4> WritesPointeeToGlobal;
 
   /// Indices of pointer arguments through whose pointee the function may write a
   /// secret (P1 argument-provenance mod-set, docs/research/memory-summaries.md
@@ -83,6 +89,7 @@ struct FunctionMemEffects {
     return WritesSecretToUnknown == O.WritesSecretToUnknown &&
            NonArgSourced == O.NonArgSourced &&
            WritesSecretToGlobal == O.WritesSecretToGlobal &&
+           WritesPointeeToGlobal == O.WritesPointeeToGlobal &&
            WritesSecretThroughArgPointee == O.WritesSecretThroughArgPointee;
   }
   bool operator!=(const FunctionMemEffects &O) const { return !(*this == O); }
@@ -107,6 +114,13 @@ struct FunctionTaintSummary {
 
   /// Whether the function returns a tainted value (X0/W0).
   bool ReturnsTainted = false;
+
+  /// Whether the function returns a POINTER TO SECRET MEMORY (X0 pointee-
+  /// tainted at a return). Distinct from ReturnsTainted: a callee handed a
+  /// secret buffer that returns `buf + k` returns no secret VALUE, but every
+  /// load the caller makes through the result is one. Without this bit that
+  /// load read clean (flowprobe C1/C5, 63 under-taint ops each).
+  bool ReturnsPointeeTainted = false;
 
   /// Which caller-visible memory the function may write a secret into.
   FunctionMemEffects MemEffects;
@@ -150,6 +164,7 @@ struct FunctionTaintSummary {
     return TaintedArgIndices == Other.TaintedArgIndices &&
            PointeeTaintedArgIndices == Other.PointeeTaintedArgIndices &&
            ReturnsTainted == Other.ReturnsTainted &&
+           ReturnsPointeeTainted == Other.ReturnsPointeeTainted &&
            StackArgTainted == Other.StackArgTainted &&
            MemEffects == Other.MemEffects &&
            IsConservative == Other.IsConservative &&
@@ -178,6 +193,7 @@ class TaintSummaryInfo {
   /// function's FunctionMemEffects::WritesSecretToGlobal). Grows monotonically,
   /// so folding it into the fixed point cannot stop it converging.
   SmallPtrSet<const GlobalVariable *, 8> ModuleSecretGlobals;
+  SmallPtrSet<const GlobalVariable *, 8> ModulePointeeGlobals;
 
 public:
   TaintSummaryInfo() = default;
@@ -214,6 +230,18 @@ public:
   /// Does any function in the module write a secret into \p GV?
   bool isSecretGlobal(const GlobalVariable *GV) const {
     return GV && ModuleSecretGlobals.contains(GV);
+  }
+
+  /// Module-wide: does any function leave \p GV holding a pointer to secret
+  /// memory? The pointee twin of the secret-global set, folded into the fixed
+  /// point the same way. A load of such a global yields a pointee-tainted
+  /// pointer, so `p = g; ...p[i]` and `return g` carry the fact across
+  /// functions without a call edge (flowprobe C5).
+  bool addPointeeGlobal(const GlobalVariable *GV) {
+    return GV && ModulePointeeGlobals.insert(GV).second;
+  }
+  bool isPointeeGlobal(const GlobalVariable *GV) const {
+    return GV && ModulePointeeGlobals.contains(GV);
   }
 
   /// Store a taint summary for a function.

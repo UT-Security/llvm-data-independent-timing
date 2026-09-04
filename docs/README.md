@@ -89,6 +89,15 @@ How the analysis is built, which bugs were found in it, and what is still open.
   (8.26x) for **-5.40% CoinSelection (25/25)** and **-8.52% signing (27/30)**. The
   predictor is switches-per-instrumented-function (5.9 vs 51.1), not the workload.
   Default stays OFF because LTO+ABI is still slower than non-LTO without it.
+- **[results/returns-pointee-2026-09-04.md](results/returns-pointee-2026-09-04.md)** -
+  **the `ReturnsPointeeTainted` summary bit and the seeded-callee return gate.**
+  A callee returning a pointer INTO secret memory returned a public pointer
+  (flowprobe C1/C5); the bit, the address-of-secret-global and store-through-
+  pointer rules, module-wide pointer-holding globals, and a return gate that
+  honours seeds close both. libsodium byte-identical, libsecp256k1 +9 sites for
+  no coverage change, mbedTLS +15.8% sites with the record layer's
+  secret-dependent error codes newly covered; dynamic cost on the resumption
+  workload measured inside.
 - **[reference/dit-abi-runbook.md](reference/dit-abi-runbook.md)** - **how to RUN the
   ABI.** Build steps (`ninja -C build` with no target list, because the analysis also
   links into `libLTO.dylib` and a targeted build leaves it stale and silently wrong),

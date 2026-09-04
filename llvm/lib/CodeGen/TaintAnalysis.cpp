@@ -435,7 +435,8 @@ static cl::opt<unsigned> TaintDitSubBlockMinRun(
     cl::init(8));
 
 // Phase 2: "unknown means tainted". Each flag flips ONE place where an UNKNOWN
-// currently reads as CLEAN (docs/design/taint-domain.md S5, entries U1, U2, U5)
+// currently reads as CLEAN (docs/design/taint-domain.md S5, entries U1, U2;
+// U5 became the ReturnsPointeeTainted summary bit and has no flag)
 // to CIO's `make_top = Taint` reading. All default OFF so the baseline stays
 // byte-identical and each can be measured alone against the fixed oracle
 // (docs/results/phase2-unknown-tainted-2026-09-04.md).
@@ -450,12 +451,6 @@ static cl::opt<bool> TaintNoMMOLoadTainted(
     "taint-no-mmo-load-tainted",
     cl::desc("U2: a load with no memory operand at all is Data-tainted whenever "
              "the state holds ANY memory-resident secret"),
-    cl::init(false));
-static cl::opt<bool> TaintCallResultPointee(
-    "taint-call-result-pointee",
-    cl::desc("U5: a call result that is Data-tainted is also Pointee-tainted: "
-             "the returned value may be a pointer into secret memory (flowprobe "
-             "C1)"),
     cl::init(false));
 
 
@@ -1213,16 +1208,12 @@ static void clearCallResultDefs(const MachineInstr &MI, TaintState &S,
 }
 
 static void taintCallResultDefs(const MachineInstr &MI, TaintState &S,
-                                const TargetRegisterInfo *TRI) {
+                                const TargetRegisterInfo *TRI,
+                                TaintKind K = TaintKind::Data) {
   for (const MachineOperand &MO : MI.all_defs()) {
     if (!isABIResultRegDef(MO, TRI))
       continue;
-    updateWithAliases(TaintKind::Data, MO.getReg(), S, TRI, /*Set=*/true);
-    // U5: the value may be a POINTER into secret memory (a callee returning
-    // &buf[i] of the buffer it was handed - flowprobe C1). Today's rule says
-    // Data only, never Pointee.
-    if (TaintCallResultPointee)
-      updateWithAliases(TaintKind::Pointee, MO.getReg(), S, TRI, /*Set=*/true);
+    updateWithAliases(K, MO.getReg(), S, TRI, /*Set=*/true);
   }
 }
 
@@ -1252,6 +1243,24 @@ const Function *llvm::findCalledFunction(Module &M, const MachineInstr &MI) {
 
 /// Propagate taint through a single machine instruction. Internal to this file:
 /// every consumer reaches it through replayTaint.
+/// A parameter carrying a seed attribute is secret BY DECLARATION, at every call
+/// site: the seed is the user's statement about the callee, not a fact any
+/// caller derived, so whatever such a callee hands back - its return value, or a
+/// pointer into memory it filled - is secret regardless of what the caller
+/// believes it passed. The return gate in propagateTaintMI used to key only on
+/// the caller's own view ("did WE pass a secret?"), which is exactly wrong at an
+/// unseeded caller: flowprobe C5's `produce_all` has no parameters, materialises
+/// the key itself (the oracle taints it with a runtime marker) and parks the
+/// pointer returned by the seeded `c5_produce` in a global; the pointer came
+/// back public and the consumer's 63 loads read clean, with the summary bit set
+/// and correct.
+static bool hasSeededParam(const Function &F) {
+  for (const Argument &Arg : F.args())
+    if (Arg.hasAttribute("tainted") || Arg.hasAttribute("tainted-pointee"))
+      return true;
+  return false;
+}
+
 static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
                              const TargetRegisterInfo *TRI,
                              const TaintSummaryInfo *TSI, Module *M,
@@ -1416,6 +1425,26 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     // writing it, and never the other's, so the order of the two is immaterial.
     for (TaintKind K : {TaintKind::Data, TaintKind::Pointee})
       updateAllRegDefs(K, MI, S, TRI, anyRegUseOfKind(K, MI, S));
+    // The ADDRESS of a global that holds a secret (module-wide, or whole-object
+    // tainted by a callee) is a pointer to secret memory. Materialising it
+    // (ADRP/ADD carry the GlobalAddress operand) must say so, or a function
+    // that fills a global and returns `&global` returns a pointer the caller
+    // treats as public (flowprobe C1). Globals otherwise carry no pointer-ness
+    // (docs/design/taint-domain.md S5.1); this is the one place it is needed,
+    // and it is monotone in the module-wide set.
+    for (const MachineOperand &MO : MI.operands()) {
+      if (!MO.isGlobal())
+        continue;
+      const auto *GV = dyn_cast<GlobalVariable>(MO.getGlobal());
+      if (!GV)
+        continue;
+      if ((TSI && TSI->isSecretGlobal(GV)) || S.isWholeGlobalTainted(GV)) {
+        updateAllRegDefs(TaintKind::Pointee, MI, S, TRI, true);
+        LLVM_DEBUG(dbgs() << "      address of secret global " << GV->getName()
+                          << " -> pointee-tainted\n");
+        break;
+      }
+    }
   }
 
   // Store handling: the stored VALUE - both of its facts, together - lands in
@@ -1473,8 +1502,13 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // and reloaded comes back as a public pointer - and lifting that is a
         // measured change, not part of this refactor
         // (docs/design/taint-domain.md S5).
-        storeCell(TaintObject::global(CI.GV), TaintVal{Stored.Data, false},
-                  "global cell", /*TracePointee=*/false);
+        // Deposit the WHOLE value: a pointer to secret memory stored into a
+        // global must come back as one (S5.1 lifted, 2026-09-04, for
+        // flowprobe C5). Module-wide as well, so a sibling sees it.
+        storeCell(TaintObject::global(CI.GV), Stored, "global cell",
+                  /*TracePointee=*/true);
+        if (Stored.Pointee)
+          S.setPointeeGlobal(CI.GV);
       } else if (CI.K == CellInfo::OutgoingArg) {
         // Arm the bit for the next call. Deliberately one-directional: an
         // untainted store to the outgoing area does NOT disarm it, because the
@@ -1490,6 +1524,49 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // Unknown/heap: keep queryable locations precise enough for AA, and
         // fall back to the opaque poison bit when MIR lacks IR memory info.
         if (Stored.Data) {
+          // The pointer this store went THROUGH now points at secret memory.
+          // Without this a function that mallocs, fills the block with a secret
+          // and returns it returns a pointer the caller treats as public
+          // (flowprobe C5): pointee taint entered only through seeds. Address
+          // registers are every physical register use that is not a stored
+          // value; reserved registers (SP, and FP when it is one) are excluded,
+          // since frame objects are the P1b provenance domain and a pointee-
+          // tainted SP would flood. An unclassifiable payload shape (nullopt)
+          // marks every use, the safe direction.
+          {
+            const MachineFunction &MFs = *MI.getMF();
+            const TargetInstrInfo *TIIs = MFs.getSubtarget().getInstrInfo();
+            const std::optional<unsigned> NVal = TIIs->getNumStoredValueRegs(MI);
+            unsigned RegUse = 0;
+            for (const MachineOperand &MO : MI.operands()) {
+              if (!MO.isReg() || MO.isDef() || !MO.getReg().isPhysical())
+                continue;
+              const unsigned Idx = RegUse++;
+              if (NVal && Idx < *NVal)
+                continue;
+              const Register Rg = MO.getReg();
+              if (MFs.getRegInfo().isReserved(Rg))
+                continue;
+              updateWithAliases(TaintKind::Pointee, Rg, S, TRI, /*Set=*/true);
+              LLVM_DEBUG(dbgs() << "      secret stored through " << printReg(Rg, TRI)
+                                << " -> pointee-tainted\n");
+            }
+          }
+          // If that pointer was LOADED FROM A GLOBAL (`g[i] = secret` where
+          // `g` is a global pointer variable), the global now holds a pointer
+          // to secret memory: a later `return g` or a sibling's `p = g`
+          // reloads it and must see the fact. The IR pointer operand names
+          // the load; its underlying object names the global.
+          if (const Value *V = MMO->getValue()) {
+            const Value *U = getUnderlyingObject(V);
+            if (const auto *LI = dyn_cast<LoadInst>(U))
+              if (const auto *GV = dyn_cast<GlobalVariable>(
+                      getUnderlyingObject(LI->getPointerOperand()))) {
+                S.setPointeeGlobal(GV);
+                LLVM_DEBUG(dbgs() << "      global " << GV->getName()
+                                  << " now holds a pointer to secret memory\n");
+              }
+          }
           if (AA && MMO->getValue()) {
             S.taintUnknownMem(MMO->getValue(), TaintKind::Data);
             LLVM_DEBUG({
@@ -1594,6 +1671,17 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           // flowprobe C2. Asking the module makes "this global holds a secret"
           // a property of the global rather than of the path taken to it.
           const bool ModuleSecret = TSI && TSI->isSecretGlobal(CI.GV);
+          // Pointer-ness: the global holds a pointer to secret memory, by this
+          // function's own store (cell), by a sibling's (module set), or by a
+          // secret stored through a pointer loaded from it.
+          if ((TSI && TSI->isPointeeGlobal(CI.GV)) || S.isPointeeGlobal(CI.GV) ||
+              S.readCell(TaintObject::global(CI.GV), CI.Offset,
+                         CI.Size.value_or(0))
+                  .Pointee) {
+            Loaded.Pointee = true;
+            LLVM_DEBUG(dbgs() << "      load of pointer-to-secret from global "
+                              << CI.GV->getName() << "\n");
+          }
           bool Tainted = ModuleSecret || S.isWholeGlobalTainted(CI.GV) ||
                          S.readCell(TaintObject::global(CI.GV), CI.Offset,
                                     CI.Size.value_or(0))
@@ -1712,9 +1800,15 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
 
       // A callee whose taint is argument-sourced can only hand back a secret to
       // a caller that gave it one. A non-argument-sourced callee returns taint
-      // regardless - its secret did not come through its parameters.
+      // regardless - its secret did not come through its parameters. And a
+      // SEEDED callee's parameters are secret at every call site by
+      // declaration (hasSeededParam), so its return applies everywhere too;
+      // `CalleeTaintIsOurs` stays false there when we passed nothing, so the
+      // absorbed secret is recorded as non-argument-sourced, which is what it
+      // is - no caller of ours can account for it.
+      const bool CalleeSeeded = hasSeededParam(*Callee);
       const bool ReturnApplies =
-          Summary.MemEffects.NonArgSourced || HasTaintedArg;
+          Summary.MemEffects.NonArgSourced || HasTaintedArg || CalleeSeeded;
       if (Summary.ReturnsTainted && ReturnApplies) {
         taintCallResultDefs(MI, S, TRI);
         if (!CalleeTaintIsOurs)
@@ -1723,6 +1817,17 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
                           << " returns tainted value"
                           << (CalleeTaintIsOurs ? "" : " (NON-ARG-SOURCED)")
                           << "\n");
+      }
+      // The callee returns a POINTER TO SECRET MEMORY (`buf + k` of a buffer
+      // it was handed, or the address of a global it filled): every load the
+      // caller makes through the result is a secret. Same applicability rule
+      // as the value bit.
+      if (Summary.ReturnsPointeeTainted && ReturnApplies) {
+        taintCallResultDefs(MI, S, TRI, TaintKind::Pointee);
+        if (!CalleeTaintIsOurs)
+          S.setNonArgSourcedTaint();
+        LLVM_DEBUG(dbgs() << "        call to " << Callee->getName()
+                          << " returns pointer to secret memory\n");
       }
 
       // Apply the callee's memory-effects (mod-set): what secret it may have
@@ -1853,6 +1958,10 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // modes. Annotation-driven mode suppresses the clobber's FLOOD at load
         // consumption (below), not here, so the mod-set stays complete.
         taintCallResultDefs(MI, S, TRI);
+        // An unseen callee handed a secret may return a pointer to it
+        // (memcpy returns dst; strdup, realloc, a getter). Unknown means
+        // tainted: the result is also a pointer to secret memory.
+        taintCallResultDefs(MI, S, TRI, TaintKind::Pointee);
         std::optional<LibcMoveModel> Move;
         if (TaintLibcModel)
           Move = getLibcMoveModel(Callee, getCalleeSymbolName(MI));
@@ -2161,6 +2270,8 @@ FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
       ME.WritesSecretToUnknown = true;
     for (const GlobalVariable *GV : S.wholeTaintedGlobals())
       ME.WritesSecretToGlobal.insert(GV);
+    for (const GlobalVariable *GV : S.pointeeGlobals())
+      ME.WritesPointeeToGlobal.insert(GV);
     // The source condition, re-exported with the effects it qualifies. One bit
     // for the whole mod-set: if any taint in this function came from somewhere
     // other than its parameters, none of its effects may be gated away.
