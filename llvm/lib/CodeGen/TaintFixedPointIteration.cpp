@@ -55,10 +55,10 @@ using namespace llvm;
 /// version of that reasoning cost +44 points against the mod-set gate and was
 /// removed (docs/design/frame-addr-fallback.md).
 static bool frameMayHoldSecret(const TaintState &S) {
-  // The UNKNOWN sets matter as much as the resolved cells, and omitting them
-  // was this predicate's first bug: at -O2 a user local's MMO underlying object
-  // is frequently not a resolvable frame cell, so the secret lands in
-  // TaintedUnknownMemValues instead of TaintedStackCells (the case
+  // The UNKNOWN entries matter as much as the resolved cells, and omitting
+  // them was this predicate's first bug: at -O2 a user local's MMO underlying
+  // object is frequently not a resolvable frame cell, so the secret lands in
+  // UnknownMemValues instead of a frame cell (the case
   // frame-addr-fallback.md records as "they fall through to Unknown"). Checking
   // only the resolved cells therefore missed libsodium's argon2id entirely -
   // `argon2_hash` stores the password pointer into a stack-allocated
@@ -70,9 +70,7 @@ static bool frameMayHoldSecret(const TaintState &S) {
   // caller passing anything, so a frame-address argument is not the mechanism
   // and the record would not be actionable.
   return S.isExternalMemClobbered() || S.UnknownMemTainted ||
-         !S.TaintedStackCells.empty() || !S.PointeeTaintedStackCells.empty() ||
-         !S.TaintedUnknownMemValues.empty() ||
-         !S.PointeeTaintedUnknownMemValues.empty();
+         S.anyFrameCell() || !S.UnknownMemValues.empty();
 }
 
 /// True if `Reg`, as it reaches `Call`, was computed from the frame base - i.e.
@@ -241,12 +239,10 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           // (paper_experiments/08-seed-ground-truth).
           if (PtrParam)
             if (auto B = S.getPointerBase(PhysReg)) {
-              const bool IsFrame = B->K == TaintState::PointerBase::Frame;
+              const bool IsFrame = B->K == TaintObject::Frame;
               const bool PointsAtSecret =
-                  IsFrame ? (TaintFrameAddrArgs &&
-                             S.anyTaintedStackCellForFI(B->Index))
-                          : (TaintArgPointeeArgs &&
-                             S.isTaintedArgPointee((unsigned)B->Index));
+                  (IsFrame ? TaintFrameAddrArgs : TaintArgPointeeArgs) &&
+                  S.objectHoldsSecret(*B);
               if (PointsAtSecret &&
                   CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
                 SummaryChanged = true;
@@ -461,15 +457,13 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
 
         *TraceOS << "  result: " << TR.Merged.countRegs() << " tainted regs "
                  << "(data=" << TR.Merged.countDataRegs()
-                 << ", pointee=" << TR.Merged.countPointeeRegs()
-                 << ", address=" << TR.Merged.countAddressRegs() << "), "
+                 << ", pointee=" << TR.Merged.countPointeeRegs() << "), "
                  << TR.Merged.countCells() << " tainted cells";
         if (TR.Merged.UnknownMemTainted)
           *TraceOS << ", UnknownMemTainted";
         *TraceOS << "\n";
         dumpRegs("tainted_regs", TaintKind::Data);
         dumpRegs("pointee_tainted_regs", TaintKind::Pointee);
-        dumpRegs("address_tainted_regs", TaintKind::Address);
       }
 
       // Keep unknown-memory taint intraprocedural. Promoting any tainted store
@@ -554,6 +548,28 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                     << " iteration(s)\n");
   LLVM_DEBUG(dbgs() << "Total function summaries: " << TSI.size() << "\n");
 
+  // Which functions EXECUTE a tainted instruction. THIS is the gate on
+  // instrumentation and export - not `TR.Merged.empty()`, which every consumer
+  // below used to test first. Merged is the join of the block EXIT states, so
+  // a function whose only secret is consumed and its register redefined before
+  // every exit read as empty and was skipped: `ldr x0, [secret]; bl consume;
+  // ret`, or a seeded `f(long s) { return consume(s); }`, where `consume`
+  // returns a public value and so redefines x0. The load and the
+  // secret-passing call are both Needs and ran with PSTATE.DIT clear, and the
+  // Scenario-B check in step 3c did not fire because it asks THIS question,
+  // not that one (clang/test/CodeGen/taint-instrument-gate.c).
+  //
+  // Computed once: the three places that used to ask it per function each ran
+  // their own replay, so an instrumented function paid three and a clean one
+  // paid none; now every function pays exactly one.
+  DenseMap<const Function *, bool> HasTaintedRuns;
+  forEachAnalyzed(M, Ctx, Results,
+                  [&](Function &F, MachineFunction &MF, const TaintResult &TR,
+                      AAResults *AA) {
+                    HasTaintedRuns[&F] =
+                        functionHasTaintedRuns(MF, TR, &TSI, AA);
+                  });
+
   if (TraceOS) {
     *TraceOS << "\n=== Converged after " << Iteration << " iteration(s) ===\n";
     *TraceOS << "Total function summaries: " << TSI.size() << "\n";
@@ -573,9 +589,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                     [&](Function &F, MachineFunction &MF, const TaintResult &TR,
                         AAResults *AA) {
                       FunctionTaintSummary S = TSI.getSummary(F);
-                      S.InstrumentedForDIT =
-                          !TR.Merged.empty() &&
-                          functionHasTaintedRuns(MF, TR, &TSI, AA);
+                      S.InstrumentedForDIT = HasTaintedRuns.lookup(&F);
                       S.PreservesDIT = !S.InstrumentedForDIT;
                       TSI.storeSummary(F, S);
                     });
@@ -674,7 +688,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
           // moot; requiring instrumentation also keeps the consumer in
           // TaintAnalysis.cpp simple.
           if (!F.hasLocalLinkage() || F.hasAddressTaken() ||
-              !functionHasTaintedRuns(MF, TR, &TSI, AA))
+              !HasTaintedRuns.lookup(&F))
             return;
 
           // RETRACT THROUGH TAIL CALLS. The bit records an ENTRY property ("DIT
@@ -782,7 +796,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
     forEachAnalyzed(M, Ctx, Results,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
-          bool FnInstrumented = functionHasTaintedRuns(MF, TR, &TSI, AA);
+          const bool FnInstrumented = HasTaintedRuns.lookup(&F);
           const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
           replayTaint(
               MF, TR, &TSI, AA, /*Post=*/{},
@@ -1082,9 +1096,9 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
     SmallVector<FunctionTaintStats, 32> AllStats;
 
     forEachAnalyzed(M, Ctx, Results,
-        [&](Function &, MachineFunction &MF, const TaintResult &TR,
+        [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
-          if (TR.Merged.empty())
+          if (!HasTaintedRuns.lookup(&F))
             return;
 
           auto OS = openTaintReport(TaintOutputFile, "taint output",
@@ -1125,9 +1139,9 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
   unsigned SourceRegionsReported = 0;
   if (TaintInsertDIT || RegionsOS || SourceRegionsOS) {
     forEachAnalyzed(M, Ctx, Results,
-                    [&](Function &, MachineFunction &MF, const TaintResult &TR,
+                    [&](Function &F, MachineFunction &MF, const TaintResult &TR,
                         AAResults *AA) {
-                      if (TR.Merged.empty())
+                      if (!HasTaintedRuns.lookup(&F))
                         return;
 
                       if (TaintInsertDIT)

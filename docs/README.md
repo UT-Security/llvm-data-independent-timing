@@ -140,6 +140,12 @@ How the analysis is built, which bugs were found in it, and what is still open.
   context-insensitive mod-sets are **the dominant false-positive source** (measured on
   libsodium: 169 of 199 FPs). Also records that P1b is a far smaller lever than
   assumed: only 17 of 583 secret-writing call sites resolve provenance to an argument.
+- **[design/taint-domain.md](design/taint-domain.md)** - the analysis domain as a
+  product lattice (2026-09-03): one abstract value (Data, Pointee) for registers and
+  memory cells alike, one memory map, provenance kept apart from pointee taint and why,
+  the proof that the old `Address` kind was redundant, the byte-identical differential
+  verification, and the audit of every place "unknown" still reads as clean (Phase 2's
+  worklist).
 - **[design/spill-soundness-bugs.md](design/spill-soundness-bugs.md)** - two spill
   soundness bugs fixed 2026-07-27 (`implicit-def` counted as a use; narrowed reload of
   a spilled secret), plus what spilling *does* handle correctly.

@@ -15,9 +15,13 @@
 #define LLVM_CODEGEN_TAINTANALYSIS_H
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/Hashing.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SparseBitVector.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -25,7 +29,9 @@
 #include "llvm/CodeGen/TaintSummaryInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
+#include <climits>
 #include <memory>
+#include <optional>
 
 namespace llvm {
 
@@ -38,11 +44,6 @@ class MachineInstr;
 class GlobalVariable;
 class AAResults;
 class Value;
-
-/// Cell keys: (base, (offset, size_in_bytes))
-using StackCell = std::pair<int, std::pair<int64_t, uint64_t>>;
-using GlobalCell =
-    std::pair<const GlobalVariable *, std::pair<int64_t, uint64_t>>;
 
 /// Command-line option for taint output file (shared across passes).
 extern cl::opt<std::string> TaintOutputFile;
@@ -182,74 +183,198 @@ extern cl::opt<std::string> TaintClobberReportFile;
 extern cl::opt<std::string> TaintDITJoinReportFile;
 extern cl::opt<std::string> TaintFrameRefReportFile;
 
-/// Selects which of TaintState's register bitvectors an operation applies to.
+/// The two may-facts the analysis tracks about a VALUE, wherever that value
+/// sits - in a register or in a memory cell. They are independent dimensions
+/// of one abstract value (TaintVal), and everything the analysis moves - a
+/// copy, an ALU result, a store, a load - moves the whole value: a store
+/// writes the stored register's value into the cell, a load reads the cell's
+/// value back into the defined register. That is what makes the memory side
+/// ONE mechanism instead of one per kind (docs/design/taint-domain.md).
+///
+/// There is deliberately no third kind. The old `Address` channel
+/// ("secret-dependent address") was, under every rule the analysis has, a
+/// subset of `Data`: it was only ever set on an ALU result whose inputs were
+/// Data-tainted, and cleared wherever Data was cleared. Every consumer that
+/// tested it therefore tested Data twice, and removing it changes no output
+/// (docs/design/taint-domain.md S2).
 enum class TaintKind {
   Data,    ///< The value itself is secret.
-  Pointee, ///< The value is a pointer to secret memory.
-  Address, ///< The value may be used as a secret-dependent memory address.
+  Pointee, ///< The value is a pointer into memory that may hold a secret.
 };
 
-/// TaintState holds the result of taint analysis for a MachineFunction.
-/// TaintedRegs tracks secret data values. PointeeTaintedRegs tracks pointer
-/// values whose pointee memory is secret. AddressTaintedRegs tracks values that
-/// may be used as secret-dependent memory addresses.
-struct TaintState {
-  /// The object a register-held pointer refers to. See PointerBases.
-  struct PointerBase {
-    enum Kind : uint8_t { Frame, Arg };
-    Kind K = Frame;
-    int Index = 0; ///< frame index when Frame, argument number when Arg
-    bool operator==(const PointerBase &O) const {
-      return K == O.K && Index == O.Index;
-    }
-    bool operator!=(const PointerBase &O) const { return !(*this == O); }
-  };
+/// The abstract value: one bit per TaintKind. Bottom is (false, false); the
+/// join is OR in both dimensions, because both are may-facts.
+struct TaintVal {
+  bool Data = false;
+  bool Pointee = false;
 
-  SparseBitVector<> TaintedRegs;
-  SparseBitVector<> PointeeTaintedRegs;
-  SparseBitVector<> AddressTaintedRegs;
+  static TaintVal data() { return {true, false}; }
+  static TaintVal pointee() { return {false, true}; }
+
+  bool get(TaintKind K) const { return K == TaintKind::Data ? Data : Pointee; }
+  void set(TaintKind K, bool V) {
+    if (K == TaintKind::Data)
+      Data = V;
+    else
+      Pointee = V;
+  }
+  bool any() const { return Data || Pointee; }
+  TaintVal &operator|=(TaintVal O) {
+    Data |= O.Data;
+    Pointee |= O.Pointee;
+    return *this;
+  }
+  bool operator==(TaintVal O) const {
+    return Data == O.Data && Pointee == O.Pointee;
+  }
+  bool operator!=(TaintVal O) const { return !(*this == O); }
+};
+
+/// A memory object the analysis can NAME. Post-prologepilog there are three:
+///
+///   Frame(FI)   an object in THIS function's frame - `$sp + imm` (P1b).
+///   Global(GV)  a global variable.
+///   Arg(k)      the object this function's incoming pointer argument k points
+///               at. The caller named it; we cannot, but we can say "the same
+///               object argument k was given" and let OUR caller resolve it one
+///               level up (B1). It is an ABSTRACT object in this function's
+///               memory state: the callee cannot see the caller's bytes, only
+///               what it has been told or has itself written through the
+///               pointer.
+///
+/// Used in two roles with OPPOSITE soundness polarity, and the code keeps them
+/// apart on purpose:
+///   * as the key of a memory cell (MemCell) - a MAY fact, "this object may
+///     hold a secret here", which unions on join;
+///   * as the provenance of a register (TaintState::PointerBases) - a MUST
+///     fact, "this register points into exactly this object", which
+///     INTERSECTS on join, because it licenses a callee's write to be applied
+///     to one object instead of to all of memory, and attributing that write
+///     to the wrong object is the one direction that under-taints.
+struct TaintObject {
+  enum Kind : uint8_t { Frame, Global, Arg };
+  Kind K = Frame;
+  int Index = 0; ///< frame index when Frame, argument number when Arg
+  const GlobalVariable *GV = nullptr; ///< when Global
+
+  static TaintObject frame(int FI) { return {Frame, FI, nullptr}; }
+  static TaintObject global(const GlobalVariable *G) { return {Global, 0, G}; }
+  static TaintObject arg(unsigned ArgNo) { return {Arg, (int)ArgNo, nullptr}; }
+
+  bool operator==(const TaintObject &O) const {
+    return K == O.K && Index == O.Index && GV == O.GV;
+  }
+  bool operator!=(const TaintObject &O) const { return !(*this == O); }
+};
+
+/// A byte range of a nameable object. Size 0 is the unknown-extent sentinel:
+/// it is recorded by a store whose size the analysis cannot see, and it reads
+/// as covering the whole object (see TaintState::rangesOverlap).
+struct MemCell {
+  TaintObject Obj;
+  int64_t Off = 0;
+  uint64_t Size = 0;
+
+  bool operator==(const MemCell &O) const {
+    return Obj == O.Obj && Off == O.Off && Size == O.Size;
+  }
+  bool operator!=(const MemCell &O) const { return !(*this == O); }
+};
+
+template <> struct DenseMapInfo<TaintObject> {
+  // Real frame indices are small (fixed objects are small negatives), so the
+  // two extreme values are free to serve as the map's sentinels.
+  static inline TaintObject getEmptyKey() {
+    return {TaintObject::Frame, INT_MIN, nullptr};
+  }
+  static inline TaintObject getTombstoneKey() {
+    return {TaintObject::Frame, INT_MIN + 1, nullptr};
+  }
+  static unsigned getHashValue(const TaintObject &O) {
+    return static_cast<unsigned>(
+        hash_combine(static_cast<unsigned>(O.K), O.Index, O.GV));
+  }
+  static bool isEqual(const TaintObject &A, const TaintObject &B) {
+    return A == B;
+  }
+};
+
+template <> struct DenseMapInfo<MemCell> {
+  static inline MemCell getEmptyKey() {
+    return {DenseMapInfo<TaintObject>::getEmptyKey(), 0, 0};
+  }
+  static inline MemCell getTombstoneKey() {
+    return {DenseMapInfo<TaintObject>::getTombstoneKey(), 0, 0};
+  }
+  static unsigned getHashValue(const MemCell &C) {
+    return static_cast<unsigned>(hash_combine(
+        DenseMapInfo<TaintObject>::getHashValue(C.Obj), C.Off, C.Size));
+  }
+  static bool isEqual(const MemCell &A, const MemCell &B) { return A == B; }
+};
+
+/// TaintState is the dataflow state of the analysis at one program point: the
+/// abstract value (TaintVal) of every register and of every memory cell the
+/// analysis can name, plus the coarse facts it keeps about memory it cannot.
+///
+///   registers   Reg -> TaintVal          two bitvectors, one per TaintKind
+///   provenance  Reg -> TaintObject       MUST: which object a pointer targets
+///   memory      MemCell -> TaintVal      one map for frame, global and
+///                                        arg-pointee cells
+///   heap        IR Value -> TaintVal     stores the analysis could locate
+///                                        only by IR pointer
+///   TOP bits    UnknownMemTainted, ExternalMemClobbered
+///   flags       OutgoingArgSecret, NonArgSourcedTaint
+///
+/// Join is per component: taint UNIONS (registers, cells, heap, TOP bits,
+/// flags), provenance INTERSECTS. See docs/design/taint-domain.md.
+struct TaintState {
+  SparseBitVector<> TaintedRegs;        ///< Data
+  SparseBitVector<> PointeeTaintedRegs; ///< Pointee
   bool OutgoingArgSecret = false;
   bool NonArgSourcedTaint = false;
 
-  /// Register -> WHICH object the pointer it holds refers to. Post-prologepilog
-  /// there are exactly two nameable bases, and neither is an IR value:
-  ///
-  ///   Frame(FI)  an object in THIS function's frame - `$sp + imm` (P1b).
-  ///   Arg(k)     the object this function's incoming pointer argument k points
-  ///              at. The caller named it; we cannot, but we can say "the same
-  ///              object argument k was given" and let OUR caller resolve it one
-  ///              level up (B1).
-  ///
-  /// Naming the second is what lets a callee's arg-pointee mod-set be applied to
-  /// the one object the caller passed instead of collapsing to a whole-caller
-  /// clobber. GCC's `ipa-modref` carries the same pair as a `parm_index` that is
-  /// either a real parameter or a negative sentinel; see
+  /// Register -> WHICH object the pointer it holds refers to (Frame or Arg;
+  /// a global's address is never tracked as a base). Naming the object is what
+  /// lets a callee's arg-pointee mod-set be applied to the one object the
+  /// caller passed instead of collapsing to a whole-caller clobber. GCC's
+  /// `ipa-modref` carries the same pair as a `parm_index` that is either a
+  /// real parameter or a negative sentinel; see
   /// docs/design/frame-address-gap.md.
   ///
   /// Absent = unknown, and every consumer must fall back to its conservative
   /// path on absent. ONE map, so a def kills provenance of both kinds at once.
   /// Excluded from isBottom()/countRegs(): it is provenance, not taint.
-  SmallDenseMap<unsigned, PointerBase, 8> PointerBases{};
+  SmallDenseMap<unsigned, TaintObject, 8> PointerBases{};
 
-  /// Argument numbers whose POINTEE this function has been told holds a secret
-  /// (B1). Whole-object granularity: the call site cannot know which bytes of
-  /// the passed object a callee wrote, so it records the object.
+  /// Every memory cell the analysis can name and knows to hold a secret or a
+  /// pointer to one. A cell is written by a store (strongly when the store's
+  /// extent is known, weakly otherwise) and read by a load of any overlapping
+  /// range; the two kinds travel together because the cell holds a VALUE.
   ///
-  /// This IS taint, not provenance - it participates in isBottom(), ==, and the
-  /// join - and at function exit it is re-exported as
-  /// FunctionMemEffects::WritesSecretThroughArgPointee, which is what makes the
-  /// naming compose up the call graph.
-  SparseBitVector<> TaintedArgPointees;
-  DenseSet<StackCell> TaintedStackCells;
-  DenseSet<StackCell> PointeeTaintedStackCells;
-  DenseSet<GlobalCell> TaintedGlobalCells;
-  DenseSet<const Value *> TaintedUnknownMemValues;
-  DenseSet<const Value *> PointeeTaintedUnknownMemValues;
+  /// Arg(k) cells are whole-object sentinels only (offset 0, size 0): "the
+  /// object my caller passed for argument k holds a secret" (B1). At function
+  /// exit they are re-exported as
+  /// FunctionMemEffects::WritesSecretThroughArgPointee, which is what makes
+  /// the naming compose up the call graph.
+  DenseMap<MemCell, TaintVal> Cells{};
+
+  /// Stores the analysis could not attach to a nameable object but could
+  /// still locate by IR pointer, so a later load can be screened against them
+  /// with alias analysis. Data is never cleared from an entry (a later public
+  /// store to the same IR pointer proves nothing about which bytes it hit);
+  /// Pointee is, because the entry then records a pointer spill and a
+  /// non-pointer store to the slot overwrote it.
+  DenseMap<const Value *, TaintVal> UnknownMemValues{};
+  /// A secret was stored somewhere the analysis could not locate at all.
   bool UnknownMemTainted = false;
 
   /// Globals a callee wrote a secret into, at unknown offset. Whole-object
   /// (any load of the global is secret): a callee's mod-set carries no offset.
-  DenseSet<const GlobalVariable *> TaintedWholeGlobals;
+  /// Kept apart from Cells because it is INHERITED taint, not this function's
+  /// own - empty() deliberately ignores it, and computeFunctionMemEffects
+  /// re-exports it as a set.
+  DenseSet<const GlobalVariable *> TaintedWholeGlobals{};
 
   /// A call may have written a secret into memory the analysis cannot pin down
   /// (through a pointer argument, to the heap, or via an unknown callee). Once
@@ -261,16 +386,16 @@ struct TaintState {
   bool ExternalMemClobbered = false;
 
 private:
-  /// Merge Src into Dst in one shot. Reserving up front matters: join is the
-  /// hot path of the intraprocedural fixed point, and inserting element by
-  /// element into a growing DenseSet rehashes repeatedly. See
+  /// Merge Src into Dst by OR-ing values. Reserving up front matters: join is
+  /// the hot path of the intraprocedural fixed point, and inserting element by
+  /// element into a growing map rehashes repeatedly. See
   /// docs/design/scalability.md.
-  template <typename SetT> static void mergeSet(SetT &Dst, const SetT &Src) {
+  template <typename MapT> static void mergeVals(MapT &Dst, const MapT &Src) {
     if (Src.empty())
       return;
     Dst.reserve(Dst.size() + Src.size());
-    for (const auto &E : Src)
-      Dst.insert(E);
+    for (const auto &KV : Src)
+      Dst[KV.first] |= KV.second;
   }
 
 public:
@@ -278,28 +403,18 @@ public:
   /// Every component check is O(1), so this is a cheap guard on join.
   bool isBottom() const {
     return TaintedRegs.empty() && PointeeTaintedRegs.empty() &&
-           AddressTaintedRegs.empty() && !OutgoingArgSecret &&
-           !NonArgSourcedTaint && TaintedStackCells.empty() &&
-           PointeeTaintedStackCells.empty() && TaintedGlobalCells.empty() &&
-           TaintedUnknownMemValues.empty() &&
-           PointeeTaintedUnknownMemValues.empty() && !UnknownMemTainted &&
-           TaintedWholeGlobals.empty() && !ExternalMemClobbered &&
-           TaintedArgPointees.empty();
+           !OutgoingArgSecret && !NonArgSourcedTaint && Cells.empty() &&
+           UnknownMemValues.empty() && !UnknownMemTainted &&
+           TaintedWholeGlobals.empty() && !ExternalMemClobbered;
   }
 
   bool operator==(const TaintState &O) const {
     return TaintedRegs == O.TaintedRegs &&
            PointeeTaintedRegs == O.PointeeTaintedRegs &&
-           AddressTaintedRegs == O.AddressTaintedRegs &&
            OutgoingArgSecret == O.OutgoingArgSecret &&
            NonArgSourcedTaint == O.NonArgSourcedTaint &&
-           PointerBases == O.PointerBases &&
-           TaintedArgPointees == O.TaintedArgPointees &&
-           TaintedStackCells == O.TaintedStackCells &&
-           PointeeTaintedStackCells == O.PointeeTaintedStackCells &&
-           TaintedGlobalCells == O.TaintedGlobalCells &&
-           TaintedUnknownMemValues == O.TaintedUnknownMemValues &&
-           PointeeTaintedUnknownMemValues == O.PointeeTaintedUnknownMemValues &&
+           PointerBases == O.PointerBases && Cells == O.Cells &&
+           UnknownMemValues == O.UnknownMemValues &&
            UnknownMemTainted == O.UnknownMemTainted &&
            TaintedWholeGlobals == O.TaintedWholeGlobals &&
            ExternalMemClobbered == O.ExternalMemClobbered;
@@ -308,19 +423,21 @@ public:
   bool operator!=(const TaintState &O) const { return !(*this == O); }
 
   void join(const TaintState &O) {
-    // Joining bottom cannot change anything. Worth the check because a forward
-    // taint analysis over a large CFG spends most joins merging empty state.
-    if (O.isBottom())
-      return;
-    TaintedRegs |= O.TaintedRegs;
-    PointeeTaintedRegs |= O.PointeeTaintedRegs;
-    AddressTaintedRegs |= O.AddressTaintedRegs;
-    OutgoingArgSecret |= O.OutgoingArgSecret;
-    NonArgSourcedTaint |= O.NonArgSourcedTaint;
-    // Frame provenance INTERSECTS on merge: a register only points at a known
-    // object if every incoming path agrees which one. Disagreement, or presence
-    // on only one path, drops to unknown - the conservative direction, since
+    // Provenance INTERSECTS on merge: a register only points at a known object
+    // if every incoming path agrees which one. Disagreement, or presence on
+    // only one path, drops to unknown - the conservative direction, since
     // unknown means "fall back to the whole-frame clobber".
+    //
+    // This runs BEFORE the bottom check below, and must. isBottom() ignores
+    // provenance (it is not taint), so a predecessor that carries no secret
+    // yet can still name a different object for the same register - `p = &a`
+    // on one arm, `p = &b` on the other, before any secret exists. Returning
+    // early kept the first arm's answer, a callee's write through `p` was
+    // then applied precisely to that one object, and a read of the other
+    // came back public (clang/test/CodeGen/taint-provenance-join.c). The
+    // optimistic treatment a loop backedge needs is the caller's job: it
+    // skips predecessors it has not visited yet, not predecessors that are
+    // bottom.
     if (!PointerBases.empty()) {
       SmallVector<unsigned, 8> Drop;
       for (const auto &KV : PointerBases) {
@@ -331,103 +448,35 @@ public:
       for (unsigned R : Drop)
         PointerBases.erase(R);
     }
-    // Arg-pointee taint UNIONS: it is taint, and any path reaching this point
-    // with the object secret makes it secret here.
-    TaintedArgPointees |= O.TaintedArgPointees;
-    mergeSet(TaintedStackCells, O.TaintedStackCells);
-    mergeSet(PointeeTaintedStackCells, O.PointeeTaintedStackCells);
-    mergeSet(TaintedGlobalCells, O.TaintedGlobalCells);
-    mergeSet(TaintedUnknownMemValues, O.TaintedUnknownMemValues);
-    mergeSet(PointeeTaintedUnknownMemValues, O.PointeeTaintedUnknownMemValues);
+    // Joining bottom cannot change any TAINT. Worth the check because a forward
+    // taint analysis over a large CFG spends most joins merging empty state.
+    if (O.isBottom())
+      return;
+    TaintedRegs |= O.TaintedRegs;
+    PointeeTaintedRegs |= O.PointeeTaintedRegs;
+    OutgoingArgSecret |= O.OutgoingArgSecret;
+    NonArgSourcedTaint |= O.NonArgSourcedTaint;
+    // Everything else is taint and UNIONS: any path reaching this point with
+    // the location secret makes it secret here.
+    mergeVals(Cells, O.Cells);
+    mergeVals(UnknownMemValues, O.UnknownMemValues);
     UnknownMemTainted |= O.UnknownMemTainted;
-    mergeSet(TaintedWholeGlobals, O.TaintedWholeGlobals);
+    if (!O.TaintedWholeGlobals.empty()) {
+      TaintedWholeGlobals.reserve(TaintedWholeGlobals.size() +
+                                  O.TaintedWholeGlobals.size());
+      for (const GlobalVariable *GV : O.TaintedWholeGlobals)
+        TaintedWholeGlobals.insert(GV);
+    }
     ExternalMemClobbered |= O.ExternalMemClobbered;
   }
 
-  // Whole-object / call-clobber accessors (memory-effects component).
-  void setTaintedWholeGlobal(const GlobalVariable *GV) {
-    if (GV)
-      TaintedWholeGlobals.insert(GV);
-  }
-  bool isWholeGlobalTainted(const GlobalVariable *GV) const {
-    return GV && TaintedWholeGlobals.contains(GV);
-  }
-  /// Globals a callee wrote a secret into, inherited via caller-side mod-set
-  /// application. Read by computeFunctionMemEffects to re-export the effect so
-  /// it survives more than one call level.
-  const DenseSet<const GlobalVariable *> &wholeTaintedGlobals() const {
-    return TaintedWholeGlobals;
-  }
-  void setExternalMemClobbered() { ExternalMemClobbered = true; }
-  bool isExternalMemClobbered() const { return ExternalMemClobbered; }
-
-  /// A secret has been stored into the OUTGOING argument area and has not yet
-  /// been consumed by a call. AAPCS64 passes arguments beyond the eighth (and
-  /// large aggregates) in memory: the caller stores them to `$sp + imm` and the
-  /// argument registers may then be overwritten before the call, so by the time
-  /// the call is reached NO register holds the secret. Without this bit the
-  /// analysis concluded that such a call passes nothing secret, and the callee
-  /// was analysed as clean - a real leak, not merely imprecision
-  /// (docs/design/stack-arguments.md).
-  /// Some taint in this function did NOT enter through its own parameters: it
-  /// was read from a tainted global, arrived from another TU's unknown memory,
-  /// or was produced by a call this function did not hand a secret to. This is
-  /// the source condition the mod-set call-site gate needs: a caller's arguments
-  /// can only account for a callee's secret if that secret came from parameters
-  /// in the first place. Monotone - set, never cleared, merged with OR.
-  void setNonArgSourcedTaint() { NonArgSourcedTaint = true; }
-  bool hasNonArgSourcedTaint() const { return NonArgSourcedTaint; }
-
-  void setOutgoingArgSecret() { OutgoingArgSecret = true; }
-  void clearOutgoingArgSecret() { OutgoingArgSecret = false; }
-  bool isOutgoingArgSecret() const { return OutgoingArgSecret; }
-
-  /// The object R points at, if the analysis knows it.
-  std::optional<PointerBase> getPointerBase(Register R) const {
-    auto It = PointerBases.find(R.id());
-    return It == PointerBases.end() ? std::nullopt
-                                    : std::optional<PointerBase>(It->second);
-  }
-  /// The frame object R points into, if the analysis knows it AND it is a frame
-  /// object (P1b). Deliberately narrow: a caller that can only act on a frame
-  /// index must not be handed an argument number.
-  std::optional<int> getFrameRef(Register R) const {
-    auto It = PointerBases.find(R.id());
-    if (It == PointerBases.end() || It->second.K != PointerBase::Frame)
-      return std::nullopt;
-    return It->second.Index;
-  }
-  void setFrameRef(Register R, int FI) {
-    PointerBases[R.id()] = {PointerBase::Frame, FI};
-  }
-  void setPointerBase(Register R, PointerBase B) { PointerBases[R.id()] = B; }
-  void setArgRef(Register R, unsigned ArgNo) {
-    PointerBases[R.id()] = {PointerBase::Arg, (int)ArgNo};
-  }
-  /// Kills provenance of BOTH kinds - one map, so a def cannot leave a stale
-  /// base of the other kind behind.
-  void clearFrameRef(Register R) { PointerBases.erase(R.id()); }
-
-  /// The pointee of incoming pointer argument ArgNo holds a secret (B1).
-  void setTaintedArgPointee(unsigned ArgNo) { TaintedArgPointees.set(ArgNo); }
-  bool isTaintedArgPointee(unsigned ArgNo) const {
-    return TaintedArgPointees.test(ArgNo);
-  }
-  const SparseBitVector<> &taintedArgPointees() const {
-    return TaintedArgPointees;
-  }
+  //===--------------------------------------------------------------------===//
+  // Registers
+  //===--------------------------------------------------------------------===//
 
   /// The register bitvector holding taint of kind K.
   SparseBitVector<> &regs(TaintKind K) {
-    switch (K) {
-    case TaintKind::Data:
-      return TaintedRegs;
-    case TaintKind::Pointee:
-      return PointeeTaintedRegs;
-    case TaintKind::Address:
-      return AddressTaintedRegs;
-    }
-    llvm_unreachable("unhandled TaintKind");
+    return K == TaintKind::Data ? TaintedRegs : PointeeTaintedRegs;
   }
   const SparseBitVector<> &regs(TaintKind K) const {
     return const_cast<TaintState *>(this)->regs(K);
@@ -456,10 +505,39 @@ public:
     return test(TaintKind::Pointee, R);
   }
 
-  /// Check if a register carries secret-dependent address taint.
-  bool isAddressTainted(Register R) const {
-    return test(TaintKind::Address, R);
+  //===--------------------------------------------------------------------===//
+  // Provenance
+  //===--------------------------------------------------------------------===//
+
+  /// The object R points at, if the analysis knows it.
+  std::optional<TaintObject> getPointerBase(Register R) const {
+    auto It = PointerBases.find(R.id());
+    return It == PointerBases.end() ? std::nullopt
+                                    : std::optional<TaintObject>(It->second);
   }
+  /// The frame object R points into, if the analysis knows it AND it is a frame
+  /// object (P1b). Deliberately narrow: a caller that can only act on a frame
+  /// index must not be handed an argument number.
+  std::optional<int> getFrameRef(Register R) const {
+    auto It = PointerBases.find(R.id());
+    if (It == PointerBases.end() || It->second.K != TaintObject::Frame)
+      return std::nullopt;
+    return It->second.Index;
+  }
+  void setFrameRef(Register R, int FI) {
+    PointerBases[R.id()] = TaintObject::frame(FI);
+  }
+  void setPointerBase(Register R, TaintObject B) { PointerBases[R.id()] = B; }
+  void setArgRef(Register R, unsigned ArgNo) {
+    PointerBases[R.id()] = TaintObject::arg(ArgNo);
+  }
+  /// Kills provenance of BOTH kinds - one map, so a def cannot leave a stale
+  /// base of the other kind behind.
+  void clearFrameRef(Register R) { PointerBases.erase(R.id()); }
+
+  //===--------------------------------------------------------------------===//
+  // Memory cells
+  //===--------------------------------------------------------------------===//
 
   /// Do byte ranges [AOff,AOff+ASz) and [BOff,BOff+BSz) overlap? Size 0 is the
   /// unknown-extent sentinel (recorded by an unknown-size store) and is treated
@@ -471,137 +549,185 @@ public:
     return AOff < BOff + (int64_t)BSz && BOff < AOff + (int64_t)ASz;
   }
 
-  // Stack cell methods
-  void setTaintedStackCell(int FI, int64_t Off, uint64_t Sz) {
-    TaintedStackCells.insert({FI, {Off, Sz}});
+  /// WEAK update: cell C may (additionally) hold V. Never clears anything.
+  void taintCell(const MemCell &C, TaintVal V) {
+    if (V.any())
+      Cells[C] |= V;
   }
-  void clearTaintedStackCell(int FI, int64_t Off, uint64_t Sz) {
-    TaintedStackCells.erase({FI, {Off, Sz}});
+
+  /// STRONG update, for a store whose extent is known: cell C now holds
+  /// exactly V, so a public store clears the exact cell it overwrote. The
+  /// clear is deliberately exact-match: widening it would drop taint a partial
+  /// public store never actually overwrote. (READS test overlap, see below.)
+  void assignCell(const MemCell &C, TaintVal V) {
+    if (V.any())
+      Cells[C] = V;
+    else
+      Cells.erase(C);
   }
-  bool isTaintedStackCell(int FI, int64_t Off, uint64_t Sz) const {
-    return TaintedStackCells.contains({FI, {Off, Sz}});
+
+  /// What a read of [Off, Off+Size) of Obj may observe: the join of every cell
+  /// of Obj that overlaps the range. Size 0 asks about the whole object.
+  ///
+  /// READ-side overlap, not exact match: spilling 8 secret bytes and reloading
+  /// the low 4 (`STRXui` then `LDRWui` on the same slot) used to miss the cell
+  /// entirely and hand the secret back as public - an UNDER-taint
+  /// (docs/design/spill-soundness-bugs.md).
+  TaintVal readCell(const TaintObject &Obj, int64_t Off, uint64_t Size) const {
+    TaintVal V;
+    if (Size) {
+      // Fast path: identical access shape.
+      auto It = Cells.find(MemCell{Obj, Off, Size});
+      if (It != Cells.end()) {
+        V |= It->second;
+        if (V.Data && V.Pointee)
+          return V;
+      }
+    }
+    for (const auto &KV : Cells)
+      if (KV.first.Obj == Obj &&
+          rangesOverlap(Off, Size, KV.first.Off, KV.first.Size))
+        V |= KV.second;
+    return V;
   }
-  /// READ-side test: does any tainted cell of this object overlap the accessed
-  /// byte range? Exact (FI,Off,Sz) matching was an UNDER-TAINT: spilling 8
-  /// secret bytes and reloading the low 4 (`STRXui` then `LDRWui` on the same
-  /// slot) missed the cell entirely and handed the secret back as public. The
-  /// CLEAR path deliberately stays exact-match - widening a clear would drop
-  /// taint a partial public store did not actually overwrite.
-  bool isTaintedStackCellOverlapping(int FI, int64_t Off, uint64_t Sz) const {
-    if (TaintedStackCells.contains({FI, {Off, Sz}}))
-      return true; // fast path: identical access shape
-    for (const auto &C : TaintedStackCells)
-      if (C.first == FI &&
-          rangesOverlap(Off, Sz, C.second.first, C.second.second))
+
+  /// Does any cell of Obj hold a secret?
+  bool objectHoldsSecret(const TaintObject &Obj) const {
+    return readCell(Obj, 0, 0).Data;
+  }
+
+  /// Any cell of this function's own frame, of either kind.
+  bool anyFrameCell() const {
+    for (const auto &KV : Cells)
+      if (KV.first.Obj.K == TaintObject::Frame)
         return true;
     return false;
   }
 
-  /// Fallback: any cell for this FI tainted? O(n) scan.
-  bool anyTaintedStackCellForFI(int FI) const {
-    for (const auto &C : TaintedStackCells)
-      if (C.first == FI)
-        return true;
-    return false;
+  /// A whole frame object became secret (a callee wrote it, or a stack
+  /// argument arrived in it). Weak: nothing else in the object is cleared.
+  void taintFrameObject(int FI, uint64_t Sz) {
+    taintCell(MemCell{TaintObject::frame(FI), 0, Sz}, TaintVal::data());
   }
-  void setPointeeTaintedStackCell(int FI, int64_t Off, uint64_t Sz) {
-    PointeeTaintedStackCells.insert({FI, {Off, Sz}});
-  }
-  void clearPointeeTaintedStackCell(int FI, int64_t Off, uint64_t Sz) {
-    PointeeTaintedStackCells.erase({FI, {Off, Sz}});
-  }
-  bool isPointeeTaintedStackCell(int FI, int64_t Off, uint64_t Sz) const {
-    return PointeeTaintedStackCells.contains({FI, {Off, Sz}});
-  }
-  /// READ-side overlap test for pointee taint (see isTaintedStackCellOverlapping).
-  bool isPointeeTaintedStackCellOverlapping(int FI, int64_t Off,
-                                            uint64_t Sz) const {
-    if (PointeeTaintedStackCells.contains({FI, {Off, Sz}}))
-      return true;
-    for (const auto &C : PointeeTaintedStackCells)
-      if (C.first == FI &&
-          rangesOverlap(Off, Sz, C.second.first, C.second.second))
-        return true;
-    return false;
+  bool frameObjectHoldsSecret(int FI) const {
+    return objectHoldsSecret(TaintObject::frame(FI));
   }
 
-  bool anyPointeeTaintedStackCellForFI(int FI) const {
-    for (const auto &C : PointeeTaintedStackCells)
-      if (C.first == FI)
-        return true;
-    return false;
+  /// The pointee of incoming pointer argument ArgNo holds a secret (B1).
+  /// Whole-object granularity: the call site cannot know which bytes of the
+  /// passed object a callee wrote, so it records the object.
+  void setTaintedArgPointee(unsigned ArgNo) {
+    taintCell(MemCell{TaintObject::arg(ArgNo), 0, 0}, TaintVal::data());
+  }
+  bool isTaintedArgPointee(unsigned ArgNo) const {
+    return objectHoldsSecret(TaintObject::arg(ArgNo));
+  }
+  /// Every argument whose pointee object holds a secret, in increasing order.
+  SmallVector<unsigned, 4> taintedArgPointees() const {
+    SmallVector<unsigned, 4> Args;
+    for (const auto &KV : Cells)
+      if (KV.first.Obj.K == TaintObject::Arg && KV.second.Data)
+        Args.push_back((unsigned)KV.first.Obj.Index);
+    llvm::sort(Args);
+    Args.erase(llvm::unique(Args), Args.end());
+    return Args;
   }
 
-  // Global cell methods
-  void setTaintedGlobalCell(const GlobalVariable *GV, int64_t Off,
-                            uint64_t Sz) {
-    TaintedGlobalCells.insert({GV, {Off, Sz}});
+  // Whole-object / call-clobber accessors (memory-effects component).
+  void setTaintedWholeGlobal(const GlobalVariable *GV) {
+    if (GV)
+      TaintedWholeGlobals.insert(GV);
   }
-  void clearTaintedGlobalCell(const GlobalVariable *GV, int64_t Off,
-                              uint64_t Sz) {
-    TaintedGlobalCells.erase({GV, {Off, Sz}});
+  bool isWholeGlobalTainted(const GlobalVariable *GV) const {
+    return GV && TaintedWholeGlobals.contains(GV);
   }
-  bool isTaintedGlobalCell(const GlobalVariable *GV, int64_t Off,
-                           uint64_t Sz) const {
-    return TaintedGlobalCells.contains({GV, {Off, Sz}});
+  /// Globals a callee wrote a secret into, inherited via caller-side mod-set
+  /// application. Read by computeFunctionMemEffects to re-export the effect so
+  /// it survives more than one call level.
+  const DenseSet<const GlobalVariable *> &wholeTaintedGlobals() const {
+    return TaintedWholeGlobals;
   }
-  /// READ-side overlap test for globals (see isTaintedStackCellOverlapping).
-  bool isTaintedGlobalCellOverlapping(const GlobalVariable *GV, int64_t Off,
-                                      uint64_t Sz) const {
-    if (TaintedGlobalCells.contains({GV, {Off, Sz}}))
-      return true;
-    for (const auto &C : TaintedGlobalCells)
-      if (C.first == GV &&
-          rangesOverlap(Off, Sz, C.second.first, C.second.second))
-        return true;
-    return false;
-  }
+  void setExternalMemClobbered() { ExternalMemClobbered = true; }
+  bool isExternalMemClobbered() const { return ExternalMemClobbered; }
 
-  bool anyTaintedGlobalCellForGV(const GlobalVariable *GV) const {
-    for (const auto &C : TaintedGlobalCells)
-      if (C.first == GV)
-        return true;
-    return false;
-  }
+  //===--------------------------------------------------------------------===//
+  // Heap / unknown memory
+  //===--------------------------------------------------------------------===//
 
-  void setTaintedUnknownMemValue(const Value *V) {
+  void taintUnknownMem(const Value *V, TaintKind K) {
     if (V)
-      TaintedUnknownMemValues.insert(V);
+      UnknownMemValues[V].set(K, true);
   }
-  void setPointeeTaintedUnknownMemValue(const Value *V) {
-    if (V)
-      PointeeTaintedUnknownMemValues.insert(V);
+  /// A non-pointer store to V overwrote whatever pointer was spilled there.
+  void clearUnknownMemPointee(const Value *V) {
+    if (!V)
+      return;
+    auto It = UnknownMemValues.find(V);
+    if (It == UnknownMemValues.end())
+      return;
+    It->second.Pointee = false;
+    if (!It->second.any())
+      UnknownMemValues.erase(It);
   }
-  void clearPointeeTaintedUnknownMemValue(const Value *V) {
-    if (V)
-      PointeeTaintedUnknownMemValues.erase(V);
+  bool anyUnknownMem(TaintKind K) const {
+    for (const auto &KV : UnknownMemValues)
+      if (KV.second.get(K))
+        return true;
+    return false;
   }
+
+  //===--------------------------------------------------------------------===//
+  // Flags
+  //===--------------------------------------------------------------------===//
+
+  /// A secret has been stored into the OUTGOING argument area and has not yet
+  /// been consumed by a call. AAPCS64 passes arguments beyond the eighth (and
+  /// large aggregates) in memory: the caller stores them to `$sp + imm` and the
+  /// argument registers may then be overwritten before the call, so by the time
+  /// the call is reached NO register holds the secret. Without this bit the
+  /// analysis concluded that such a call passes nothing secret, and the callee
+  /// was analysed as clean - a real leak, not merely imprecision
+  /// (docs/design/stack-arguments.md).
+  void setOutgoingArgSecret() { OutgoingArgSecret = true; }
+  void clearOutgoingArgSecret() { OutgoingArgSecret = false; }
+  bool isOutgoingArgSecret() const { return OutgoingArgSecret; }
+
+  /// Some taint in this function did NOT enter through its own parameters: it
+  /// was read from a tainted global, arrived from another TU's unknown memory,
+  /// or was produced by a call this function did not hand a secret to. This is
+  /// the source condition the mod-set call-site gate needs: a caller's arguments
+  /// can only account for a callee's secret if that secret came from parameters
+  /// in the first place. Monotone - set, never cleared, merged with OR.
+  void setNonArgSourcedTaint() { NonArgSourcedTaint = true; }
+  bool hasNonArgSourcedTaint() const { return NonArgSourcedTaint; }
+
+  //===--------------------------------------------------------------------===//
+  // Summary predicates
+  //===--------------------------------------------------------------------===//
 
   bool emptyRegs() const {
-    return TaintedRegs.empty() && PointeeTaintedRegs.empty() &&
-           AddressTaintedRegs.empty();
+    return TaintedRegs.empty() && PointeeTaintedRegs.empty();
   }
+  /// No taint this function's OWN analysis produced: no tainted register, no
+  /// named cell, no located or opaque heap store. Deliberately narrower than
+  /// isBottom(): it ignores what was merely INHERITED from a callee (a
+  /// whole-global clobber, ExternalMemClobbered) and the two side flags. This
+  /// is the gate on export and instrumentation, and it is checked on the JOIN
+  /// OF BLOCK EXITS, so a function whose only secret is consumed and cleared
+  /// before every block exit reads as empty even though it executes tainted
+  /// instructions - docs/design/taint-domain.md S5, preserved as is.
   bool empty() const {
-    return emptyRegs() && TaintedStackCells.empty() &&
-           PointeeTaintedStackCells.empty() &&
-           TaintedGlobalCells.empty() && TaintedUnknownMemValues.empty() &&
-           PointeeTaintedUnknownMemValues.empty() &&
+    return emptyRegs() && Cells.empty() && UnknownMemValues.empty() &&
            !UnknownMemTainted;
   }
 
   unsigned countRegs() const {
-    return TaintedRegs.count() + PointeeTaintedRegs.count() +
-           AddressTaintedRegs.count();
+    return TaintedRegs.count() + PointeeTaintedRegs.count();
   }
   unsigned countDataRegs() const { return TaintedRegs.count(); }
   unsigned countPointeeRegs() const { return PointeeTaintedRegs.count(); }
-  unsigned countAddressRegs() const { return AddressTaintedRegs.count(); }
   unsigned countCells() const {
-    return (unsigned)(TaintedStackCells.size() +
-                      PointeeTaintedStackCells.size() +
-                      TaintedGlobalCells.size() +
-                      TaintedUnknownMemValues.size() +
-                      PointeeTaintedUnknownMemValues.size());
+    return (unsigned)(Cells.size() + UnknownMemValues.size());
   }
   unsigned count() const { return countRegs() + countCells(); }
 };
@@ -657,7 +783,6 @@ public:
 struct TaintFacts {
   bool UsesData = false;    ///< Reads a secret value (state entering MI).
   bool UsesPointee = false; ///< Reads a pointer to secret memory.
-  bool UsesAddress = false; ///< Reads a secret-dependent address.
   bool DefsData = false;    ///< Defines a secret value (state leaving MI).
 };
 

@@ -577,9 +577,18 @@ X86/AMDGPU only), so lowering and emission remain on the legacy PM.
 
 ### Internal structure (post-2026-07-13 cleanup)
 
-- The three taint kinds (data / pointee / address) are parameterized by `TaintKind`,
-  not written out longhand - `TaintState::regs(K)` selects the bitvector, and one
-  `updateWithAliases` holds the subreg/superreg walk.
+- **The domain is a product (2026-09-03, `docs/design/taint-domain.md`).** A value
+  is a `TaintVal` = (Data, Pointee), the same two may-facts whether it sits in a
+  register or a memory cell; a store deposits the whole value in a cell and a load
+  reads it back, so the memory side is ONE map (`TaintState::Cells`, keyed by
+  `MemCell` = (`TaintObject` Frame/Global/Arg, offset, size)) rather than one set per
+  kind. Register provenance (`PointerBases`, MUST, intersects on join) stays a
+  separate component from pointee taint (MAY, unions) on purpose - deriving the
+  latter from the former would either under-taint or cost the measured +44-point
+  frame-address rule. The old `Address` kind was provably a subset of `Data` and is
+  gone. The two kinds are parameterized by `TaintKind`, not written out longhand -
+  `TaintState::regs(K)` selects the bitvector, and one `updateWithAliases` holds the
+  subreg/superreg walk.
 - Every consumer of a converged `TaintResult` goes through the single
   `replayTaint(MF, TR, TSI, AA, Post, Pre)` visitor, which hands out `TaintFacts` (the
   four booleans consumers actually need) rather than a per-instruction `TaintState`
