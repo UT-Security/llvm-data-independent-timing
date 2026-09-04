@@ -676,6 +676,22 @@ public:
     return false;
   }
 
+  /// Phase 2 ("unknown means tainted", docs/design/taint-domain.md S5): does
+  /// this state hold ANY memory-resident taint of kind K? The unknown-load
+  /// flips use it as CIO's `make_top = Taint` fallback: a load whose object
+  /// cannot be resolved may be reading any of it. Deliberately coarse - that
+  /// is the experiment.
+  bool anyMemTaint(TaintKind K) const {
+    if (K == TaintKind::Data &&
+        (UnknownMemTainted || ExternalMemClobbered ||
+         !TaintedWholeGlobals.empty()))
+      return true;
+    for (const auto &KV : Cells)
+      if (KV.second.get(K))
+        return true;
+    return anyUnknownMem(K);
+  }
+
   //===--------------------------------------------------------------------===//
   // Flags
   //===--------------------------------------------------------------------===//
