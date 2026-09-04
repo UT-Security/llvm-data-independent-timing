@@ -1,0 +1,37 @@
+Pass-arm residual, pure-PSK, per resumption (N=1 run minus N=0 run): 11,126 ops
+running with PSTATE.DIT clear while holding a secret-derived value.
+
+Split by whether the code was compiled with -ftaint-harden:
+
+  OUTSIDE instrumented mbedTLS : 8,218 ops (73.9%)  - no annotation can reach these
+       2915  free
+       2387  __memcpy_generic
+       2306  calloc
+        120  __memset_zva64
+        115  srv_send          (harness transport stub, single-process artifact)
+        114  cli_recv          (same)
+         83  srv_recv          (same)
+         71  _int_free_chunk
+         48  cli_send          (same)
+         33  _int_malloc
+
+  INSIDE instrumented mbedTLS  : 2,908 ops (26.1%)  - the pass compiled these and
+                                                      left them clear: seedable gap
+        266  psa_hash_finish
+        252  mbedtls_sha256_clone
+        200  mbedtls_ssl_decrypt_buf
+        136  psa_key_derivation_input_bytes
+        133  mbedtls_ssl_fetch_input
+        119  ssl_parse_record_header
+        110  ssl_tls13_process_client_hello      (client side, harness artifact)
+         99  mbedtls_ssl_tls13_handshake_client_step  (client side)
+         93  mbedtls_ssl_read_record
+         93  ctr_drbg_update_internal
+         85  psa_key_derivation_output_bytes
+         67  mbedtls_ssl_flush_output
+         62  mbedtls_cipher_update
+         57  psa_mac_compute
+         56  ssl_tls13_parse_pre_shared_key_ext
+
+For comparison the blanket arm leaves 0. The pass is a reduction in exposure
+(625,973 -> 11,126 per resumption), not an elimination.

@@ -1,0 +1,8 @@
+arm,mode,kex,n0_undertaint,n4_undertaint,n4_protected,n4_wasted,n4_sites,note
+null,off,dhe,7784,,,,,unhardened control - everything runs DIT-clear
+null,blanket,dhe,14,14,73082738,71114506,6,blanket protects all but 14 ops set before the constructor
+null,bracket,dhe,7784,35497519,37585233,16703814,6674,human scope guard around the server handshake step
+prim,off,dhe,1681,,,,,primitive seeds (AES/GCM/SHA cores)
+api,off,dhe,1286,70290717,2709429,1799028,6270,crypto API surface seeds
+pass,off,dhe,1286,70285439,2714707,1813270,6170,API + 6 ticket-glue seeds
+func,off,dhe,1255,70262692,3? ,1886144,, API+glue at function placement

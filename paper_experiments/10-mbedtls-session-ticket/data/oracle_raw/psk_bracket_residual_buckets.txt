@@ -1,0 +1,11 @@
+bucket                         ops/resumption   share   top functions
+hash primitive                         295392   89.6%   mbedtls_internal_sha256_process 287082, mbedtls_internal_sha512_process 2710, mbedtls_sha256_finish 1769, psa_hash_update 923
+libc copy/alloc                         26173    7.9%   __memcpy_generic 7534, calloc 6623, free 5992, __memset_zva64 4938
+server handshake / other                 2090    0.6%   ecp_mod_p256 558, mbedtls_mpi_core_mla 387, mbedtls_mpi_cmp_mpi 76, mbedtls_mpi_core_sub 66
+aead primitive                           2049    0.6%   mbedtls_aesce_setkey_enc 847, mbedtls_aesce_crypt_ecb 246, mbedtls_gcm_crypt_and_tag 126, mbedtls_gcm_update 119
+psa key mgmt                             2035    0.6%   psa_key_derivation_output_bytes 360, psa_key_derivation_input_bytes 259, psa_key_derivation_input_internal 253, psa_get_and_lock_key_slot 232
+record layer                             1029    0.3%   mbedtls_ssl_decrypt_buf 175, cli_recv 116, mbedtls_ssl_read_record 106, mbedtls_ssl_fetch_input 103
+ticket glue                               427    0.1%   mbedtls_ct_memcmp 379, ssl_tls13_write_binder 14, mbedtls_ssl_tls13_export_handshake_psk 13, mbedtls_ssl_tls13_key_schedule_stage_early 7
+key schedule                              334    0.1%   mbedtls_ssl_tls13_hkdf_expand_label 90, mbedtls_ssl_add_hs_msg_to_checksum 38, mbedtls_ssl_tls13_evolve_secret 37, ssl_update_checksum_start 25
+client side                               130    0.0%   mbedtls_ssl_tls13_handshake_client_step 126, ssl_tls13_postprocess_server_hello 3
+TOTAL                                  329659

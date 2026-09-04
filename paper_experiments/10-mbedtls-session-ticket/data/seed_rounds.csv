@@ -1,0 +1,21 @@
+# The coverage/cost frontier for selective PSTATE.DIT placement.
+# Workload: pure-PSK TLS 1.3 resumption, mbedTLS 3.6.2, gem5 shadow-taint oracle.
+# Per resumption = (N=1 run minus N=0 run). Seed: the server's ticket key.
+# coverage_pct = 1 - uncovered/625973, against the unhardened control.
+#
+# Each row buys coverage and pays over-protection. NO configuration reaches 0,
+# and the most conservative one costs 93% of blanket's over-protection - so on
+# THIS workload (which is ~2/3 crypto) there is no sound-and-cheaper setting.
+# That is the framework's Q1 answering "use blanket here", not a pass failure.
+config,seed_lines,extra_flags,uncovered_per_res,wasted_per_res,coverage_pct,switches_in_binary
+unhardened,0,,625973,0,0.0,3
+prim,19,,43436,107653,93.06,95
+api,42,,12254,250207,98.04,401
+pass_round1,48,,11126,254520,98.22,459
+pass_round2,69,,5637,296930,99.10,557
+pass_round2_nogate,69,-taint-no-modset-gate,2495,317524,99.60,1162
+blanket,0,DIT set process-wide,0,340959,100.0,3
+# Residual at maximum conservatism (2,495): allocator internals reached from
+# callers the analysis never considered tainted (free 530, calloc 454, memcpy 355),
+# harness transport stubs (163, single-process artifact), client side (134, same),
+# ctr_drbg_update_internal 93, and small server-handshake tails.

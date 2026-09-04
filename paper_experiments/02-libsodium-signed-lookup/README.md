@@ -276,6 +276,49 @@ That last number is why the switch model barely matters here, and it is a
 *committed* count rather than a static one - see `commit.ditWrites` in gem5,
 added by this study.
 
+## The coverage/cost frontier (added 2026-09-03)
+
+Experiment 10 asked what selective placement leaves unprotected and found that
+on a crypto-heavy flow it cannot reach blanket's coverage at any setting. The
+same gem5 shadow-taint oracle was then pointed at THIS flow, which has a real
+public lane, and the answer inverts. Seed: the AEAD key. Per request, from
+`(iter=4) - (iter=0)`; `f_secret` derived from the blanket arm, where
+protected + wasted is every executed operation. Data:
+`data/oracle_frontier.csv`.
+
+| L | `f_secret` | pass uncovered | pass wasted | blanket wasted | blanket / pass |
+|---|---|---|---|---|---|
+| 64 | 66.54% | 4 | 1,083 | 1,805 | 1.7x |
+| 1,000 | 22.54% | 4 | 1,083 | 12,335 | 11.4x |
+| 20,000 | **1.56%** | **4** | **1,083** | **226,085** | **208.8x** |
+
+**The pass's over-protection is constant in the public lane; blanket's is
+linear in it.** The pass covers the secret lane and nothing else, so its cost
+does not change when the public lane grows 350x. Blanket covers everything, so
+its waste *is* the public lane. That is the whole cost argument in one table,
+and it is an instruction count rather than a timing measurement, so no layout
+or `argv[0]` artifact can touch it.
+
+**On this flow the pass is also effectively sound**: 3,585 of 3,589 secret
+operations per request protected (99.89%), and the four survivors are `main`
+folding the published AEAD ciphertext into its checksum - a declassification
+point, exactly like the 40 survivors experiment 04 reports at the signature.
+
+**The contrast with experiment 10 is the decision rule.** There, on a pure-PSK
+TLS resumption that is 65% secret by instruction count, blanket wastes only
+1.34x what the pass does and the pass cannot get below 2,495 genuinely
+uncovered operations at any configuration - so blanket is the right answer and
+experiment 10 says so. Here, at f = 1.56%, blanket costs 209x the
+over-protection to buy back four operations that are published anyway. The
+framework's Q1 ("is blanket already free?") decides which regime you are in,
+and both regimes now have a measured example.
+
+Reproduce: `benchmarks/signed_lookup/signed_lookup_gem5.c` carries the oracle
+hooks under `-DTAINT_ORACLE` (inert otherwise, so the arms above are
+unaffected); build libsodium with `build_native_sodium.sh base pass`, link with
+`-DGEM5_BUILD -DTAINT_ORACLE`, and run under
+`configs/example/arm/fdp_neoverse_v2_binary.py --eves --dmp --comp-simp`.
+
 ## Validity gates
 
 All fatal, all passing.
@@ -349,4 +392,5 @@ benchmarks/signed_lookup/build.sh base blanket taint
 | `data/retired-signing-driver/gem5_arms.csv` | 4 arms x 4 knob points, both switch models, committed DIT writes |
 | `data/retired-signing-driver/public_lane_penalty.csv` | `C_public` and the per-lookup normalisation |
 | `data/retired-signing-driver/gem5_value_predictor.csv` | the mechanism: predictions with and without DIT |
+| `data/oracle_frontier.csv` | **the coverage/cost frontier**: oracle under-taint and over-protection per request at three secret fractions |
 | `figures/crossover.html` | source of the published artifact above |
