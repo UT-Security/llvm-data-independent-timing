@@ -1,0 +1,14 @@
+# Experiment 10 coverage under psk_dhe_ke (the DEPLOYED key exchange), gem5 shadow-taint oracle.
+# Oracle seeded at the server ticket key AND the PSA RNG (the ECDHE ephemeral scalar lives in a
+# PSA key slot the harness cannot address, so the RNG is the only reachable seed point; this
+# over-approximates - nonces share that source and are declassified again at the transport).
+# Per resumption = (2-resumption run minus 0-resumption run) / 2.
+arm,seeds,uncovered_per_res,protected_per_res,coverage_pct,overprotected_per_res,full_handshake_coverage_pct
+null,none (control),20372928,0,0.00,0,0.00
+pass2,ticket glue only (69 lines),19650328,695123,3.42,244176,4.13
+pass3,+13 ECDHE seed lines,1079780,19265633,94.69,6353088,93.96
+blanket,DIT set process-wide,0,20372928,100.00,6834924,100.00
+# pass2's 19.6M uncovered ops are almost entirely the X25519 scalar multiply, which no seed
+# in sections 12-14 named. pass3 adds 361 switches across 30 functions (ecp_double_jac,
+# ecp_add_mixed, ecp_select_comb, mbedtls_ecdh_compute_shared, ...) and closes the gap.
+# Residual 1.08M is still low-level bignum (mbedtls_mpi_core_sub, add_sub_mpi).

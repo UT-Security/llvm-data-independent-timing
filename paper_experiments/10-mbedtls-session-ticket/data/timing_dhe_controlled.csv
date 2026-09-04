@@ -1,0 +1,12 @@
+# Experiment 10 timing, psk_dhe_ke (DEPLOYED key exchange), gem5 NeoverseV2 FDP.
+# 5 resumptions per run; median over 5 argv[0] path lengths (11..42 chars) per arm.
+# Controls per docs/paper/evaluation-framework.md section 5: round-trip baseline, NOP layout control.
+# Coverage from data/oracle_dhe_coverage.csv: pass2 3.42%, pass3 94.69%, blanket 100%.
+arm,description,switch_model,n,median_cycles,spread_pct,ipc,vs_base_pct,dit_writes
+base,round-trip control (-ftaint-harden=<empty>),,5,81225452,0.153,2.1354,0.0,0
+blkt,"blanket, DIT set process-wide",,5,80090797,0.029,2.1656,-1.397,0
+nopc,"layout control: pass2 code, switches as NOP",,5,82455816,0.127,2.1048,1.515,0
+pren,pass2 (ticket seeds only),renamed,5,82435981,0.128,2.1053,1.49,74880
+pser,pass2 (ticket seeds only),serialising,5,83914815,0.082,2.0682,3.311,74880
+p3ren,pass3 (+13 ECDHE seed lines),renamed,5,80014582,0.424,2.1842,-1.491,1364408
+p3ser,pass3 (+13 ECDHE seed lines),serialising,5,106620145,0.023,1.6392,31.264,1364408

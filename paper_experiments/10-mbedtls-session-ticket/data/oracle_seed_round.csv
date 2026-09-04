@@ -1,0 +1,15 @@
+# Experiment 10, psk_dhe_ke, FIXED gem5 oracle (store rule, 2026-09-03). The seed loop
+# (benchmarks/tls_resume/seed_round.sh) took seed_pass3 (82 lines) to 717 in 4 rounds.
+# It zeroed every named bignum leak and opened ecp_mod_p256 (0 -> 1.16M): seeding
+# mbedtls_mpi_grow made it region-placed and it now CLEARS DIT on exit, stripping the
+# inherited protection of a caller reached by function pointer. See
+# docs/results/oracle-pointer-taint-2026-09-03.md. secret_addr = ops consuming a
+# secret-derived address (the cache-channel floor DIT cannot lower; arm-independent).
+arm,per_res_uncovered,per_res_protected,per_res_overprot,per_res_secret_addr,full_uncovered,full_protected,full_overprot,full_secret_addr
+null,12086838,0,0,3891735,12945528,0,0,889173
+pass3_82seeds,625612,11438357,14180363,3891814,726114,12197964,21005235,889218
+round4_717seeds,19547,12047930,15886265,3891746,1161229,11784924,23736004,889367
+round4_provenance_flags,19538,12047939,15886281,3891746,1161211,11784942,23736466,889367
+round4_callee_saved_abi,3312,12064217,18363717,3891746,1859,12944316,27348337,889367
+round5_modp_targets,8610,12058867,15952932,3891746,3799,12942354,24189658,889367
+blanket,0,12086838,15121013,3891735,0,12945528,22847714,889173
