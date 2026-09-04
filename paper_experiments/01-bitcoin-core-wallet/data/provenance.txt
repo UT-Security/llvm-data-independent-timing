@@ -1,0 +1,15 @@
+2026-09-03T17:53Z  stage=gem5  host=beckham (Linux aarch64)
+    llvm-data-independent-timing fdfdef5e15b1222e00c78518387c20cb05c799c8
+    clang: clang version 23.0.0git (git@github.com:UT-Security/llvm-data-independent-timing.git fdfdef5e15b1222e00c78518387c20cb05c799c8)
+    bitcoin 15a7a4ed7c4d0952ce966087e55a9a3e2f28ec1d
+    gem5-DIT 493bc1f0b8ac6feebf844f67a13e281209641545
+2026-09-03T22:15Z  stage=flow  host=beckham (Linux aarch64)
+    llvm-data-independent-timing fdfdef5e15b1222e00c78518387c20cb05c799c8
+    clang: clang version 23.0.0git (git@github.com:UT-Security/llvm-data-independent-timing.git fdfdef5e15b1222e00c78518387c20cb05c799c8)
+    bitcoin 15a7a4ed7c4d0952ce966087e55a9a3e2f28ec1d
+    gem5-DIT 493bc1f0b8ac6feebf844f67a13e281209641545
+2026-09-03T22:48Z  stage=gem5  host=beckham (Linux aarch64)  note=re-take on the shared-kernel drivers, 5 argv[0] offsets; supersedes the 17:53Z line
+    llvm-data-independent-timing fdfdef5e15b1222e00c78518387c20cb05c799c8
+    clang: clang version 23.0.0git (git@github.com:UT-Security/llvm-data-independent-timing.git fdfdef5e15b1222e00c78518387c20cb05c799c8)
+    bitcoin 15a7a4ed7c4d0952ce966087e55a9a3e2f28ec1d
+    gem5-DIT 493bc1f0b8ac6feebf844f67a13e281209641545
