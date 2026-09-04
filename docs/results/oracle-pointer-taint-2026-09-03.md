@@ -350,3 +350,12 @@ TU-qualified seed key would remove the need for the rename patch.
 
 Found by the experiment 02 rerun of 2026-09-04
 (`paper_experiments/02-libsodium-signed-lookup/rerun-2026-09-04.md`).
+
+**Refinement from the experiment 09 rerun, same day.** That rig has two
+halves built from different trees with ONE seed file: the timing half from
+the rename-patched wllvm tree (the 12 `_ref` lines live), the oracle half
+from the vanilla tree (the 12 lines dead). So the checker's finding was
+right for the oracle half and wrong for the timing half. Neither file
+changes any verdict (the oracle half reports 0 uncovered either way; the
+corrected file adds 21 switches there). The fix is still the format, not the
+file: a TU-qualified seed key serves both halves without a rename patch.
