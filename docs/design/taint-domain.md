@@ -198,7 +198,14 @@ is byte identity. Each is a candidate for a separately measured follow-up.
    the other local read afterwards): `caller` carries no switch at all. This
    is reachable in the DEFAULT configuration - frame provenance is always on -
    whenever the secret arrives from a global rather than from a register the
-   join could see. Fixed in the follow-up commit.
+   join could see. Fixed in the follow-up commit: `join` intersects
+   provenance before its bottom early-return, and the block join in
+   `TaintAnalysis::run` skips predecessors not yet evaluated (an unevaluated
+   backedge is unknown, not "points nowhere"), which is what kept loops as
+   precise as the early return had made them. Measured: mbedTLS and
+   libsodium objects identical to baseline with `.comment` and debug info
+   stripped, precision reports identical - the shape is real but neither
+   library exhibits it.
 4. **Under `-taint-arg-provenance`, `Arg(k)` cells count as this function's
    own taint** (they live in `Cells`, so `empty()` sees them) where the old
    `TaintedArgPointees` bitvector was excluded. Observable only with that
