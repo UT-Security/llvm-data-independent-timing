@@ -1,0 +1,23 @@
+Table 1: Selective vs blanket DIT across the secret fraction of one Bitcoin Core wallet call
+
+WalletCreateTxUsePresetInputsAndCoinSelection, Apple silicon, 20 paired reps per cell, rotated arm order.
+Median per-rep ratio; n/20 = reps where the first-named arm is slower; exact two-sided sign test.
+
+| K (inputs) | f_secret | baseline | C_public | C_whole | pass vs base | pass vs blanket | sign test | verdict | switch cost |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 3.7% | 15.12 ms | +3.94% | +3.25% | +0.10% | **-3.52%** | 1/20 *** | pass | -0.64% |
+| 4 | 5.8% | 15.62 ms | +4.37% | +3.74% | +0.78% | **-2.81%** | 0/20 *** | pass | +0.95% |
+| 10 | 10.2% | 16.37 ms | +3.95% | +3.07% | +0.53% | **-3.18%** | 2/20 *** | pass | +0.16% |
+| 25 | 19.2% | 18.37 ms | +4.23% | +2.84% | +0.37% | **-2.06%** | 2/20 *** | pass | +0.81% |
+| 50 | 29.8% | 21.25 ms | +2.96% | +4.32% | +2.25% | **-1.93%** | 1/20 *** | pass | +1.77% |
+| 100 | 45.0% | 27.23 ms | +3.36% | +4.20% | +3.87% | **-0.48%** | 8/20 ns | tie | +3.53% |
+| 200 | 61.2% | 39.26 ms | +3.55% | +4.10% | +4.60% | **+0.74%** | 15/20 * | blanket | +5.10% |
+| 400 | 75.0% | 63.21 ms | +3.09% | +3.75% | +5.50% | **+1.65%** | 19/20 *** | blanket | +5.98% |
+
+Controls (all arms, every K):
+  noise floor (baseline2/baseline)  -0.68% .. +0.31%
+  harness null (DIT never written)  -0.40% .. +0.08%
+  in-band lvp_chase positive control 3.97x (PASS)
+
+Closure  C_whole ~= (1-f)*C_public + f*C_secret
+  implied C_secret (f >= 25%): median +4.83%, spread 3.55 pp, reference +3.39% -> OK

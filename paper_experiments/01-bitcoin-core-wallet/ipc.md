@@ -159,15 +159,57 @@ the point: `argv[0]` alignment has no consistent size or sign, it depends on the
 specific path length, so an affected run must be re-measured and cannot be
 corrected by applying another run's offset.
 
-## 5. Two rig gaps found while doing this
+### Re-take on the current compiler, 2026-09-03 (Linux, native build)
+
+Same arguments, same gates, arms rebuilt from the committed seed on LLVM
+`fdfdef5e15b1` against Bitcoin Core `15a7a4ed7`, on an aarch64 Linux host
+(`README.md`, "Re-measurement"). Medians over 5 `argv[0]` offsets; rows in
+`data/gem5/coinsel_repro.csv`:
+
+| arm | switch model | IPC | cycles | vs base | spread over offsets |
+|---|---|---|---|---|---|
+| base | either | **1.9892** | 29,765,977 | - | 0.20% |
+| blanket | spec | **1.8665** | 31,723,057 | +6.57% | 0.26% |
+| blanket | serdit | 1.8665 | 31,723,057 | +6.57% | |
+
+**IPC -6.17%, cycles +6.57%**, against -9.31% / +10.27% above. The prize is
+there and the switch-model no-op is exact (identical to the cycle at every
+offset, where the 2026-08-31 run had +0.034% between models). The magnitude
+is two thirds of the recorded one, and the binary retires 0.8% fewer
+instructions (59.2 million vs 59.7 million): a different libc, libstdc++ and
+config header as well as a different compiler commit. Quote the two side by
+side as two builds; do not read the gap as the cost of the compiler change.
+The signing arms on the same re-take read IPC 2.7297 -> 2.6956 under blanket
+(+1.3% in cycles, positive at every offset), built on the empty-seed baseline
+as the silicon rig's `always` arm is: still no prize of the coin-selection
+kind (`data/gem5/sign_repro.csv`).
+
+The work-scaling control reproduces too (`data/gem5/coinsel4_repro.csv`),
+with the same shape as the recorded pair - the prize grows with the number of
+selections:
+
+| run | selections | base IPC | blanket IPC | IPC change | cycles | spread |
+|---|---|---|---|---|---|---|
+| `coinsel`, re-take | 1 | 1.9892 | 1.8665 | -6.17% | +6.57% | 0.26% |
+| `coinsel4`, re-take | 4 | 1.9839 | 1.8441 | **-7.05%** | **+7.58%** | 0.19% |
+
+## 5. Rig gaps found while doing this
 
 1. **The driver's defaults do not reproduce the committed numbers.** `coinsel`
    was run at `--iter 1 --warmup 1 --targets 1`; the defaults are `50 / 2 / 10`,
    roughly 500x the work (4 jobs x 99.8% CPU for 31 min without finishing).
    `btc_gem5_coinsel.csv` records `wall_s` but not `iter/warmup/targets`, so the
    run's own output cannot say which configuration produced it - the argv had to
-   be recovered from `config.ini`. **Add those three as CSV columns.**
+   be recovered from `config.ini`. **Fixed 2026-09-03: the three are CSV columns.**
 2. **No IPC column.** The CSV carries `cycles` and `simInsts` but not IPC.
    `simInsts/cycles` gives 1.9552 where gem5's own `.ipc` gives 1.9559, because
    gem5 divides by committed `numInsts` (59,697,945), not `simInsts`
-   (59,678,264). Emit `numInsts` and `ipc` to make the CSV self-sufficient.
+   (59,678,264). **Fixed 2026-09-03: `numInsts` and gem5's `ipc` are emitted.**
+3. **The `ditSwitches` column was always 0** (found 2026-09-03): it matched no
+   stat in the model. It now reads `commit.ditWrites`, the committed count, and
+   the sign taint arm reads 4,622 where it read 0.
+4. **Concurrent drivers overwrote each other's equal-length binary slot**
+   (found 2026-09-03): the slot was keyed on arm and config alone, so `coinsel`
+   and `sign` running at once could hand a sign run the coinsel binary. The
+   slot now hashes the run directory too; the 2026-08-31 runs were sequential
+   and are unaffected.
