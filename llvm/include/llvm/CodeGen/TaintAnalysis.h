@@ -423,18 +423,21 @@ public:
   bool operator!=(const TaintState &O) const { return !(*this == O); }
 
   void join(const TaintState &O) {
-    // Joining bottom cannot change anything. Worth the check because a forward
-    // taint analysis over a large CFG spends most joins merging empty state.
-    if (O.isBottom())
-      return;
-    TaintedRegs |= O.TaintedRegs;
-    PointeeTaintedRegs |= O.PointeeTaintedRegs;
-    OutgoingArgSecret |= O.OutgoingArgSecret;
-    NonArgSourcedTaint |= O.NonArgSourcedTaint;
     // Provenance INTERSECTS on merge: a register only points at a known object
     // if every incoming path agrees which one. Disagreement, or presence on
     // only one path, drops to unknown - the conservative direction, since
     // unknown means "fall back to the whole-frame clobber".
+    //
+    // This runs BEFORE the bottom check below, and must. isBottom() ignores
+    // provenance (it is not taint), so a predecessor that carries no secret
+    // yet can still name a different object for the same register - `p = &a`
+    // on one arm, `p = &b` on the other, before any secret exists. Returning
+    // early kept the first arm's answer, a callee's write through `p` was
+    // then applied precisely to that one object, and a read of the other
+    // came back public (clang/test/CodeGen/taint-provenance-join.c). The
+    // optimistic treatment a loop backedge needs is the caller's job: it
+    // skips predecessors it has not visited yet, not predecessors that are
+    // bottom.
     if (!PointerBases.empty()) {
       SmallVector<unsigned, 8> Drop;
       for (const auto &KV : PointerBases) {
@@ -445,6 +448,14 @@ public:
       for (unsigned R : Drop)
         PointerBases.erase(R);
     }
+    // Joining bottom cannot change any TAINT. Worth the check because a forward
+    // taint analysis over a large CFG spends most joins merging empty state.
+    if (O.isBottom())
+      return;
+    TaintedRegs |= O.TaintedRegs;
+    PointeeTaintedRegs |= O.PointeeTaintedRegs;
+    OutgoingArgSecret |= O.OutgoingArgSecret;
+    NonArgSourcedTaint |= O.NonArgSourcedTaint;
     // Everything else is taint and UNIONS: any path reaching this point with
     // the location secret makes it secret here.
     mergeVals(Cells, O.Cells);

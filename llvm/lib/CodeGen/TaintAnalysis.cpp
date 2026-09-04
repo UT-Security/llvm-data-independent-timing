@@ -2602,8 +2602,17 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
     if (B == &MF.front()) {
       NewIn = Seed;
     } else {
+      // Join over the predecessors that have been evaluated. An unvisited one
+      // - a loop backedge on the first pass, or a dead edge - contributes no
+      // taint either way (its OUT is bottom), but it must not contribute to
+      // the provenance intersection: that is a MUST fact, and an unevaluated
+      // predecessor is unknown, not "points nowhere". When the backedge is
+      // evaluated its OUT changes from bottom, this block is re-pushed, and
+      // the intersection is redone with the real answer.
       bool First = true;
       for (const MachineBasicBlock *P : B->predecessors()) {
+        if (!Visited.contains(P))
+          continue;
         if (First) {
           NewIn = OUT[P];
           First = false;
