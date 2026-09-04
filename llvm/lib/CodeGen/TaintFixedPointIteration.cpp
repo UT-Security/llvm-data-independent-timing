@@ -55,10 +55,10 @@ using namespace llvm;
 /// version of that reasoning cost +44 points against the mod-set gate and was
 /// removed (docs/design/frame-addr-fallback.md).
 static bool frameMayHoldSecret(const TaintState &S) {
-  // The UNKNOWN sets matter as much as the resolved cells, and omitting them
-  // was this predicate's first bug: at -O2 a user local's MMO underlying object
-  // is frequently not a resolvable frame cell, so the secret lands in
-  // TaintedUnknownMemValues instead of TaintedStackCells (the case
+  // The UNKNOWN entries matter as much as the resolved cells, and omitting
+  // them was this predicate's first bug: at -O2 a user local's MMO underlying
+  // object is frequently not a resolvable frame cell, so the secret lands in
+  // UnknownMemValues instead of a frame cell (the case
   // frame-addr-fallback.md records as "they fall through to Unknown"). Checking
   // only the resolved cells therefore missed libsodium's argon2id entirely -
   // `argon2_hash` stores the password pointer into a stack-allocated
@@ -70,9 +70,7 @@ static bool frameMayHoldSecret(const TaintState &S) {
   // caller passing anything, so a frame-address argument is not the mechanism
   // and the record would not be actionable.
   return S.isExternalMemClobbered() || S.UnknownMemTainted ||
-         !S.TaintedStackCells.empty() || !S.PointeeTaintedStackCells.empty() ||
-         !S.TaintedUnknownMemValues.empty() ||
-         !S.PointeeTaintedUnknownMemValues.empty();
+         S.anyFrameCell() || !S.UnknownMemValues.empty();
 }
 
 /// True if `Reg`, as it reaches `Call`, was computed from the frame base - i.e.
@@ -241,12 +239,10 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           // (paper_experiments/08-seed-ground-truth).
           if (PtrParam)
             if (auto B = S.getPointerBase(PhysReg)) {
-              const bool IsFrame = B->K == TaintState::PointerBase::Frame;
+              const bool IsFrame = B->K == TaintObject::Frame;
               const bool PointsAtSecret =
-                  IsFrame ? (TaintFrameAddrArgs &&
-                             S.anyTaintedStackCellForFI(B->Index))
-                          : (TaintArgPointeeArgs &&
-                             S.isTaintedArgPointee((unsigned)B->Index));
+                  (IsFrame ? TaintFrameAddrArgs : TaintArgPointeeArgs) &&
+                  S.objectHoldsSecret(*B);
               if (PointsAtSecret &&
                   CalleeSummary.PointeeTaintedArgIndices.insert(ArgIdx).second) {
                 SummaryChanged = true;
@@ -461,15 +457,13 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
 
         *TraceOS << "  result: " << TR.Merged.countRegs() << " tainted regs "
                  << "(data=" << TR.Merged.countDataRegs()
-                 << ", pointee=" << TR.Merged.countPointeeRegs()
-                 << ", address=" << TR.Merged.countAddressRegs() << "), "
+                 << ", pointee=" << TR.Merged.countPointeeRegs() << "), "
                  << TR.Merged.countCells() << " tainted cells";
         if (TR.Merged.UnknownMemTainted)
           *TraceOS << ", UnknownMemTainted";
         *TraceOS << "\n";
         dumpRegs("tainted_regs", TaintKind::Data);
         dumpRegs("pointee_tainted_regs", TaintKind::Pointee);
-        dumpRegs("address_tainted_regs", TaintKind::Address);
       }
 
       // Keep unknown-memory taint intraprocedural. Promoting any tainted store

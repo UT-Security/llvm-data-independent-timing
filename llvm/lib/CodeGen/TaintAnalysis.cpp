@@ -752,7 +752,7 @@ static CellInfo getCellFromMMO(const MachineMemOperand &MMO,
       // the alloca plus a CONSTANT offset. Under a variable index (a[i]) the
       // access could touch any part of the object, so drop to whole-object
       // (Size = nullopt): the load path then reads it with
-      // anyTaintedStackCellForFI and the store path records it under the size-0
+      // whole-object read (readCell with size 0) and the store path records it under the size-0
       // sentinel. Keeping a bogus precise (offset,size) would let a store and a
       // load of the same object miss each other - an UNDER-taint.
       const DataLayout &DL = MF->getFunction().getDataLayout();
@@ -802,12 +802,13 @@ getMemoryLocationFromMMO(const MachineMemOperand &MMO) {
 }
 
 /// True if the load described by MMO may read memory written by any of the
-/// tainted unknown-memory stores in TaintedPtrs. Without AA, or without a
-/// queryable location, any tainted store is assumed to reach the load.
+/// located unknown-memory stores in S that carry taint of kind K. Without AA,
+/// or without a queryable location, any such store is assumed to reach the
+/// load.
 static bool unknownMemMayTaintLoad(const MachineMemOperand &MMO,
-                                   const DenseSet<const Value *> &TaintedPtrs,
+                                   const TaintState &S, TaintKind K,
                                    AAResults *AA) {
-  if (TaintedPtrs.empty())
+  if (!S.anyUnknownMem(K))
     return false;
 
   if (!AA)
@@ -817,8 +818,9 @@ static bool unknownMemMayTaintLoad(const MachineMemOperand &MMO,
   if (!LoadLoc)
     return true;
 
-  for (const Value *StorePtr : TaintedPtrs)
-    if (!AA->isNoAlias(*LoadLoc, MemoryLocation::getBeforeOrAfter(StorePtr)))
+  for (const auto &KV : S.UnknownMemValues)
+    if (KV.second.get(K) &&
+        !AA->isNoAlias(*LoadLoc, MemoryLocation::getBeforeOrAfter(KV.first)))
       return true;
 
   return false;
@@ -932,13 +934,21 @@ static bool anyTaintedStoreDataRegUse(TaintKind K, const MachineInstr &MI,
   return false;
 }
 
+/// The abstract VALUE MI writes to memory: the taint of each kind carried by
+/// its stored-value registers. This is what a store deposits in a cell, whole.
+static TaintVal storedValueTaint(const MachineInstr &MI, const TaintState &S) {
+  TaintVal V;
+  V.Data = anyTaintedStoreDataRegUse(TaintKind::Data, MI, S);
+  V.Pointee = anyTaintedStoreDataRegUse(TaintKind::Pointee, MI, S);
+  return V;
+}
+
 /// Complement of anyTaintedStoreDataRegUse: is any ADDRESS operand of a store
 /// (the register uses AFTER the leading stored-value registers) tainted of kind
 /// K? Lets the G2 diagnostic tell a secret store ADDRESS (uncovered by DIT -
-/// cache/TLB timing) from secret store DATA (which DIT covers, and which is
-/// address-tainted by the over-approximation, so a naive whole-instruction check
-/// would false-positive on it). Returns false when the value/address split is
-/// unknown, to avoid a false "uncovered" report.
+/// cache/TLB timing) from secret store DATA (which DIT covers, so a naive
+/// whole-instruction check would false-positive on it). Returns false when the
+/// value/address split is unknown, to avoid a false "uncovered" report.
 static bool anyTaintedStoreAddressRegUse(TaintKind K, const MachineInstr &MI,
                                          const TaintState &S) {
   if (!MI.mayStore())
@@ -1035,7 +1045,7 @@ CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
     // secret memory - so it both (a) makes the gate apply the callee's clobber
     // and (b) marks the callee's parameter, letting taint enter the callee.
     //
-    // Object-granular on purpose: `anyTaintedStackCellForFI` asks whether the
+    // Object-granular on purpose: `objectHoldsSecret` asks whether the
     // object holds any secret, not whether the callee reads that exact range,
     // which the call site cannot know. Over-approximating is the safe
     // direction, and this only ever ADDS taint, so it cannot introduce a leak.
@@ -1053,20 +1063,21 @@ CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
              << " base=";
       if (!Base)
         dbgs() << "NONE";
-      else if (Base->K == TaintState::PointerBase::Frame)
-        dbgs() << "fi" << Base->Index << " objTainted="
-               << S.anyTaintedStackCellForFI(Base->Index);
+      else if (Base->K == TaintObject::Frame)
+        dbgs() << "fi" << Base->Index
+               << " objTainted=" << S.objectHoldsSecret(*Base);
       else
-        dbgs() << "arg" << Base->Index << " pointeeTainted="
-               << S.isTaintedArgPointee((unsigned)Base->Index);
+        dbgs() << "arg" << Base->Index
+               << " pointeeTainted=" << S.objectHoldsSecret(*Base);
       dbgs() << "\n";
     });
     if (auto B = Base) {
-      const bool PointsAtSecret =
-          B->K == TaintState::PointerBase::Frame
-              ? (TaintFrameAddrArgs && S.anyTaintedStackCellForFI(B->Index))
-              : (TaintArgPointeeArgs &&
-                 S.isTaintedArgPointee((unsigned)B->Index));
+      // One question - does the object this register points at hold a
+      // secret? - gated per base kind, because the two were measured
+      // separately (docs/design/p1b-frame-provenance.md S4).
+      const bool Enabled =
+          B->K == TaintObject::Frame ? TaintFrameAddrArgs : TaintArgPointeeArgs;
+      const bool PointsAtSecret = Enabled && S.objectHoldsSecret(*B);
       if (PointsAtSecret) {
         R.Pointee = true;
         R.PointeeMask |= uint8_t(1u << Idx);
@@ -1085,11 +1096,6 @@ CallArgTaint llvm::taintedCallArguments(const MachineInstr &MI,
   if (S.isOutgoingArgSecret())
     R.Data = true;
   return R;
-}
-
-static bool anyTaintedCallArgument(const MachineInstr &MI, const TaintState &S,
-                                   const TargetRegisterInfo *TRI) {
-  return taintedCallArguments(MI, S, TRI).any();
 }
 
 // True when this callee's memory clobber may be suppressed at a call site that
@@ -1135,8 +1141,7 @@ static void clearCallResultDefs(const MachineInstr &MI, TaintState &S,
     if (!isABIResultRegDef(MO, TRI))
       continue;
     Register R = MO.getReg();
-    for (TaintKind K :
-         {TaintKind::Data, TaintKind::Pointee, TaintKind::Address})
+    for (TaintKind K : {TaintKind::Data, TaintKind::Pointee})
       updateWithAliases(K, R, S, TRI, /*Set=*/false);
   }
 }
@@ -1188,7 +1193,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
   // one direction that under-taints.
   // Argument-register provenance as it stood BEFORE this instruction's defs
   // were killed. Only populated for calls; see the snapshot below.
-  SmallDenseMap<unsigned, TaintState::PointerBase, 8> PreCallArgBases;
+  SmallDenseMap<unsigned, TaintObject, 8> PreCallArgBases;
 
   // A call's arguments must be read in the state ENTERING it. The provenance
   // block below kills every def, and a call implicitly defines x0 and clobbers
@@ -1224,7 +1229,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           if (auto B = S.getPointerBase(MO.getReg()))
             PreCallArgBases[MO.getReg().id()] = *B;
 
-    std::optional<TaintState::PointerBase> SrcBase;
+    std::optional<TaintObject> SrcBase;
     bool VarDisplacement = false;
     if (MI.isCopy() && MI.getOperand(1).isReg()) {
       SrcBase = S.getPointerBase(MI.getOperand(1).getReg());
@@ -1262,14 +1267,14 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           for (Register C : Cands) {
             dbgs() << " " << printReg(C, TRI);
             if (auto B = S.getPointerBase(C))
-              dbgs() << "=" << (B->K == TaintState::PointerBase::Arg ? "arg" : "fi")
+              dbgs() << "=" << (B->K == TaintObject::Arg ? "arg" : "fi")
                      << B->Index;
             else
               dbgs() << "=none";
           }
           dbgs() << (Ambiguous ? "  AMBIGUOUS" : "") << "\n";
         });
-        if (Ambiguous || (SrcBase && SrcBase->K != TaintState::PointerBase::Arg))
+        if (Ambiguous || (SrcBase && SrcBase->K != TaintObject::Arg))
           SrcBase.reset();
         VarDisplacement = SrcBase.has_value();
       }
@@ -1317,7 +1322,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // and attributing it to A would UNDER-taint. An argument's object has
         // bounds we cannot see, and in well-defined C arithmetic within an
         // object stays inside it - the same assumption `parm_offset` makes.
-        if (SrcBase && SrcBase->K == TaintState::PointerBase::Arg)
+        if (SrcBase && SrcBase->K == TaintObject::Arg)
           S.setPointerBase(Dst, *SrcBase);
       }
     } else if (VarDisplacement) {
@@ -1333,77 +1338,79 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
   bool IsPureStore = !MI.mayLoad() && MI.mayStore();
   bool IsCall = MI.isCall();
   if (!IsPureLoad && !IsPureStore && !IsCall) {
-    bool UsesData = anyRegUseOfKind(TaintKind::Data, MI, S);
-    bool UsesPointee = anyRegUseOfKind(TaintKind::Pointee, MI, S);
-    bool UsesAddress = anyRegUseOfKind(TaintKind::Address, MI, S);
-
-    updateAllRegDefs(TaintKind::Data, MI, S, TRI, UsesData);
-    updateAllRegDefs(TaintKind::Pointee, MI, S, TRI, UsesPointee);
-    updateAllRegDefs(TaintKind::Address, MI, S, TRI, UsesData || UsesAddress);
+    // The result carries whatever any input carried, in both dimensions: a
+    // secret in yields a secret out, and a pointer to a secret in yields (an
+    // over-approximation of) a pointer to a secret out, which is what keeps
+    // `p + i` pointing where `p` did. Each kind reads its own bitvector before
+    // writing it, and never the other's, so the order of the two is immaterial.
+    for (TaintKind K : {TaintKind::Data, TaintKind::Pointee})
+      updateAllRegDefs(K, MI, S, TRI, anyRegUseOfKind(K, MI, S));
   }
 
-  // Store handling: track taint into stack/global cells precisely.
+  // Store handling: the stored VALUE - both of its facts, together - lands in
+  // the cell the store names, under one rule for every nameable object.
   if (MI.mayStore()) {
-    bool DataTainted = anyTaintedStoreDataRegUse(TaintKind::Data, MI, S);
-    bool PointeeDataTainted =
-        anyTaintedStoreDataRegUse(TaintKind::Pointee, MI, S);
+    const TaintVal Stored = storedValueTaint(MI, S);
     for (MachineMemOperand *MMO : MI.memoperands()) {
       if (!MMO)
         continue;
       CellInfo CI = getCellFromMMO(*MMO, MI.getMF());
 
       // Write one cell. A known size means we know exactly what the store
-      // overwrote, so the update is strong (taint or clear). An unknown size
-      // proves nothing about what was overwritten, so it can only ever add
-      // taint - recorded under a size-0 sentinel cell.
-      auto storeCell = [&](bool Tainted, const char *Label, auto Set,
-                           auto Clear) {
-        if (!CI.Size && !Tainted)
-          return;
-        if (Tainted)
-          Set(CI.Size.value_or(0));
+      // overwrote, so the update is strong: the cell now holds exactly the
+      // stored value, and a public store clears it. An unknown size proves
+      // nothing about what was overwritten, so it can only ever add taint -
+      // recorded under a size-0 sentinel cell.
+      auto storeCell = [&](TaintObject Obj, TaintVal V, const char *Label,
+                           bool TracePointee) {
+        const MemCell C{Obj, CI.Offset, CI.Size.value_or(0)};
+        if (CI.Size)
+          S.assignCell(C, V);
         else
-          Clear(*CI.Size);
+          S.taintCell(C, V);
 
         LLVM_DEBUG({
-          dbgs() << "      " << (Tainted ? "taint " : "clear ") << Label << " ";
-          if (CI.K == CellInfo::Stack)
-            dbgs() << "FI=" << CI.FI;
-          else
-            dbgs() << CI.GV->getName();
-          dbgs() << " off=" << CI.Offset << " sz=";
-          if (CI.Size)
-            dbgs() << *CI.Size;
-          else
-            dbgs() << "unknown";
-          dbgs() << (Tainted ? " (store)\n" : " (store untainted)\n");
+          for (TaintKind K : {TaintKind::Data, TaintKind::Pointee}) {
+            if (K == TaintKind::Pointee && !TracePointee)
+              continue;
+            const bool Tainted = V.get(K);
+            if (!CI.Size && !Tainted)
+              continue;
+            dbgs() << "      " << (Tainted ? "taint " : "clear ")
+                   << (K == TaintKind::Pointee ? "pointee " : "") << Label
+                   << " ";
+            if (Obj.K == TaintObject::Frame)
+              dbgs() << "FI=" << Obj.Index;
+            else
+              dbgs() << Obj.GV->getName();
+            dbgs() << " off=" << CI.Offset << " sz=";
+            if (CI.Size)
+              dbgs() << *CI.Size;
+            else
+              dbgs() << "unknown";
+            dbgs() << (Tainted ? " (store)\n" : " (store untainted)\n");
+          }
         });
       };
 
       if (CI.K == CellInfo::Stack) {
-        storeCell(
-            DataTainted, "stack cell",
-            [&](uint64_t Sz) { S.setTaintedStackCell(CI.FI, CI.Offset, Sz); },
-            [&](uint64_t Sz) { S.clearTaintedStackCell(CI.FI, CI.Offset, Sz); });
-        storeCell(PointeeDataTainted, "pointee stack cell",
-                  [&](uint64_t Sz) {
-                    S.setPointeeTaintedStackCell(CI.FI, CI.Offset, Sz);
-                  },
-                  [&](uint64_t Sz) {
-                    S.clearPointeeTaintedStackCell(CI.FI, CI.Offset, Sz);
-                  });
+        storeCell(TaintObject::frame(CI.FI), Stored, "stack cell",
+                  /*TracePointee=*/true);
       } else if (CI.K == CellInfo::Global) {
-        storeCell(
-            DataTainted, "global cell",
-            [&](uint64_t Sz) { S.setTaintedGlobalCell(CI.GV, CI.Offset, Sz); },
-            [&](uint64_t Sz) { S.clearTaintedGlobalCell(CI.GV, CI.Offset, Sz); });
+        // Only the Data fact is kept for a global. Pointer-ness has never been
+        // tracked through globals - a pointer to a secret stored in a global
+        // and reloaded comes back as a public pointer - and lifting that is a
+        // measured change, not part of this refactor
+        // (docs/design/taint-domain.md S5).
+        storeCell(TaintObject::global(CI.GV), TaintVal{Stored.Data, false},
+                  "global cell", /*TracePointee=*/false);
       } else if (CI.K == CellInfo::OutgoingArg) {
         // Arm the bit for the next call. Deliberately one-directional: an
         // untainted store to the outgoing area does NOT disarm it, because the
         // area holds several arguments at different offsets and clearing on any
         // one of them would lose a secret written at another. The bit is cleared
         // where it is consumed - at the call - so it cannot leak past it.
-        if (DataTainted || PointeeDataTainted) {
+        if (Stored.any()) {
           S.setOutgoingArgSecret();
           LLVM_DEBUG(dbgs() << "      secret stored into the OUTGOING argument "
                                "area (stack-passed argument)\n");
@@ -1411,9 +1418,9 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
       } else {
         // Unknown/heap: keep queryable locations precise enough for AA, and
         // fall back to the opaque poison bit when MIR lacks IR memory info.
-        if (DataTainted) {
+        if (Stored.Data) {
           if (AA && MMO->getValue()) {
-            S.setTaintedUnknownMemValue(MMO->getValue());
+            S.taintUnknownMem(MMO->getValue(), TaintKind::Data);
             LLVM_DEBUG({
               dbgs() << "      taint unknown mem value ";
               MMO->getValue()->printAsOperand(dbgs(), false);
@@ -1425,30 +1432,31 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
                                  "non-global store, opaque)\n");
           }
         }
-        if (PointeeDataTainted && MMO->getValue()) {
-          S.setPointeeTaintedUnknownMemValue(MMO->getValue());
+        if (Stored.Pointee && MMO->getValue()) {
+          S.taintUnknownMem(MMO->getValue(), TaintKind::Pointee);
           LLVM_DEBUG({
             dbgs() << "      taint pointee unknown mem value ";
             MMO->getValue()->printAsOperand(dbgs(), false);
             dbgs() << " (pointer spill)\n";
           });
         } else if (MMO->getValue()) {
-          S.clearPointeeTaintedUnknownMemValue(MMO->getValue());
+          S.clearUnknownMemPointee(MMO->getValue());
         }
       }
     }
-    if (MI.memoperands_empty() && DataTainted) {
+    if (MI.memoperands_empty() && Stored.Data) {
       S.UnknownMemTainted = true;
       LLVM_DEBUG(dbgs() << "      taint unknown mem (store, no MMO)\n");
     }
   }
 
-  // Load handling: stack and globals use cell-level precision. Unknown/heap
-  // loads use pointee taint, opaque unknown-memory poison, and an AA noalias
-  // filter over tainted unknown-memory stores that still have IR pointer info.
+  // Load handling: the defined registers receive the VALUE the load reads. A
+  // nameable object answers from its cells, with both facts together; unknown
+  // and heap memory answer from the pointee taint of the address, the opaque
+  // poison bits, and an AA noalias screen over the located unknown-memory
+  // stores.
   if (MI.mayLoad()) {
-    bool ShouldTaint = false;
-    bool ShouldPointeeTaint = false;
+    TaintVal Loaded;
     // ExternalMemClobbered folds in here: after a call whose callee may have
     // written a secret to unknown memory (a mod-set TOP), every heap and global
     // load is secret. Stack loads are handled separately below - the existing
@@ -1462,12 +1470,17 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     bool HeapPoisoned = S.UnknownMemTainted || S.isExternalMemClobbered() ||
                         (TSI && TSI->hasUnknownMemTainted());
 
+    // A load that names no memory at all: pointee taint on any address
+    // operand, any located secret store, or any poison makes it secret.
+    auto opaqueLoadIsSecret = [&]() {
+      return HeapPoisoned || S.anyUnknownMem(TaintKind::Data) ||
+             anyRegUseOfKind(TaintKind::Pointee, MI, S);
+    };
+
     for (MachineMemOperand *MMO : MI.memoperands()) {
       if (!MMO) {
-        // No MMO info: use pointee taint or heap-poisoned flag as fallback.
-        if (HeapPoisoned || !S.TaintedUnknownMemValues.empty() ||
-            anyRegUseOfKind(TaintKind::Pointee, MI, S))
-          ShouldTaint = true;
+        if (opaqueLoadIsSecret())
+          Loaded.Data = true;
         continue;
       }
       CellInfo CI = getCellFromMMO(*MMO, MI.getMF());
@@ -1476,32 +1489,25 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // through a pointer into this frame - blunt P0 poisons every stack load
         // after such a call. Provenance-based escaped-object precision (only
         // poison stack objects whose address escaped) is the P1 refinement.
-        bool Tainted =
-            S.isExternalMemClobbered() ||
-            (CI.Size
-                 ? S.isTaintedStackCellOverlapping(CI.FI, CI.Offset, *CI.Size)
-                 : S.anyTaintedStackCellForFI(CI.FI));
-        bool PointeeTainted =
-            CI.Size ? S.isPointeeTaintedStackCellOverlapping(CI.FI, CI.Offset,
-                                                            *CI.Size)
-                    : S.anyPointeeTaintedStackCellForFI(CI.FI);
-        if (Tainted) {
-          ShouldTaint = true;
-          LLVM_DEBUG(dbgs() << "      load from tainted stack cell FI=" << CI.FI
-                            << " off=" << CI.Offset << "\n");
-        }
-        if (PointeeTainted) {
-          ShouldPointeeTaint = true;
-          LLVM_DEBUG(dbgs() << "      load from pointee-tainted stack cell FI="
-                            << CI.FI << " off=" << CI.Offset << "\n");
-        }
-        if (!Tainted && !PointeeTainted) {
-          LLVM_DEBUG(dbgs() << "      load from untainted stack cell FI="
-                            << CI.FI << " off=" << CI.Offset << "\n");
-        }
+        TaintVal Cell = S.readCell(TaintObject::frame(CI.FI), CI.Offset,
+                                   CI.Size.value_or(0));
+        if (S.isExternalMemClobbered())
+          Cell.Data = true;
+        Loaded |= Cell;
+        LLVM_DEBUG({
+          if (Cell.Data)
+            dbgs() << "      load from tainted stack cell FI=" << CI.FI
+                   << " off=" << CI.Offset << "\n";
+          if (Cell.Pointee)
+            dbgs() << "      load from pointee-tainted stack cell FI=" << CI.FI
+                   << " off=" << CI.Offset << "\n";
+          if (!Cell.any())
+            dbgs() << "      load from untainted stack cell FI=" << CI.FI
+                   << " off=" << CI.Offset << "\n";
+        });
       } else if (CI.K == CellInfo::Global) {
         if (HeapPoisoned) {
-          ShouldTaint = true;
+          Loaded.Data = true;
           if (TSI && TSI->hasUnknownMemTainted())
             S.setNonArgSourcedTaint(); // another TU's secret, not our caller's
           LLVM_DEBUG(dbgs() << "      load from global " << CI.GV->getName()
@@ -1515,11 +1521,11 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           // a property of the global rather than of the path taken to it.
           const bool ModuleSecret = TSI && TSI->isSecretGlobal(CI.GV);
           bool Tainted = ModuleSecret || S.isWholeGlobalTainted(CI.GV) ||
-                         (CI.Size ? S.isTaintedGlobalCellOverlapping(
-                                        CI.GV, CI.Offset, *CI.Size)
-                                  : S.anyTaintedGlobalCellForGV(CI.GV));
+                         S.readCell(TaintObject::global(CI.GV), CI.Offset,
+                                    CI.Size.value_or(0))
+                             .Data;
           if (Tainted) {
-            ShouldTaint = true;
+            Loaded.Data = true;
             // Source condition: this taint came out of a global, not out of a
             // parameter, so no caller's arguments can account for it. Applies
             // even when THIS function tainted the global from its own parameter
@@ -1540,15 +1546,16 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // Unknown/heap: pointee-tainted bases identify secret memory. Secret
         // data used as an address is handled as an address-sensitive sink by
         // the reporting/barrier logic, not as proof that loaded data is secret.
-        if (unknownMemMayTaintLoad(*MMO, S.PointeeTaintedUnknownMemValues,
-                                   AA)) {
-          ShouldPointeeTaint = true;
+        if (unknownMemMayTaintLoad(*MMO, S, TaintKind::Pointee, AA)) {
+          Loaded.Pointee = true;
           LLVM_DEBUG(dbgs()
                      << "      load from pointee-tainted unknown mem\n");
         }
         // B1: a load through one of OUR OWN pointer arguments, whose pointee a
-        // callee filled with a secret. Whole-object, because the call site could
-        // not know which bytes the callee wrote.
+        // callee filled with a secret - the Arg(k) cell. Whole-object, because
+        // the call site could not know which bytes the callee wrote. Arg(k)
+        // cells are only ever written under -taint-arg-provenance, so this is
+        // inert otherwise.
         //
         // Strictly ADDITIVE, and it must stay that way. An earlier revision made
         // this a separate `else if (CI.K == CellInfo::Arg)` branch, which
@@ -1558,13 +1565,12 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // playground/frame_addr_gap/gapB_only.c the secret multiply in `produce`
         // fell from need=12 to need=4. Never divert a load away from an existing
         // taint source; only add to it.
-        const bool ArgPointeeTainted = TaintArgProvenance &&
-                                       CI.K == CellInfo::Arg &&
-                                       S.isTaintedArgPointee(CI.ArgNo);
+        const bool ArgPointeeTainted =
+            CI.K == CellInfo::Arg && S.isTaintedArgPointee(CI.ArgNo);
         if (HeapPoisoned || ArgPointeeTainted ||
             anyRegUseOfKind(TaintKind::Pointee, MI, S) ||
-            unknownMemMayTaintLoad(*MMO, S.TaintedUnknownMemValues, AA)) {
-          ShouldTaint = true;
+            unknownMemMayTaintLoad(*MMO, S, TaintKind::Data, AA)) {
+          Loaded.Data = true;
           LLVM_DEBUG(dbgs() << "      load from tainted unknown/heap mem"
                             << (ArgPointeeTainted ? " (tainted arg pointee)" : "")
                             << "\n");
@@ -1578,16 +1584,14 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
 
     // No MMOs at all: use pointer taint or heap-poisoned flag.
     if (MI.memoperands_empty()) {
-      if (HeapPoisoned || !S.TaintedUnknownMemValues.empty() ||
-          anyRegUseOfKind(TaintKind::Pointee, MI, S))
-        ShouldTaint = true;
-      if (!S.PointeeTaintedUnknownMemValues.empty())
-        ShouldPointeeTaint = true;
+      if (opaqueLoadIsSecret())
+        Loaded.Data = true;
+      if (S.anyUnknownMem(TaintKind::Pointee))
+        Loaded.Pointee = true;
     }
 
-    updateAllRegDefs(TaintKind::Data, MI, S, TRI, ShouldTaint);
-    updateAllRegDefs(TaintKind::Pointee, MI, S, TRI, ShouldPointeeTaint);
-    updateAllRegDefs(TaintKind::Address, MI, S, TRI, /*Set=*/false);
+    for (TaintKind K : {TaintKind::Data, TaintKind::Pointee})
+      updateAllRegDefs(K, MI, S, TRI, Loaded.get(K));
   }
 
   // NEW: Handle function calls for interprocedural taint propagation
@@ -1695,10 +1699,10 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           // at (B1). The second is what stops the fallback below from firing on
           // a caller that is itself just forwarding a buffer.
           bool AllResolved = (FOM && !FOM->empty()) || TaintArgProvenance;
-          SmallVector<TaintState::PointerBase, 4> Objs;
+          SmallVector<TaintObject, 4> Objs;
           if (AllResolved) {
             for (unsigned Idx : ME.WritesSecretThroughArgPointee) {
-              std::optional<TaintState::PointerBase> Found;
+              std::optional<TaintObject> Found;
               for (const MachineOperand &MO : MI.uses()) {
                 if (!MO.isReg() || MO.isDef() || !MO.getReg().isValid() ||
                     !MO.getReg().isPhysical())
@@ -1714,7 +1718,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
               }
               // An Arg base is only usable when B1 is on; otherwise fall back,
               // so the flag really is a no-op when off.
-              if (!Found || (Found->K == TaintState::PointerBase::Arg &&
+              if (!Found || (Found->K == TaintObject::Arg &&
                              !TaintArgProvenance)) {
                 AllResolved = false;
                 break;
@@ -1724,8 +1728,8 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
           }
           if (AllResolved) {
             const MachineFrameInfo &MFI = MI.getMF()->getFrameInfo();
-            for (TaintState::PointerBase B : Objs) {
-              if (B.K == TaintState::PointerBase::Arg) {
+            for (TaintObject B : Objs) {
+              if (B.K == TaintObject::Arg) {
                 // We cannot name the object either - but our caller can, and
                 // re-exporting this as WritesSecretThroughArgPointee at exit is
                 // what hands it the chance. Same one-hop-per-edge composition
@@ -1735,7 +1739,7 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
               }
               int64_t Sz = MFI.getObjectSize(B.Index);
               if (Sz > 0)
-                S.setTaintedStackCell(B.Index, 0, (uint64_t)Sz);
+                S.taintFrameObject(B.Index, (uint64_t)Sz);
               else
                 S.setExternalMemClobbered();
             }
@@ -1800,17 +1804,17 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
                               << ": source is public, nothing becomes secret\n");
           } else {
             Register DstReg = findCallArgReg(MI, Move->DstArg, TRI);
-            std::optional<TaintState::PointerBase> DstBase;
+            std::optional<TaintObject> DstBase;
             if (DstReg.isValid()) {
               auto It = PreCallArgBases.find(DstReg.id());
               if (It != PreCallArgBases.end())
                 DstBase = It->second;
             }
-            if (DstBase && DstBase->K == TaintState::PointerBase::Frame) {
+            if (DstBase && DstBase->K == TaintObject::Frame) {
               const MachineFrameInfo &MFI = MI.getMF()->getFrameInfo();
               int64_t Sz = MFI.getObjectSize(DstBase->Index);
               if (Sz > 0)
-                S.setTaintedStackCell(DstBase->Index, 0, (uint64_t)Sz);
+                S.taintFrameObject(DstBase->Index, (uint64_t)Sz);
               else
                 S.setExternalMemClobbered();
               LLVM_DEBUG(dbgs() << "        libc move " << MoveName
@@ -1868,9 +1872,9 @@ static bool hasTaintedRegDef(const MachineInstr &MI, const TaintState &S) {
 
 // Public: declared in TaintAnalysis.h - shared by the barrier and export paths.
 bool llvm::isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F) {
-  bool IsMemAccess = MI.mayLoad() || MI.mayStore();
+  // A memory access whose ADDRESS is secret is covered by F.UsesData: every
+  // register a load or store reads, address or data, is a use of it.
   bool LoadsSecretPointee = MI.mayLoad() && F.UsesPointee;
-  bool AddressSensitive = IsMemAccess && (F.UsesAddress || F.UsesData);
   // A call that hands a secret to its callee must run with DIT enabled so the
   // callee inherits it (Scenario B, docs/design/dit-placement.md G3). A data-carrying
   // call is already covered by F.UsesData; a call that passes only a *pointer to
@@ -1878,7 +1882,7 @@ bool llvm::isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F) {
   // public but its pointee is secret) is not, and would otherwise leave the
   // enclosing function uninstrumented - so the callee would run with DIT off.
   bool PassesPointeeSecretToCall = MI.isCall() && F.UsesPointee;
-  return F.UsesData || F.DefsData || LoadsSecretPointee || AddressSensitive ||
+  return F.UsesData || F.DefsData || LoadsSecretPointee ||
          PassesPointeeSecretToCall;
 }
 
@@ -1898,19 +1902,15 @@ const char *llvm::classifyDITUncovered(const MachineInstr &MI,
   // Load: every register a pure load uses is an address operand (the loaded
   // value is a def), so a secret in any of them is a secret ADDRESS - cache/TLB
   // timing, which DIT does not cover. A load of secret *data* through a clean
-  // pointer is UsesPointee (not UsesData/UsesAddress) and IS covered.
-  if (MI.mayLoad() && !MI.mayStore() && (F.UsesData || F.UsesAddress))
+  // pointer is UsesPointee (not UsesData) and IS covered.
+  if (MI.mayLoad() && !MI.mayStore() && F.UsesData)
     return "secret-address";
 
-  // Store: check ONLY the address operands. Secret store *data* is DIT-covered
-  // (and is address-tainted by the over-approximation, so a whole-instruction
-  // UsesAddress check would false-positive on it - the reason this uses the
-  // value/address split). A raw uncomputed secret used directly as a store
-  // address is the one under-flagged case (getStoredValueRegCount unknown ->
-  // not flagged); computed/address-tainted store addresses are caught.
-  if (MI.mayStore() &&
-      (anyTaintedStoreAddressRegUse(TaintKind::Data, MI, S) ||
-       anyTaintedStoreAddressRegUse(TaintKind::Address, MI, S)))
+  // Store: check ONLY the address operands. Secret store *data* is DIT-covered,
+  // so a whole-instruction UsesData check would false-positive on it - the
+  // reason this uses the value/address split. A store whose value/address
+  // split is unknown (getStoredValueRegCount nullopt) is not flagged.
+  if (MI.mayStore() && anyTaintedStoreAddressRegUse(TaintKind::Data, MI, S))
     return "secret-address";
 
   // Secret-dependent branch: control-flow timing, not covered.
@@ -1964,7 +1964,6 @@ void llvm::replayTaint(
       if (Post) {
         F.UsesData = anyRegUseOfKind(TaintKind::Data, MI, S);
         F.UsesPointee = anyRegUseOfKind(TaintKind::Pointee, MI, S);
-        F.UsesAddress = anyRegUseOfKind(TaintKind::Address, MI, S);
       }
 
       propagateTaintMI(MI, S, TRI, TSI, M, AA, FOM.get());
@@ -2107,10 +2106,7 @@ FunctionMemEffects llvm::computeFunctionMemEffects(MachineFunction &MF,
   replayTaint(
       MF, TR, TSI, AA, /*Post=*/reexport,
       [&](MachineInstr &MI, const TaintState &S) {
-        if (!MI.mayStore())
-          return true;
-        if (!anyTaintedStoreDataRegUse(TaintKind::Data, MI, S) &&
-            !anyTaintedStoreDataRegUse(TaintKind::Pointee, MI, S))
+        if (!MI.mayStore() || !storedValueTaint(MI, S).any())
           return true;
 
         if (MI.memoperands_empty()) {
@@ -2490,7 +2486,7 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
       int64_t Sz = MFI.getObjectSize(FI);
       if (Sz <= 0)
         continue;
-      Seed.setTaintedStackCell(FI, 0, (uint64_t)Sz);
+      Seed.taintFrameObject(FI, (uint64_t)Sz);
       ++Seeded;
     }
     LLVM_DEBUG(dbgs() << "  Seeded " << Seeded
@@ -2657,8 +2653,7 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
 
   LLVM_DEBUG(dbgs() << "Total tainted regs: " << Result.countRegs()
                     << " (data=" << Result.countDataRegs()
-                    << ", pointee=" << Result.countPointeeRegs()
-                    << ", address=" << Result.countAddressRegs() << ")"
+                    << ", pointee=" << Result.countPointeeRegs() << ")"
                     << ", tainted cells: " << Result.countCells()
                     << ", total: " << Result.count() << "\n");
 
@@ -2783,9 +2778,6 @@ void llvm::exportTaintedInstructions(MachineFunction &MF, const TaintResult &TR,
           OS << " " << printReg(Register(RegID), TRI);
         OS << " # pointee_tainted_regs:";
         for (const auto &RegID : S.PointeeTaintedRegs)
-          OS << " " << printReg(Register(RegID), TRI);
-        OS << " # address_tainted_regs:";
-        for (const auto &RegID : S.AddressTaintedRegs)
           OS << " " << printReg(Register(RegID), TRI);
         OS << "\n";
 
