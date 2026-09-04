@@ -123,8 +123,11 @@ Do not touch gem5-DIT. Phase 0 has uncommitted changes in
    libsodium 1.0.21 (`~/Documents/libsodium-1.0.21`, `--disable-shared
    --enable-static --disable-asm`, `CFLAGS=-O2 -ftaint-harden=<seed>
    -fno-optimize-sibling-calls`) with
-   `/home/rgangar/Documents/gem5-DIT/benchmarks/crypto/libsodium_secret.fixed.txt`
-   (the corrected seed set; the shipped one has 12 dead lines). Record per TU:
+   `/home/rgangar/Documents/gem5-DIT/benchmarks/crypto/libsodium_secret.txt`
+   (the SHIPPED seed set. A "corrected" variant was proposed on 2026-09-03 and
+   withdrawn on 2026-09-04: the rig patches `chacha20_ref.c` so those names
+   exist; see the correction in `docs/results/oracle-pointer-taint-2026-09-03.md`).
+   Record per TU:
    sha256 of every `.o`, and `-mllvm -taint-dit-precision-report=<f>` output
    (per-function `need`/`underdit`/`switches`). A worked build+report script
    is `gem5-DIT/benchmarks/tls_resume/sbsweep2/run.sh`.
