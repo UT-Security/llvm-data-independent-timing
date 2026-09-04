@@ -19,7 +19,7 @@ were run.
 
 | # | workload | public lane | secret lane | knob | status |
 |---|---|---|---|---|---|
-| 01 | [Bitcoin Core wallet](01-bitcoin-core-wallet/) | coin selection, 4 solvers | `CKey::Sign` per input | inputs per tx | **complete, both instruments** |
+| 01 | [Bitcoin Core wallet](01-bitcoin-core-wallet/) | coin selection, 4 solvers | `CKey::Sign` per input | inputs per tx | **complete, both instruments; gem5 half re-taken on the current compiler 2026-09-03 and the flow added on gem5 (the pass wins through f = 54% under either switch; beyond that, inside the code-placement floor), silicon re-take pending on the M5 (`reproduce.sh`)** |
 | 02 | [libsodium signed lookup](02-libsodium-signed-lookup/) | hashed pointer chase, 75% of critical-path loads LVP-predictable | chacha20-poly1305 AEAD per record (ed25519 until 2026-09-03) | lookups per record; also the LVP-predictable fraction, and the switch implementation | **gem5 complete on the new rig (2026-09-03), silicon pending** |
 | 03 | [mbedTLS record MAC](03-mbedtls-record-mac/) | per-record bookkeeping, in the SAME function | `mbedtls_md_hmac` per record | **bytes per record (region SIZE)** | **complete, silicon** |
 | 04 | [libsecp256k1 soundness](04-libsecp256k1-soundness/) | - | ECDSA signing, key seeded | **none - measures PROTECTION, not cost** | **complete, gem5** |
@@ -47,7 +47,7 @@ scope. Checked:
 | 08 | libhydrogen | **AFFECTED, already re-measured** - this is the experiment the fix came out of. Oracle 97.61% -> 80.85% unprotected on the natural seed, and the info-loss report's own repair line went from doing nothing to reaching 0.03% |
 | **03** | mbedTLS | **AFFECTED, re-measured 2026-09-03.** 41 -> 49 switches, in exactly the path it measures. **Headline intact** - region still beats function everywhere, -13.6% at 16 KB. **The blanket crossover moved** from 1,024 B to between 1,024 and 4,096 B, the small-region regime being where switch count is the cost |
 | **06** | mbedTLS | **AFFECTED, not re-run** - reuses 03's binaries, and its gem5 arms need rebuilding on the current compiler |
-| 01 | Bitcoin Core | **cannot be settled by comparison** - see below |
+| 01 | Bitcoin Core | **gem5 half re-measured 2026-09-03 on the current compiler; silicon half pending** - see below |
 | 05 | nginx + OpenSSL | **not settled** - the hardened objects are no longer on disk, so there is nothing to compare against; needs an OpenSSL rebuild |
 
 **01 is a different problem from the other two.** Its recorded arm
@@ -59,6 +59,28 @@ re-measurement on the current compiler**, not a diff. Its secret lane is
 libsecp256k1, which experiment 04 verifies is unaffected, and its wallet lib
 carries **0** switches, so the expected movement is small - but that is an
 argument, not a measurement.
+
+**2026-09-03: the gem5 half is re-measured, the silicon half is scripted,
+and the flow now exists on gem5.** `01-bitcoin-core-wallet/reproduce.sh`
+rebuilds the taint clang, the three `bench_bitcoin` arms and the gem5 arms
+from the committed seed, and runs both instruments. The gem5 stages ran on a
+Linux host on the current compiler, every number a median over 5 `argv[0]`
+offsets (details in the experiment README): the coin-selection prize
+reproduces at +6.6%, signing has no prize, every gate passes. New: the two
+lanes in ONE flow under gem5 with K as the knob - **the pass beats blanket
+through f = 54% under both switch models** (3.5 points renamed, 2.8
+serialising at that f), so the crossover, if the flow has one, lies above 54%
+where silicon's is at 45 to 50%; where it lies is a property of the switch
+and of what DIT costs the secret lane, not of the lanes. Beyond f = 54% the
+margins sit inside a **new rig trap**: gem5's model moves a pass-vs-base
+delta on the signing kernel by up to 5 points from link placement alone
+(pads of 0 to 8 KB; `argv[0]` offsets do not sample it), so any comparison
+against a differently laid-out binary needs a placement sweep, which has not
+been run. The silicon stages need the M5 and have not been run; until
+they are, Table 1 is still the 2026-08-31 arm. Bitcoin Core is pinned to
+`15a7a4ed7` (master, 2026-08-18) for the gem5 arms; the M5 tree's commit was
+never recorded and should be, along with the uncommitted
+`wallet_create_tx.cpp` knob patch that only exists there.
 
 **The general lesson, worth more than the individual answers.** A switch-count
 and disassembly diff against the recorded arm settles this cheaply *when the arm

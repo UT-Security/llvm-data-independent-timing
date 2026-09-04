@@ -1,0 +1,20 @@
+IPC under blanket DIT, wallet_m5_ipc.csv
+WalletCreateTxUsePresetInputsAndCoinSelection, Apple M5 (Mac17,2), same binary both arms
+
+    K  f_secret   base ms  blanket ms  time cost  IPC change  +/- drift     n/N
+--------------------------------------------------------------------------------
+    1      3.5%     15.39       16.00     +4.09%      -3.93%      0.30%  10/10
+    4      5.6%     15.78       16.39     +4.08%      -3.92%      0.00%   9/10
+  100     44.6%     27.76       28.84     +3.88%      -3.73%      0.16%  10/10
+  400     75.2%     64.23       66.90     +4.19%      -4.02%      0.21%  10/10
+
+IPC change = 1/(1 + time cost) - 1, exact because the instruction stream
+is identical between arms. Negative = blanket DIT retires fewer
+instructions per cycle. '+/- drift' is the duplicate-baseline arm, the
+frequency-drift and noise budget on that figure.
+
+Absolute IPC is NOT measurable on this machine (no PMU access).
+For absolute IPC on the same code, gem5 (validated at 85% of silicon's
+blanket cost on the coin-selection kernel) reads:
+  coin selection (public lane)  IPC 1.9617 -> 1.7733   -9.60%
+  ECDSA signing  (secret lane)  IPC 2.7131 -> 2.7292   +0.59%  (flat)

@@ -17,17 +17,23 @@ The difference between those two columns, on one binary, IS the serialization
 cost. It is not inferred from a cycle budget.
 
 Arms:
-    base     btc_sign_base,  DIT_MODE=0   reference
+    base     btc_sign_base,  DIT_MODE=0   the baseline: built THROUGH the pass
+                                          with an empty seed, so it carries
+                                          everything -ftaint-harden changes
+                                          besides DIT (the tail-call disable),
+                                          as the silicon rig's baseline does
     blanket  btc_sign_blanket,DIT_MODE=0  always-on: base plus a CONSTRUCTOR
                                           that sets DIT before main. The switch
                                           is never inside the measured function
-    nodit    btc_sign_nodit, DIT_MODE=0   round-trip control (empty seed file)
     taint    btc_sign_taint, DIT_MODE=0   the shipped pass, 9 seeds
+    plain    btc_sign_plain, DIT_MODE=0   stock -O2, no pass: reference for what
+                                          building through the pass costs
+                                          (base vs plain), never a baseline
 
 Two gates, both enforced rather than documented (each has failed before):
   1. simInsts identical across switch models for a given arm. If a config
      perturbs the instruction stream, the cycle comparison is void.
-  2. ditSuppressed == 0 in every arm that should carry no DIT (base, nodit). A
+  2. ditSuppressed == 0 in every arm that should carry no DIT (base, plain). A
      baseline silently running with protection looks exactly like a win.
   3. Every arm runs from an EQUAL-LENGTH path. gem5 SE mode writes the binary
      path onto the initial process stack as argv[0], so its LENGTH shifts stack
@@ -37,7 +43,8 @@ Two gates, both enforced rather than documented (each has failed before):
      so comparing them where they are built confounds every delta. See
      dit-gem5-rig-traps #5.
 """
-import argparse, csv, hashlib, json, os, pathlib, re, shutil, subprocess, sys, time
+import argparse, csv, hashlib, json, os, pathlib, re, shutil, statistics as st
+import subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
 G = pathlib.Path.home() / "Documents/gem5-DIT"
@@ -52,7 +59,7 @@ BENCHES = {
     # its toggles, so this is where the switch model should matter most.
     "sign": {
         "base": "btc_sign_base", "blanket": "btc_sign_blanket",
-        "nodit": "btc_sign_nodit", "taint": "btc_sign_taint",
+        "taint": "btc_sign_taint", "plain": "btc_sign_plain",
     },
     # 0% secret, and the largest always-on DIT cost this project has measured on
     # production code (+13.3% on silicon). No pass arm: the question here is
@@ -62,7 +69,7 @@ BENCHES = {
     },
 }
 # Arms that must show zero DIT suppression.
-UNPROTECTED = ("base", "nodit")
+UNPROTECTED = ("base", "plain")
 
 CONFIGS = {
     "spec":   ["--eves", "--dmp", "--comp-simp"],
@@ -113,16 +120,28 @@ def pick(s, *keys):
     return None
 
 
-def canon_path(arm, cfg, binary):
-    """An equal-length path for every arm (gate 3).
+def canon_path(arm, cfg, binary, outroot, offset=0):
+    """An equal-length path for every arm (gate 3), at a chosen offset.
 
     Fixed-width hex slot, so the string length is identical for every arm and
     config while staying unique enough for the parallel jobs not to collide.
     Hard-linked beside the binaries so this costs no disk and no copy time;
     falls back to a copy if the link cannot be made.
+
+    The slot hashes the run directory and the offset as well as arm/cfg. Keyed
+    on arm/cfg alone, two drivers running at once (coinsel beside coinsel4, or
+    sign beside either) re-linked each other's slots, and a sign run could load
+    the coinsel binary with the sign arguments - which is what happened on
+    2026-09-03. Length stays 8 hex either way.
+
+    The file name is `b` repeated offset+1 times, so consecutive offsets differ
+    by exactly one byte of argv[0] and every arm at one offset shares a length.
+    gem5 SE writes argv[0] onto the initial stack, so its length moves every
+    stack address for the whole run (dit-gem5-rig-traps #5); a sub-2% delta is
+    only quotable as a median over several offsets, with its spread.
     """
-    slot = hashlib.md5(f"{arm}/{cfg}".encode()).hexdigest()[:8]
-    c = BIN / "armlink" / slot / "b"
+    slot = hashlib.md5(f"{outroot}/{arm}/{cfg}/o{offset}".encode()).hexdigest()[:8]
+    c = BIN / "armlink" / slot / ("b" * (offset + 1))
     c.parent.mkdir(parents=True, exist_ok=True)
     if c.exists():
         c.unlink()
@@ -133,35 +152,56 @@ def canon_path(arm, cfg, binary):
     return c
 
 
+def done(d):
+    sp, lg = d / "stats.txt", d / "run.log"
+    return (sp.exists() and sp.stat().st_size > 0 and lg.exists()
+            and "checksum=" in lg.read_text(errors="replace"))
+
+
 def run_one(job):
-    arm, cfg, outroot, a = job
+    arm, cfg, off, outroot, a = job
     binary = BENCHES[a.bench][arm]
-    d = outroot / f"{arm}__{cfg}"
-    d.mkdir(parents=True, exist_ok=True)
-    cmd = [str(GEM5), "-d", str(d), str(CONFIG)] + CONFIGS[cfg] + [
-        "--binary", str(canon_path(arm, cfg, binary)),
-        "--arguments", f"{a.iter} {a.warmup} {a.targets}".strip(),
-    ]
-    t0 = time.time()
-    with open(d / "run.log", "w") as log:
-        rc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT).returncode
-    rec = {"arm": arm, "cfg": cfg, "rc": rc, "wall_s": round(time.time() - t0, 1)}
+    d = outroot / f"o{off}" / f"{arm}__{cfg}"
+    # The run's own configuration travels with its numbers: the driver's
+    # defaults (50/2/10) are ~500x the work of the committed coinsel runs
+    # (1/1/1), and a CSV that omits them cannot say which it holds.
+    rec = {"arm": arm, "cfg": cfg, "offset": off, "wall_s": "",
+           "iter": a.iter, "warmup": a.warmup, "targets": a.targets}
+    if a.resume and done(d):
+        rec["rc"] = 0
+    else:
+        d.mkdir(parents=True, exist_ok=True)
+        cmd = [str(GEM5), "-d", str(d), str(CONFIG)] + CONFIGS[cfg] + [
+            "--binary", str(canon_path(arm, cfg, binary, outroot, off)),
+            "--arguments", f"{a.iter} {a.warmup} {a.targets}".strip(),
+        ]
+        t0 = time.time()
+        with open(d / "run.log", "w") as log:
+            rec["rc"] = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT).returncode
+        rec["wall_s"] = round(time.time() - t0, 1)
     sp = d / "stats.txt"
-    if rc == 0 and sp.exists():
+    if rec["rc"] == 0 and sp.exists():
         s = first_dump(sp)
         rec.update({
             "cycles": pick(s, "core.numCycles", "numCycles"),
+            # gem5's own IPC divides committed numInsts by numCycles, which is
+            # not simInsts/cycles (numInsts counts a few hundred more), so both
+            # are recorded and IPC is gem5's, not derived.
+            "numInsts": pick(s, "core.commitStats0.numInsts", "commitStats0.numInsts"),
+            "ipc": pick(s, "core.ipc"),
             "simInsts": pick(s, "simInsts"),
             "ditSuppressed": pick(s, "ditSuppressed") or 0.0,
-            "ditSwitches": pick(s, "ditSwitches") or 0.0,
+            # Committed PSTATE.DIT writes. The model names this commit.ditWrites;
+            # the earlier "ditSwitches" key matched nothing and read 0 on every arm.
+            "ditSwitches": pick(s, "commit.ditWrites", "ditSwitches") or 0.0,
             "commitNonSpecStalls": pick(s, "commitNonSpecStalls") or 0.0,
         })
     # The driver prints its checksum; arms that disagree did different work.
     log_txt = (d / "run.log").read_text(errors="replace") if (d / "run.log").exists() else ""
     m = re.search(r"checksum=(\d+)", log_txt)
     rec["checksum"] = m.group(1) if m else ""
-    print(f"  {arm:<9} {cfg:<7} rc={rc} cycles={rec.get('cycles')} "
-          f"ck={rec['checksum']} {rec['wall_s']}s", flush=True)
+    print(f"  o{off} {arm:<9} {cfg:<7} rc={rec['rc']} cycles={rec.get('cycles')} "
+          f"ipc={rec.get('ipc')} ck={rec['checksum']} {rec['wall_s']}s", flush=True)
     return rec
 
 
@@ -175,6 +215,10 @@ def main():
     # coinsel only: selections per pass. The pool stays at the benchmark's 400
     # coins; fewer targets just shortens the run.
     ap.add_argument("--targets", type=int, default=10)
+    # argv[0] lengths per arm; every number reported is the median over them.
+    ap.add_argument("--offsets", type=int, default=1)
+    ap.add_argument("--resume", action="store_true",
+                    help="skip runs whose stats.txt and checksum already exist")
     ap.add_argument("--jobs", type=int, default=6)
     ap.add_argument("--out", default=str(pathlib.Path.home() /
                                          "Documents/dit-browser-bench/gem5-btc"))
@@ -182,6 +226,7 @@ def main():
     a = ap.parse_args()
     if not a.arms:
         a.arms = ",".join(BENCHES[a.bench])
+    arms, cfgs, offs = a.arms.split(","), a.configs.split(","), list(range(a.offsets))
 
     for p in (GEM5, CONFIG, BIN):
         if not p.exists():
@@ -189,15 +234,15 @@ def main():
 
     outroot = pathlib.Path(a.out) / (a.tag or a.bench)
     outroot.mkdir(parents=True, exist_ok=True)
-    jobs = [(arm, cfg, outroot, a)
-            for arm in a.arms.split(",") for cfg in a.configs.split(",")]
-    print(f"gem5 Bitcoin [{a.bench}]: {len(jobs)} runs, {a.jobs} parallel")
+    jobs = [(arm, cfg, off, outroot, a) for off in offs for arm in arms for cfg in cfgs]
+    print(f"gem5 Bitcoin [{a.bench}]: {len(jobs)} runs ({a.offsets} offset(s)), {a.jobs} parallel")
     with ThreadPoolExecutor(max_workers=a.jobs) as ex:
         recs = list(ex.map(run_one, jobs))
 
     csv_path = outroot / f"btc_gem5_{a.bench}.csv"
-    cols = ["arm", "cfg", "rc", "cycles", "simInsts", "ditSuppressed",
-            "ditSwitches", "commitNonSpecStalls", "checksum", "wall_s"]
+    cols = ["arm", "cfg", "offset", "rc", "iter", "warmup", "targets", "cycles",
+            "numInsts", "simInsts", "ipc", "ditSuppressed", "ditSwitches",
+            "commitNonSpecStalls", "checksum", "wall_s"]
     with open(csv_path, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
@@ -205,62 +250,64 @@ def main():
             w.writerow(r)
     print("WROTE", csv_path)
 
-    # ---- gates ----------------------------------------------------------
+    # ---- gates, per offset ----------------------------------------------
     ok = True
-    by = {(r["arm"], r["cfg"]): r for r in recs}
-    failed = [r for r in recs if r["rc"] != 0]
+    by = {(r["arm"], r["cfg"], r["offset"]): r for r in recs}
+    failed = [r for r in recs if r["rc"] != 0 or not r.get("cycles")]
     if failed:
         ok = False
-        print(f"\nGATE FAIL: {len(failed)} run(s) returned nonzero: "
-              f"{[(r['arm'], r['cfg']) for r in failed]}")
+        print(f"\nGATE FAIL: {len(failed)} run(s) without a result: "
+              f"{[(r['arm'], r['cfg'], r['offset']) for r in failed]}")
 
     print("\n--- gate 1: simInsts identical across switch models ---")
-    for arm in a.arms.split(","):
-        vals = {c: by[(arm, c)].get("simInsts") for c in a.configs.split(",")
-                if (arm, c) in by}
-        uniq = set(v for v in vals.values() if v is not None)
-        status = "OK" if len(uniq) <= 1 else "FAIL"
-        if len(uniq) > 1:
-            ok = False
-        print(f"  {arm:<9} {status:<5} {vals}")
+    for arm in arms:
+        for off in offs:
+            vals = {c: by[(arm, c, off)].get("simInsts") for c in cfgs if (arm, c, off) in by}
+            uniq = set(v for v in vals.values() if v is not None)
+            status = "OK" if len(uniq) <= 1 else "FAIL"
+            if len(uniq) > 1:
+                ok = False
+            print(f"  o{off} {arm:<9} {status:<5} {vals}")
 
     print("\n--- gate 2: ditSuppressed == 0 in unprotected arms ---")
-    for arm in [x for x in UNPROTECTED if x in a.arms.split(",")]:
-        for c in a.configs.split(","):
-            if (arm, c) not in by:
-                continue
-            v = by[(arm, c)].get("ditSuppressed")
-            status = "OK" if not v else "FAIL"
-            if v:
-                ok = False
-            print(f"  {arm:<9} {c:<7} {status:<5} ditSuppressed={v}")
+    for arm in [x for x in UNPROTECTED if x in arms]:
+        for c in cfgs:
+            for off in offs:
+                if (arm, c, off) not in by:
+                    continue
+                v = by[(arm, c, off)].get("ditSuppressed")
+                status = "OK" if not v else "FAIL"
+                if v:
+                    ok = False
+                print(f"  o{off} {arm:<9} {c:<7} {status:<5} ditSuppressed={v}")
 
     # Gate 3 compares cycles ACROSS configs, which is only meaningful when the
     # configs differ solely in the DIT switch model. Mechanism-isolation configs
     # (none/eves/dmp/...) legitimately change base cycles, so the gate would
     # misfire; restrict it to the switch-model pair.
     SWITCH_MODEL_CFGS = {"spec", "serdit"}
-    gate3_cfgs = [c for c in a.configs.split(",") if c in SWITCH_MODEL_CFGS]
+    gate3_cfgs = [c for c in cfgs if c in SWITCH_MODEL_CFGS]
     if len(gate3_cfgs) < 2:
         print("\n--- gate 3: skipped (needs both spec and serdit; configs vary "
               "mechanisms, not the switch model) ---")
     else:
         print("\n--- gate 3: switch model is a no-op on arms with no DIT switch ---")
-    # base and nodit contain zero `msr DIT`, so --no-speculative-dit rewrites
+    # base and plain contain zero `msr DIT`, so --no-speculative-dit rewrites
     # nothing in them and their cycle counts MUST be identical across models.
     # A nonzero delta here means the knob under test is reaching the controls,
     # and it bounds nothing until it is fixed. This gate caught exactly that:
     # a runtime blanket switch inside main() moved `nodit` by 0.549%.
-        for arm in [x for x in UNPROTECTED if x in a.arms.split(",")]:
-            cs = [by[(arm, c)].get("cycles") for c in gate3_cfgs if (arm, c) in by]
-            cs = [x for x in cs if x]
-            if len(cs) < 2:
-                continue
-            delta = (max(cs) / min(cs) - 1) * 100
-            status = "OK" if delta == 0.0 else "FAIL"
-            if delta != 0.0:
-                ok = False
-            print(f"  {arm:<9} {status:<5} delta={delta:+.4f}%  cycles={cs}")
+        for arm in [x for x in UNPROTECTED if x in arms]:
+            for off in offs:
+                cs = [by[(arm, c, off)].get("cycles") for c in gate3_cfgs if (arm, c, off) in by]
+                cs = [x for x in cs if x]
+                if len(cs) < 2:
+                    continue
+                delta = (max(cs) / min(cs) - 1) * 100
+                status = "OK" if delta == 0.0 else "FAIL"
+                if delta != 0.0:
+                    ok = False
+                print(f"  o{off} {arm:<9} {status:<5} delta={delta:+.4f}%  cycles={cs}")
 
     print("\n--- checksums (must all match) ---")
     cks = {r["checksum"] for r in recs if r["checksum"]}
@@ -268,19 +315,34 @@ def main():
     if len(cks) > 1:
         ok = False
 
-    # ---- result ---------------------------------------------------------
-    print("\n--- cycles vs base, per switch model ---")
-    hdr = f"{'arm':<9}" + "".join(f"{c:>22}" for c in a.configs.split(","))
+    # ---- result: medians over offsets, with the spread ----------------------
+    def vals(arm, c, key="cycles"):
+        return [by[(arm, c, o)][key] for o in offs
+                if (arm, c, o) in by and by[(arm, c, o)].get(key)]
+
+    def med(arm, c, key="cycles"):
+        v = vals(arm, c, key)
+        return st.median(v) if v else None
+
+    def spread(arm, c):
+        v = vals(arm, c)
+        return (max(v) / min(v) - 1) * 100 if len(v) > 1 else 0.0
+
+    print(f"\n--- cycles vs base and IPC, median over {a.offsets} offset(s); "
+          f"spread = max/min - 1 over offsets ---")
+    hdr = f"{'arm':<9}" + "".join(f"{c:>34}" for c in cfgs) + f"{'spread':>9}"
     print(hdr)
-    for arm in a.arms.split(","):
+    for arm in arms:
         line = f"{arm:<9}"
-        for c in a.configs.split(","):
-            r, b = by.get((arm, c)), by.get(("base", c))
-            if r and b and r.get("cycles") and b.get("cycles"):
-                pct = (r["cycles"] / b["cycles"] - 1) * 100
-                line += f"{r['cycles']:>12,.0f} {pct:>+7.2f}%"
+        for c in cfgs:
+            r, b = med(arm, c), med("base", c)
+            if r and b:
+                pct = (r / b - 1) * 100
+                ipc = med(arm, c, "ipc")
+                line += f"{r:>12,.0f} {pct:>+7.2f}% ipc={ipc:>8.4f}" if ipc else f"{r:>12,.0f} {pct:>+7.2f}% ipc={'-':>8}"
             else:
-                line += f"{'-':>22}"
+                line += f"{'-':>34}"
+        line += f"{max(spread(arm, c) for c in cfgs):>8.2f}%"
         print(line)
 
     print("\nGATES", "PASS" if ok else "FAIL")
