@@ -25,6 +25,8 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/LineIterator.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
@@ -54,6 +56,29 @@ static cl::opt<std::string> TaintDitCloneList(
     cl::value_desc("file"), cl::Hidden);
 
 static cl::opt<std::string> TaintSourcesFile("taint-src", cl::desc("A file specifying taint sources"), cl::value_desc("file"));
+
+// Seed validation. A seed is a parameter attribute stamped on a DEFINITION,
+// so a seed line that names a function this TU only declares, or does not
+// contain at all, or an argument index the function does not have, applies to
+// nothing - and until now did so silently. That is how a seed set can look
+// complete while protecting three percent of the secret work (mbedTLS TLS 1.3
+// resumption, 2026-09-02: every ticket-path seed was live, the ECDHE scalar
+// had no seed, and nothing said so). CIO ships the identical hole: its ABI
+// table maps argument indices 0-5, so four of its 64 libsodium seed lines
+// (index 8) are never applied.
+//
+// Two mechanisms. An argument index a DEFINED function does not have is a hard
+// error, because it can never apply anywhere. Whether a seed applied in SOME
+// TU is only knowable after the whole build, so every TU appends one record
+// per seed line to this report - APPLIED / DECLARED / ABSENT - and
+// utils/taint_seed_check.py flags any seed with no APPLIED record. It appends
+// for the same reason -taint-info-loss-report does: truncating per invocation
+// would keep only the last TU's verdict.
+static cl::opt<std::string> TaintSeedReport(
+    "taint-seed-report",
+    cl::desc("Append one APPLIED/DECLARED/ABSENT record per seed line per TU, "
+             "for utils/taint_seed_check.py to find seeds that applied nowhere"),
+    cl::value_desc("file"));
 
 struct TaintSource {
   std::string FuncName;
@@ -202,6 +227,29 @@ PreservedAnalyses TaintSourceAnnotatorPass::run(Module &M,
       const auto &TaintedArgs = It->second.TaintedArgs;
       const auto &PointeeTaintedArgs = It->second.PointeeTaintedArgs;
 
+      // An index this function does not have can never be stamped, in this TU
+      // or any other: the definition is right here and it has arg_size()
+      // parameters. Silently skipping it is how a seed set lies about its
+      // coverage, so this is fatal rather than a warning.
+      {
+        const unsigned NArgs = F.arg_size();
+        auto CheckRange = [&](const llvm::SmallSet<unsigned, 4> &Idx,
+                              StringRef Kind) {
+          for (unsigned A : Idx)
+            if (A >= NArgs) {
+              errs() << "taint: seed " << F.getName() << "," << A
+                     << (Kind == "data" ? "" : ",")
+                     << (Kind == "data" ? "" : Kind) << " names argument "
+                     << A << " but " << F.getName() << " has only " << NArgs
+                     << " parameter(s); the seed would apply to nothing\n";
+              report_fatal_error("taint seed argument index out of range");
+            }
+        };
+        CheckRange(TaintedArgs, "data");
+        CheckRange(PointeeTaintedArgs, "pointee");
+        CheckRange(It->second.DeclassifiedArgs, "declassify");
+      }
+
       // A taint source must survive to codegen as a function.
       //
       // The seed is expressed as an attribute on a PARAMETER, so it lives
@@ -304,6 +352,35 @@ PreservedAnalyses TaintSourceAnnotatorPass::run(Module &M,
     }
     if (!KeepAlive.empty())
       appendToUsed(M, KeepAlive);
+  }
+
+  // Per-seed verdict for this TU. Only in the stamping run - the early
+  // preserve-only run sees the same module and would double every record.
+  if (!TaintSeedReport.empty() && !PreserveFunctionsOnly) {
+    std::error_code EC;
+    raw_fd_ostream OS(TaintSeedReport, EC,
+                      sys::fs::OF_Append | sys::fs::OF_Text);
+    if (EC) {
+      errs() << "taint: cannot open seed report " << TaintSeedReport << ": "
+             << EC.message() << "\n";
+    } else {
+      StringRef Src = M.getSourceFileName();
+      for (const auto &KV : TaintSources) {
+        const Function *F = M.getFunction(KV.first());
+        const char *St = !F ? "ABSENT"
+                         : F->isDeclaration() ? "DECLARED"
+                                              : "APPLIED";
+        auto Emit = [&](const llvm::SmallSet<unsigned, 4> &Idx,
+                        const char *Kind) {
+          for (unsigned A : Idx)
+            OS << St << " func=" << KV.first() << " arg=" << A
+               << " kind=" << Kind << " src=" << Src << "\n";
+        };
+        Emit(KV.second.TaintedArgs, "data");
+        Emit(KV.second.PointeeTaintedArgs, "pointee");
+        Emit(KV.second.DeclassifiedArgs, "declassify");
+      }
+    }
   }
 
   return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
