@@ -1,0 +1,20 @@
+# Experiment 10, psk_dhe_ke. SAME binaries under two gem5 oracles: 'old' lumps a store's
+# address registers' data taint into the written memory; 'fixed' (gem5-DIT commit.cc,
+# 2026-09-03) taints memory from the stored VALUE only, with address registers feeding
+# the secret-address channel as the load path already did. The old rule let a pointer
+# read out of secret memory re-taint everything stored through it, a self-sustaining
+# cycle with no secret in it. Per-resumption = (n2 - n0)/2; full = n0.
+# EVERY coverage figure quoted before this date used the old denominator.
+arm,oracle,per_res_uncovered,per_res_protected,per_res_overprotected,full_uncovered,full_protected,full_overprotected
+null,old,20372927,0,0,15130577,0,0
+null,fixed,12086838,0,0,12945528,0,0
+pass3,old,1079780,19265633,6353088,912302,14196978,19006221
+pass3,fixed,625612,11438357,14180363,726114,12197964,21005235
+blkt,old,0,20372927,6834923,0,15130577,20662665
+blkt,fixed,0,12086838,15121013,0,12945528,22847714
+# 'store+pair' = the above plus per-register store-pair slicing. IDENTICAL to 'fixed' on every
+# arm: gem5 splits STP into two single-register micro-ops before commit, so no pair reaches
+# the oracle. Recorded so the hypothesis is not re-derived.
+null,store+pair,12086838,0,0,12945528,0,0
+pass3,store+pair,625612,11438357,14180363,726114,12197964,21005235
+blkt,store+pair,0,12086838,15121013,0,12945528,22847714

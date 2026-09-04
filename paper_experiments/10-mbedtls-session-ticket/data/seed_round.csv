@@ -1,0 +1,13 @@
+# Automated seed loop (benchmarks/tls_resume/seed_round.sh), 2026-09-03: build with the
+# current seeds and -taint-info-loss-report, harvest every repair line, repeat. Round 0 =
+# seed_pass3 (82 lines). Static counts over all mbedTLS TUs. 'flags' = round-4 seeds plus
+# -taint-frame-addr-args -taint-arg-provenance -taint-arg-pointee-args (all default off).
+# UNSOUND rises with rounds because it counts frame-address sites the analysis can SEE;
+# more taint knowledge surfaces more of them. Final seed set: seed_round_r4.txt.
+round,seeds,switches,need,unsound,moderate,bignum_c_switches,bignum_core_c_switches
+0,82,973,29373,95,339,0,0
+1,307,2162,82832,213,468,404,0
+2,547,2621,100648,235,371,417,80
+3,659,2740,102452,234,307,413,87
+4,717,2811,105958,255,306,413,88
+flags,717,2816,90042,131,429,391,88
