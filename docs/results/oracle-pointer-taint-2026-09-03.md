@@ -323,3 +323,30 @@ the function-pointer rule (the one regression to zero), the residual is
 8,610 and almost all of it is the floor. The compiler was sound throughout;
 what was incomplete was the seed set, and the tool that names the missing
 seeds was never being run.
+
+## Correction (2026-09-04): the libsodium seed file was never broken
+
+The Phase 0 seed checker reported 12 of 65 lines in
+`gem5-DIT/benchmarks/crypto/libsodium_secret.txt` as naming functions that do
+not exist (`stream_ref_ref`, `stream_ref_xor_ic_ref`,
+`chacha20_encrypt_bytes_ref`), and a "corrected" file was written alongside.
+That check was run on an UNPATCHED libsodium 1.0.21. The experiment 09 rig
+(`gem5-DIT/benchmarks/taint_oracle/build_sodium.sh` and the cioparity build
+scripts) applies a rename patch to `crypto_stream/chacha20/ref/chacha20_ref.c`
+so that exactly those names exist, and the reason is not cosmetic:
+`stream_ref` and `stream_ref_xor_ic` are `static` functions defined in FOUR
+translation units (the ChaCha20 reference, the Salsa20 reference, and two
+Dolbeau variants), and a seed matches by name in every TU that defines it.
+Seeding the unpatched name would taint Salsa20's unused code (measured: +16
+switches there) while the direct seed on the ChaCha20 core goes dead
+(`chacha20_encrypt_bytes` need 297 -> 116).
+
+So: the shipped file is correct for the rig it is used with; the "corrected"
+file has been withdrawn; the seed checker must be run against the SOURCE THE
+RIG BUILDS, not a pristine tarball; and the general limitation stands and is
+worth fixing at the format level - **a name-keyed seed cannot address a
+`static` whose name is reused across TUs.** A `file:function` or
+TU-qualified seed key would remove the need for the rename patch.
+
+Found by the experiment 02 rerun of 2026-09-04
+(`paper_experiments/02-libsodium-signed-lookup/rerun-2026-09-04.md`).
