@@ -111,12 +111,21 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
 
 ## 4. How the taint analysis works
 
-**Taint kinds** (parameterized by `TaintKind`, one bitvector each):
+**The abstract value** (`TaintVal`, one bit per `TaintKind`, the same whether the value
+sits in a register or in a memory cell - `docs/design/taint-domain.md`):
 - **Data** - the value itself is secret.
-- **Pointee** - the value is a pointer to secret memory. A load *through* a pointee-tainted
-  pointer yields Data taint. Pointee taint survives pointer arithmetic (`base+offset`).
-- **Address** - the value may be used as a secret-dependent address (cache/TLB domain - DIT
-  does NOT cover this; it lands in the uncovered report, not a barrier).
+- **Pointee** - the value is a pointer to memory that may hold a secret. A load *through*
+  a pointee-tainted pointer yields Data taint. Pointee taint survives pointer arithmetic
+  (`base+offset`).
+
+A store deposits the stored register's whole value into the cell it names; a load reads
+the cell's value back. Memory is one map, `TaintState::Cells`, keyed by
+(`TaintObject` = Frame(FI) | Global(GV) | Arg(k), offset, size). A secret-dependent
+*address* is not a third kind: it is a Data-tainted register used by a load or store,
+which `-taint-uncovered-report` flags as `secret-address` (DIT does not cover cache/TLB
+timing). Register provenance (`PointerBases`: which object a pointer targets, a MUST
+fact that intersects on join) is a separate component from pointee taint (a MAY fact
+that unions), because it licenses the opposite kind of decision.
 
 **Interprocedural fixed point** (`TaintInterprocPass`, a new-PM module pass):
 - Seeds argument taint from the `tainted` / `tainted-pointee` IR attributes (set by the
