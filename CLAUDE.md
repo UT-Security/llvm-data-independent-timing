@@ -613,6 +613,15 @@ X86/AMDGPU only), so lowering and emission remain on the legacy PM.
   round-tripping in `4fb7600db532`. That cannot be all of +17.10 pp, so do not
   treat it as settled - **rebuild the SQLCipher NOP arms on the current path
   before quoting either side.**
+
+  **Measured on the clang path, mbedTLS 727 seeds, 2026-09-04**
+  (`docs/results/dit-callee-contract-2026-09-04.md`): every switch a `HINT #0` costs
+  **+4.84% (inherit) / +7.14% (callee) on BOTH switch models**, MORE than the real arms
+  on the renamed model (+3.50% / +6.17%) - executing DIT in place of the NOPs recovers
+  about a point, blanket's -1.40% direction. On renamed hardware the entire cost of
+  selective placement on this workload is the inserted instructions and their layout;
+  on serialising hardware the mode adds +244 to +248 points on top of that same share.
+  The NOP-not-neutral caveat (~0.25%) applies.
 - **A gem5 ROI delimited by `m5_reset_stats` does NOT give exactly equal
   instruction counts across machine configs.** The marker lands as a scheduled
   event, so a ROB-scale number of in-flight instructions commit on either side.

@@ -141,17 +141,43 @@ difference between them is the price of that class on its own.
 | r5 seeds, callee, restores uncovered | +4.57% | +240.71% | 11,318,148 | 96.789% (387,438) |
 | **r5 seeds, callee (final)** | **+6.17%** | **+251.53%** | 11,916,847 | 99.877% (14,803) |
 | r5 seeds, callee + naive hardened movers | +10.09% | +272.57% | 13,116,695 | 99.891% (13,295) |
+| r5 seeds, inherit, every switch a NOP | +4.84% | +4.81% | 0 | |
+| r5 seeds, callee, every switch a NOP | +7.14% | +7.11% | 0 | |
 
 Spreads are 0.00-0.27% across the five path lengths on every arm.
 
-**Timing.** The contract executes 1.6% fewer DIT writes than inherit and the
-serialising model, which prices writes, agrees to the sign: -0.31%. The
-renamed model charges **+2.59%** over inherit for it, at slightly FEWER
-covered instructions (the oracle's protected plus wasted per resumption:
-27.94M against 28.02M). That is neither switches nor dwell; the counters here
-do not explain it, and it is the first question for Phase C. The naive
-movers add +3.69% renamed and +5.99% serialising on top, which is the byte
-loop, not DIT (1.2M more writes per run from their own enable and clear).
+**Timing, and the NOP control that explains it.** The contract executes
+1.6% fewer DIT writes than inherit and the serialising model, which prices
+writes, agrees to the sign: -0.31%. The renamed model charges **+2.59%** over
+inherit for it, at slightly FEWER covered instructions (the oracle's
+protected plus wasted per resumption: 27.94M against 28.02M), so neither
+switches nor dwell. The NOP arms (`-taint-dit-nop-switches`: every switch
+site carries a `HINT #0` instead, identical code otherwise, 3,222 and 3,302
+of them) say what it is:
+
+| | inherit | callee |
+|---|---|---|
+| NOP arm vs control, renamed | +4.84% | +7.14% |
+| NOP arm vs control, serialising | +4.81% | +7.11% |
+| real arm minus NOP arm, renamed | **-1.35 points** | **-0.97 points** |
+| real arm minus NOP arm, serialising | +247.80 points | +244.41 points |
+
+On the renamed model the placement's instructions cost MORE than the mode
+they switch: the whole +3.50% of the shipped arm and the whole +6.17% of the
+contract are the inserted instructions and the layout they impose, and
+executing DIT in their place recovers about a point, the same direction and
+size as blanket's -1.40%. The +2.59% between the contracts is +2.30 points
+of NOP-arm difference: 80 more sites, and more of them inside the hot bignum
+callees' own entries and exits. The NOP arm is the same to 0.03% under both
+switch models, as it must be. On the serialising model the mode is the
+cost, +244 to +248 points, and the placement's own share is the same 5-7%.
+The known caveat applies: a `HINT #0` measured ~0.25% slower than a real
+filler op on two cache points (CLAUDE.md), so the placement share is
+overstated and DIT's understated by about that much. This settles, for this
+workload on the clang path, the "contested" note in CLAUDE.md: the layout
+term is not zero, it is the whole renamed-model cost. The naive movers add
++3.69% renamed and +5.99% serialising on top, which is the byte loop, not
+DIT (1.2M more writes per run from their own enable and clear).
 
 **Coverage.** Uncovered ops per resumption go from 8,222 to 14,803. The
 residual classifier splits them:
@@ -190,8 +216,8 @@ The restore rule on its own is worth 372,635 uncovered ops per resumption
   secrets were only ever covered by accident. Both are now visible, one is
   fixed by a placement rule, the other by the existing frame-address flag
   once the movers let the oracle see it.
-- **Do not flip the default yet.** The +2.59% is unexplained, the limb-traffic
-  loss belongs to Phase C's placement work, and the naive movers are not a
-  shippable `memcpy`. The flag, the obligation report, and the movers are
+- **Do not flip the default yet.** The +2.59% is placement, not DIT (the NOP
+  arms), which makes it Phase C's to reduce along with the limb-traffic loss;
+  and the naive movers are not a shippable `memcpy`. The flag, the obligation report, and the movers are
   the tools; the seed sets for libsodium and libsecp256k1 in the rig are the
   first two obligation lists closed.
