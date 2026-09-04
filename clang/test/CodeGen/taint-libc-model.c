@@ -1,3 +1,6 @@
+// REQUIRES: asserts
+// -debug-only= exists only in an assertions build; without this line the test
+// fails outright on a Release build instead of being marked unsupported.
 // REQUIRES: aarch64-registered-target
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o /dev/null \
 // RUN:     -ftaint-harden=%S/Inputs/taint-libc-model-seed.txt \
