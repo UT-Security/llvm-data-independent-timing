@@ -434,6 +434,31 @@ static cl::opt<unsigned> TaintDitSubBlockMinRun(
              "cut off across it (default 8). Independent of -taint-dit-switch-cyc"),
     cl::init(8));
 
+// Phase 2: "unknown means tainted". Each flag flips ONE place where an UNKNOWN
+// currently reads as CLEAN (docs/design/taint-domain.md S5, entries U1, U2, U5)
+// to CIO's `make_top = Taint` reading. All default OFF so the baseline stays
+// byte-identical and each can be measured alone against the fixed oracle
+// (docs/results/phase2-unknown-tainted-2026-09-04.md).
+static cl::opt<bool> TaintUnknownLoadTainted(
+    "taint-unknown-load-tainted",
+    cl::desc("U1: a load whose memory object cannot be resolved is Data-tainted "
+             "whenever the state holds ANY memory-resident secret, not only "
+             "when a pointee-tainted base, an AA-connected unknown store or a "
+             "TOP bit reaches it"),
+    cl::init(false));
+static cl::opt<bool> TaintNoMMOLoadTainted(
+    "taint-no-mmo-load-tainted",
+    cl::desc("U2: a load with no memory operand at all is Data-tainted whenever "
+             "the state holds ANY memory-resident secret"),
+    cl::init(false));
+static cl::opt<bool> TaintCallResultPointee(
+    "taint-call-result-pointee",
+    cl::desc("U5: a call result that is Data-tainted is also Pointee-tainted: "
+             "the returned value may be a pointer into secret memory (flowprobe "
+             "C1)"),
+    cl::init(false));
+
+
 // DEFAULT is true = each need-loop is coarsened On and the enable is hoisted to
 // the loop preheader: one toggle, whole loop covered. Set =0 for BLOCK-MINIMAL
 // coverage - On(b)=HasNeed(b) only, so DIT wraps just the blocks that actually
@@ -1193,6 +1218,11 @@ static void taintCallResultDefs(const MachineInstr &MI, TaintState &S,
     if (!isABIResultRegDef(MO, TRI))
       continue;
     updateWithAliases(TaintKind::Data, MO.getReg(), S, TRI, /*Set=*/true);
+    // U5: the value may be a POINTER into secret memory (a callee returning
+    // &buf[i] of the buffer it was handed - flowprobe C1). Today's rule says
+    // Data only, never Pointee.
+    if (TaintCallResultPointee)
+      updateWithAliases(TaintKind::Pointee, MO.getReg(), S, TRI, /*Set=*/true);
   }
 }
 
@@ -1515,7 +1545,10 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
     // operand, any located secret store, or any poison makes it secret.
     auto opaqueLoadIsSecret = [&]() {
       return HeapPoisoned || S.anyUnknownMem(TaintKind::Data) ||
-             anyRegUseOfKind(TaintKind::Pointee, MI, S);
+             anyRegUseOfKind(TaintKind::Pointee, MI, S) ||
+             // U2: no memory operand means the object is unknowable; under
+             // "unknown means tainted" it may be any secret the state holds.
+             (TaintNoMMOLoadTainted && S.anyMemTaint(TaintKind::Data));
     };
 
     for (MachineMemOperand *MMO : MI.memoperands()) {
@@ -1610,7 +1643,11 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
             CI.K == CellInfo::Arg && S.isTaintedArgPointee(CI.ArgNo);
         if (HeapPoisoned || ArgPointeeTainted ||
             anyRegUseOfKind(TaintKind::Pointee, MI, S) ||
-            unknownMemMayTaintLoad(*MMO, S, TaintKind::Data, AA)) {
+            unknownMemMayTaintLoad(*MMO, S, TaintKind::Data, AA) ||
+            // U1: the object is unresolved; under "unknown means tainted" the
+            // load may read any secret the state holds, whether or not AA or a
+            // pointee-tainted base could connect the two.
+            (TaintUnknownLoadTainted && S.anyMemTaint(TaintKind::Data))) {
           Loaded.Data = true;
           LLVM_DEBUG(dbgs() << "      load from tainted unknown/heap mem"
                             << (ArgPointeeTainted ? " (tainted arg pointee)" : "")
