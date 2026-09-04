@@ -184,7 +184,18 @@ is byte identity. Each is a candidate for a separately measured follow-up.
    both run with DIT clear. (An EXTERNAL callee does not show it, because the
    analysis re-taints the return register of any external call that received
    a secret.) The Scenario-B check in step 3c does not fire because it asks
-   `functionHasTaintedRuns`, which is true. Fixed in the follow-up commit.
+   `functionHasTaintedRuns`, which is true. Fixed in the follow-up commit:
+   `runTaintInterproc` now computes `functionHasTaintedRuns` once per function
+   after convergence and gates instrumentation, export, `InstrumentedForDIT`
+   and the ownership candidates on that (one replay per function, where an
+   instrumented function used to pay three and a clean one none); the
+   standalone `TaintAnalysisPass` gates the same way. Measured: mbedTLS and
+   libsodium objects identical to baseline with `.comment` and debug info
+   stripped, precision reports identical - neither library has a function
+   whose only secret is consumed before every block exit. One existing test,
+   `taint-analysis-stack-args.mir`, had enshrined the bug with a `CHECK-NOT`
+   on its caller (whose store of the secret is a pinned Need); its expectation
+   is corrected in the same commit.
 3. **Provenance is not intersected at a join against a taint-free
    predecessor.** `TaintState::join` returns early when the other state
    `isBottom()`, and `isBottom()` excludes `PointerBases` because provenance

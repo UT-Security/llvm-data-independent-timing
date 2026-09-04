@@ -4534,13 +4534,17 @@ PreservedAnalyses TaintAnalysisPass::run(MachineFunction &MF,
   // Intraprocedural: summaries only exist inside TaintInterprocPass.
   const TaintSummaryInfo *TSI = nullptr;
 
+  // Gate on what the function EXECUTES, not on the join of its block exits -
+  // the same correction as runTaintInterproc's HasTaintedRuns.
+  const bool HasRuns = functionHasTaintedRuns(MF, TR, TSI, AA);
+
   LLVM_DEBUG({
-    if (!TR.Merged.empty())
+    if (HasRuns)
       dbgs() << "TaintAnalysisPass: " << MF.getName() << " has "
              << TR.Merged.count() << " tainted register(s)\n";
   });
 
-  if (!TR.Merged.empty()) {
+  if (HasRuns) {
     if (auto OS = openTaintReport(TaintOutputFile, "taint output",
                                   /*Append=*/true)) {
       auto SrcOS = openTaintReport(deriveReportPath(TaintOutputFile, "_src"),
@@ -4558,7 +4562,7 @@ PreservedAnalyses TaintAnalysisPass::run(MachineFunction &MF,
   }
 
   unsigned BarriersInserted = 0;
-  if (!TR.Merged.empty()) {
+  if (HasRuns) {
     auto RegionsOS = openTaintReport(TaintRegionsOutputFile,
                                      "taint regions output", /*Append=*/true);
     auto SourceRegionsOS =
