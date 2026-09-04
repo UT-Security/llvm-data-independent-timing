@@ -78,8 +78,10 @@ print("\nIPC change = 1/(1 + time cost) - 1, exact because the instruction strea
 print("is identical between arms. Negative = blanket DIT retires fewer")
 print("instructions per cycle. '+/- drift' is the duplicate-baseline arm, the")
 print("frequency-drift and noise budget on that figure.")
-print("\nAbsolute IPC is NOT measurable on this machine (no PMU access).")
-print("For absolute IPC on the same code, gem5 (validated at 85% of silicon's")
-print("blanket cost on the coin-selection kernel) reads:")
-print("  coin selection (public lane)  IPC 1.9617 -> 1.7733   -9.60%")
-print("  ECDSA signing  (secret lane)  IPC 2.7131 -> 2.7292   +0.59%  (flat)")
+# Absolute silicon IPC is measurable after all (kperf fixed counters, root;
+# ipc.md section 1), and the gem5 figures for the same code live with their
+# gates in paper_experiments/01-bitcoin-core-wallet/{ipc.md,data/gem5/} rather
+# than here, where an earlier footer kept quoting pre-argv[0]-gate numbers.
+print("\nAbsolute IPC on this machine needs the kperf fixed counters (root; ipc.md")
+print("section 1). gem5 absolute IPC for the same code: btc_gem5.py --bench")
+print("coinsel|sign, quoted from the equal-length-argv[0] runs recorded in ipc.md.")

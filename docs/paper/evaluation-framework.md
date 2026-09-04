@@ -347,6 +347,21 @@ silicon to decide whether a small effect is real at all.
 > lengths AND the workload is large enough that the sign is stable across them.**
 > `run_secp_gem5.sh` does this by default (8 offsets, 20 signatures) and prints a
 > 95% CI with an explicit *not resolved* verdict; the other rigs do not yet.
+>
+> **Code placement is a second, larger floor, and `argv[0]` offsets do not
+> sample it** (2026-09-03, `paper_experiments/01-bitcoin-core-wallet/`, known
+> limit 7). Relinking the Bitcoin sign arms behind a never-executed pad object
+> of 0 to 8 KB - nothing else changed - moves the base arm by 0.9%, the taint
+> arm by 2.9%, and taint-vs-base from **-3.1% to +2.3%**
+> (`data/gem5/sign_code_placement.csv`; `benchmarks/bitcoin/code_placement_probe.sh`
+> in gem5-DIT). The `argv[0]` sweep moves the stack; this moves the code, and
+> the model's PC-indexed predictors with it. Comparisons between arms that
+> share a binary (blanket vs base with the switch in a constructor,
+> serialising vs renamed) are immune; every comparison against a hardened
+> arm, which is a different program, carries it. **Quote a pass-vs-base or
+> pass-vs-blanket gem5 delta below ~3% of the hardened lane's work only as a
+> median over a link-placement sweep as well as an `argv[0]` sweep.** No rig
+> applies the placement sweep yet; the probe exists.
 
 Sources: `docs/results/dit-bitcoin-coinsel-gem5.md`,
 `dit-bitcoin-sign-two-instruments.md`.
