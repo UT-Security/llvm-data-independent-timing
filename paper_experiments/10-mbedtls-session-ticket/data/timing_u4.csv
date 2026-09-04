@@ -1,0 +1,12 @@
+# Experiment 10, psk_dhe_ke, --resumptions 5, ONE compiler (dit-tainter 7a4512b21fb7), r5 seeds.
+# Phase 2 U4 cost sweep, 2026-09-04: median over 5 argv[0] path lengths per arm x switch model.
+# vs_control = against the round-trip (empty seed, zero switches) build of the same compiler.
+arm,description,switch_model,n,median_cycles,spread_pct,ipc,vs_control_pct,dit_writes
+rtbs,round-trip control,renamed,5,81225452,0.153,2.1354,0.0,0
+blkt,blanket,renamed,5,80090797,0.029,2.1656,-1.397,0
+p2bs,gated pass r5,renamed,5,83581940,0.056,2.2839,2.901,12109416
+p2u4,U4 no mod-set gate r5,renamed,5,84905646,0.075,2.2484,4.531,12113991
+rtbs,round-trip control,serialising,5,81249406,0.098,2.1347,0.0,0
+blkt,blanket,serialising,5,80240512,0.2,2.1616,-1.242,0
+p2bs,gated pass r5,serialising,5,286741086,0.006,0.6657,252.915,12109416
+p2u4,U4 no mod-set gate r5,serialising,5,287071968,0.001,0.665,253.322,12113991
