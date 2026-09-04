@@ -38,6 +38,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/ADT/StringSet.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
 
@@ -689,7 +691,14 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
   // Retraction-shaped, like PreservesDIT above: seed the candidates optimistically
   // and disqualify on evidence. A call site we fail to observe therefore cannot
   // silently qualify a function - only observed secret-passing sites keep it.
-  if (TaintInsertDIT) {
+  //
+  // Under the callee contract the bit is OFF. Its premise is exactly the term the
+  // contract removes: a secret-passing call is no longer a Need, so nothing
+  // guarantees DIT is on at such a call, and "every call site passes a secret"
+  // no longer implies "entered with DIT on". Every instrumented function then
+  // owns its own switches, which is the contract. PreservesDIT and the `.dit`
+  // clones remain: neither depends on the caller's state.
+  if (TaintInsertDIT && !ditCalleeContract()) {
     // The retraction below can only disqualify a callee from call sites it
     // actually walks, and forEachAnalyzed silently skips any function without a
     // cached MachineFunction or taint result. A skipped caller could hold the
@@ -822,6 +831,12 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
         openTaintReport(TaintInfoLossReportFile, "taint information-loss report",
                         /*Append=*/true);
     raw_fd_ostream *LossOS = LossOSPtr.get();
+    // Callee contract: secret-passing call sites whose callee this build does
+    // not cover. Summarised on stderr once per TU below, since one line per
+    // site would drown the tail-call warning this report exists for.
+    unsigned Obligations = 0;
+    StringSet<> ObligationCallees;
+    unsigned IndirectObligations = 0;
     forEachAnalyzed(M, Ctx, Results,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
@@ -883,23 +898,40 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                       continue; // already transferred by the normal path
                     if (!argIsFrameAddress(MI, MO.getReg(), TRI))
                       continue;
+                    // When provenance names the frame object and its cells hold nothing,
+                    // and no blunt clobber could have filled it behind the analysis's
+                    // back, this argument is an output buffer, not the secret: skip it.
+                    // Otherwise list it - every such argument, one record each, because
+                    // the first one is as likely to be the output state (`&rng`) as the
+                    // staged key (`&keydata`), and the repair line must name the right one.
+                    if (auto Base = State.getPointerBase(MO.getReg()))
+                      if (Base->K == TaintObject::Frame &&
+                          !State.objectHoldsSecret(TaintObject::frame(Base->Index)) &&
+                          !State.isExternalMemClobbered() && !State.UnknownMemTainted)
+                        continue;
+                    const unsigned ArgIdx = TRI->getEncodingValue(MO.getReg());
+                    const std::string MemRepair =
+                        (Twine("seed the callee on the argument that receives the frame "
+                               "address, i.e. `") +
+                         (MemCallee ? MemCallee->getName() : StringRef("<callee>")) + "," +
+                         Twine(ArgIdx) + ",pointee`, or re-enable per-object frame "
+                         "provenance (docs/design/p1b-frame-provenance.md)")
+                            .str();
                     reportInfoLoss(
                         LossOS, TaintLossSeverity::Unsound, "memory", F,
-                        MemCallee ? MemCallee->getName()
-                                  : StringRef("<indirect>"),
+                        MemCallee ? MemCallee->getName() : StringRef("<indirect>"),
                         MI.getDebugLoc(),
-                        "a frame address is passed to the callee while this "
-                        "frame holds a secret, but the pointer register carries "
-                        "no pointee taint, so NOTHING is transferred and the "
-                        "callee is analysed clean",
+                        (Twine("a frame address is passed as argument ") + Twine(ArgIdx) +
+                         " while this frame holds a secret, but the pointer register "
+                         "carries no pointee taint, so NOTHING is transferred and the "
+                         "callee is analysed clean")
+                            .str(),
                         "if the callee reads the secret through that pointer it "
                         "runs with PSTATE.DIT clear and no other record will "
                         "say so - this is an UNDER-approximation, unlike every "
                         "other record in this report",
-                        "seed the callee directly on the argument that receives "
-                        "the frame address, or re-enable per-object frame "
-                        "provenance (docs/design/p1b-frame-provenance.md)");
-                    break; // one record per call site is enough
+                        MemRepair);
+                    // (no break: one record per frame-address argument)
                   }
                 }
 
@@ -908,7 +940,10 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
 
                 // (B) The enclosing function must be DIT-instrumented, else the
                 // secret executes through the call with DIT off.
-                if (TaintInsertDIT && !FnInstrumented) {
+                // Inherit contract only: under the callee contract the call is not a
+                // Need and an otherwise clean caller is legitimately uninstrumented -
+                // the callee covers itself, or is an obligation below.
+                if (TaintInsertDIT && !FnInstrumented && !ditCalleeContract()) {
                   errs() << "taint: UNCOVERED secret-passing call in "
                          << F.getName()
                          << " but the function is not DIT-instrumented "
@@ -925,11 +960,17 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 // failure on libsodium depend on an unrelated flag.
                 if (Callee && !Callee->isDeclaration())
                   return true;
+                // A libcall for an intrinsic (memcpy, memset) carries no Function but a
+                // perfectly good symbol: name it, and give it a seed line, rather than
+                // filing it as indirect.
+                const StringRef CalleeName =
+                    Callee ? Callee->getName() : getCalleeSymbolName(MI);
+                const bool Named = !CalleeName.empty();
 
                 if (CallsiteOS) {
                   *CallsiteOS << "ESCAPE "
-                              << (Callee ? "external" : "indirect") << " callee="
-                              << (Callee ? Callee->getName() : "<indirect>")
+                              << (Named ? "external" : "indirect") << " callee="
+                              << (Named ? CalleeName : StringRef("<indirect>"))
                               << " caller=" << F.getName()
                               << " bb=" << MI.getParent()->getNumber();
                   if (const DebugLoc &DL = MI.getDebugLoc())
@@ -938,7 +979,11 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                     *CallsiteOS << " tainted-args";
                   if (Arg.Pointee)
                     *CallsiteOS << " pointee-tainted-args";
-                  *CallsiteOS << " (covered by inherited DIT)\n";
+                  *CallsiteOS << (ditCalleeContract()
+                                      ? (isLibcMover(Callee, MI)
+                                             ? " (UNCOVERED: libc mover, link a hardened one)\n"
+                                             : " (UNCOVERED: callee contract)\n")
+                                      : " (covered by inherited DIT)\n");
                 }
 
                 // Same site, stated as a consequence with a repair. The seed
@@ -970,12 +1015,13 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 if (Callee && (SeedD || SeedP) && !MissD && !MissP)
                   return true;   // fully seeded elsewhere - nothing to report
 
+
                 // Emit EVERY argument that carried taint, not just the first.
                 // crypto_sign passes four pointee-tainted arguments and the key
                 // is the LAST of them; suggesting only the lowest index points
                 // the user at the output buffer and silently omits the secret.
                 std::string Repair;
-                if (Callee) {
+                if (Named) {
                   SmallString<160> R("seed the TU that defines it:");
                   for (unsigned i = 0; i < 8; ++i) {
                     const bool P = MissP & (1u << i);
@@ -983,7 +1029,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                     if (!P && !D)
                       continue;
                     R += "\n                  ";
-                    R += Callee->getName();
+                    R += CalleeName;
                     R += ",";
                     R += Twine(i).str();
                     if (P)
@@ -992,10 +1038,55 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                   if (R.size() > 28)   // something was appended
                     Repair = std::string(R);
                 }
+                if (ditCalleeContract()) {
+                  // The obligation. Under this contract the caller holds nothing on the
+                  // callee's behalf, so until the TU that defines the callee is seeded
+                  // the callee's secret work runs with whatever DIT state it happens to
+                  // find, which this build does not guarantee. The seed line is the
+                  // repair; for an indirect site the pass cannot name the targets.
+                  ++Obligations;
+                  if (Named)
+                    ObligationCallees.insert(CalleeName);
+                  else
+                    ++IndirectObligations;
+                  reportInfoLoss(
+                      LossOS, TaintLossSeverity::Uncovered,
+                      Named ? "uncovered-callee" : "uncovered-indirect", F,
+                      Named ? CalleeName : StringRef("<indirect>"),
+                      MI.getDebugLoc(),
+                      Named ? "the secret is passed to a callee this build cannot see, "
+                               "and under the callee contract nothing covers it on the "
+                               "callee's behalf"
+                             : "the secret is passed through a function pointer the pass "
+                               "cannot resolve, and under the callee contract nothing "
+                               "covers the target on its behalf",
+                      "the callee's secret work runs UNPROTECTED unless the build that "
+                      "defines it is hardened with its own seed",
+                      isLibcMover(Callee, MI)
+                          ? StringRef("link a hardened mover ahead of libc: a memcpy "
+                                      "built with -ftaint-harden and seeded on its "
+                                      "source pointee (memset: on its value) enables "
+                                      "DIT around its own loop; libc's runs with "
+                                      "whatever mode it finds")
+                      : isLibcAllocator(Callee, MI)
+                          ? StringRef("no seed can fill this one: the secret is a "
+                                      "size or a pointer handed to the allocator, "
+                                      "whose control flow depends on it and which DIT "
+                                      "does not cover; stop deriving the size or the "
+                                      "pointer from the secret (mbedTLS: the "
+                                      "leading-zero limb trim)")
+                      : Named ? StringRef(Repair)
+                               : StringRef("seed every function this pointer can "
+                                           "reach, on the argument that receives the "
+                                           "secret (grep the assignments to the "
+                                           "pointer; the pass cannot name the "
+                                           "targets)"));
+                  return true;
+                }
                 reportInfoLoss(
                       LossOS, TaintLossSeverity::Moderate,
-                      Callee ? "cross-tu" : "indirect", F,
-                      Callee ? Callee->getName() : StringRef("<indirect>"),
+                      Named ? "cross-tu" : "indirect", F,
+                      Named ? CalleeName : StringRef("<indirect>"),
                       MI.getDebugLoc(),
                       "the secret is passed to a callee this pass cannot see; DIT "
                       "is enabled so the callee inherits protection",
@@ -1005,6 +1096,18 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 return true;
               });
         });
+    // Loud once per TU, like the tail-call warning: a build whose obligation
+    // list is non-empty has secret work it does not cover, by design, and
+    // silence has to mean the list is empty.
+    if (TaintInsertDIT && Obligations) {
+      errs() << "taint: " << sys::path::filename(M.getSourceFileName()) << ": "
+             << Obligations << " secret-passing call site(s) reach "
+             << ObligationCallees.size() << " callee(s)";
+      if (IndirectObligations)
+        errs() << " and " << IndirectObligations << " indirect target(s)";
+      errs() << " this build does not cover (callee contract); "
+                "-taint-info-loss-report lists them with the seed lines\n";
+    }
   }
 
   // Step 3c-2: Memory-clobber report - the *sources* of cross-function memory
