@@ -1,0 +1,6 @@
+seed_set,msr_dit,functions_with_switches,functions_total,need,underdit,total_instr,collateral,underdit_pct
+prim,8834,1067,1618,40600,98227,117964,57627,83.3
+glue_full,8835,1067,1618,40718,98270,117964,57552,83.3
+glue_minus_ct_memcmp,8835,1067,1618,40718,98270,117964,57552,83.3
+flowA_all,8835,1067,1618,40718,98270,117964,57552,83.3
+flowA_glue_only_5_seeds,8793,1059,1618,40075,97605,117118,57530,83.3
