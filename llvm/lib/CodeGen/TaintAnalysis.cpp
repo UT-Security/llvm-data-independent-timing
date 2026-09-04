@@ -393,6 +393,47 @@ static cl::opt<double> TaintDitDwellPerInstr(
              "clean corridor between two DIT regions"),
     cl::init(1.0));
 
+// Sub-block (instruction-level) placement. Block placement decides On/Off per
+// BASIC BLOCK, so a block holding one Need runs every one of its instructions
+// with DIT set. Measured on mbedTLS TLS 1.3 resumption: overall precision 47.3%
+// (11,145 instructions covered for 5,268 Needs), and the switch-cost knob only
+// reaches the CROSS-block part - at -taint-dit-switch-cyc=0, the finest the
+// merge test can express, precision still only rises to 54.1%. The rest is
+// intra-block waste that no existing flag can touch: ecp_double_jac covers 96
+// instructions to protect 23.
+//
+// This carves DIT-OFF holes INSIDE an On block, around maximal runs that hold
+// no Need. Block ENTRY and EXIT states are left exactly as block placement set
+// them, so the cross-block dataflow, loop hoisting, mixed-join handling and the
+// soundness verifier are all unchanged - a hole is opened and closed within one
+// block or not at all. A hole is only cut when it pays under the same cost model
+// the corridor-merge test uses (dwell saved > the two switches it costs), and
+// never across a call or a DIT clobber, whose re-assert logic assumes the region
+// is continuous.
+static cl::opt<bool> TaintDitSubBlock(
+    "taint-dit-sub-block",
+    cl::desc("Sink a block-entry enable to the first Need, hoist a pre-return "
+             "disable past the last, and cut DIT-off holes across long Need-free "
+             "runs. Block entry/exit states are unchanged. DEFAULT OFF: measured "
+             "2026-09-02 on mbedTLS resumption it removed 2% of over-protection "
+             "per resumption for 0.06 points of oracle coverage, and the "
+             "workload's verdict (blanket wins) did not move. Re-evaluate once "
+             "the oracle's store rule no longer counts pointer moves"),
+    cl::init(false));
+
+// Minimum length of a Need-free run before a hole is worth cutting. Independent
+// of -taint-dit-switch-cyc ON PURPOSE: that knob also drives the cross-block
+// corridor-merge test, so sharing it makes the two effects impossible to
+// separate. Two switches cost two instructions of I-cache and two scheduling
+// barriers even when the mode write itself is free, so cutting a 1-2 instruction
+// run is a guaranteed loss: measured at min-run=1, sub-block spent 750 extra
+// switches to remove DIT from 572 instructions.
+static cl::opt<unsigned> TaintDitSubBlockMinRun(
+    "taint-dit-sub-block-min-run",
+    cl::desc("Minimum Need-free run length inside a covered block before DIT is "
+             "cut off across it (default 8). Independent of -taint-dit-switch-cyc"),
+    cl::init(8));
+
 // DEFAULT is true = each need-loop is coarsened On and the enable is hoisted to
 // the loop preheader: one toggle, whole loop covered. Set =0 for BLOCK-MINIMAL
 // coverage - On(b)=HasNeed(b) only, so DIT wraps just the blocks that actually
@@ -3765,6 +3806,151 @@ regionEntryInsertPt(MachineBasicBlock &MBB) {
   return It;
 }
 
+// Sub-block, part 1 and the one that pays: SINK a block-entry enable down to the
+// first Need in the block, and HOIST the pre-return disable up to just after the
+// last Need. This moves switches that already exist rather than adding any, so
+// it is strictly a coverage reduction at identical toggle count.
+//
+// Measured on this workload, interior Need-free runs are almost all shorter than
+// 8 instructions, so cutting holes between Needs recovers very little. The
+// collateral is overwhelmingly the LEADING stretch of a block before its first
+// Need (a block holding one Need at instruction 5 of 50 has no interior gap at
+// all, and 45 instructions of waste).
+//
+// Returns the insertion point for an entry enable: the first Need, unless
+// something between the block start and it must already be covered - a call
+// (the callee may inherit DIT), a DIT clobber, a terminator, or an existing
+// switch - in which case the enable stays at the block start.
+static MachineBasicBlock::iterator
+sinkEntryEnableTo(MachineBasicBlock &MBB,
+                  const DenseSet<const MachineInstr *> &NeedSet,
+                  const TaintSummaryInfo *TSI, Module &M,
+                  const TargetInstrInfo *TII, bool ABI) {
+  MachineBasicBlock::iterator Start = regionEntryInsertPt(MBB);
+  if (!TaintDitSubBlock)
+    return Start;
+  for (auto It = Start, E = MBB.end(); It != E; ++It) {
+    MachineInstr &MI = *It;
+    if (NeedSet.count(&MI))
+      return It;                       // sink to here
+    if (MI.isMetaInstruction())
+      continue;                        // costs nothing, keep scanning
+    if (MI.isCall() || MI.isTerminator() || MI.isReturn() || MI.isInlineAsm() ||
+        (!ABI && clobbersDIT(MI, TSI, M)) ||
+        TII->getTimingModeStateAfter(MI).has_value())
+      return Start;                    // cannot sink past this
+  }
+  return Start;                        // no Need here (loop-coarsened block)
+}
+
+// The mirror of sinkEntryEnableTo: HOIST a pre-return disable up to just after
+// the block's last Need, so the tail of a returning block is not covered for
+// nothing. Same zero-cost property - the switch already exists, it only moves.
+// Scans backwards from the return; anything that must stay covered pins the
+// disable where block placement put it.
+static MachineBasicBlock::iterator
+hoistExitDisableTo(MachineBasicBlock &MBB, MachineInstr &Ret,
+                   const DenseSet<const MachineInstr *> &NeedSet,
+                   const TaintSummaryInfo *TSI, Module &M,
+                   const TargetInstrInfo *TII, bool ABI) {
+  MachineBasicBlock::iterator Pin = Ret.getIterator();
+  if (!TaintDitSubBlock)
+    return Pin;
+  MachineBasicBlock::iterator It = Pin;
+  while (It != MBB.begin()) {
+    --It;
+    MachineInstr &MI = *It;
+    if (NeedSet.count(&MI))
+      return std::next(It);            // disable immediately after the last Need
+    if (MI.isMetaInstruction())
+      continue;
+    if (MI.isCall() || MI.isInlineAsm() ||
+        (!ABI && clobbersDIT(MI, TSI, M)) ||
+        TII->getTimingModeStateAfter(MI).has_value())
+      return Pin;                      // cannot hoist past this
+  }
+  return Pin;
+}
+
+// Sub-block placement: inside one covered block, cut DIT off across maximal runs
+// of instructions that hold no Need.
+//
+// The block's ENTRY and EXIT states are invariants here. Block placement has
+// already decided them and the whole cross-block story (loop hoisting, mixed
+// joins, the AND-meet verifier) rests on them, so every hole this opens is also
+// closed before anything that could observe it: the run must be strictly
+// interior, bounded on both sides by a Need in the same block.
+//
+// A run is skipped when it contains anything whose DIT state is not ours to
+// move: a call (the callee may inherit DIT, and redirectCallsToDITClones has
+// already rewritten calls in covered blocks on that assumption), a DIT clobber
+// and its re-assert, a terminator, or a meta instruction that carries no cost
+// and would only inflate the length estimate.
+//
+// The threshold is -taint-dit-sub-block-min-run, deliberately NOT the corridor
+// merge test's switch cost: that knob also decides cross-block merging, and
+// sharing it makes the two effects inseparable in a measurement.
+static unsigned cutSubBlockHoles(MachineBasicBlock &MBB,
+                                 const DenseSet<const MachineInstr *> &NeedSet,
+                                 const TaintSummaryInfo *TSI, Module &M,
+                                 const TargetInstrInfo *TII, bool ABI) {
+  if (!TaintDitSubBlock)
+    return 0;
+
+  // Instructions in order, with the positions that hold a Need. Meta
+  // instructions cost nothing at run time, so they neither anchor a run nor
+  // count toward its length.
+  SmallVector<MachineInstr *, 64> Insts;
+  SmallVector<unsigned, 16> NeedIdx;
+  for (MachineInstr &MI : MBB) {
+    if (MI.isMetaInstruction())
+      continue;
+    if (NeedSet.count(&MI))
+      NeedIdx.push_back(Insts.size());
+    Insts.push_back(&MI);
+  }
+  if (NeedIdx.size() < 2)
+    return 0;   // no interior run to cut
+
+  const unsigned MinRun = TaintDitSubBlockMinRun;
+
+  // Collect first, mutate after: inserting switches invalidates the indices.
+  SmallVector<std::pair<MachineInstr *, MachineInstr *>, 8> Holes;
+  for (unsigned k = 0; k + 1 < NeedIdx.size(); ++k) {
+    const unsigned Lo = NeedIdx[k] + 1, Hi = NeedIdx[k + 1];  // [Lo, Hi)
+    if (Hi <= Lo)
+      continue;
+    const unsigned Len = Hi - Lo;
+    if (Len < MinRun)
+      continue;   // too short: the two switches cost more than the dwell saved
+
+    bool Blocked = false;
+    for (unsigned i = Lo; i < Hi; ++i) {
+      MachineInstr *MI = Insts[i];
+      if (MI->isCall() || MI->isTerminator() || MI->isReturn() ||
+          MI->isInlineAsm() || (!ABI && clobbersDIT(*MI, TSI, M)) ||
+          TII->getTimingModeStateAfter(*MI).has_value()) {
+        Blocked = true;
+        break;
+      }
+    }
+    if (Blocked)
+      continue;
+    Holes.emplace_back(Insts[Lo], Insts[Hi]);
+  }
+
+  unsigned Toggles = 0;
+  for (auto &H : Holes) {
+    // Off across the run, back On before the Need that ends it.
+    TII->insertTimingModeSwitch(MBB, H.first->getIterator(),
+                                H.first->getDebugLoc(), /*Enable=*/false);
+    TII->insertTimingModeSwitch(MBB, H.second->getIterator(),
+                                H.second->getDebugLoc(), /*Enable=*/true);
+    Toggles += 2;
+  }
+  return Toggles;
+}
+
 // True if MBB lies on a cycle (reachable from one of its own successors). Used
 // to detect an irreducible cycle MachineLoopInfo does not model: a plain
 // begin() enable there would be re-executed every iteration (per-iteration
@@ -4105,8 +4291,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
           // backedge, so the enable (and the matching disable on the On→Off exit)
           // is per-iteration - the deliberate cost of covering the fewest
           // instructions. Sound either way: the verifier below is the hard gate.
-          TII->insertTimingModeSwitch(MBB, regionEntryInsertPt(MBB), DebugLoc(),
-                                      /*Enable=*/true);
+          TII->insertTimingModeSwitch(
+              MBB, sinkEntryEnableTo(MBB, NeedSet, TSI, M, TII, ABI),
+              DebugLoc(), /*Enable=*/true);
           ++Toggles;
         }
       }
@@ -4134,8 +4321,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
         if (!MI.isReturn())
           continue;
         if (!NeedSet.count(&MI) && !ABI) {
-          TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
-                                      /*Enable=*/false);
+          TII->insertTimingModeSwitch(
+              MBB, hoistExitDisableTo(MBB, MI, NeedSet, TSI, M, TII, ABI),
+              MI.getDebugLoc(), /*Enable=*/false);
           ++Toggles;
         }
         // Under the ABI the exit is not a clear but a restore of the entry
@@ -4145,6 +4333,11 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
         // restore may have to RE-ENABLE.
         break;
       }
+      // Sub-block: now that this block's boundary switches are in place, cut
+      // DIT off across its interior Need-free runs. Strictly interior, so the
+      // entry/exit states just established are preserved and the verifier below
+      // still sees the same cross-block picture.
+      Toggles += cutSubBlockHoles(MBB, NeedSet, TSI, M, TII, ABI);
     } else {
       // Off block: disable on entering from an On predecessor. An On→Off edge's
       // Off side is a loop exit (outside the loop), entered once per exit - no
