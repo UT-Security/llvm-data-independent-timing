@@ -1,0 +1,18 @@
+# gem5 shadow-taint oracle, pure-PSK TLS 1.3 resumption (kex=psk, no ECDHE).
+# Per-resumption figures are (N=1 run minus N=0 run), the least contaminated run length.
+# ct_memcmp_per_res = ops of the constant-time PSK binder compare executing with PSTATE.DIT clear.
+arm,seeds,undertaint_n0,undertaint_n1,undertaint_per_res,wasted_per_res,ct_memcmp_per_res
+null,none (unhardened control),6812,632785,625973,0,871
+prim,primitive cores (AES/GCM/SHA),714,44150,43436,107653,547
+api,whole crypto API surface,343,12597,12254,250207,547
+pass,api + 6 ticket-glue seeds,343,11469,11126,254520,0
+func,pass seeds at function placement,312,8235,7923,268745,0
+nogate,pass seeds with modset gate off,258,7509,7251,292752,0
+bracket,human scope guard on server handshake,6812,313390,306578,172634,355
+blanket,DIT set process-wide,0,0,0,340959,0
+# Run-length trend (per-resumption under-taint), showing the stale-taint-on-free artifact.
+# arm,N1,N2,N4  -- the null universe is stable at 1.07x; hardened residuals inflate.
+trend_null,unhardened universe,625973,645684,670137,,
+trend_pass,api+glue residual,11126,15092,22741,,
+trend_prim,primitive residual,,54182,73352,,
+# ct_memcmp per resumption is constant across run lengths: prim 547 at N=2 and N=4, pass 0 at both.

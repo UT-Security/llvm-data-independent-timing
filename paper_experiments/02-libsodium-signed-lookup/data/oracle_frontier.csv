@@ -1,0 +1,23 @@
+# Coverage/cost frontier on experiment 02's flow, gem5 shadow-taint oracle, 2026-09-03.
+# Rig: benchmarks/signed_lookup, built natively on aarch64 with -DTAINT_ORACLE.
+# Seed: the ChaCha20-Poly1305 key `ak`. Per request = (iter=4 run - iter=0 run) / 4.
+# f_secret from the blanket arm, where protected+wasted = every executed op.
+#
+# THE POINT: the pass's over-protection is CONSTANT in the public lane (1,083 ops,
+# it covers the secret lane only), while blanket's grows linearly with it. At
+# f=1.56% blanket wastes 209x what the pass does, for 4 ops/request of extra
+# coverage - and those 4 are the harness folding published ciphertext into its
+# checksum, i.e. a declassification point, not a leak (cf. experiment 04's 40).
+L_lookups,f_secret_pct,arm,secret_ops,uncovered,wasted,coverage_pct,blanket_waste_ratio
+64,66.54,base,3589,3589,0,0.00,
+64,66.54,pass,3589,4,1083,99.89,1.7
+64,66.54,blanket,3589,0,1805,100.00,1.0
+1000,22.54,base,3589,3589,0,0.00,
+1000,22.54,pass,3589,4,1083,99.89,11.4
+1000,22.54,blanket,3589,0,12335,100.00,1.0
+20000,1.56,base,3589,3589,0,0.00,
+20000,1.56,pass,3589,4,1083,99.89,208.8
+20000,1.56,blanket,3589,0,226085,100.00,1.0
+# Contrast, same measurement on experiment 10's pure-PSK resumption (65% secret):
+# blanket wastes only 1.34x the pass, and the pass cannot get below 2,495
+# genuinely uncovered ops at any setting. Crypto-heavy flow -> use blanket.

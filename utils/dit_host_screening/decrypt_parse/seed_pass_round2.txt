@@ -1,0 +1,87 @@
+# PRIM - "annotate the primitives". The developer's first annotation: the AES
+# and GCM cores that decrypt the ticket and protect records, and the SHA-256
+# core under HKDF/HMAC. Nothing outside gcm.c, aes.c, aesce.c, sha256.c.
+mbedtls_gcm_setkey,0,pointee
+mbedtls_gcm_setkey,2,pointee
+mbedtls_gcm_starts,0,pointee
+mbedtls_gcm_update,0,pointee
+mbedtls_gcm_update_ad,0,pointee
+mbedtls_gcm_finish,0,pointee
+mbedtls_gcm_auth_decrypt,0,pointee
+mbedtls_gcm_crypt_and_tag,0,pointee
+mbedtls_aes_setkey_enc,1,pointee
+mbedtls_aes_setkey_dec,1,pointee
+mbedtls_aes_crypt_ecb,0,pointee
+mbedtls_aesce_setkey_enc,1,pointee
+mbedtls_aesce_crypt_ecb,0,pointee
+mbedtls_sha256_starts,0,pointee
+mbedtls_sha256_update,0,pointee
+mbedtls_sha256_update,1,pointee
+mbedtls_sha256_finish,0,pointee
+mbedtls_internal_sha256_process,0,pointee
+mbedtls_internal_sha256_process,1,pointee
+# API - "annotate the crypto library's API surface": every PSA entry point and
+# builtin driver that takes secret bytes by pointer. The strongest human
+# annotation short of reading the SSL layer (the CryptoMPK-style policy).
+psa_import_key,1,pointee
+psa_import_key_into_slot,1,pointee
+psa_aead_encrypt,6,pointee
+psa_aead_decrypt,6,pointee
+mbedtls_psa_aead_encrypt,1,pointee
+mbedtls_psa_aead_decrypt,1,pointee
+psa_key_derivation_input_bytes,2,pointee
+psa_key_derivation_input_internal,3,pointee
+psa_key_derivation_output_bytes,1,pointee
+psa_key_derivation_hkdf_read,0,pointee
+psa_hash_update,1,pointee
+psa_hash_compute,1,pointee
+mbedtls_psa_hash_update,1,pointee
+mbedtls_psa_hash_update,0,pointee
+mbedtls_psa_hash_finish,0,pointee
+psa_mac_update,1,pointee
+psa_mac_compute_internal,2,pointee
+mbedtls_psa_mac_update,1,pointee
+mbedtls_psa_mac_update,0,pointee
+mbedtls_psa_mac_sign_finish,0,pointee
+mbedtls_psa_mac_compute,1,pointee
+mbedtls_psa_mac_compute,4,pointee
+psa_export_key,1,pointee
+# PASS - the API set plus the six points where the secret LEAVES the primitive
+# on the ticket path. Five of these the info-loss report can name once the
+# first is placed; the last (the consumer's own copy behind the ticket
+# function pointer) it cannot, and was found by reading ssl_tls13_server.c.
+mbedtls_ssl_ticket_parse,2,pointee
+mbedtls_ssl_session_load,1,pointee
+mbedtls_ssl_set_hs_psk,1,pointee
+mbedtls_ssl_tls13_create_psk_binder,2,pointee
+mbedtls_ct_memcmp,0,pointee
+ssl_tls13_session_copy_ticket,1,pointee
+
+# ---- ROUND 2: the operation CONTEXTS, not just the data flowing in. ----
+# The round-1 set named psa_hash_update's input buffer but never the
+# psa_hash_operation_t that carries the running state, so the transcript hash
+# and its clones ran unprotected. Same for the KDF operation and the record
+# transform. These were found by reading the oracle's residual, not by any
+# report - the analysis has no way to know a struct it was never told about
+# holds a secret.
+psa_hash_setup,0,pointee
+psa_hash_update,0,pointee
+psa_hash_finish,0,pointee
+psa_hash_clone,0,pointee
+psa_hash_clone,1,pointee
+psa_hash_abort,0,pointee
+mbedtls_sha256_clone,0,pointee
+mbedtls_sha256_clone,1,pointee
+psa_mac_setup,0,pointee
+psa_mac_update,0,pointee
+psa_mac_sign_finish,0,pointee
+psa_mac_verify_finish,0,pointee
+psa_key_derivation_setup,0,pointee
+psa_key_derivation_input_bytes,0,pointee
+psa_key_derivation_input_internal,0,pointee
+psa_key_derivation_output_bytes,0,pointee
+psa_key_derivation_abort,0,pointee
+mbedtls_ssl_decrypt_buf,1,pointee
+mbedtls_ssl_encrypt_buf,1,pointee
+mbedtls_cipher_update,0,pointee
+mbedtls_cipher_finish,0,pointee

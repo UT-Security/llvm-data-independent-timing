@@ -1,0 +1,28 @@
+# PRIM: a developer annotates the primitives. The AEAD's key inside gcm/aes,
+# and the RSA private operation's key context. Nothing outside the primitives.
+mbedtls_gcm_setkey,0,pointee
+mbedtls_gcm_setkey,2,pointee
+mbedtls_gcm_starts,0,pointee
+mbedtls_gcm_update,0,pointee
+mbedtls_gcm_finish,0,pointee
+mbedtls_gcm_auth_decrypt,0,pointee
+mbedtls_gcm_crypt_and_tag,0,pointee
+mbedtls_aes_setkey_enc,1,pointee
+mbedtls_aes_setkey_dec,1,pointee
+mbedtls_aes_crypt_ecb,0,pointee
+mbedtls_aesce_crypt_ecb,0,pointee
+mbedtls_rsa_private,0,pointee
+# GLUE: where the secret LEAVES the primitive. Flow A: the ticket buffer is
+# decrypted in place, then parsed; the resumption key is copied into the
+# handshake, HKDF'd into a binder, and compared.
+mbedtls_ssl_ticket_parse,2,pointee
+mbedtls_ssl_session_load,1,pointee
+mbedtls_ssl_set_hs_psk,1,pointee
+mbedtls_ssl_tls13_create_psk_binder,2,pointee
+mbedtls_ct_memcmp,0,pointee
+# Flow B: the premaster after RSA decrypt: unpadding, version check, PRF.
+mbedtls_rsa_rsaes_pkcs1_v15_decrypt,0,pointee
+ssl_decrypt_encrypted_pms,3,pointee
+ssl_compute_master,0,pointee
+# consumer side, behind f_ticket_parse: the copy into session_negotiate
+ssl_tls13_session_copy_ticket,1,pointee

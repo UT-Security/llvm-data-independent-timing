@@ -1,0 +1,14 @@
+# PRIM: a developer annotates the primitives. The AEAD's key inside gcm/aes,
+# and the RSA private operation's key context. Nothing outside the primitives.
+mbedtls_gcm_setkey,0,pointee
+mbedtls_gcm_setkey,2,pointee
+mbedtls_gcm_starts,0,pointee
+mbedtls_gcm_update,0,pointee
+mbedtls_gcm_finish,0,pointee
+mbedtls_gcm_auth_decrypt,0,pointee
+mbedtls_gcm_crypt_and_tag,0,pointee
+mbedtls_aes_setkey_enc,1,pointee
+mbedtls_aes_setkey_dec,1,pointee
+mbedtls_aes_crypt_ecb,0,pointee
+mbedtls_aesce_crypt_ecb,0,pointee
+mbedtls_rsa_private,0,pointee

@@ -28,6 +28,7 @@ were run.
 | 07 | [annotation cost](07-annotation-cost/) | - | libsodium signing path | **seed DEPTH - measures DEVELOPER cost** | **complete, silicon** |
 | 08 | [seed ground truth](08-seed-ground-truth/) | - | libhydrogen signing, their exact source | **none - compares our taint set against an INDEPENDENT one** | **complete** |
 | 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon x2 (M5 + M4) + gem5 switch model; percentages corrected 4-15x, conclusions unchanged** |
+| 10 | [mbedTLS session ticket](10-mbedtls-session-ticket/) | ClientHello and record handling; the application behind the server | AES-GCM ticket decrypt, then the PARSE of the resumption secret in plain C (TLS 1.2 RSA premaster as the literature anchor) | resumption rate, records per connection | **MEASURED 2026-09-03, both gates passed. Annotating the ENTIRE crypto API surface still leaves the constant-time PSK binder compare running with DIT clear, 547 ops per resumption; the pass takes it to 0. But the pass is NOT sound here - it leaves 11,126 secret ops per resumption against blanket's 0, three quarters of them in uninstrumentable libc. The claim is narrow: among SELECTIVE placements the pass reaches glue no API annotation reaches** |
 
 ## Compiler changes and experiment validity
 
@@ -107,6 +108,7 @@ One artifact per experiment. Republish through the recorded URL (`Artifact` with
 | 09 | Nothing to Recover | https://claude.ai/code/artifact/24709335-fc81-4a36-8eca-0c64fcc6cf8a |
 | 09b | The Cost Is the Switch (gem5 switch model) | https://claude.ai/code/artifact/6b5dc30a-1296-4d02-a5e2-b723e6c8ed57 |
 | 09c | DIT overhead on libsodium (paper figure, M4 + M5 + ExpeDITe) | `09-libsodium-cio-parity/figures/three-machines-region.png` |
+| 10 | The Secret Leaves the Primitive (design page, no data yet) | https://claude.ai/code/artifact/d1ac0e15-a836-41b6-8b13-0d7c434e457b |
 
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6
 
@@ -119,6 +121,11 @@ One artifact per experiment. Republish through the recorded URL (`Artifact` with
 Skia filters are **not** a crossover experiment - a control that fails the
 framework's first question (blanket DIT is already free on it), kept in
 `docs/results/`.
+
+The decrypt-then-parse shape (a key-class secret leaving a primitive into
+parsing glue) was researched 2026-09-03; the memos are
+`../docs/research/decrypt-then-parse-{literature,libraries,applications}.md`
+and the resulting design is experiment 10 above.
 
 **libsodium is BOTH**, and it is now two experiments rather than a footnote: 02 is
 the flow with a public lane; 09 is the library alone, run the way the closest

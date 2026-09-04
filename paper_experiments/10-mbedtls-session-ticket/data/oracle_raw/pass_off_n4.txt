@@ -1,0 +1,9 @@
+== gem5 taint oracle ==
+seeded bytes            : 32
+ops with a secret operand and DIT SET (protected) : 2714707
+ops with a secret operand and DIT CLEAR           : 70285439  <-- under-taint
+ops with DIT set but NO secret operand            : 1813270  <-- wasted coverage
+ops consuming a secret ADDRESS (not DIT-covered)  : 103176
+bytes declassified      : 9238  <-- ASSERTED public, not checked
+distinct under-taint sites: 6170
+  UNDERTAINT pc=0x400784 count=95    strxi_uop   x20, [ureg0]
