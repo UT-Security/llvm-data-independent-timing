@@ -36,7 +36,15 @@ G5="${G5:-$HOME/Documents/gem5-DIT}"
 SRC="${SRC:-$HOME/Documents/libsodium-1.0.21}"
 WORK="${WORK:-$HOME/Documents/libsodium-cioparity}"
 CIO="${CIO:?set CIO to a counter-optimization/cio checkout}"
-SEEDS="${SEEDS:-$G5/benchmarks/crypto/libsodium_secret.txt}"
+# The pass arm's seeds. Since 2026-09-05 the compiler's defaults are the callee
+# contract and the DIT twins, under which the CIO seed file protects nothing
+# (its seeds sit on forwarders; see docs/results/dit-callee-contract-2026-09-04.md
+# section 4). `taint` therefore takes the contract's fixpoint file and the
+# owned-symbols list this script derives from the base build; `taintold` is the
+# pre-flip compiler on the CIO file, for the record.
+SEEDS="${SEEDS:-$G5/benchmarks/crypto/libsodium_secret_contract.txt}"
+SEEDS_OLD="${SEEDS_OLD:-$G5/benchmarks/crypto/libsodium_secret.txt}"
+OWNED="$WORK/owned.txt"
 MARCH="${MARCH:-armv8.4-a}"
 JOBS="${JOBS:-32}"
 CC="$LLVM/bin/clang"
@@ -44,7 +52,10 @@ CC="$LLVM/bin/clang"
 BENCHES="${BENCHES:-ed25519 chacha20_poly1305_encrypt chacha20_poly1305_decrypt aesni256gcm_encrypt aesni256gcm_decrypt}"
 # arm -> library variant it links. `blanket` reuses the UNHARDENED base library
 # and adds a constructor, so blanket and base are one codegen in two modes.
-ARMS="${ARMS:-base blanket rt nop taint taintfn fine}"
+ARMS="${ARMS:-base blanket api taint taintnop taintold taintoldnop}"
+# Library variants to build, base first (the owned list comes from it). Not
+# LIBS: autoconf reads that name and would hand it to the link line.
+LIB_VARIANTS="${LIB_VARIANTS:-base taintold taintoldnop taint taintnop}"
 
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
@@ -77,8 +88,13 @@ lib_cflags() {
     # code-layout cost of inserting switches. This arm is the reason the
     # serialised-minus-renamed delta is interpretable rather than just a number.
     nop)     echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-dit-nop-switches" ;;
-    # Shipped defaults: region placement, switch-cyc=30, loop hoist, mod-set gate.
-    taint)   echo "-O2 -ftaint-harden=$SEEDS" ;;
+    # Shipped defaults (2026-09-05): region placement, callee contract, DIT twins,
+    # the contract seeds and the owned list.
+    taint)      echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED" ;;
+    taintnop)   echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED -mllvm -taint-dit-nop-switches" ;;
+    # The pre-2026-09-05 compiler: inherit contract, no twins, the CIO seeds.
+    taintold)    echo "-O2 -ftaint-harden=$SEEDS_OLD -mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0" ;;
+    taintoldnop) echo "-O2 -ftaint-harden=$SEEDS_OLD -mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-nop-switches" ;;
     taintfn) echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-dit-placement=function" ;;
     # Pre-2026-08-24 defaults. The arm that produced experiment 09's +153%/+166%
     # column; a historical policy, not a default.
@@ -89,10 +105,13 @@ lib_cflags() {
 
 # ------------------------------------------------------------------ lib
 if want lib; then
-for v in base rt nop taint taintfn fine; do
+for v in $LIB_VARIANTS; do
   W="$WORK/$v"
   if [[ -f "$W/src/libsodium/.libs/libsodium.a" ]]; then
-    info "libsodium '$v' already built -- skipping"; continue
+    info "libsodium '$v' already built -- skipping"
+    [[ "$v" == base && ! -f "$OWNED" ]] && "$LLVM/bin/llvm-nm" --defined-only --no-demangle "$W/src/libsodium/.libs/libsodium.a" 2>/dev/null \
+      | awk 'NF == 3 && $2 ~ /^[tTwW]$/ { print $3 }' | sed 's/^\.L//' | sort -u > "$OWNED"
+    continue
   fi
   info "libsodium variant '$v'"
   rm -rf "$W"; mkdir -p "$W"
@@ -128,7 +147,15 @@ for v in base rt nop taint taintfn fine; do
   [[ -f "$lib" ]] || die "no archive produced for $v"
   n=$("$LLVM/bin/llvm-objdump" -d "$lib" 2>/dev/null | grep -icE '\bmsr\b[[:space:]]+dit,')
   h=$("$LLVM/bin/llvm-objdump" -d "$lib" 2>/dev/null | grep -cE '\bhint\b[[:space:]]+#0')
-  info "    $(du -h "$lib" | cut -f1)   msr DIT: $n   hint #0: $h"
+  t=$("$LLVM/bin/llvm-nm" "$lib" 2>/dev/null | grep -c ' [TtWw] .*\.dit$')
+  info "    $(du -h "$lib" | cut -f1)   msr DIT: $n   hint #0: $h   twins: $t"
+  # The functions this build defines, from the unhardened objects: what the
+  # twins may be named across TUs and what the obligation report may propose.
+  if [[ "$v" == base ]]; then
+    "$LLVM/bin/llvm-nm" --defined-only --no-demangle "$lib" 2>/dev/null \
+      | awk 'NF == 3 && $2 ~ /^[tTwW]$/ { print $3 }' | sed 's/^\.L//' | sort -u > "$OWNED"
+    info "    owned symbols: $(wc -l < "$OWNED")"
+  fi
 done
 fi
 
@@ -159,7 +186,23 @@ for b in $BENCHES; do
   src="$STAGE/eval_$b.c"
   [[ -f "$src" ]] || { warn "skip $b -- no $src"; continue; }
   for arm in $ARMS; do
-    case "$arm" in blanket) v=base; extra="-DBLANKET_DIT" ;; *) v="$arm"; extra="" ;; esac
+    wraps=""; src2=""
+    case "$arm" in
+      blanket) v=base; extra="-DBLANKET_DIT" ;;
+      # Hand placement at the public API: the base library, the entry points
+      # CIO's driver calls wrapped by the linker so each is bracketed by one
+      # enable and one clear (api_bracket.c). Two mode writes per call.
+      api)     v=base; src2="$R/api_bracket.c"
+               case "$b" in
+                 ed25519)        extra="-DAPI_SIGN";   syms="crypto_sign_keypair crypto_sign crypto_sign_open" ;;
+                 chacha20*)      extra="-DAPI_CHACHA"; syms="crypto_aead_chacha20poly1305_ietf_keygen crypto_aead_chacha20poly1305_ietf_encrypt crypto_aead_chacha20poly1305_ietf_decrypt" ;;
+                 aesni256gcm*)   extra="-DAPI_AES";    syms="crypto_aead_aes256gcm_keygen crypto_aead_aes256gcm_encrypt crypto_aead_aes256gcm_decrypt" ;;
+                 argon2id)       extra="-DAPI_PWHASH"; syms="crypto_pwhash" ;;
+                 *) die "no API bracket table for $b" ;;
+               esac
+               for sy in $syms; do wraps="$wraps -Wl,--wrap=$sy"; done ;;
+      *)       v="$arm"; extra="" ;;
+    esac
     lib="$WORK/$v/src/libsodium/.libs/libsodium.a"
     [[ -f "$lib" ]] || { warn "skip $b/$arm -- no library for '$v'"; continue; }
     # NO_DYN_HIT_COUNTS: their opcode instrumentation is x86 and not our
@@ -170,8 +213,8 @@ for b in $BENCHES; do
     "$CC" -march="$MARCH" -O2 -std=gnu18 -static -fomit-frame-pointer \
         -DNO_DYN_HIT_COUNTS $extra \
         -I"$R" -I"$G5/include" -I"$WORK/$v/src/libsodium/include" \
-        -o "$WORK/bin/eval_${b}.${arm}" "$src" "$R/blanket_ctor.c" \
-        "$lib" -L"$G5/util/m5/build/arm64/out" -lm5 -lm \
+        -o "$WORK/bin/eval_${b}.${arm}" "$src" "$R/blanket_ctor.c" $src2 \
+        "$lib" $wraps -L"$G5/util/m5/build/arm64/out" -lm5 -lm \
       >"$WORK/bin/.link_${b}_${arm}.log" 2>&1 \
       || { warn "link failed $b/$arm"; tail -6 "$WORK/bin/.link_${b}_${arm}.log" >&2; continue; }
   done

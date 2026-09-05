@@ -1,0 +1,77 @@
+# Experiment 09 on gem5 (NeoverseV2 FDP, --eves --dmp --comp-simp, the PMULL+ditCycles gem5), 2026-09-05: the API-bracket arm and the compiler's new defaults.
+# Compiler dit-tainter 64831933bc88 (callee contract + DIT twins by default). Per-TU clang path (build_arms.sh), CIO's drivers byte-identical, -O2.
+# arms: base = unhardened; blanket = base + DIT set before main; api = base + the linker's --wrap on the public entry points, one enable and one clear per call (api_bracket.c);
+#   taint = -ftaint-harden with the fixpoint seeds (188, libsodium_secret_contract.txt) and the owned list; taintnop = taint with every switch a HINT #0;
+#   taintold = the pre-2026-09-05 compiler (inherit contract, no twins, CIO seeds); taintoldnop = its NOP twin.
+# cfg: spec = renamed MSR DIT, serdit = serialising (--no-speculative-dit). cycles_per_op over the measured window (warmup dumps dropped); dit_* are committed counts over the window.
+bench,arm,cfg,roi_n,cycles_per_op,insts_per_op,dit_writes,dit_set,dit_clear,dit_read,dit_suppressed,dit_cycles,dit_exit,wall_s
+aesni256gcm_decrypt,api,serdit,50,1332.4,1479.0,100.0,50.0,50.0,0.0,0.0,65017.0,,0.1
+aesni256gcm_decrypt,api,spec,50,1175.0,1479.0,100.0,50.0,50.0,0.0,0.0,58301.0,,0.0
+aesni256gcm_decrypt,base,serdit,50,1076.7,1473.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.1
+aesni256gcm_decrypt,base,spec,50,1076.7,1473.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.2
+aesni256gcm_decrypt,blanket,serdit,50,1167.0,1473.0,0.0,0.0,0.0,0.0,0.0,58350.0,,0.2
+aesni256gcm_decrypt,blanket,spec,50,1167.0,1473.0,0.0,0.0,0.0,0.0,0.0,58350.0,,0.0
+aesni256gcm_decrypt,taint,serdit,50,1465.0,1483.0,300.0,250.0,50.0,0.0,0.0,71900.0,,29.0
+aesni256gcm_decrypt,taint,spec,50,1185.0,1483.0,300.0,250.0,50.0,0.0,0.0,58800.0,,29.4
+aesni256gcm_decrypt,taintnop,serdit,50,1138.2,1483.0,0.0,0.0,0.0,0.0,0.0,0.0,,27.0
+aesni256gcm_decrypt,taintnop,spec,50,1138.2,1483.0,0.0,0.0,0.0,0.0,0.0,0.0,,27.2
+aesni256gcm_decrypt,taintold,serdit,50,1602.0,1490.0,650.0,500.0,150.0,0.0,0.0,77350.0,,0.0
+aesni256gcm_decrypt,taintold,spec,50,1177.0,1490.0,650.0,500.0,150.0,0.0,0.0,58350.0,,0.2
+aesni256gcm_decrypt,taintoldnop,serdit,50,1086.3,1490.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+aesni256gcm_decrypt,taintoldnop,spec,50,1086.3,1490.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+aesni256gcm_encrypt,api,serdit,50,1263.0,1235.0,100.0,50.0,50.0,0.0,0.0,61600.0,,0.0
+aesni256gcm_encrypt,api,spec,50,1220.0,1235.0,100.0,50.0,50.0,0.0,0.0,60550.0,,0.1
+aesni256gcm_encrypt,base,serdit,50,1217.0,1229.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+aesni256gcm_encrypt,base,spec,50,1217.0,1229.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.1
+aesni256gcm_encrypt,blanket,serdit,50,1222.0,1229.0,0.0,0.0,0.0,0.0,0.0,61100.0,,0.1
+aesni256gcm_encrypt,blanket,spec,50,1222.0,1229.0,0.0,0.0,0.0,0.0,0.0,61100.0,,0.2
+aesni256gcm_encrypt,taint,serdit,50,1368.1,1239.0,300.0,250.0,50.0,0.0,0.0,67054.0,,29.4
+aesni256gcm_encrypt,taint,spec,50,1220.0,1239.0,300.0,250.0,50.0,0.0,0.0,60552.0,,27.7
+aesni256gcm_encrypt,taintnop,serdit,50,1216.6,1239.0,0.0,0.0,0.0,0.0,0.0,0.0,,26.5
+aesni256gcm_encrypt,taintnop,spec,50,1216.6,1239.0,0.0,0.0,0.0,0.0,0.0,0.0,,27.9
+aesni256gcm_encrypt,taintold,serdit,50,1534.2,1245.0,600.0,450.0,150.0,0.0,0.0,73959.0,,0.0
+aesni256gcm_encrypt,taintold,spec,50,1214.0,1245.0,600.0,450.0,150.0,0.0,0.0,60250.0,,0.0
+aesni256gcm_encrypt,taintoldnop,serdit,50,1211.4,1245.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.1
+aesni256gcm_encrypt,taintoldnop,spec,50,1211.4,1245.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.1
+chacha20_poly1305_decrypt,api,serdit,50,2389.0,5067.0,100.0,50.0,50.0,0.0,13000.0,117900.0,,0.0
+chacha20_poly1305_decrypt,api,spec,50,2324.1,5067.0,100.0,50.0,50.0,0.0,12900.0,115654.0,,0.0
+chacha20_poly1305_decrypt,base,serdit,50,2289.8,5057.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+chacha20_poly1305_decrypt,base,spec,50,2289.8,5057.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+chacha20_poly1305_decrypt,blanket,serdit,50,2305.9,5057.0,0.0,0.0,0.0,0.0,13150.0,115297.0,,0.6
+chacha20_poly1305_decrypt,blanket,spec,50,2305.9,5057.0,0.0,0.0,0.0,0.0,13150.0,115297.0,,0.0
+chacha20_poly1305_decrypt,taint,serdit,50,3261.2,5161.0,1950.0,1400.0,550.0,0.0,13150.0,154908.0,,30.4
+chacha20_poly1305_decrypt,taint,spec,50,2365.2,5161.0,1950.0,1400.0,550.0,0.0,12882.0,117411.0,,32.4
+chacha20_poly1305_decrypt,taintnop,serdit,50,2383.8,5161.0,0.0,0.0,0.0,0.0,0.0,0.0,,32.4
+chacha20_poly1305_decrypt,taintnop,spec,50,2383.8,5161.0,0.0,0.0,0.0,0.0,0.0,0.0,,32.0
+chacha20_poly1305_decrypt,taintold,serdit,50,3614.5,5173.0,2550.0,1900.0,650.0,0.0,13250.0,168324.0,,0.0
+chacha20_poly1305_decrypt,taintold,spec,50,2345.9,5173.0,2550.0,1900.0,650.0,0.0,13254.0,115697.0,,0.0
+chacha20_poly1305_decrypt,taintoldnop,serdit,50,2357.2,5173.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+chacha20_poly1305_decrypt,taintoldnop,spec,50,2357.2,5173.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+chacha20_poly1305_encrypt,api,serdit,50,2257.5,4820.0,100.0,50.0,50.0,0.0,12836.0,111325.0,,0.2
+chacha20_poly1305_encrypt,api,spec,50,2255.6,4820.0,100.0,50.0,50.0,0.0,13370.0,112232.0,,0.0
+chacha20_poly1305_encrypt,base,serdit,50,2185.9,4810.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+chacha20_poly1305_encrypt,base,spec,50,2185.9,4810.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+chacha20_poly1305_encrypt,blanket,serdit,50,2215.9,4810.0,0.0,0.0,0.0,0.0,13001.0,110796.0,,0.0
+chacha20_poly1305_encrypt,blanket,spec,50,2214.6,4810.0,0.0,0.0,0.0,0.0,13032.0,110729.0,,0.0
+chacha20_poly1305_encrypt,taint,serdit,50,3145.0,4909.0,1900.0,1350.0,550.0,0.0,13150.0,149100.0,,32.1
+chacha20_poly1305_encrypt,taint,spec,50,2237.8,4909.0,1900.0,1350.0,550.0,0.0,12802.0,111138.0,,28.2
+chacha20_poly1305_encrypt,taintnop,serdit,50,2238.5,4909.0,0.0,0.0,0.0,0.0,0.0,0.0,,28.8
+chacha20_poly1305_encrypt,taintnop,spec,50,2238.5,4909.0,0.0,0.0,0.0,0.0,0.0,0.0,,29.5
+chacha20_poly1305_encrypt,taintold,serdit,50,3425.7,4920.0,2450.0,1800.0,650.0,0.0,13100.0,158986.0,,0.0
+chacha20_poly1305_encrypt,taintold,spec,50,2239.3,4920.0,2450.0,1800.0,650.0,0.0,12893.0,110373.0,,0.0
+chacha20_poly1305_encrypt,taintoldnop,serdit,50,2241.5,4920.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.8
+chacha20_poly1305_encrypt,taintoldnop,spec,50,2241.5,4920.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+ed25519,api,serdit,20,79687.5,171759.0,40.0,20.0,20.0,0.0,1287777.0,1593110.0,,0.0
+ed25519,api,spec,20,79362.6,171759.0,40.0,20.0,20.0,0.0,1284072.0,1587071.0,,0.0
+ed25519,base,serdit,20,78789.9,171769.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+ed25519,base,spec,20,78789.9,171769.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+ed25519,blanket,serdit,20,78962.7,171769.0,0.0,0.0,0.0,0.0,1287849.0,1579254.0,,0.0
+ed25519,blanket,spec,20,78962.7,171769.0,0.0,0.0,0.0,0.0,1287849.0,1579254.0,,0.0
+ed25519,taint,serdit,20,76740.0,171827.0,320.0,300.0,20.0,0.0,1271669.0,1534160.0,,213.5
+ed25519,taint,spec,20,75836.6,171827.0,320.0,300.0,20.0,0.0,1272961.0,1516513.0,,158.5
+ed25519,taintnop,serdit,20,75842.6,171827.0,0.0,0.0,0.0,0.0,0.0,0.0,,256.3
+ed25519,taintnop,spec,20,75842.6,171827.0,0.0,0.0,0.0,0.0,0.0,0.0,,174.1
+ed25519,taintold,serdit,20,78253.4,171800.0,60.0,40.0,20.0,0.0,1292029.0,1564529.0,,0.0
+ed25519,taintold,spec,20,78136.7,171800.0,60.0,40.0,20.0,0.0,1291877.0,1562534.0,,0.0
+ed25519,taintoldnop,serdit,20,77601.0,171800.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0
+ed25519,taintoldnop,spec,20,77601.0,171800.0,0.0,0.0,0.0,0.0,0.0,0.0,,0.0

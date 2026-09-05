@@ -363,6 +363,101 @@ Required two gem5 patches, both validated and unpushed: PMULL 64x64->128 (absent
 from gem5, so AES-GCM could not run at all) and `commit.ditCycles` (cycles with
 the mode set - the dwell axis the switch counters cannot provide).
 
+## The hand-placed API bracket, and the compiler's new defaults (gem5, 2026-09-05)
+
+What a careful library author does by hand, and what Apple's corecrypto scope
+guards do: set `PSTATE.DIT` once at the entry of each public crypto function
+and clear it once at the exit. Nothing inside is touched, nothing is analysed.
+It is the arm between blanket (the mode set for the whole process) and the
+pass (the mode placed inside the library by the analysis), and on a workload
+that is all crypto it is the placement a reviewer will name first.
+
+**The arm.** The unhardened `base` library, the public entry points CIO's
+drivers call wrapped by the linker (`-Wl,--wrap`) so `__wrap_f` brackets
+`__real_f` with one enable and one clear (`api_bracket.c`; `crypto_sign`,
+`crypto_sign_keypair`, `crypto_sign_open`; the AEAD `keygen`/`encrypt`/
+`decrypt` pairs; `crypto_pwhash`). Same driver, same library, same layout as
+`base`; exactly two committed mode writes per operation, which the runner
+gates on.
+
+**The pass arm** is the compiler's defaults since 2026-09-05: the callee
+contract and the DIT twins (`docs/design/dit-cloning.md`), the per-TU clang
+path, the contract's fixpoint seeds (188 lines,
+`benchmarks/crypto/libsodium_secret_contract.txt` in gem5-DIT from PR #101;
+the CIO seeds protect nothing under the contract) and the owned-symbols list
+`build_arms.sh` now derives from its own base build. 364 switch sites and 85
+twins in the library. `taintold` is the pre-flip compiler on the CIO seeds
+(inherit contract, no twins), the per-TU form of the `pass` arm above, for
+the record. Every arm has its NOP twin; `run_cio_gem5.py` gates all of them.
+Data: `data/gem5_api_bracket.csv`, `data/gem5_api_bracket_analysis.txt`.
+
+| benchmark | base cyc/op | blanket | API bracket, renamed / serialising | pass, renamed / serialising | pass switches/op | old compiler, renamed / serialising (switches) |
+|---|---|---|---|---|---|---|
+| ed25519 sign | 78,790 | +0.22% | +0.73% / +1.14% | -3.75% / -2.60% | 16 | -0.83% / -0.68% (3) |
+| chacha20-poly1305 encrypt | 2,186 | +1.31% | +3.19% / +3.28% | +2.37% / **+43.88%** | 38 | +2.44% / +56.72% (49) |
+| chacha20-poly1305 decrypt | 2,290 | +0.70% | +1.50% / +4.33% | +3.29% / **+42.42%** | 39 | +2.45% / +57.85% (51) |
+| aes256-gcm encrypt | 1,217 | +0.41% | +0.25% / +3.78% | +0.25% / +12.42% | 6 | -0.25% / +26.06% (12) |
+| aes256-gcm decrypt | 1,077 | +8.39% | +9.13% / +23.75% | +10.06% / +36.06% | 6 | +9.32% / +48.79% (13) |
+
+Each policy's own NOP twin, so the layout term is visible:
+
+| benchmark | pass NOP (layout) | pass, real minus NOP, renamed | old NOP | old, real minus NOP, renamed |
+|---|---|---|---|---|
+| ed25519 sign | -3.74% | -0.01 | -1.51% | +0.68 |
+| chacha20-poly1305 encrypt | +2.41% | -0.03 | +2.54% | -0.10 |
+| chacha20-poly1305 decrypt | +4.11% | -0.81 | +2.94% | -0.49 |
+| aes256-gcm encrypt | -0.03% | +0.28 | -0.46% | +0.21 |
+| aes256-gcm decrypt | +5.71% | +4.35 | +0.89% | +8.42 |
+
+Three readings.
+
+- **Renamed: blanket, the bracket and the pass cost the same thing, dwell,
+  and the rest is layout.** Every arm is within a few points of blanket, and
+  where the pass differs from the bracket its NOP twin differs by the same
+  amount: ed25519's -3.75% is a layout win (-3.74% with no switch executing)
+  and the two chacha rows are +2.4 and +4.1 of layout. The bracket's two
+  switches and the pass's 6 to 39 both execute for nothing on a renamed core.
+- **Serialising: the bracket pays two switches per call and the pass pays
+  its dispatch.** The bracket sits 1 to 4 points above blanket, and 15 above
+  on aes-gcm decrypt, where two serialising drains land on a 1,077-cycle
+  operation. The pass pays 38 to 39 switches per AEAD call, all of them
+  behind the Poly1305 and ChaCha20 implementation tables that no twin can
+  reach (an indirect call is never redirected), and 6 per AES-GCM call for
+  the same reason: +42 to +44 on chacha, +12 and +36 on AES-GCM. On ed25519,
+  where the calls are direct, the twins leave 16 switches on a 78,790-cycle
+  signature and the serialising term is +1.15 points, the bracket's +0.41.
+- **What the new defaults changed.** Against the old compiler on the same
+  path the pass executes a quarter to a half fewer switches (49 -> 38, 51 ->
+  39, 12 -> 6, 13 -> 6) and its serialising cost drops by 13 to 14 points on
+  every AEAD row. ed25519 goes the other way, 3 -> 16, because the old
+  contract held DIT across the whole signature from one forwarder and the
+  new one has each entry into the library toggle for itself; on a renamed
+  core that is free, on a serialising one it is +1.15 points.
+
+**The verdict for this experiment does not move: on a workload that is all
+crypto, blanket is the answer and the hand-placed bracket is within a few
+points of it.** The pass is a placement engine for flows with a public lane
+(experiment 02); here it can only match the bracket where the library's
+calls are direct, and libsodium's AEAD dispatch is not. The tables are
+also the bound: `api` is what the pass would cost if every indirect target
+had a twin, which is a property of the library, not of the compiler.
+
+**Coverage** of the pass arm on the signing path, the gem5 shadow-taint
+oracle (two signatures, the round-11 protocol): 294,164 secret operations
+protected, 0 uncovered, 54,010 wasted, identical to the round-11 library
+measured for `docs/design/dit-cloning.md`; the seeds are at their fixpoint
+on this path and the twins do not move protection.
+
+**argon2id** is running as this is written (one operation is 326M cycles;
+five arms, both models, about six hours) and will be appended to the data
+file; on silicon it is the null endpoint for every arm.
+
+A first sweep of these arms used the seed file the gem5 tree carried as
+`libsodium_secret_contract.txt`, which turned out to be the round-2 file (86
+seeds, `_r2` after PR #101), not the fixpoint; the pass arm then executed 19
+switches per signature and 177 sites. Those numbers are superseded by the
+table above.
+
 ## Second host, and a measurement correction
 
 **Apple M4 (Mac16,10), 4P+6E, macOS 15.7.3, root, kperf. 2026-09-02.** The whole
