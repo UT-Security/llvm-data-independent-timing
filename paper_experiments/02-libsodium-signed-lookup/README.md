@@ -208,6 +208,28 @@ session scratchpad `exp02_oracle/`; compare with
 
 Not moved: the retired-driver data and the three frozen-evidence files.
 
+### Narrowing twins (2026-09-05, `data/gem5_arms_twin_narrow{,0}.csv`)
+
+The pass arm rebuilt twice with the twins narrowing (`-taint-dit-twin-narrow`;
+`gem5_arms_twin_narrow0.csv` adds `-taint-dit-twin-switch-cyc=0`, DIT off at
+the top of every twin whose entry holds no secret), everything else as
+`gem5_arms.csv`; `docs/results/dit-twin-narrowing-2026-09-05.md`. IPC overhead
+vs unhardened, renamed / serialising, switches per request in brackets:
+
+| L | shipped twins | narrowing, default cost | narrowing, cost 0 |
+|---|---|---|---|
+| 10 | -1.0 / +28.4 (38) | +3.5 / +30.5 (38) | -2.0 / +33.0 (45) |
+| 50 | -0.5 / +22.1 (38) | -1.2 / +23.7 (38) | -2.2 / +25.9 (45) |
+| 200 | -0.4 / +11.8 (38) | +0.1 / +12.3 (38) | -1.4 / +14.0 (45) |
+| 1000 | +0.2 / +3.2 (38) | +0.1 / +3.4 (38) | -0.6 / +3.9 (45) |
+| 5000 | +0.1 / +0.7 (38) | -0.2 / +0.6 (38) | +0.0 / +1.0 (45) |
+| 20000 | +0.4 / -0.1 (38) | +0.2 / +0.5 (38) | +0.7 / +0.5 (45) |
+
+At the default cost the binary's switch count and coverage are the shipped
+arm's and the renamed differences are layout; at cost 0 seven more switches
+per request buy nothing on the renamed model and cost 2 to 5 points on the
+serialising one. The twins stay whole by default.
+
 ## Known limits
 
 - **Silicon is not re-measured.** The M5 crossover below is the retired lane's.

@@ -110,6 +110,12 @@ How the analysis is built, which bugs were found in it, and what is still open.
   through the seed file and the owned list, no LTO. libsodium signing under the
   callee contract: 10,400 executed DIT writes -> 41 (inherit 6) at identical
   coverage, +21% text.
+- **[results/dit-twin-narrowing-2026-09-05.md](results/dit-twin-narrowing-2026-09-05.md)** -
+  narrowing twins (`-taint-dit-twin-narrow`, opt-in): a twin that clears at its
+  top and re-enables at its first secret. Does not pay on libsodium: nothing
+  narrows at the shipped switch cost, and with switches free 0.7% of wasted
+  coverage costs 3x the writes and +5 points renamed on signing. Two analysis
+  fixes it exposed (twin argument taint, NEON register tuples) apply everywhere.
 - **[results/returns-pointee-2026-09-04.md](results/returns-pointee-2026-09-04.md)** -
   **the `ReturnsPointeeTainted` summary bit and the seeded-callee return gate.**
   A callee returning a pointer INTO secret memory returned a public pointer
