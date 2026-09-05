@@ -117,7 +117,18 @@ only a to-do list for callees the build defines; `utils/taint_owned_symbols.sh` 
 build's objects writes that set, `-taint-owned-symbols=<file>` makes the report file every
 other callee as `external-call` (out of scope, no repair), and `utils/taint_obligations.py`
 splits a report offline and writes the next round's seed file (test
-`clang/test/CodeGen/taint-dit-owned.c`).
+`clang/test/CodeGen/taint-dit-owned.c`). **Twins (`-mllvm -taint-dit-clone-seeded`,
+opt-in, `docs/design/dit-cloning.md`):** every seeded function and every function it
+reaches by direct call in its TU gets a `<name>.dit` copy that is entered DIT-on by
+construction and emits no enable or clear; a call made from DIT-on code is redirected to
+it, in the TU and across TUs (a seeded declaration the owned list covers is assumed to
+have one, the linker resolves it), and the caller then needs no re-assert. A twin still
+re-asserts after any call of its own that may clear, even with nothing secret in it -
+that is the guarantee its caller bought. Every TU must be built with the flag. libsodium
+signing at the contract's fixpoint: **10,400 executed DIT writes -> 41** (inherit 6),
+identical coverage, +21% text; the reached set (not just the seeds) is what makes it
+work, since propagation instruments `ge25519_cmov` and the like without a seed. Test
+`clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs).
 
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function

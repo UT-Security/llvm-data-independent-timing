@@ -23,6 +23,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SparseBitVector.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/Register.h"
@@ -165,6 +166,19 @@ extern cl::opt<std::string> TaintInfoLossReportFile;
 /// line. Without the file every named callee is an obligation, as before.
 /// Only the report classification changes; codegen is identical.
 extern cl::opt<std::string> TaintOwnedSymbolsFile;
+
+/// The set that file names, loaded once per process; null when no file was
+/// given or it could not be read. Shared by the obligation report and by
+/// cross-TU DIT cloning, which must agree on what "a callee we define" means.
+const StringSet<> *taintOwnedSymbols();
+
+/// A `<name>.dit` twin of a seeded function (`-taint-dit-clone-seeded`, or the
+/// older `-taint-dit-clone-list`): entered with PSTATE.DIT already set by
+/// construction - only a DIT-on call site is ever redirected to it - so it
+/// emits no entry enable and no exit clear, and leaves DIT set for its caller.
+/// What it does owe its caller is that guarantee: after any call of its own
+/// that may clear DIT it re-asserts, even when nothing in its body is secret.
+bool isDITClone(const Function *F);
 
 /// Command-line option for the DIT-uncovered report (gap G2): tainted
 /// instructions PSTATE.DIT does not actually protect - divide/sqrt (not
