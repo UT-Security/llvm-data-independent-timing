@@ -14,10 +14,13 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "llvm/IR/ValueMap.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/LLVMContext.h"
@@ -54,6 +57,24 @@ static cl::opt<std::string> TaintDitCloneList(
              "mode switches; the MIR pass redirects calls made from inside a "
              "DIT-on region to it."),
     cl::value_desc("file"), cl::Hidden);
+
+// The general form of the above: every SEEDED function gets the twin, with its
+// original linkage, so a caller in another TU can name it. The MIR pass
+// (ditCloneFor) redirects a DIT-on call to `f` to `f.dit` when `f` is defined
+// here, or when `f` is a seeded declaration the -taint-owned-symbols list says
+// this build defines - so every TU of the build must be compiled with this flag,
+// and the module flag it sets is how the pass knows this one was. The original
+// stays as it is for the tables and pointers that name it; only direct calls
+// from DIT-on code are redirected, which is why the eligibility rules of the
+// listed form (local linkage, address not taken) are not needed here.
+static cl::opt<bool> TaintDitCloneSeeded(
+    "taint-dit-clone-seeded", cl::Hidden, cl::init(true),
+    cl::desc("Give every seeded function, and every function it reaches by "
+             "direct call in its TU, a <name>.dit twin that is entered with "
+             "PSTATE.DIT already set and emits no switch of its own; the MIR "
+             "pass redirects calls made from DIT-on code to it, in this TU and "
+             "across TUs for seeded callees the -taint-owned-symbols list "
+             "covers. Default on since 2026-09-05; =0 for an A/B arm."));
 
 static cl::opt<std::string> TaintSourcesFile("taint-src", cl::desc("A file specifying taint sources"), cl::value_desc("file"));
 
@@ -348,6 +369,71 @@ PreservedAnalyses TaintSourceAnnotatorPass::run(Module &M,
       Clone->setLinkage(GlobalValue::InternalLinkage);
       Clone->addFnAttr("taint-dit-clone");
       KeepAlive.push_back(Clone);
+      Changed = true;
+    }
+    if (!KeepAlive.empty())
+      appendToUsed(M, KeepAlive);
+  }
+
+  // ---- Seeded-function cloning, cross-TU -----------------------------------
+  // Stamping run only: the clone must copy the parameter attributes the loop
+  // above just applied, and the early run's argument numbering is not final.
+  if (TaintDitCloneSeeded && !PreserveFunctionsOnly) {
+    // The MODULE carries the fact. The MIR pass reads this flag to decide that
+    // a seeded declaration has a `.dit` twin in the TU that defines it - a TU
+    // it never sees - and names the twin on that strength alone.
+    if (!M.getModuleFlag("taint-dit-clone-seeded"))
+      M.addModuleFlag(Module::Override, "taint-dit-clone-seeded", 1);
+    // Every seeded definition, and every definition a seeded one reaches
+    // through direct calls inside this TU. The MIR pass instruments a callee
+    // that receives the secret by propagation exactly as it does a seeded one
+    // (its own enable and clear), and a DIT-on caller can skip those toggles
+    // and its own re-assert only if the callee has a twin - so the twin set
+    // must cover what propagation reaches, which at this point is the direct
+    // call graph under the seeds. Over-approximate on purpose: a reached
+    // function that turns out to hold no secret costs its twin's code size and
+    // nothing else, because a twin never emits a switch that the whole-function
+    // path would not emit for the original. Across TUs the set stays the
+    // seeded one (ditCloneFor), since a caller cannot see what a declaration
+    // reaches.
+    auto cloneable = [](const Function &F) {
+      return !F.isDeclaration() && !F.isIntrinsic() &&
+             !F.hasFnAttribute("taint-dit-clone");
+    };
+    SmallPtrSet<Function *, 32> Wanted;
+    SmallVector<Function *, 32> Worklist;
+    for (Function &F : M)
+      if (cloneable(F) && TaintSources.count(F.getName()) &&
+          Wanted.insert(&F).second)
+        Worklist.push_back(&F);
+    while (!Worklist.empty()) {
+      Function *F = Worklist.pop_back_val();
+      for (Instruction &I : instructions(*F))
+        if (auto *CB = dyn_cast<CallBase>(&I))
+          if (Function *Callee = CB->getCalledFunction())
+            if (cloneable(*Callee) && Wanted.insert(Callee).second)
+              Worklist.push_back(Callee);
+    }
+    SmallVector<Function *, 16> ToClone;
+    for (Function &F : M) { // module order: deterministic output
+      if (!Wanted.contains(&F))
+        continue;
+      if (M.getFunction((F.getName() + ".dit").str()))
+        continue; // the listed form already made it
+      ToClone.push_back(&F);
+    }
+    SmallVector<GlobalValue *, 16> KeepAlive;
+    for (Function *F : ToClone) {
+      ValueToValueMapTy VMap;
+      Function *Clone = CloneFunction(F, VMap);
+      Clone->setName(F->getName() + ".dit");
+      // Linkage and visibility stay the original's: an external `f` has an
+      // external `f.dit` for other TUs to name, a static one an internal twin.
+      Clone->addFnAttr("taint-dit-clone");
+      // A discardable twin (internal, linkonce) has no caller until the MIR
+      // pass makes one; keep it from any DCE in between.
+      if (Clone->isDiscardableIfUnused())
+        KeepAlive.push_back(Clone);
       Changed = true;
     }
     if (!KeepAlive.empty())
