@@ -19,6 +19,24 @@ not reintroduce it. Why taint at all, rather than DIT-everywhere: DIT is not fre
 (some SPEC 2026 benchmarks lose ~15% with it fully on), so it should cover only
 secret-dependent code. See `docs/results/dit-cost-model.md`.
 
+## gem5-DIT submodule
+
+The gem5 half of every measurement is pinned as the submodule `gem5-DIT/`,
+tracking `master` of `UT-Security/gem5-DIT`. The pinned commit is the gem5 the
+compiler at this revision was measured against, so a compiler change that moves a
+gem5 number and the gem5 change it depends on land in the same PR.
+
+- Fresh checkout: `git submodule update --init gem5-DIT`. Do NOT add
+  `--recursive`: gem5-DIT's own `PolyBenchC` submodule is SSH-only and nothing
+  here needs it.
+- Move the pin to master's tip: `git submodule update --remote gem5-DIT`, then
+  commit the new `gem5-DIT` entry alongside the measurement it belongs to.
+- The submodule is sources only. `build/ARM/gem5.fast` and the benchmark
+  binaries still live in the tree the scripts point at (`GEM5_ROOT`, else
+  `~/Documents/gem5-DIT`). Either build inside the submodule and point
+  `GEM5_ROOT` at it, or keep `~/Documents/gem5-DIT` checked out at the pinned
+  commit (`git -C gem5-DIT rev-parse HEAD`) while measuring.
+
 ## Build
 
 Running builds is fine. They are long, so start them in the background rather than
