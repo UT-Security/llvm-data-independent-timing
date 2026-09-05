@@ -34,8 +34,10 @@ in the order the wallet runs them, with one integer varying the ratio.
 | the two lanes in one flow, gem5 (2026-09-03) | **the pass beats blanket through f = 54% under both switch models**, by 3.5 points renamed and 2.8 serialising at that f; beyond it the margins (down to 2.0 and 0.8 at f = 83%) sit inside gem5's code-placement floor, so the crossover lies above 54% where silicon's is at 45 to 50% |
 
 **The mechanism**: blanket's cost is flat in f because it protects everything
-either way; what grows is the pass's toggle bill (+0.20% -> +6.08% switch cost).
-The crossover is a fixed prize meeting a linearly growing cost.
+either way; what grows is the pass's own cost over the secret lane it protects
+(`pass vs nop`, +0.20% -> +6.08%). That column is the switch PLUS DIT dwell,
+not the toggle bill alone: the gem5 flow isolates serialisation at +1.2% at
+K = 400 (known limit 8). The crossover is a fixed prize meeting a growing cost.
 
 ## What is public and what is secret
 
@@ -78,7 +80,8 @@ dependence chain, and DIT switches the predictor off.
 Two panels sharing the x-axis: **(a)** the result, selective placement against
 blanket DIT crossing zero at $f \approx 51\%$ with the sign test unable to
 resolve $f = 45\%$; **(b)** the mechanism, a flat public-lane prize meeting a
-linearly growing toggle bill, crossing at $f \approx 43\%$. Panel (b) is the
+growing cost (the switch plus DIT dwell over the secret lane, known limit 8),
+crossing at $f \approx 43\%$. Panel (b) is the
 argument for panel (a) - the claim is drawn, not asserted.
 
     python3 paper_experiments/01-bitcoin-core-wallet/figures/plot_crossover.py
@@ -303,7 +306,7 @@ max/min - 1 over offsets of any arm. Negative pass vs blanket = the pass wins.
    Silicon crosses earlier because its switch costs more and its blanket
    costs the secret lane: the crossover's position is a property of the
    switch implementation and of what DIT costs the secret lane, not of the
-   lanes themselves. This is the counterfactual Table 1's caveat 4 asked
+   lanes themselves. This is the counterfactual Table 1's caveat 5 asked
    for, with the resolution it comes at.
 4. **The serialising switch costs 31 to 37 cycles.** Serialising minus renamed
    on the taint arm, divided by its committed switches, reads 34.8, 36.5,
@@ -385,3 +388,12 @@ across switch models, `ditSuppressed = 0` in base · equal-length `argv[0]`.
    renamed) are immune; every comparison against the taint arm carries it,
    in this experiment's sign bench and its flow alike. A link-placement
    sweep is the remedy and has not been run.
+8. **Table 1's last column is not the switch cost.** It is `pass/passnop`, and
+   `passnop` emits `HINT #0` in place of every inserted `msr DIT`, so
+   `PSTATE.DIT` is never set and that arm loses the PROTECTION along with the
+   switch. `pass - passnop` is therefore the switch plus DIT dwell over the
+   protected regions, and the gem5 flow above isolates serialisation alone at
+   +1.21% at K = 400 against the +5.98% that column reports on silicon. The
+   crossover is unaffected - `pass vs blanket` compares two arms that both
+   protect - but the column was named `switch cost` from 2026-08-31 to
+   2026-09-02 and is now `pass vs nop`.

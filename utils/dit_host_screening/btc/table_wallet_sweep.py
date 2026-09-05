@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """Emit the paper table for the Bitcoin wallet secret-fraction sweep.
 
+NOTE ON THE LAST COLUMN. It is `pass/passnop` and it is NOT the switch cost,
+though it was labelled that until 2026-09-02. `passnop` emits `HINT #0` in place
+of every inserted `MSR DIT`, so PSTATE.DIT is never set and that arm loses the
+PROTECTION along with the switch. The column is therefore
+
+    switch cost  +  DIT dwell over the regions the pass protects
+
+and the dwell term grows with the secret lane, which is most of why the column
+climbs with K. Experiment 01's own gem5 flow isolates serialisation on one binary
+under two switch models and gets +1.21% at K=400 against the +5.98% this column
+reports.
+Do not describe it as the toggle bill.
+
 Reads the same CSV as analyze_wallet_sweep.py and emits the table in Markdown
 and LaTeX. Adds what the analyser does not: an exact two-sided sign test on
 every paired cell, so a median ratio is never reported as a win or a loss
@@ -102,7 +115,7 @@ if "--latex" not in sys.argv:
     print(f"Median per-rep ratio; n/{N} = reps where the first-named arm is slower; "
           f"exact two-sided sign test.\n")
     print("| K (inputs) | f_secret | baseline | C_public | C_whole | pass vs base | "
-          "pass vs blanket | sign test | verdict | switch cost |")
+          "pass vs blanket | sign test | verdict | pass vs nop |")
     print("|---|---|---|---|---|---|---|---|---|---|")
     for t in TAB:
         x = t["xover"]
