@@ -4,7 +4,7 @@
 Narayan browser-history paper - what did it exploit, how did vendors patch it, and
 can an emerging hardware optimization reopen that channel?* Secondary and real
 goal: **find a workload where fine-grained DIT beats always-on DIT**
-(see [[fastdit-thesis-status]] / `docs/results/dit-cost-model.md`).
+(see [[expedite-thesis-status]] / `docs/results/dit-cost-model.md`).
 
 Companion to `docs/research/value-timing-leaks.md` (which covers the SVG-filter
 subnormal-FP anchor and FLOP/LVP). This doc covers the *history* half of the
@@ -198,7 +198,7 @@ Two quotes that matter for us, both from Pixel Thief §2.2/§9:
 > "For these reasons, we only recommend this solution [constant-time programming]
 > to browser vendors **for any fallback filters that are executed on the CPU**."
 
-That is a top-tier-venue recommendation for exactly what FastDIT automates, aimed
+That is a top-tier-venue recommendation for exactly what ExpeDITe automates, aimed
 at exactly the code we can compile (CPU-path filters), on a non-crypto target,
 noting that nobody has done it because doing it by hand is impractical. That is a
 citation worth having in the intro.
@@ -487,7 +487,7 @@ DIT. This is the honest stand-in for "browser-shaped workload."
 **Step 3 - the security demo, if we want the offense half.** Take Hot Pixels'
 setup verbatim (`a { color: black } a:visited { color: white }` + CPU-path filter
 stack) and show it leaks through an *instruction-timing* channel rather than
-DVFS, on M4/M5 where the LVP exists, then show FastDIT closes it. Note the risk:
+DVFS, on M4/M5 where the LVP exists, then show ExpeDITe closes it. Note the risk:
 per [[dit-headroom-needs-serial-chains]] the filter is parallel, so the LVP
 probably will not bite there - the more likely carrier is comp-simp / zero-skip on
 the black (all-zero operand) vs white blend, which we would have to model in gem5

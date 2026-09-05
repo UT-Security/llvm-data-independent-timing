@@ -1,4 +1,4 @@
-# FastDIT documentation
+# ExpeDITe documentation
 
 Interprocedural taint analysis + PSTATE.DIT hardening for AArch64, built as an LLVM
 fork (branch `dit-tainter`). Secret data entry points are declared in a taint-source
@@ -15,7 +15,7 @@ defense is out of scope. Operating instructions (build, flags, gotchas) live in
 > LLVM IR use lists, and mitigation by `seq_cst` fences rather than a mode bit. It was
 > developed independently on `main` and is **not** the pass documented here - different
 > target, different mitigation primitive, no shared code. Everything in *this* directory
-> is FastDIT/AArch64 unless it sits under `fences/`.
+> is ExpeDITe/AArch64 unless it sits under `fences/`.
 
 ## Read in this order
 

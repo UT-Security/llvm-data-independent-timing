@@ -371,7 +371,7 @@ Everything below this table is the detail; this is the comparison the
 experiment exists for. Cycles per operation against the unhardened build
 (`-O2` with our compiler, no seeds), gem5 NeoverseV2 FDP. Blanket and the
 Apple bracket are given under the serialising `MSR DIT` only, since that is
-what an M4 or M5 does; FastDIT is given under both, because the renamed
+what an M4 or M5 does; ExpeDITe is given under both, because the renamed
 column is the one that says what the pass would cost on a core that renamed
 the write. Executed switches per op in brackets.
 
@@ -379,11 +379,11 @@ the write. Executed switches per op in brackets.
 - **Apple bracket**: each public entry point wrapped in Apple's prologue and
   epilogue (read the previous state, `msr DIT, #1`, speculation barrier as
   `isb sy`, the call, clear only if it was clear), no analysis;
-- **FastDIT**: `-ftaint-harden` at the shipped defaults (callee contract,
+- **ExpeDITe**: `-ftaint-harden` at the shipped defaults (callee contract,
   twins, intra-block region placement) with the fixpoint seeds and the
   owned list.
 
-| benchmark | base cycles/op | blanket | Apple bracket | FastDIT, serialising | FastDIT, renamed |
+| benchmark | base cycles/op | blanket | Apple bracket | ExpeDITe, serialising | ExpeDITe, renamed |
 |---|---|---|---|---|---|
 | ed25519 sign | 78,790 | +0.22% | +0.42% (2) | -1.04% (16) | -1.44% |
 | chacha20-poly1305 encrypt | 2,186 | +1.37% | +3.21% (2) | +44.79% (38) | +2.37% |

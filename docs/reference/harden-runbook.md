@@ -1,4 +1,4 @@
-# The run document: how to run the pass, every flag, every default
+# The ExpeDITe run document: how to run the pass, every flag, every default
 
 **This is the operating reference.** How to build the compiler, how to harden
 one file or a whole library, what every flag means and what it defaults to,
