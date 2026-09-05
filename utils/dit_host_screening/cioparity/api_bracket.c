@@ -35,7 +35,11 @@
  */
 #include <stddef.h>
 
-#if defined(API_BARRIER_DSBISB)
+#if defined(API_BARRIER_SB)
+   /* Apple's actual instruction, for silicon with FEAT_SB (every M-series);
+    * the raw encoding so no -march or target attribute is needed */
+#  define DIT_BARRIER() __asm__ volatile(".inst 0xd50330ff" ::: "memory")
+#elif defined(API_BARRIER_DSBISB)
 #  define DIT_BARRIER() __asm__ volatile("dsb nsh\n\tisb sy" ::: "memory")
 #elif defined(API_BARRIER_NONE)
 #  define DIT_BARRIER() ((void)0)
@@ -59,21 +63,36 @@ static inline unsigned long dit_was_on(void) {
 #  define DIT_LEAVE(was) do { if (!(was)) __asm__ volatile("msr DIT, #0" ::: "memory"); } while (0)
 #endif
 
+/* Two ways to interpose. GNU/lld: the linker's --wrap, __wrap_f brackets
+ * __real_f (gem5, Linux). Apple's ld64 has no --wrap, so on macOS the DRIVER
+ * TU is compiled with -Dcrypto_sign=expedite_api_crypto_sign (and so on for
+ * the entry points it calls; the drivers declare them with extern prototypes,
+ * which the define renames consistently) and this file, compiled with
+ * -DAPI_MACRO_RENAME, defines expedite_api_f bracketing the real f. Same
+ * wrapper frame, same prologue and epilogue, either way. */
+#ifdef API_MACRO_RENAME
+#  define API_WRAP(name) expedite_api_##name
+#  define API_REAL(name) name
+#else
+#  define API_WRAP(name) __wrap_##name
+#  define API_REAL(name) __real_##name
+#endif
+
 #define BRACKET(rettype, name, params, args)                       \
-    rettype __real_##name params;                                  \
-    rettype __wrap_##name params {                                 \
+    rettype API_REAL(name) params;                                 \
+    rettype API_WRAP(name) params {                                \
         rettype r_; unsigned long was_;                            \
         DIT_ENTER(was_);                                           \
-        r_ = __real_##name args;                                   \
+        r_ = API_REAL(name) args;                                  \
         DIT_LEAVE(was_);                                           \
         return r_;                                                 \
     }
 #define BRACKET_VOID(name, params, args)                           \
-    void __real_##name params;                                     \
-    void __wrap_##name params {                                    \
+    void API_REAL(name) params;                                    \
+    void API_WRAP(name) params {                                   \
         unsigned long was_;                                        \
         DIT_ENTER(was_);                                           \
-        __real_##name args;                                        \
+        API_REAL(name) args;                                       \
         DIT_LEAVE(was_);                                           \
     }
 
