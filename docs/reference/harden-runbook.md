@@ -90,6 +90,21 @@ call is only ever redirected to a twin when the callee is in the list**.
 Without the list the twins work inside each TU and a cross-TU call keeps the
 original, which protects itself. Nothing is lost but the optimisation.
 
+Add the libc model on the second build too:
+
+```
+   -mllvm -taint-dit-preserving-symbols=$LLVM/utils/dit_preserving_libc.txt \
+```
+
+Every callee the build does not define is otherwise assumed to clear DIT, and
+DIT-on code re-asserts after each one: on libsodium that is three `msr DIT`
+per argon2 block after glibc's `memcpy`, 393,216 per hash. The file names the
+external leaves that never write PSTATE.DIT (movers, string functions,
+allocators, syscall wrappers) and the re-assert after them goes. It is
+trusted only for symbols the owned list does not name, so a hardened `memcpy`
+of your own is still handled as yours. Do not add anything that takes a
+callback: the callback may be hardened code, which clears at its exit.
+
 ## 4. Close the seed loop
 
 ```
