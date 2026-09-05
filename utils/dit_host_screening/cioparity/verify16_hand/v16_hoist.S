@@ -28,9 +28,8 @@ __wrap_crypto_verify_16:
         orr     w9, w11, w9
         strh    w9, [sp, #0xc]
         b.ne    1b
-        msr     DIT, #0
-        // the post-loop d handling: covered as one region in both variants
-        msr     DIT, #1
+        // the post-loop d handling stays inside the same region, exactly as the
+        // pass places it: one enable at 413160, one clear before ret at 4131cc.
         ldrh    w8, [sp, #0xc]
         strh    w8, [sp, #0xc]
         ldrh    w8, [sp, #0xc]

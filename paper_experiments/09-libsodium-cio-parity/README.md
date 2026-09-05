@@ -544,11 +544,11 @@ library so the compare is the only thing that runs with DIT set):
 | `crypto_verify_16` | DIT writes / op | renamed | serialising | load predictions / op |
 |---|---|---|---|---|
 | no switch (control) | 0 | 1,080.5 cycles | 1,080.5 | 64.5 |
-| hoisted, whole loop covered (what the pass emits) | 4 | **+8.38%** | +15.01% | 8.0 |
+| hoisted, whole loop covered (what the pass emits) | 2 | **+7.73%** | +11.71% | 5.4 |
 | per iteration, only the 8 tainted instructions covered | 34 | **+8.19%** | +74.17% | 8.5 |
 
 Leaving the public reloads uncovered recovers nothing: +8.19% against
-+8.38% on the renamed model, and +74% on the serialising one for the 34
++7.73% on the renamed model, and +74% on the serialising one for the 34
 switches. The loop's critical path is the store-to-load chain through the
 tainted accumulator, and once that is covered the predictor has nothing
 left to shorten; the trace of the per-iteration variant shows the two
