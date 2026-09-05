@@ -1,14 +1,14 @@
 # Fence-based taint hardening: documentation index
 
 > **This is one of two independent hardening lines in this repository.** The other is
-> FastDIT ([`../README.md`](../README.md)): AArch64, taint propagated at the MIR level,
+> ExpeDITe ([`../README.md`](../README.md)): AArch64, taint propagated at the MIR level,
 > mitigation by flipping the `PSTATE.DIT` mode bit. This line is x86-64, taint over IR
 > use lists, mitigation by `seq_cst` fences. **No shared code**, and the two were
 > developed on separate branches.
 >
 > Because both lines defined a class named `llvm::TaintAnalysis`, this line's was
 > renamed to **`IRTaintAnalysis`** (pass `ir-taint-analysis`) when the branches were
-> merged. The FastDIT line kept `TaintAnalysis`. Command-line flag names were not
+> merged. The ExpeDITe line kept `TaintAnalysis`. Command-line flag names were not
 > changed. If you are reading older notes that say `print<taint-analysis>` for this
 > line, the current name is `print<ir-taint-analysis>`.
 

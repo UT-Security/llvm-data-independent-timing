@@ -8,8 +8,9 @@
 > control arms and the M4/M5 notes. This file holds the gotchas and the history behind
 > them; `docs/` holds the reasoning.
 
-This is an **LLVM fork** (branch `dit-tainter`) implementing **interprocedural taint
-analysis + PSTATE.DIT hardening** for AArch64: secret data entry points are declared
+**The project is ExpeDITe** (that spelling, with DIT capitalised, in every document,
+figure and table; never "FastDIT"). It is an **LLVM fork** (branch `dit-tainter`)
+implementing **interprocedural taint analysis + PSTATE.DIT hardening** for AArch64: secret data entry points are declared
 in a taint-source file, taint is propagated through registers/stack/global memory at
 the MIR level across all functions of a TU, and **PSTATE.DIT (data-independent
 timing) mode switches** are inserted so secret-dependent code runs with data-operand
@@ -193,7 +194,8 @@ whole-twin coverage; the default build is byte-identical. **The external-callee
 assumption (`-taint-dit-external-preserves`, opt-in, 2026-09-05):** without it every
 callee the build does not define is assumed to clear the mode, so DIT-on code re-asserts
 after each libc call; that was ALL of argon2id's 395,758 executed switches per hash (three
-glibc `memcpy` per `fill_block` inside the twin) and four of aes256-gcm decrypt's six.
+glibc `memcpy` per `fill_block` inside the twin) and four of aes256-gcm decrypt's six;
+with it argon2id executes 3 switches per hash and goes +7.58% -> +1.08% serialising.
 With it a direct call to a symbol this module does not define is assumed to return
 PSTATE.DIT as it found it: no re-assert, and a function whose only calls are external
 keeps `PreservesDIT`. The callee is identified by the call's SYMBOL (a `bl memcpy` lowered

@@ -1,4 +1,4 @@
-# Interprocedural Taint Analysis + PSTATE.DIT Hardening - Consolidated Overview
+# ExpeDITe: Interprocedural Taint Analysis + PSTATE.DIT Hardening - Consolidated Overview
 
 **Start here, then follow the reading order in [`README.md`](README.md)**, the annotated
 index of every design doc, measured result, and research note. This doc is the map: what

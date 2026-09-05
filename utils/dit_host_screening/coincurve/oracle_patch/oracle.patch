@@ -6,7 +6,7 @@
  
 +static int secp256k1_ecdsa_sign_oracle_inner(const secp256k1_context* ctx, secp256k1_ecdsa_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata);
 +
-+/* ORACLE DIT PLACEMENT - added for the FastDIT measurement, NOT upstream.
++/* ORACLE DIT PLACEMENT - added for the ExpeDITe measurement, NOT upstream.
 + * Exactly two MSR DIT per signature: on at entry, off at exit. This is the
 + * upper bound on what any compiler placement could achieve, and the thing the
 + * taint pass is measured against. The "memory" clobber keeps the compiler from
@@ -32,7 +32,7 @@
  
 +static int secp256k1_ecdsa_sign_recoverable_oracle_inner(const secp256k1_context* ctx, secp256k1_ecdsa_recoverable_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata);
 +
-+/* ORACLE DIT PLACEMENT - added for the FastDIT measurement, NOT upstream.
++/* ORACLE DIT PLACEMENT - added for the ExpeDITe measurement, NOT upstream.
 + * This is the entry point eth-account/eth-keys actually use: Ethereum needs
 + * the recovery id, so CoinCurveECCBackend.ecdsa_sign calls sign_recoverable. */
  int secp256k1_ecdsa_sign_recoverable(const secp256k1_context* ctx, secp256k1_ecdsa_recoverable_signature *signature, const unsigned char *msghash32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata) {
