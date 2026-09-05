@@ -66,7 +66,25 @@ SHIM="$REPO_ROOT/utils/cio_arm_shim.h"
 
 OURS="${OURS:-ditprobe ed25519 ed25519ph x25519 aead_chacha20poly1305 salsa20 xsalsa20 xchacha20 sha256 sha512 blake2b hmac_sha256 hmac_sha512}"
 CIOB="${CIOB:-ed25519 chacha20_poly1305_encrypt chacha20_poly1305_decrypt argon2id aesni256gcm_encrypt aesni256gcm_decrypt}"
-ARMS="${ARMS:-A:baseline:0 C:baseline:1 P:hardened:0 F:func:0 X:fine:0 N:narrow:0}"
+# lab:archive:dit. dit is 0 (nothing), 1 (the shim sets DIT before main: the
+# blanket arm), or `api` / `apiisb`: the Apple bracket, each public entry point
+# CIO's driver calls wrapped in Apple's prologue and epilogue (read the previous
+# DIT state, msr DIT #1, speculation barrier, the call, clear only if it was
+# clear; utils/dit_host_screening/cioparity/api_bracket.c). `api` uses Apple's
+# barrier, sb; `apiisb` uses isb sy, which is what the gem5 rig measures, since
+# gem5 does not implement sb. The interposition is a compile-time rename of the
+# driver's extern prototypes, because ld64 has no --wrap. Part 2 only.
+ARMS="${ARMS:-A:baseline:0 C:baseline:1 B:baseline:api P:hardened:0 F:func:0 X:fine:0 N:narrow:0}"
+API_SRC="$REPO_ROOT/utils/dit_host_screening/cioparity/api_bracket.c"
+api_syms() {   # the entry points a CIO driver calls, and the -DAPI_* group
+  case "$1" in
+    ed25519)      echo "API_SIGN crypto_sign_keypair crypto_sign crypto_sign_open" ;;
+    chacha20*)    echo "API_CHACHA crypto_aead_chacha20poly1305_ietf_keygen crypto_aead_chacha20poly1305_ietf_encrypt crypto_aead_chacha20poly1305_ietf_decrypt" ;;
+    aesni256gcm*) echo "API_AES crypto_aead_aes256gcm_keygen crypto_aead_aes256gcm_encrypt crypto_aead_aes256gcm_decrypt" ;;
+    argon2id)     echo "API_PWHASH crypto_pwhash" ;;
+    *) echo "" ;;
+  esac
+}
 
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
@@ -144,7 +162,8 @@ info "PART 1: our drivers, -O2  [$( [[ -z "${OURS// }" ]] && echo SKIPPED || ech
 for b in $OURS; do
   src="$BENCH_DIR/$b/$b.c"; [[ -f "$src" ]] || { warn "skip $b (no source)"; continue; }
   for a in $ARMS; do
-    lab=${a%%:*}; r=${a#*:}; arch=${r%:*}
+    lab=${a%%:*}; r=${a#*:}; arch=${r%:*}; dit=${r#*:}
+    case "$dit" in api*) continue ;; esac   # our drivers bracket their own region
     clang -Wall -O2 -include "$SHIM" -I"$BENCH_DIR" -I"$INC" \
           -o "$OUT/$b.$arch" "$src" "$WORK/libsodium-$arch.a" -lm 2>/dev/null \
       || { warn "build failed $b/$lab"; continue; }
@@ -157,6 +176,7 @@ for b in $OURS; do
     for k in $(seq 0 $((NA-1))); do
       a=${AR[$(( (k + rep - 1) % NA ))]}
       lab=${a%%:*}; r=${a#*:}; arch=${r%:*}; dit=${r#*:}
+      case "$dit" in api*) continue ;; esac
       bin="$OUT/$b.$arch"; [[ -x "$bin" ]] || continue
       # our drivers wrap the measured region with their own dit_enable(); the shim
       # must NOT also set it, or "blanket" would mean the whole process here and
@@ -180,15 +200,27 @@ MSG="$(LC_ALL=C tr -dc '[:alnum:]' </dev/urandom | head -c 100)"; echo "$MSG" > 
 for b in $CIOB; do
   src="$CIO_DIR/eval_$b.c"; [[ -f "$src" ]] || { warn "skip $b (no source)"; continue; }
   for a in $ARMS; do
-    r=${a#*:}; arch=${r%:*}
+    r=${a#*:}; arch=${r%:*}; dit=${r#*:}
     # -DCIO_SHIM_KPERF arms the shim's kperf cycle source (root only; it falls
     # back to CNTVCT_EL0 by itself otherwise). NOT used in part 1, whose drivers
     # #include perf.c themselves -- including it twice is a duplicate definition.
+    renames=""; wrapobj=""; suffix=""
+    case "$dit" in
+      api|apiisb)
+        set -- $(api_syms "$b"); grp="$1"; shift
+        [[ -n "$grp" ]] || { warn "no API bracket table for $b"; continue; }
+        for sy in "$@"; do renames="$renames -D$sy=expedite_api_$sy"; done
+        bar="-DAPI_BARRIER_SB"; [[ "$dit" == apiisb ]] && bar=""
+        wrapobj="$OUT/.api_bracket_$b.$dit.o"
+        clang -O2 -std=gnu18 -c -DAPI_MACRO_RENAME -D$grp $bar -I"$INC" \
+              -o "$wrapobj" "$API_SRC" 2>/dev/null || { warn "bracket build failed $b/$dit"; continue; }
+        suffix="-$dit" ;;
+    esac
     # shellcheck disable=SC2086
-    clang -fomit-frame-pointer $CIO_OPT -std=c18 -DCIO_SHIM_KPERF $CHEAP \
+    clang -fomit-frame-pointer $CIO_OPT -std=c18 -DCIO_SHIM_KPERF $CHEAP $renames \
           -I"$BENCH_DIR" -include "$SHIM" -I"$INC" \
-          -o "$OUT/eval_$b.$arch" "$src" "$WORK/libsodium-$arch.a" -lm 2>/dev/null \
-      || warn "build failed eval_$b/$arch"
+          -o "$OUT/eval_$b.$arch$suffix" "$src" $wrapobj "$WORK/libsodium-$arch.a" -lm 2>/dev/null \
+      || warn "build failed eval_$b/$arch$suffix"
   done
 done
 for b in $CIOB; do
@@ -198,11 +230,13 @@ for b in $CIOB; do
     for k in $(seq 0 $((NA-1))); do
       a=${AR[$(( (k + rep - 1) % NA ))]}
       lab=${a%%:*}; r=${a#*:}; arch=${r%:*}; dit=${r#*:}
-      bin="$OUT/eval_$b.$arch"; [[ -x "$bin" ]] || continue
+      suffix=""; shimdit="$dit"
+      case "$dit" in api*) suffix="-$dit"; shimdit=0 ;; esac   # the bracket is in the binary; the shim stays out
+      bin="$OUT/eval_$b.$arch$suffix"; [[ -x "$bin" ]] || continue
       cc="$OUT/.cc"; err="$OUT/.e"
       # CIO's drivers have no DIT support of their own, so the blanket arm is the
       # shim's constructor -- their sources stay byte-identical across arms.
-      SHIM_DIT="$dit" "$bin" "$NI" 25 "$MSG" $EX "$cc" >/dev/null 2>"$err"
+      SHIM_DIT="$shimdit" "$bin" "$NI" 25 "$MSG" $EX "$cc" >/dev/null 2>"$err"
       [[ -s "$cc" ]] || continue
       de=$(sed -n 's/.*SHIM exit dit=\([01]\).*/\1/p' "$err" | tail -1)
       cs=$(sed -n 's/.*cycles=\([a-z]*\).*/\1/p' "$err" | tail -1)
