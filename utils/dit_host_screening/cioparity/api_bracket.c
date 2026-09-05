@@ -50,7 +50,14 @@
 #  define DIT_BARRIER() __asm__ volatile("isb sy" ::: "memory")
 #endif
 
-#ifdef API_NO_MRS
+#if defined(API_NOP)
+   /* The bracket's instruction-matched layout control: every instruction of
+    * the full sequence kept, none of them touching DIT. mrs -> mov (one
+    * instruction, a register write), msr -> hint #0, the barrier -> hint #0,
+    * the conditional clear -> the same tbnz over a hint #0. */
+#  define DIT_ENTER(was) do { __asm__ volatile("mov %0, #0" : "=r"(was)); __asm__ volatile("hint #0" ::: "memory"); __asm__ volatile("hint #0" ::: "memory"); } while (0)
+#  define DIT_LEAVE(was) do { if (!(was)) __asm__ volatile("hint #0" ::: "memory"); } while (0)
+#elif defined(API_NO_MRS)
 #  define DIT_ENTER(was) do { (was) = 0; __asm__ volatile("msr DIT, #1" ::: "memory"); DIT_BARRIER(); } while (0)
 #  define DIT_LEAVE(was) do { (void)(was); __asm__ volatile("msr DIT, #0" ::: "memory"); } while (0)
 #else
