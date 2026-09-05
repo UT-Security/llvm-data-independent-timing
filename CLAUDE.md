@@ -112,7 +112,12 @@ until the report's 21 lines are pasted (then identical coverage); and two findin
 outrank it: glibc's `memcpy` blinds the oracle (libsecp256k1's nonce derivation was never
 protected; link `gem5-DIT benchmarks/taint_oracle/dit_movers/dit_movers.o` ahead of libc
 or every oracle number is an undercount), and callee-saved restores reload the caller's
-secrets. Test `clang/test/CodeGen/taint-dit-contract.c`.
+secrets. Test `clang/test/CodeGen/taint-dit-contract.c`. **Ownership:** the obligation list is
+only a to-do list for callees the build defines; `utils/taint_owned_symbols.sh` over the
+build's objects writes that set, `-taint-owned-symbols=<file>` makes the report file every
+other callee as `external-call` (out of scope, no repair), and `utils/taint_obligations.py`
+splits a report offline and writes the next round's seed file (test
+`clang/test/CodeGen/taint-dit-owned.c`).
 
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function

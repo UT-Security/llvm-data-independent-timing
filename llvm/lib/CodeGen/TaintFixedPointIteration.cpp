@@ -39,6 +39,8 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/LineIterator.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
@@ -837,6 +839,27 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
     unsigned Obligations = 0;
     StringSet<> ObligationCallees;
     unsigned IndirectObligations = 0;
+    // Ownership. With -taint-owned-symbols, an unseen callee that this build
+    // does not define is external code the developer does not own: filed as
+    // `external-call`, out of scope for the seed loop, counted separately.
+    // Taint still propagates through the call exactly as before.
+    StringSet<> OwnedSymbols;
+    bool HaveOwned = false;
+    if (!TaintOwnedSymbolsFile.empty()) {
+      auto Buf = MemoryBuffer::getFile(TaintOwnedSymbolsFile);
+      if (!Buf) {
+        errs() << "taint: cannot read owned-symbols file "
+               << TaintOwnedSymbolsFile << ": " << Buf.getError().message()
+               << "\n";
+      } else {
+        HaveOwned = true;
+        for (line_iterator LI(**Buf, /*SkipBlanks=*/true, '#'); !LI.is_at_eof();
+             ++LI)
+          OwnedSymbols.insert(LI->trim());
+      }
+    }
+    unsigned ExternalSites = 0;
+    StringSet<> ExternalCallees;
     forEachAnalyzed(M, Ctx, Results,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
@@ -884,8 +907,14 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 // the entire hashing kernel - `argon2_initialize`,
                 // `argon2_fill_memory_blocks`, `argon2_fill_segment_ref` -
                 // carries zero switches and appears nowhere in any report.
-                if (MI.isCall() && !Arg.any() && LossOS &&
-                    frameMayHoldSecret(State)) {
+                // For EVERY call, not only one that passes no secret: a call can hand
+                // one secret in a register and another by frame address
+                // (`ge25519_p3_tobytes(sig, &R)`), and the second was invisible while
+                // this fired only for secret-free calls - libsodium's seed loop
+                // converged with fe25519_invert uncovered, 42,312 ops per two
+                // signatures, for exactly that reason. The per-register check below
+                // already skips what the normal path transferred.
+                if (MI.isCall() && LossOS && frameMayHoldSecret(State)) {
                   const Function *MemCallee = findCalledFunction(M, MI);
                   for (const MachineOperand &MO : MI.uses()) {
                     if (!MO.isReg() || MO.isDef() || !MO.getReg().isValid() ||
@@ -910,13 +939,53 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                           !State.isExternalMemClobbered() && !State.UnknownMemTainted)
                         continue;
                     const unsigned ArgIdx = TRI->getEncodingValue(MO.getReg());
+                    // Already seeded on this argument - in its own TU (the annotator's
+                    // stamp on the declaration here) or in this one - so the callee
+                    // covers itself and there is nothing to propose. Without this the
+                    // seed loop never converges: the record re-proposes every frame-
+                    // address seed it already has (libsodium stalled at 36 lines).
+                    auto SeededOnArg = [&](unsigned Idx) {
+                      if (!MemCallee)
+                        return false;
+                      if (!MemCallee->isDeclaration())
+                        return Idx < MemCallee->arg_size() &&
+                               (MemCallee->getArg(Idx)->hasAttribute("tainted") ||
+                                MemCallee->getArg(Idx)->hasAttribute("tainted-pointee"));
+                      if (!MemCallee->hasFnAttribute("taint-seeded-elsewhere"))
+                        return false;
+                      StringRef V = MemCallee->getFnAttribute("taint-seeded-elsewhere")
+                                        .getValueAsString();
+                      StringRef D, P;
+                      std::tie(D, P) = V.split(',');
+                      unsigned MD = 0, MP = 0;
+                      D.getAsInteger(10, MD);
+                      P.getAsInteger(10, MP);
+                      return (((MD | MP) >> Idx) & 1u) != 0;
+                    };
+                    if (SeededOnArg(ArgIdx))
+                      continue;
+                    // An argument register is not always a parameter: an aggregate
+                    // passed by value spans two registers, so x2 may be the tail of
+                    // parameter 1. A seed line naming a parameter the callee does not
+                    // have is fatal to the next build (argon2_fill_segment_ref's
+                    // position struct proposed `,2` for a two-parameter function), so
+                    // only propose an index the callee has; otherwise name the register
+                    // and leave the parameter to the reader.
+                    const bool IdxIsParam = !MemCallee || ArgIdx < MemCallee->arg_size();
                     const std::string MemRepair =
-                        (Twine("seed the callee on the argument that receives the frame "
-                               "address, i.e. `") +
-                         (MemCallee ? MemCallee->getName() : StringRef("<callee>")) + "," +
-                         Twine(ArgIdx) + ",pointee`, or re-enable per-object frame "
-                         "provenance (docs/design/p1b-frame-provenance.md)")
-                            .str();
+                        IdxIsParam
+                            ? (Twine("seed the callee on the argument that receives the "
+                                     "frame address, i.e. `") +
+                               (MemCallee ? MemCallee->getName() : StringRef("<callee>")) +
+                               "," + Twine(ArgIdx) +
+                               ",pointee`, or re-enable per-object frame provenance "
+                               "(docs/design/p1b-frame-provenance.md)")
+                                  .str()
+                            : (Twine("register x") + Twine(ArgIdx) +
+                               " carries the frame address but maps to no parameter of its "
+                               "own (part of an aggregate passed by value); seed the parameter "
+                               "it belongs to, or re-enable per-object frame provenance")
+                                  .str();
                     reportInfoLoss(
                         LossOS, TaintLossSeverity::Unsound, "memory", F,
                         MemCallee ? MemCallee->getName() : StringRef("<indirect>"),
@@ -980,7 +1049,10 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                   if (Arg.Pointee)
                     *CallsiteOS << " pointee-tainted-args";
                   *CallsiteOS << (ditCalleeContract()
-                                      ? (isLibcMover(Callee, MI)
+                                      ? (Named && HaveOwned &&
+                                                 !OwnedSymbols.contains(CalleeName)
+                                             ? " (external: out of scope)\n"
+                                         : isLibcMover(Callee, MI)
                                              ? " (UNCOVERED: libc mover, link a hardened one)\n"
                                              : " (UNCOVERED: callee contract)\n")
                                       : " (covered by inherited DIT)\n");
@@ -1024,6 +1096,12 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 if (Named) {
                   SmallString<160> R("seed the TU that defines it:");
                   for (unsigned i = 0; i < 8; ++i) {
+                    // Register i is not always parameter i: an aggregate passed by value
+                    // spans two registers, and a seed naming a parameter the callee does
+                    // not have is fatal to the next build (argon2_fill_segment_ref's
+                    // position struct produced `,2` for a two-parameter function).
+                    if (Callee && i >= Callee->arg_size())
+                      continue;
                     const bool P = MissP & (1u << i);
                     const bool D = MissD & (1u << i);
                     if (!P && !D)
@@ -1037,6 +1115,32 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                   }
                   if (R.size() > 28)   // something was appended
                     Repair = std::string(R);
+                }
+                if (ditCalleeContract() && Named && HaveOwned &&
+                    !OwnedSymbols.contains(CalleeName)) {
+                  // External: not ours to seed. Say what the call does to the secret
+                  // and leave the repair empty - a hardened mover or a hardened libc is
+                  // the developer's call, not an obligation.
+                  ++ExternalSites;
+                  ExternalCallees.insert(CalleeName);
+                  reportInfoLoss(
+                      LossOS, TaintLossSeverity::Info, "external-call", F, CalleeName,
+                      MI.getDebugLoc(),
+                      "the secret is passed to code this build does not define; out of "
+                      "scope for the seed loop (the taint still propagates through the "
+                      "call)",
+                      isLibcMover(Callee, MI)
+                          ? StringRef("its loads and stores of the secret run with whatever "
+                                      "mode libc finds; a hardened mover linked ahead of "
+                                      "libc would cover them")
+                      : isLibcAllocator(Callee, MI)
+                          ? StringRef("an allocator's control flow depends on the size or "
+                                      "pointer it is handed, which DIT does not cover; the "
+                                      "fix is upstream")
+                          : StringRef("runs unprotected unless the build that defines it "
+                                      "is hardened"),
+                      "");
+                  return true;
                 }
                 if (ditCalleeContract()) {
                   // The obligation. Under this contract the caller holds nothing on the
@@ -1108,6 +1212,12 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
       errs() << " this build does not cover (callee contract); "
                 "-taint-info-loss-report lists them with the seed lines\n";
     }
+    if (TaintInsertDIT && ExternalSites)
+      errs() << "taint: " << sys::path::filename(M.getSourceFileName()) << ": "
+             << ExternalSites << " secret-passing call site(s) reach "
+             << ExternalCallees.size()
+             << " external callee(s) this build does not define (out of "
+                "scope; -taint-info-loss-report lists them as external-call)\n";
   }
 
   // Step 3c-2: Memory-clobber report - the *sources* of cross-function memory
