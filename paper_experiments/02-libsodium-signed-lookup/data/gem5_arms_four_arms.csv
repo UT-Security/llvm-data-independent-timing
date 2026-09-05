@@ -1,0 +1,51 @@
+# Experiment 02, the four arms (base, blanket, Apple bracket, ExpeDITe) plus the bracket's instruction-matched NOP twin, 2026-09-05.
+# base = -O2 with our compiler, no seeds; blanket = base + the constructor's msr DIT #1; api = base with the AEAD entry points wrapped in Apple's prologue/epilogue (mrs DIT token, msr DIT #1, isb sy for sb, call, clear only if the token was 0) via --wrap; apinop = the same wrapper with every DIT instruction a NOP (mov/hint), same instruction count and addresses; pass = -ftaint-harden at the shipped defaults (callee contract, twins, intra-block placement), fixpoint seeds, owned list.
+# gem5 build: the rig worktree at 9f80e5a2a3 (before the early-clear change of gem5 master #106). docs: paper_experiments/02-libsodium-signed-lookup/README.md, 'The four arms'.
+# gem5 Neoverse-V2 FDP, --eves --dmp --comp-simp, gem5.fast. Full flow (lookups + one chacha20-poly1305 AEAD encrypt of a 100-byte record),
+# CIO-parity seeds with the chacha rename patch; pass library built with -fno-optimize-sibling-calls.
+# switch=serialising is --no-speculative-dit. dit_writes is commit.ditWrites (committed mode writes).
+# f_secret_pct = (full - nosign) / full on the nodit arm's cycles, same iter.
+# cycles = median over 5 stack offset(s) (argv[0] lengths); spread_pct = (max-min)/median across them.
+L,pred_q4,f_secret_pct,arm,switch,cycles,insts,ipc,vs_base_pct,dit_writes,requests,n_offsets,spread_pct
+10,3,96.8,nodit,-,3989763,7980810,2.000,0.00,0,1600,5,1.09
+10,3,96.8,blanket,-,4281080,7980810,1.864,7.30,0,1600,5,0.20
+10,3,96.8,api,renamed,3809727,8012810,2.103,-4.51,3200,1600,5,0.12
+10,3,96.8,api,serialising,3870957,8012810,2.070,-2.98,3200,1600,5,0.03
+10,3,96.8,apinop,-,3919033,8012810,2.045,-1.77,0,1600,5,1.44
+10,3,96.8,pass,renamed,4064397,8139210,2.003,1.87,60800,1600,5,1.50
+10,3,96.8,pass,serialising,5356420,8139210,1.520,34.25,60800,1600,5,0.11
+50,3,81.2,nodit,-,4760689,8322010,1.748,0.00,0,1500,5,1.25
+50,3,81.2,blanket,-,5362933,8322010,1.552,12.65,0,1500,5,0.58
+50,3,81.2,api,renamed,4591768,8352010,1.819,-3.55,3000,1500,5,0.07
+50,3,81.2,api,serialising,4642903,8352010,1.799,-2.47,3000,1500,5,0.25
+50,3,81.2,apinop,-,4699637,8352010,1.777,-1.28,0,1500,5,1.10
+50,3,81.2,pass,renamed,4816482,8470510,1.759,1.17,57000,1500,5,0.83
+50,3,81.2,pass,serialising,6051621,8470510,1.400,27.12,57000,1500,5,0.07
+200,3,45.0,nodit,-,7294186,9710430,1.331,0.00,0,1270,5,1.27
+200,3,45.0,blanket,-,8770914,9710430,1.107,20.25,0,1270,5,0.63
+200,3,45.0,api,renamed,7117583,9735830,1.368,-2.42,2540,1270,5,0.16
+200,3,45.0,api,serialising,7207491,9735830,1.351,-1.19,2540,1270,5,0.01
+200,3,45.0,apinop,-,7263444,9735830,1.340,-0.42,0,1270,5,0.31
+200,3,45.0,pass,renamed,7480749,9836160,1.315,2.56,48260,1270,5,0.61
+200,3,45.0,pass,serialising,8387320,9836160,1.173,14.99,48260,1270,5,0.12
+1000,3,13.1,nodit,-,13059685,12626830,0.967,0.00,0,670,5,0.21
+1000,3,13.1,blanket,-,16685900,12626830,0.757,27.77,0,670,5,0.21
+1000,3,13.1,api,renamed,12904846,12640230,0.979,-1.19,1340,670,5,0.42
+1000,3,13.1,api,serialising,13025563,12640230,0.970,-0.26,1340,670,5,0.23
+1000,3,13.1,apinop,-,12997685,12640230,0.972,-0.47,0,670,5,0.25
+1000,3,13.1,pass,renamed,13146135,12693160,0.966,0.66,25460,670,5,0.91
+1000,3,13.1,pass,serialising,13614373,12693160,0.932,4.25,25460,670,5,0.09
+5000,3,2.6,nodit,-,17619689,14969210,0.850,0.00,0,200,5,1.12
+5000,3,2.6,blanket,-,22988060,14969210,0.651,30.47,0,200,5,0.04
+5000,3,2.6,api,renamed,17519293,14973210,0.855,-0.57,400,200,5,0.94
+5000,3,2.6,api,serialising,17655415,14973210,0.848,0.20,400,200,5,0.41
+5000,3,2.6,apinop,-,17563143,14973210,0.853,-0.32,0,200,5,0.77
+5000,3,2.6,pass,renamed,17626872,14989010,0.850,0.04,7600,200,5,1.04
+5000,3,2.6,pass,serialising,17781103,14989010,0.843,0.92,7600,200,5,0.35
+20000,3,0.6,nodit,-,18943759,15666540,0.827,0.00,0,55,5,1.36
+20000,3,0.6,blanket,-,24883971,15666540,0.630,31.36,0,55,5,0.00
+20000,3,0.6,api,renamed,18892256,15667640,0.829,-0.27,110,55,5,0.57
+20000,3,0.6,api,serialising,18891093,15667640,0.829,-0.28,110,55,5,1.96
+20000,3,0.6,apinop,-,18871383,15667640,0.830,-0.38,0,55,5,0.81
+20000,3,0.6,pass,renamed,18992749,15671985,0.825,0.26,2090,55,5,1.25
+20000,3,0.6,pass,serialising,19037238,15671985,0.823,0.49,2090,55,5,1.50
