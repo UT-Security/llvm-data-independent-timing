@@ -562,17 +562,31 @@ and no toggle placement, however fine, can make the clean reloads
 predictable. The serialising model drains at each write instead, which is
 precise and is the +74%.
 
-So what this experiment measures is the model's visibility of the mode, not
-the value of the two public predictions. The hoist is free on this loop
-because nothing finer is visible to the predictor; whether predicting the
-pointer reloads alone would shorten the loop is bounded, not measured: all
-three predicted is the control at 1,080.5 cycles, none of them is +7.7%,
-and the loop-carried chain runs through the tainted accumulator, which is
-the one that must stay covered. A clear that took effect speculatively
-would run a mispredicted path with the mode off, so the model's choice is
-the natural one for any renamed implementation, and Apple's silicon cannot
-be asked, since the renamed and serialising behaviours are not separable
-there.
+So on the shipped model that experiment measures the visibility of the mode,
+not the value of the two public predictions. To measure the value, the model
+was given a counterfactual: `--publishing-dit-clear` (gem5-DIT-pmull
+`ditcycles`), under which `msr DIT, #0` resolves to 0 at rename and does not
+defer, so younger instructions leave the region at once. It is insecure by
+construction (a mispredicted path runs with the mode off, the section 9.8
+leak) and exists only to answer this question. Same three binaries:
+
+| `crypto_verify_16` | clear takes effect | renamed | correct load predictions / op | predictions suppressed by DIT / op |
+|---|---|---|---|---|
+| no switch (control) | | 1,080.5 cycles | 64.5 | 0 |
+| hoisted (the pass) | at commit | +7.73% | 5.4 | 460 |
+| hoisted (the pass) | at rename | +7.60% | 11.8 | 380 |
+| per iteration, tainted only | at commit | +8.19% | 8.5 | 395 |
+| per iteration, tainted only | at rename | **+8.09%** | **45.7** | 252 |
+
+With the clear visible at once, the per-iteration placement gets its two
+public reloads predicted on every iteration (the trace: 41 correct
+predictions each per two operations, against 3 before) and the loop costs
+the same +8.1%. **Predicting the public loads is worth nothing here.** The
+loop's critical path is the store-to-load chain through the tainted
+accumulator, and once that load is covered the pointer predictions have
+nothing to shorten. That is now measured rather than argued: the hoist is
+free on this loop under either clear semantics, and the 8% on the row is
+the cost of protecting the one load that must be protected.
 
 A side finding from the same reports, not on the benchmark's path. The
 one-shot `crypto_aead_aes256gcm_decrypt` builds the key schedule and the

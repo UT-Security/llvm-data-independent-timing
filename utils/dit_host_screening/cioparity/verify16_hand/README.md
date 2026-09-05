@@ -22,3 +22,10 @@ Build (from `build_arms.sh`'s staged driver and base library):
 
 Run as `run_cio_gem5.py` does (`50 10 <msg> 100 cc.txt`, both switch models).
 Result 2026-09-05 in `paper_experiments/09-libsodium-cio-parity/README.md`.
+
+Counterfactual: `--publishing-dit-clear` on the gem5 command line (gem5-DIT-pmull
+branch `ditcycles`) makes `msr DIT, #0` take effect at rename instead of at
+commit, so the per-iteration variant's DIT-off instructions are actually seen
+DIT-off by the value predictor. Insecure by construction; measurement only.
+Result: the public reloads are predicted on every iteration and the loop
+costs the same (+8.09% against +8.19%).
