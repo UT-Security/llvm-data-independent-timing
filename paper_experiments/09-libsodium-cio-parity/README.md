@@ -510,6 +510,17 @@ switches per operation and pays the bracket's serialising cost; chacha keeps
 binary's layout term (aes256-gcm encrypt's -6.16% sits on a -5.94% NOP
 twin), not with the switches.
 
+**With intra-block placement, the default since later on 2026-09-05**
+(`-taint-dit-sub-block`; `=0` is the block placement every row above was
+measured with; `docs/results/dit-intra-block-default-2026-09-05.md`,
+`data/gem5_intra_block{,_ext}.csv`): executed switches identical on every
+row (16/38/39/6/6, and 2/32/32/2/2 with the external-callee assumption),
+oracle identical, and the cycles move by each arm's layout band (chacha
+serialising +44.8 / +45.6 against +43.9 / +42.4, aes-gcm decrypt +36.3
+against +36.1). The library's hot code runs in whole twins, which
+intra-block placement does not enter; four of its 113 instrumented
+functions changed.
+
 **With a different message every operation** (`build_arms.sh VARY_INPUT=1`:
 the staged drivers rewrite the message before each iteration's setup,
 outside the measured region; keys and nonces already vary per iteration in
