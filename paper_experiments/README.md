@@ -20,7 +20,7 @@ were run.
 | # | workload | public lane | secret lane | knob | status |
 |---|---|---|---|---|---|
 | 01 | [Bitcoin Core wallet](01-bitcoin-core-wallet/) | coin selection, 4 solvers | `CKey::Sign` per input | inputs per tx | **complete, both instruments; gem5 half re-taken on the current compiler 2026-09-03 and the flow added on gem5 (the pass wins through f = 54% under either switch; beyond that, inside the code-placement floor), silicon re-take pending on the M5 (`reproduce.sh`)** |
-| 02 | [libsodium signed lookup](02-libsodium-signed-lookup/) | hashed pointer chase, 75% of critical-path loads LVP-predictable | chacha20-poly1305 AEAD per record (ed25519 until 2026-09-03) | lookups per record; also the LVP-predictable fraction, and the switch implementation | **gem5 complete on the new rig (2026-09-03), silicon pending** |
+| 02 | [libsodium signed lookup](02-libsodium-signed-lookup/) | hashed pointer chase, 75% of critical-path loads LVP-predictable | chacha20-poly1305 AEAD per record (ed25519 until 2026-09-03) | lookups per record; also the LVP-predictable fraction, and the switch implementation | **gem5 complete, re-run 2026-09-05 on the compiler's new defaults (callee contract + twins: 49 -> 38 switches per request, serialising cost -25 to -35%, crossover moved up); silicon pending** |
 | 03 | [mbedTLS record MAC](03-mbedtls-record-mac/) | per-record bookkeeping, in the SAME function | `mbedtls_md_hmac` per record | **bytes per record (region SIZE)** | **complete, silicon** |
 | 04 | [libsecp256k1 soundness](04-libsecp256k1-soundness/) | - | ECDSA signing, key seeded | **none - measures PROTECTION, not cost** | **complete, gem5** |
 | 05 | [nginx TLS 1.3](05-nginx-tls-deployed/) | request handling, cert verify | TLS 1.3 key schedule | **none - a DEPLOYED server, measures REACH** | **complete, silicon** |
@@ -50,6 +50,27 @@ scope. Checked:
 | **06** | mbedTLS | **AFFECTED, not re-run** - reuses 03's binaries, and its gem5 arms need rebuilding on the current compiler |
 | 01 | Bitcoin Core | **gem5 half re-measured 2026-09-03 on the current compiler; silicon half pending** - see below |
 | 05 | nginx + OpenSSL | **not settled** - the hardened objects are no longer on disk, so there is nothing to compare against; needs an OpenSSL rebuild |
+
+**2026-09-05, the default flip** (`-taint-dit-contract=callee` and the DIT
+twins on by default; `docs/design/dit-cloning.md`,
+`docs/reference/harden-runbook.md`). This changes what every `-ftaint-harden`
+build does, so every experiment is in scope, and two things follow for any
+re-run. First, **the pre-contract seed files protect nothing under the
+contract**: a build with `libsodium_secret.txt` under the new defaults
+covers zero secret operations on the signing path (measured,
+`docs/results/dit-callee-contract-2026-09-04.md` §4); experiments 02, 07 and
+09 must use `libsodium_secret_contract.txt` and the owned list, as 02's
+rig now does. Second, the pass arm's switch count drops wherever calls are
+direct (libsodium signing 10,400 -> 41 executed writes per two signatures)
+and not where they go through tables (the AEAD keeps 38 of 49). Status:
+
+| # | workload | status |
+|---|---|---|
+| **02** | libsodium signed lookup | **re-run 2026-09-05**: serialising -25 to -35% at every point, renamed within 1%, blanket unchanged, oracle frontier unchanged; the crossover against blanket moved from ~50% to between 45% and 81% secret |
+| 07, 09 | libsodium | **not re-run**; need the contract seed file, and 09's "blanket wins" verdict is where the twins change the least (everything is secret, so a twin's dwell is blanket's) |
+| 03, 06 | mbedTLS | **not re-run**; the 727-seed contract file exists (`tls_resume/`), the twins have not been measured on it |
+| 04 | libsecp256k1 | **not re-run**; the contract seed file exists (`secp_seed_contract.txt`) |
+| 01, 05, 08 | | **not re-run** |
 
 **01 is a different problem from the other two.** Its recorded arm
 (`build-hoist`) was built **2026-08-18**, and its `-ftaint-harden` seed lived in

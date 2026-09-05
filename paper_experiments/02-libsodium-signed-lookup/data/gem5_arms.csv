@@ -1,4 +1,4 @@
-# provenance: run 2026-09-03 on aarch64 Linux (beckham), native static build; gem5-DIT 52e2505e44+dirty; clang from llvm-data-independent-timing 9d698b0ddaa2 (/home/rgangar/.treehouse/llvm-data-independent-timing-7b712d/2/llvm-data-independent-timing/build); gem5.fast built 2026-09-02 01:12 ; WORK=/tmp/claude-1000/-home-rgangar--treehouse-llvm-data-independent-timing-7b712d-3-llvm-data-independent-timing/72b2fbfa-c077-449a-b7d8-81732464925f/scratchpad/gem5/repro
+# provenance: run 2026-09-04 on aarch64 Linux (beckham), native static build; gem5-DIT bf9d52c66c; clang from llvm-data-independent-timing fa4aa84e36a0 (/home/rgangar/.treehouse/llvm-data-independent-timing-7b712d/4/llvm-data-independent-timing/build-subblock); gem5.fast built 2026-09-02 01:12 ; WORK=/home/rgangar/Documents/signed_lookup-gem5
 # CANONICAL lane: hashed chase, LVP-predictable header on 3 of 4 iterations (pred_q4=3), chacha20-poly1305 secret op. vs_base_pct is cycles; the paper figure uses IPC overhead = nodit ipc / arm ipc - 1 from the ipc column.
 # gem5 Neoverse-V2 FDP, --eves --dmp --comp-simp, gem5.fast. Full flow (lookups + one chacha20-poly1305 AEAD encrypt of a 100-byte record),
 # CIO-parity seeds with the chacha rename patch; pass library built with -fno-optimize-sibling-calls.
@@ -6,27 +6,27 @@
 # f_secret_pct = (full - nosign) / full on the nodit arm's cycles, same iter.
 # cycles = median over 5 stack offset(s) (argv[0] lengths); spread_pct = (max-min)/median across them.
 L,pred_q4,f_secret_pct,arm,switch,cycles,insts,ipc,vs_base_pct,dit_writes,requests,n_offsets,spread_pct
-10,3,96.8,nodit,-,3989763,7980810,2.000,0.00,0,1600,5,1.09
-10,3,96.8,blanket,-,4281080,7980810,1.864,7.30,0,1600,5,0.15
-10,3,96.8,pass,renamed,4086803,8156810,1.996,2.43,78400,1600,5,2.20
-10,3,96.8,pass,serialising,5759444,8156810,1.416,44.36,78400,1600,5,0.04
-50,3,81.2,nodit,-,4760689,8322010,1.748,0.00,0,1500,5,1.25
-50,3,81.2,blanket,-,5362933,8322010,1.552,12.65,0,1500,5,0.58
-50,3,81.2,pass,renamed,4811066,8487010,1.764,1.06,73500,1500,5,0.19
-50,3,81.2,pass,serialising,6412171,8487010,1.324,34.69,73500,1500,5,0.20
+10,3,96.8,nodit,-,3977649,7980810,2.006,0.00,0,1600,5,2.28
+10,3,96.8,blanket,-,4281549,7980810,1.864,7.64,0,1600,5,0.18
+10,3,96.8,pass,renamed,4016378,8139210,2.027,0.97,60800,1600,5,1.81
+10,3,96.8,pass,serialising,5211208,8139210,1.562,31.01,60800,1600,5,0.04
+50,3,81.2,nodit,-,4761593,8322010,1.748,0.00,0,1500,5,1.25
+50,3,81.2,blanket,-,5362933,8322010,1.552,12.63,0,1500,5,0.58
+50,3,81.2,pass,renamed,4821759,8470510,1.757,1.26,57000,1500,5,1.25
+50,3,81.2,pass,serialising,5913691,8470510,1.432,24.20,57000,1500,5,0.04
 200,3,45.0,nodit,-,7294186,9710430,1.331,0.00,0,1270,5,1.22
 200,3,45.0,blanket,-,8770914,9710430,1.107,20.25,0,1270,5,0.63
-200,3,45.0,pass,renamed,7326171,9850130,1.345,0.44,62230,1270,5,0.23
-200,3,45.0,pass,serialising,8707381,9850130,1.131,19.37,62230,1270,5,0.69
+200,3,45.0,pass,renamed,7356998,9836160,1.337,0.86,48260,1270,5,0.58
+200,3,45.0,pass,serialising,8261253,9836160,1.191,13.26,48260,1270,5,0.38
 1000,3,13.1,nodit,-,13059685,12626830,0.967,0.00,0,670,5,0.21
 1000,3,13.1,blanket,-,16685900,12626830,0.757,27.77,0,670,5,0.21
-1000,3,13.1,pass,renamed,13099862,12700530,0.970,0.31,32830,670,5,0.15
-1000,3,13.1,pass,serialising,13811623,12700530,0.920,5.76,32830,670,5,1.04
+1000,3,13.1,pass,renamed,13150158,12693160,0.965,0.69,25460,670,5,0.40
+1000,3,13.1,pass,serialising,13547148,12693160,0.937,3.73,25460,670,5,0.79
 5000,3,2.6,nodit,-,17619689,14969210,0.850,0.00,0,200,5,1.12
 5000,3,2.6,blanket,-,22988060,14969210,0.651,30.47,0,200,5,0.04
-5000,3,2.6,pass,renamed,17675108,14991210,0.848,0.31,9800,200,5,0.21
-5000,3,2.6,pass,serialising,17893257,14991210,0.838,1.55,9800,200,5,1.39
+5000,3,2.6,pass,renamed,17644661,14989010,0.849,0.14,7600,200,5,0.34
+5000,3,2.6,pass,serialising,17761946,14989010,0.844,0.81,7600,200,5,0.53
 20000,3,0.6,nodit,-,18943759,15666540,0.827,0.00,0,55,5,1.36
 20000,3,0.6,blanket,-,24883971,15666540,0.630,31.36,0,55,5,0.00
-20000,3,0.6,pass,renamed,19031535,15672590,0.824,0.46,2695,55,5,0.98
-20000,3,0.6,pass,serialising,19074483,15672590,0.822,0.69,2695,55,5,1.36
+20000,3,0.6,pass,renamed,19010801,15671985,0.824,0.35,2090,55,5,1.26
+20000,3,0.6,pass,serialising,18921449,15671985,0.828,-0.12,2090,55,5,0.99

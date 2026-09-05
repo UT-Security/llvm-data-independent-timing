@@ -1,4 +1,4 @@
-# provenance: run 2026-09-03 on aarch64 Linux (beckham), native static build; gem5-DIT 52e2505e44+dirty; clang from llvm-data-independent-timing 9d698b0ddaa2 (/home/rgangar/.treehouse/llvm-data-independent-timing-7b712d/2/llvm-data-independent-timing/build); gem5.fast built 2026-09-02 01:12 ; WORK=/tmp/claude-1000/-home-rgangar--treehouse-llvm-data-independent-timing-7b712d-3-llvm-data-independent-timing/72b2fbfa-c077-449a-b7d8-81732464925f/scratchpad/gem5/repro
+# provenance: run 2026-09-04 on aarch64 Linux (beckham), native static build; gem5-DIT bf9d52c66c; clang from llvm-data-independent-timing fa4aa84e36a0 (/home/rgangar/.treehouse/llvm-data-independent-timing-7b712d/4/llvm-data-independent-timing/build-subblock); gem5.fast built 2026-09-02 01:12 ; WORK=/home/rgangar/Documents/signed_lookup-gem5
 # CANONICAL lane, public lane alone (--nosecret): value predictor totals with and without DIT.
 # Mechanism: gem5, public lane alone (--nosecret).
 L,pred_q4,arm,insts,cycles,ipc,vp_predictions,vp_preds_per_1k_insts
