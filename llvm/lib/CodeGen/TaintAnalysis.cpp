@@ -358,14 +358,15 @@ static cl::opt<DITPlacementMode> TaintDITPlacement(
 cl::opt<DITContract> llvm::TaintDITContract(
     "taint-dit-contract",
     cl::desc("Who covers a callee's secrets at a call boundary"),
-    cl::init(DITContract::Inherit),
+    cl::init(DITContract::Callee),
     cl::values(clEnumValN(DITContract::Inherit, "inherit",
                           "the caller holds DIT across a secret-passing call and "
-                          "an unseen callee inherits it (default)"),
+                          "an unseen callee inherits it (the pre-2026-09-05 "
+                          "default)"),
                clEnumValN(DITContract::Callee, "callee",
                           "every function protects its own secrets; a secret "
                           "reaching a callee this build cannot see is a reported "
-                          "obligation, not the caller's job")));
+                          "obligation, not the caller's job (default)")));
 
 // Track B increment (c): the admission test (docs/design/dit-placement.md
 // §5.6). A DIT mode switch (MSR DIT) costs `switch-cyc` cycles; DIT dwell costs
@@ -3242,8 +3243,12 @@ bool llvm::isDITClone(const Function *F) {
 // redirected to it without this pass ever seeing the body - no LTO, no
 // cross-module view. It is the same assumption the owned list already encodes
 // for the obligation report: a seeded callee we define is compiled with these
-// flags. A seed naming a function this build does NOT define is the one way to
-// break it, and it breaks loudly, as an undefined `<name>.dit` at link time.
+// flags. The owned list is REQUIRED for this: without one, a seed naming a
+// function the build does not define (a hardened `memcpy` seed in a build that
+// links libc's) would name a twin nobody emits, and the failure would be an
+// undefined `<name>.dit` at link time in a configuration that is now the
+// default. Without a list the cross-TU call keeps the original, which protects
+// itself; only the optimisation is lost, never the coverage.
 static Function *ditCloneFor(const Function *F, Module &M) {
   if (!F || isDITClone(F))
     return nullptr;
@@ -3253,9 +3258,9 @@ static Function *ditCloneFor(const Function *F, Module &M) {
   if (!F->isDeclaration() || !F->hasFnAttribute("taint-seeded-elsewhere") ||
       !M.getModuleFlag("taint-dit-clone-seeded"))
     return nullptr;
-  if (const StringSet<> *Owned = taintOwnedSymbols())
-    if (!Owned->contains(F->getName()))
-      return nullptr;
+  const StringSet<> *Owned = taintOwnedSymbols();
+  if (!Owned || !Owned->contains(F->getName()))
+    return nullptr;
   FunctionCallee FC =
       M.getOrInsertFunction(Name, F->getFunctionType(), F->getAttributes());
   Function *Clone = dyn_cast<Function>(FC.getCallee());

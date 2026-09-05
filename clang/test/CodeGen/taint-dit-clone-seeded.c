@@ -30,21 +30,32 @@
 //
 // The owned list does not name inner: this build may not define it, so no twin
 // can be assumed and the call stays as it was, with its re-assert. (outer,
-// defined here, still gets its twin: cloning a definition needs no list.)
+// defined here, still gets its twin: cloning a definition needs no list.) The
+// same holds with no list at all: a cross-TU twin is only ever named on the
+// list's word.
 // RUN: printf 'outer\n' > %t.owned1
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.a1.s -DTU_A \
 // RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee \
 // RUN:     -mllvm -taint-owned-symbols=%t.owned1 -mllvm -taint-dit-clone-seeded %s
 // RUN: FileCheck --check-prefix=A-NOOWN --input-file=%t.a1.s %s
+// RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.a2.s -DTU_A \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee %s
+// RUN: FileCheck --check-prefix=A-NOOWN --input-file=%t.a2.s %s
 //
-// Flag off: no twin anywhere, nothing redirected.
+// The defaults (callee contract, twins on) are exactly the explicit flags above:
+// the same TU with no contract or clone flag must come out identical.
+// RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.a.def.s -DTU_A \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-owned-symbols=%t.owned %s
+// RUN: diff %t.a.s %t.a.def.s
+//
+// Twins off (-taint-dit-clone-seeded=0): no twin anywhere, nothing redirected.
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.a0.s -DTU_A \
 // RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee \
-// RUN:     -mllvm -taint-owned-symbols=%t.owned %s
+// RUN:     -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-owned-symbols=%t.owned %s
 // RUN: FileCheck --check-prefix=OFF --input-file=%t.a0.s %s
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.b0.s -DTU_B \
 // RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee \
-// RUN:     -mllvm -taint-owned-symbols=%t.owned %s
+// RUN:     -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-owned-symbols=%t.owned %s
 // RUN: FileCheck --check-prefix=OFF --input-file=%t.b0.s %s
 
 #ifdef TU_A

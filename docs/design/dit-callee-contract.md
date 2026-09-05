@@ -1,6 +1,9 @@
 # The callee contract: every function protects its own secrets
 
-**Status 2026-09-04.** Landed OPT-IN as `-taint-dit-contract=callee`
+**Status 2026-09-05: the DEFAULT**, together with the twins
+(`dit-cloning.md`; `-taint-dit-contract=inherit -taint-dit-clone-seeded=0`
+is the pre-flip compiler for an A/B; the recipe is
+`docs/reference/harden-runbook.md`). Landed 2026-09-04 as opt-in
 (default `inherit`, byte-identical to before). Phases A and B of the plan:
 the contract in placement, the obligation report, tests, and the four
 measurements. Phase C, the cross-boundary cost model (sticky exits chosen by

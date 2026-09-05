@@ -87,12 +87,15 @@ Requires FEAT_DIT (Armv8.4+) at run time - Apple M-series has it
 (`sysctl hw.optional.arm.FEAT_DIT`), Neoverse N1 does not, so SIGILL there; verify via
 objdump/lit or `qemu-aarch64 -cpu max`.
 
-**The coverage contract at a call boundary (`-taint-dit-contract`, default `inherit`;
-`docs/design/dit-callee-contract.md`).** Under `inherit` a secret-passing call is a Need,
+**The coverage contract at a call boundary (`-taint-dit-contract`, **default `callee`
+since 2026-09-05**, with the twins below; `docs/design/dit-callee-contract.md`; the
+end-to-end recipe, including the seed loop and the M4/M5 arms, is
+`docs/reference/harden-runbook.md`).** Under `inherit` (the pre-2026-09-05 default,
+`=inherit` for an A/B) a secret-passing call is a Need,
 the caller holds DIT across it and an unseen callee inherits protection; that is what
 makes the seed loop non-monotone (`ecp_mod_p256` lost 1.16M ops of inherited coverage
 when a callee inside it was seeded) and what the callee-saved ABI existed to repair.
-**`=callee`** is the opt-in alternative (2026-09-04): every function protects its own
+**`=callee`** (2026-09-04): every function protects its own
 secrets, a call is never a Need for its arguments, `AlwaysEnteredWithDIT` and the
 Scenario-B assertion are off, and a secret reaching a callee this build cannot see is an
 `UNCOVERED` obligation in `-taint-info-loss-report` with the seed line as the repair,
@@ -117,12 +120,13 @@ only a to-do list for callees the build defines; `utils/taint_owned_symbols.sh` 
 build's objects writes that set, `-taint-owned-symbols=<file>` makes the report file every
 other callee as `external-call` (out of scope, no repair), and `utils/taint_obligations.py`
 splits a report offline and writes the next round's seed file (test
-`clang/test/CodeGen/taint-dit-owned.c`). **Twins (`-mllvm -taint-dit-clone-seeded`,
-opt-in, `docs/design/dit-cloning.md`):** every seeded function and every function it
+`clang/test/CodeGen/taint-dit-owned.c`). **Twins (`-taint-dit-clone-seeded`, DEFAULT ON
+since 2026-09-05, `=0` for an A/B; `docs/design/dit-cloning.md`):** every seeded function and every function it
 reaches by direct call in its TU gets a `<name>.dit` copy that is entered DIT-on by
 construction and emits no enable or clear; a call made from DIT-on code is redirected to
-it, in the TU and across TUs (a seeded declaration the owned list covers is assumed to
-have one, the linker resolves it), and the caller then needs no re-assert. A twin still
+it, in the TU and across TUs (a seeded declaration is redirected ONLY when the owned
+list names it, so a build without `-taint-owned-symbols` gets in-TU twins and keeps the
+original across TUs; the linker resolves the twin), and the caller then needs no re-assert. A twin still
 re-asserts after any call of its own that may clear, even with nothing secret in it -
 that is the guarantee its caller bought. Every TU must be built with the flag. libsodium
 signing at the contract's fixpoint: **10,400 executed DIT writes -> 41** (inherit 6),
@@ -692,7 +696,9 @@ DIT-off and the `msr DIT, #0x1` sits at the loop preheader, not the entry (add
 `-mllvm -taint-dit-placement=function` for the old whole-function reference: one
 `msr DIT, #0x1` at entry, one `msr DIT, #0x0` before each return).
 
-**Exception since 2026-08-08 - a function that is `AlwaysEnteredWithDIT` gets
+**Under `-taint-dit-contract=inherit` only (the default until 2026-09-05; the callee
+contract has no `AlwaysEnteredWithDIT`, every function owns its DIT and a DIT-on caller
+calls the twin instead): a function that is `AlwaysEnteredWithDIT` gets
 whole-function coverage even under `region`, and that is correct, not a regression.**
 It was entered with DIT already on, so it does not own DIT and may not clear it; region
 placement narrows *by clearing*, so narrowing there would strip the caller's

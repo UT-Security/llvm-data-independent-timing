@@ -13,7 +13,8 @@
 // RUN: echo "seeded_bit,0,pointee" >> %t.seed
 // RUN: rm -f %t.prec
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o /dev/null \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-precision-report=%t.prec %s
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=inherit \
+// RUN:     -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-precision-report=%t.prec %s
 // RUN: FileCheck --input-file=%t.prec %s
 
 void *malloc(unsigned long);
