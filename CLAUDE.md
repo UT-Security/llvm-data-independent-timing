@@ -137,7 +137,16 @@ gem5 against instruction-matched NOP baselines: signing on the serialising model
 cost (the 176,500-switch arm beats its own NOP baseline by 2.5%) and the twins tie
 blanket at +1.4%. AEAD keeps 38 of 58 switches per call behind the Poly1305/ChaCha20
 implementation tables, since an indirect call is never redirected, and stays +6.09%
-serialising. Test `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs).
+serialising. Test `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs). **Narrowing
+twins (`-taint-dit-twin-narrow`, opt-in; `-taint-dit-twin-switch-cyc=0` for "DIT off at
+the top of every twin") are built and measured and do NOT pay on libsodium** (results
+`docs/results/dit-twin-narrowing-2026-09-05.md`): at the shipped switch cost nothing
+narrows, at cost 0 wasted coverage drops 0.7% for 3x the executed writes and signing goes
++1.42% -> +6.74% renamed. Two analysis fixes came out of it and apply to every build: a
+twin inherits its original's incoming argument taint (a propagation-reached twin used to
+be analysed with none), and a register-tuple use reads its parts' taint while a tuple def
+marks them (an `st2` of a secret used to leave its cells public). Both were masked by
+whole-twin coverage; the default build is byte-identical.
 
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function

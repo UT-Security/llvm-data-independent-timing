@@ -945,6 +945,28 @@ prefix. Both are now pinned (drivers compile from a bare relative name;
 are byte-identical. The rig's own documented trap - a 0.84% shift from an
 argv[0] length change - was only half-closed until this.
 
+### Narrowing twins (2026-09-05, `data/gem5_twin_narrow{,0}.csv`)
+
+The pass arm and its NOP twin rebuilt with the twins narrowing
+(`-taint-dit-twin-narrow`; the `0` file adds `-taint-dit-twin-switch-cyc=0`,
+DIT off at the top of every twin whose entry holds no secret), everything else
+as `gem5_api_bracket.csv`; `docs/results/dit-twin-narrowing-2026-09-05.md`.
+Cycles per op vs base, renamed / serialising, switches per op, the arm's own
+NOP twin in brackets:
+
+| benchmark | blanket | shipped twins | narrowing, default cost | narrowing, cost 0 |
+|---|---|---|---|---|
+| ed25519 sign | +0.2% | -3.7 / -2.6 (16) [-3.7] | -3.6 / -3.5 (16) [-4.0] | -2.7 / -1.0 (56) [-3.3] |
+| chacha enc | +1.3% | +2.4 / +43.9 (38) [+2.4] | +2.1 / +43.0 (38) [+2.3] | +3.7 / +50.1 (45) [+5.1] |
+| chacha dec | +0.7% | +3.3 / +42.4 (39) [+4.1] | +2.9 / +44.7 (39) [+4.7] | +5.8 / +53.4 (50) [+6.1] |
+| aes-gcm enc | +0.4% | +0.2 / +12.4 (6) [-0.0] | -0.7 / +12.2 (6) [-0.7] | -0.1 / +49.3 (28) [-0.2] |
+| aes-gcm dec | +8.4% | +10.1 / +36.1 (6) [+5.7] | +9.7 / +48.9 (8) [+1.3] | +9.3 / +54.6 (13) [+1.0] |
+
+Narrowing at cost 0 raises every switch count and every serialising number and
+moves nothing on the renamed model beyond its NOP twin: the renamed cost here
+is dwell over the kernels (and the `crypto_verify_16` chain on decrypt), which
+any placement that protects them pays. argon2id pending, as above.
+
 ## Known limits
 
 - **CIO's seeds over-taint, and it inflates the UNCOVERED count.** Their config
