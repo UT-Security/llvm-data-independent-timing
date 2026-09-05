@@ -726,18 +726,24 @@ X86/AMDGPU only), so lowering and emission remain on the legacy PM.
 ## Testing
 
 ```
-build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate
+build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate clang/test/CodeGen/taint-*.c
 ```
 
-All 33 tests pass as of 2026-08-27. The whole `llvm/test/CodeGen/AArch64` suite was
-last run clean on 2026-08-27 (3898 discovered, 3894 pass, 4 pre-existing XFAIL, 0
-failures).
+All 58 tests pass as of 2026-09-05 (the clang tests carry the defaults: contract, twins,
+intra-block placement, the external-callee flag). The whole `llvm/test/CodeGen/AArch64`
+suite was last run clean on 2026-08-27 (3898 discovered, 3894 pass, 4 pre-existing XFAIL,
+0 failures).
 
 **End-to-end reference:** harden `playground/firefox_convolve_int.c` and compare
 per-symbol DIT placement between the clang flag and the wrapper - they must match
-exactly. Under the default `region` placement a tainted function's clean preamble is
-DIT-off and the `msr DIT, #0x1` sits at the loop preheader, not the entry (add
-`-mllvm -taint-dit-placement=function` for the old whole-function reference: one
+exactly. **Under the 2026-09-05 defaults** (verified that day): `run_kernel_int` emits
+NO switch, because its only secret use is passing the pointee-tainted `source` to
+`convolve_pixel_int`, and under the callee contract a call is not a Need (it keeps
+calling the original, since it is not DIT-on itself); `convolve_pixel_int` owns its
+DIT and shows exactly the region shape: its clean preamble DIT-off, one `msr DIT, #0x1`
+at the outer loop's preheader, and one enable/clear pair around its tail after the
+mixed join where the early-exit path arrives DIT-off. Add
+`-mllvm -taint-dit-placement=function` for the whole-function reference (one
 `msr DIT, #0x1` at entry, one `msr DIT, #0x0` before each return).
 
 **Under `-taint-dit-contract=inherit` only (the default until 2026-09-05; the callee

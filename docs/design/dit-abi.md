@@ -1,6 +1,15 @@
 # The PSTATE.DIT calling convention
 
-**Status 2026-08-30: PROPOSED. This file is the contract; everything else is a
+**Status 2026-09-05: implemented (`-ftaint-dit-abi`), measured, and NOT SHIPPING;
+default off, do not prescribe it** (`docs/results/dit-abi-measured.md`, and the
+verdict in `CLAUDE.md`: it only helps in an LTO configuration nobody should pick,
+and the default configuration gains nothing measurable). The one piece worth
+keeping, the TU-wide tail-call disable of §9.1, moved out of the ABI on
+2026-09-01 and rides on `-ftaint-harden` itself. What replaced the ABI's
+purpose is the callee contract plus the twins (`dit-callee-contract.md`,
+`dit-cloning.md`, default since 2026-09-05) and, for libc, the external-callee
+assumption (`docs/results/dit-external-preserves-2026-09-05.md`).
+Written 2026-08-30 as: PROPOSED. This file is the contract; everything else is a
 consequence of it.** `dit-unconditional-design.md` gives the instruction sequence,
 `dit-callee-ownership.md` gives the shipped static approximation, and
 `docs/research/mode-bit-precedent.md` gives the prior art. Read this one first: both of
@@ -496,7 +505,7 @@ the four causes have unrelated fixes:
 
 **Treat any of these on a hot function as invalidating the measurement**, not as a
 tolerable cost.
-### 9.1 Piece 1: TU-wide tail-call disable. LANDED, on by default.
+### 9.1 Piece 1: TU-wide tail-call disable. LANDED, on by default - and since 2026-09-01 it rides on `-ftaint-harden`, not on the ABI (stamped at codegen, not in `CodeGenOptions`, so tail-recursion elimination still runs; see `dit-tailcall-gap.md`).
 
 `clang/lib/Frontend/CompilerInvocation.cpp`, end of `ParseCodeGenArgs`:
 

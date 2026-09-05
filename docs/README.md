@@ -26,13 +26,30 @@ defense is out of scope. Operating instructions (build, flags, gotchas) live in
 | 3 | [results/dit-cost-model.md](results/dit-cost-model.md) | What DIT costs. Read before any placement work. |
 | 4 | [results/quickjs.md](results/quickjs.md) | The first positive result, and the method rule that makes it trustworthy. |
 | 5 | [results/sqlcipher.md](results/sqlcipher.md) | The definitive negative, and the gem5 study that bounds the whole thesis at ~1.4%. |
-| 6 | [design/dit-placement.md](design/dit-placement.md) | Where switches go, which gaps remain, and the optimal-placement design. |
+| 6 | [design/dit-placement.md](design/dit-placement.md) | Where switches go, which gaps remain, and the optimal-placement design. §5.7 is the intra-block default. |
+| 7 | [reference/harden-runbook.md](reference/harden-runbook.md) | **The current recipe.** What the 2026-09-05 defaults do, the seed loop, the control arms, the M4/M5 notes. |
+| 8 | [design/dit-callee-contract.md](design/dit-callee-contract.md) and [design/dit-cloning.md](design/dit-cloning.md) | The two mechanisms that own every switch today: the callee contract and the twins. |
+
+> **Which docs describe the design as it is (2026-09-05), and which are records.** The
+> defaults are the callee contract, the DIT twins, intra-block region placement at
+> `switch-cyc=30` with loop hoisting, tail calls off, the mod-set gate; the pass runs
+> inside codegen after PEI with no MIR round-trip. Every doc carries a dated status
+> line at its top; a doc whose status says PROPOSED, HISTORICAL, SUPERSEDED, RETIRED or
+> NOT SHIPPING is a record of how a decision was reached, not a description of the
+> compiler. The 2026-09-05 audit added or corrected those lines in: `overview.md`
+> (pipeline, flags, current state), `design/dit-placement.md`, `design/dit-abi.md`,
+> `design/dit-unconditional-design.md`, `design/frame-addr-fallback.md`,
+> `design/stack-arguments.md` (§7), `reference/dit-abi-runbook.md`,
+> `reference/firefox-integration.md`, `results/quickjs.md`, `results/dit-cost-model.md`,
+> `results/dit-callee-contract-2026-09-04.md`, `results/session-2026-08-30-handoff.md`,
+> `handoff.md`, and the experiment READMEs measured before the default flip.
 
 ## Overview
 
 - **[overview.md](overview.md)** - the single consolidated entry-point doc: what this
-  is, the threat model, how to run it, how the taint analysis works, why the 3-phase
-  serialize/reparse design is load-bearing, and how cross-function memory is handled.
+  is, the threat model, how to run it, how the taint analysis works, where the pass
+  sits in the pipeline (no MIR round-trip since 2026-08-30), how cross-function memory
+  is handled, and the current state and next actions as of 2026-09-05.
 
 ## Reference
 
@@ -157,7 +174,8 @@ How the analysis is built, which bugs were found in it, and what is still open.
   ownership rule adopted 2026-08-08: *only the frame that turned DIT on may turn it
   off*. An instrumented callee used to clear DIT on exit, so callers re-asserted after
   every call and the switch count scaled with the CALL count. Shipped:
-  `AlwaysEnteredWithDIT` fixes resolvable in-TU calls, and
+  `AlwaysEnteredWithDIT` fixes resolvable in-TU calls (under the inherit contract only;
+  since 2026-09-05 the callee contract and the twins do this job by default), and
   `-taint-dit-reassert-report=<file>` audits the rest. **Deferred (out of scope, for
   advisor discussion): the runtime `MRS` mode**, the only thing that fixes indirect
   *and* cross-TU calls. Measured: `MRS DIT` = 1.00 cyc vs `MSR DIT` = 30.34, so per
@@ -230,8 +248,10 @@ Measured numbers. These are the claims the project stands on, with their caveats
   recovers ~1.07%, essentially the whole always-on cost.
   - **MUST-READ METHOD RULE: baseline fine-grained against a round-trip control
     (`-ftaint-harden=<empty file>`), never the stock -O2 build.** The 3-phase MIR
-    round-trip alone costs +0.58% +/-0.24 with zero `MSR DIT` emitted. That artifact
-    is ~10x the real DIT cost and, charged to DIT, produced two retracted claims.
+    round-trip alone cost +0.58% +/-0.24 with zero `MSR DIT` emitted. That artifact
+    was ~10x the real DIT cost and, charged to DIT, produced two retracted claims.
+    **Scoped 2026-08-30:** the clang path no longer round-trips and its empty-seed
+    build is byte-identical to `-O2`; the rule still binds the `llc` wrapper.
   - A **-6.28% figure was first reported and is WRONG** as an end-to-end number: it
     came from the Octane score, which covers only the timed `run` sections (~14% of
     wall) and excludes setup, GC, *and* the secret work.
@@ -350,3 +370,50 @@ respect the refuted ones.
 | DIT cost microbenchmarks | `playground/dit_bench/` |
 | Scratch experiments (not shipping code) | `playground/` |
 | Tests | `llvm/test/CodeGen/AArch64/taint-analysis-*.mir`, `llvm/test/Transforms/TaintAnnotate/` |
+
+## Everything else (indexed 2026-09-05)
+
+Documents that existed but were never listed above, with their own titles. Each
+carries a dated status line at its top.
+
+Design and method:
+
+- [design/frame-address-gap.md](design/frame-address-gap.md) - the frame-address gap: why 97.61% of a signing path ran unprotected; the PHI look-through fix (2026-09-02) and the B1/B2/libc-model flags (default off).
+- [design/p1b-frame-provenance.md](design/p1b-frame-provenance.md) - P1b: per-object pointee taint (built 2026-08-19/20).
+- [design/source-condition.md](design/source-condition.md) - the source condition that makes the mod-set gate sound (unconditional since 2026-08-24).
+- [design/stack-arguments.md](design/stack-arguments.md) - stack-passed secrets: the leak, the fix, the seeded-index-8 case, and the 2026-09-05 both-kinds seeding (§7).
+- [design/taint-domain-refactor-handoff.md](design/taint-domain-refactor-handoff.md) - the Phase 1 handoff that became `taint-domain.md`.
+- [paper/evaluation-framework.md](paper/evaluation-framework.md) - the evaluation procedure for the paper: which control arm prevents which mistake.
+- [paper/bitcoin-secret-fraction-sweep.md](paper/bitcoin-secret-fraction-sweep.md) - the secret-fraction sweep inside one Bitcoin Core wallet call.
+
+Results (each dated; those before 2026-09-05 were measured under the inherit contract, no twins, block placement):
+
+- [results/oracle-pointer-taint-2026-09-03.md](results/oracle-pointer-taint-2026-09-03.md) - the oracle's store rule fixed; every earlier coverage denominator was ~40% inflated.
+- [results/phase2-unknown-tainted-2026-09-04.md](results/phase2-unknown-tainted-2026-09-04.md) - U1/U2/U5 flipped to "unknown means tainted": byte-neutral on mbedTLS.
+- [results/pr21-verification-2026-09-03.md](results/pr21-verification-2026-09-03.md) - independent verification of the product-lattice refactor.
+- [results/dit-abi-committed-switches.md](results/dit-abi-committed-switches.md) - committed switches under the callee-saved ABI (not shipping).
+- [results/dit-relaxed-ownership.md](results/dit-relaxed-ownership.md) - relaxed callee ownership; the flag is gone.
+- [results/dit-switch-cyc-confirmation.md](results/dit-switch-cyc-confirmation.md) - the `switch-cyc=30` default confirmed, and what the knob actually prices.
+- [results/dit-modset-callsite-gated.md](results/dit-modset-callsite-gated.md) - gating the mod-set on the call site: 3.7x fewer switches, no coverage lost.
+- [results/dit-gem5-composite.md](results/dit-gem5-composite.md) - the composite under gem5: the pass beats always-on by 2.66%.
+- [results/dit-oracle-composites.md](results/dit-oracle-composites.md) - oracle placement vs always-on on four composite hosts.
+- [results/dit-pass-vs-oracle.md](results/dit-pass-vs-oracle.md) - the pass reaches the oracle: CPython and SQLite.
+- [results/dit-cpython-case-study.md](results/dit-cpython-case-study.md) - CPython: what is protected and where the switches landed.
+- [results/dit-sqlite-tce.md](results/dit-sqlite-tce.md) - the SQLite TCE composite and what it caught.
+- [results/dit-host-screening.md](results/dit-host-screening.md) - five real applications, always-on DIT cost on M5.
+- [results/dit-bitcoin-core-screen.md](results/dit-bitcoin-core-screen.md) - Bitcoin Core clears condition (d): +14.4% on coin selection.
+- [results/dit-bitcoin-coinsel-gem5.md](results/dit-bitcoin-coinsel-gem5.md) - gem5 reproduces CoinSelection's always-on cost.
+- [results/dit-bitcoin-sign-two-instruments.md](results/dit-bitcoin-sign-two-instruments.md) - SignTransactionECDSA on both instruments: the cost is the switch.
+- [results/dit-coincurve-timing.md](results/dit-coincurve-timing.md) - a real signing workload: the prize is under 1%.
+- [results/dit-coincurve-real-application.md](results/dit-coincurve-real-application.md) - web3.py to coincurve, built with the pass.
+- [results/dit-upstream-gem5.md](results/dit-upstream-gem5.md) - upstream gem5 cannot model DIT at all.
+- [results/session-2026-08-19-findings.md](results/session-2026-08-19-findings.md) - session record, 2026-08-15 to 08-19.
+- [results/session-2026-08-30-handoff.md](results/session-2026-08-30-handoff.md) - session record, 2026-08-26 to 08-30 (LTO, the EH fix); historical.
+
+Research memos (literature and surveys, not descriptions of the compiler):
+
+- [research/related-work.md](research/related-work.md) - what is published and what our claims must survive.
+- [research/cio-taint-implementation.md](research/cio-taint-implementation.md) - how CIO's taint analysis works, the evidence behind `taint-domain.md`.
+- [research/decrypt-then-parse-literature.md](research/decrypt-then-parse-literature.md), [research/decrypt-then-parse-libraries.md](research/decrypt-then-parse-libraries.md), [research/decrypt-then-parse-applications.md](research/decrypt-then-parse-applications.md) - the decrypt-then-parse memos behind experiment 10.
+- [research/real-world-instances.md](research/real-world-instances.md) - deployed software exhibiting each (host, secret) pairing.
+- [research/workload-candidates.md](research/workload-candidates.md) - workload candidates for the fine-grained DIT win.

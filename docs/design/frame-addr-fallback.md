@@ -1,6 +1,10 @@
 # The frame-address fallback (`-taint-frame-addr-args`)
 
-> **STATUS 2026-08-24: THE FLAG IS GONE.** `-taint-frame-addr-args` was deleted. It
+> **STATUS 2026-08-24: RETIRED.** `-taint-frame-addr-args` was meant to be deleted
+> that day; the `cl::opt` in fact survives in `TaintAnalysis.cpp` as a hidden,
+> default-off knob (audit 2026-09-05) selecting the whole-frame rule at the two
+> sites where P1b's per-object rule otherwise applies. Do not enable it; removing
+> it is a pending cleanup. It
 > reasoned about whole frames rather than objects, so once the call-site mod-set gate
 > existed nearly every call site looked secret-passing and the gate stopped firing:
 > `ConnectBlockAllEcdsa` measured +45.32% with both against +0.66% with the gate alone,

@@ -206,4 +206,4 @@ the same five shapes so every check is a difference between them.
   callee "may inherit DIT". Under the contract that is merely conservative
   (an enable a little earlier), not wrong; tightening it is a Phase C
   measurement.
-- Flipping the default.
+- ~~Flipping the default.~~ Done 2026-09-05.

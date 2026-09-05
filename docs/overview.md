@@ -3,7 +3,8 @@
 **Start here, then follow the reading order in [`README.md`](README.md)**, the annotated
 index of every design doc, measured result, and research note. This doc is the map: what
 the project is, how to run it, how the analysis works, and what is measured.
-Last updated **2026-08-18**.
+Last updated **2026-09-05** (defaults, pipeline, current state, next actions; the dated
+session sections 8 and 8b are records and were left as written).
 Branch: `dit-tainter` (**all work goes here** - `main` is the upstream LLVM mirror and
 has never carried taint work). Target arch: **AArch64 only**.
 
@@ -102,6 +103,15 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
 | `-taint-dit-loop-hoist={0\|1}` | **default 1** = each need-loop coarsened On with the enable hoisted to the preheader (one toggle, whole loop covered). `0` selects block-minimal coverage: fewest instrs covered, per-iteration toggles. |
 | `-taint-dit-switch-cyc` (default **30**), `-taint-dit-dwell-per-instr` (default 1.0) | cost-model knobs for region merging admission. 30 cyc is the measured serializing switch cost; the error is asymmetric (merging costs cheap dwell and is fail-safe, not merging costs a full switch pair), so err high. |
 | `-taint-no-modset-gate` | **default false, i.e. the call-site mod-set gate is ON.** The safety valve: applies a callee's memory clobber at every call site of that callee rather than only where a secret is passed. Maximally conservative, much slower - the escape hatch for taint that does not travel by arguments. See §6. |
+| `-taint-dit-sub-block={0\|1}` | **default 1 (since 2026-09-05) = intra-block placement**: inside a covered block the enable sinks to the first secret instruction, the clear hoists past the last, and a DIT-off hole is cut across a public run of >= `-taint-dit-sub-block-min-run` (8). `0` = block placement (a block with any secret instruction covered whole). `docs/design/dit-placement.md` §5.7. |
+| `-taint-dit-contract={callee\|inherit}` | **default `callee` (since 2026-09-05)**: every function protects its own secrets; a call is never a Need; a secret reaching a callee this build cannot see is an obligation in `-taint-info-loss-report`. `inherit` is the pre-2026-09-05 behaviour. `docs/design/dit-callee-contract.md`. |
+| `-taint-dit-clone-seeded={0\|1}` | **default 1 (since 2026-09-05)**: the DIT twins - every seeded function and everything it reaches by direct call in its TU gets a `<name>.dit` copy entered DIT-on; calls from DIT-on code are redirected to it, across TUs when `-taint-owned-symbols` names the callee. `docs/design/dit-cloning.md`. |
+| `-taint-owned-symbols=F` | the functions this build defines (`utils/taint_owned_symbols.sh`); files an unseen callee outside it as external in the obligation report, and is what allows a cross-TU twin redirect. |
+| `-taint-dit-external-preserves` | **default off**: assume a callee this module does not define (and the owned list does not name) never writes PSTATE.DIT, so no re-assert after it. Removes all of argon2id's 395,758 re-asserts after `memcpy`. `docs/results/dit-external-preserves-2026-09-05.md`. |
+| `-taint-dit-twin-narrow`, `-taint-dit-twin-switch-cyc` | **default off**: region placement inside a twin (clear at its top, enable before its returns). Measured not to pay on libsodium; `docs/results/dit-twin-narrowing-2026-09-05.md`. |
+| `-taint-info-loss-report=F` | one record per site where the analysis lost the secret, with what it cost and the seed line that repairs it; APPENDS across invocations. The seed loop's input; `utils/taint_obligations.py` splits it by ownership. |
+| `-taint-seed-report=F` | per-seed validation (an out-of-range argument index is fatal since 2026-09-03); `utils/taint_seed_check.py`. |
+| `-taint-dit-abi` / `-ftaint-dit-abi` | **default off, NOT shipping** (2026-09-01): the callee-saved PSTATE.DIT ABI. `docs/results/dit-abi-measured.md`. |
 | `-taint-callsite-report=F` | ESCAPE report: secrets passed to callees we can't instrument. |
 | `-taint-uncovered-report=F` | tainted instrs DIT can't protect (divide/sqrt, secret-address, secret-branch). |
 | `-taint-clobber-report=F` | call sites that make the caller treat memory as secret (taint-explosion sources). |
@@ -143,7 +153,10 @@ secret-dependent regions (clean preambles / public index math stay DIT-off), car
 coverage if it cannot prove coverage - so it is always safe. Requires FEAT_DIT (Armv8.4+,
 Apple M-series has it; Neoverse N1 does not → SIGILL there).
 
-**DIT ownership (2026-08-08): only the frame that turned DIT on may turn it off.** A
+**DIT ownership (2026-08-08; under `-taint-dit-contract=inherit` ONLY, which stopped
+being the default on 2026-09-05 - under the callee contract every function owns its
+switches and a DIT-on caller calls a `.dit` twin, so the rule below never fires):**
+only the frame that turned DIT on may turn it off. A
 function proven `AlwaysEnteredWithDIT` keeps whole-function coverage even under `region`
 and never clears the bit - narrowing there would strip the *caller's* protection, and
 nothing is lost because the caller's region already covered the callee.
@@ -162,18 +175,25 @@ above). What survives the disable is `musttail` and `MachineOutlinerTailCall`, b
 reported as `DITLEAK tailcall`; a `DITLEAK tailcall-ungated` line instead means the flag
 did not reach that TU.
 
-## 5. Why the 3-phase serialize/reparse design (load-bearing)
+## 5. Where the pass runs in the pipeline (no round-trip since 2026-08-30)
 
-1. `TaintInterprocPass` needs **all MachineFunctions of the TU resident at once**; the legacy
-   PM frees each MF after emission ⇒ serialize to MIR text and reparse (MIRParser
-   materializes all MFs together).
-2. **AArch64 has no new-PM codegen pipeline** ⇒ lowering must use the legacy PM, driven via
-   process-global `start-after`/`stop-after` cl::opts.
-
-So `-ftaint-harden` runs: (1) legacy PM `stop-after=prologepilog` → in-memory MIR text
-(+ `<mcsymbol>` strip); (2) MIR reparse + new-PM `TaintInterprocPass` → hardened MIR;
-(3) legacy PM `start-after=prologepilog` → object. Analysis runs **post-prologepilog** so it
-sees real stack offsets. `-g -O2 -ftaint-harden` is fully supported (dwarfdump clean).
+`TaintInterprocPass` needs every MachineFunction of the TU resident at once, and
+AArch64 has no new-PM codegen pipeline. Until 2026-08-30 `-ftaint-harden` solved
+that by running codegen three times: legacy PM to `stop-after=prologepilog`,
+serialise to MIR text (plus the `<mcsymbol >` strip), reparse so all MFs were
+resident, run the pass, then `start-after=prologepilog` to object. **That is
+gone** (`4fb7600db532`): `RunTaintHardenCodegen` in `BackendUtil.cpp` adds the
+pass as a module pass immediately after PrologEpilogInserter in the ordinary
+pipeline, which gives the same all-resident view at the same point with no
+serialisation. Consequences: exception tables, debug info and CFI stay as
+codegen built them (MIR does not serialise landing-pad state, so the old flow
+dropped C++ exception tables), and an empty-seed `-ftaint-harden` build is
+**byte-identical** to plain `-O2`, so the "round-trip control" arm is no longer
+needed on the clang path. The wrapper `utils/taint_harden_c.sh` still drives
+`llc` with `-stop-after`/`-start-after` and still round-trips; everything said
+about the codegen lottery applies to it and to hand-driven `llc` flows only.
+Analysis runs **post-prologepilog** so it sees real stack offsets;
+`-g -O2 -ftaint-harden` is fully supported.
 
 ## 6. Cross-function memory: the model, and how external calls are handled
 
@@ -221,6 +241,16 @@ inline asm (`INLINEASM` is not `isCall()`, so the pass cannot see it at all), an
 moved through a NEON register tuple. Closing the inline-asm and register-tuple channels is
 the next precision work; the sound end state is an origin bit in the fixed point.
 `-taint-no-modset-gate` gives up the precision for whole-memory conservatism.
+
+**Closed since that list was written.** The sibling-global channel (2026-08-31): a global
+written with a secret anywhere in the module is secret module-wide
+(`TaintSummaryInfo::addSecretGlobal`), not only along call edges; flowprobe 265 -> 5
+under-taint operations at no switch cost. The returned-pointer channel (2026-09-04,
+`docs/results/returns-pointee-2026-09-04.md`): a `ReturnsPointeeTainted` summary bit, the
+address of a secret global pointee-tainted when materialised, a pointer made
+pointee-tainted by a secret stored through it, pointer-ness carried through globals, and a
+seeded callee's return applied at every call site. Still open: the inline-asm store and the
+pointer-parameter write-back (flowprobe C3/C6 and C4/C7, 63 operations each).
 
 ## 7. Cost model (why placement granularity matters) - do not skip
 
@@ -290,7 +320,10 @@ the prize: **~1.4%**, carried entirely by value prediction. So the shipped place
 
 1. **Baseline every placement measurement against a round-trip control**
    (`-ftaint-harden=<empty file>`), never against the stock `-O2` build. The 3-phase MIR
-   round-trip changes codegen by itself, with zero `MSR DIT` emitted.
+   round-trip changed codegen by itself, with zero `MSR DIT` emitted. **Scoped since
+   2026-08-30:** the clang path no longer round-trips and its empty-seed control is
+   byte-identical to `-O2`, so this rule now applies to the `utils/taint_harden_c.sh`
+   wrapper and hand-driven `llc` flows only (§5).
 2. **That control is necessary but NOT sufficient.** The artifact is a per-binary codegen
    lottery, not a constant: **+0.58%** (QuickJS), **+0.06%** (SQLCipher native), **+2.65%**
    (gem5, where the zero-DIT `nodit` binary is the *slowest* in the matrix, exceeding the
@@ -482,82 +515,70 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
     lines / 940 functions: 733 s; a flat 1.3-1.5x up to ~100 functions). Taint *spread* on
     such TUs is still open. See `docs/design/scalability.md`.
 12. **Measurement itself is a limitation at these effect sizes** - the MIR round-trip
-    perturbs codegen by +0.06%..+2.65% with zero `MSR DIT` emitted, which can exceed the
-    entire signal. See the two method rules in §7.
+    perturbed codegen by +0.06%..+2.65% with zero `MSR DIT` emitted, which can exceed the
+    entire signal. Since 2026-08-30 that applies to the `llc` wrapper only (the clang path
+    is byte-identical to `-O2` at zero seeds), but a rebuilt library still moves with
+    layout, which is why every arm carries an instruction-matched NOP twin. See the two
+    method rules in §7.
 
-## 10. Current state
+## 10. Current state (2026-09-05)
 
-- **Tests:** 29 lit tests pass - 28 `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` +
-  `llvm/test/Transforms/TaintAnnotate` (as of 2026-08-11). The whole
-  `llvm/test/CodeGen/AArch64` suite was last clean on 2026-08-08 (3894 discovered, 3890
-  pass, 4 pre-existing XFAIL). Run:
-  `build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate`
-- **Placement defaults (retuned 2026-08-24):** `region` granularity, `loop-hoist=1`,
-  `switch-cyc=30`. Both flips are fail-safe (each widens coverage, never narrows it) and
-  were measured: on the libsodium composite `switch-cyc=30` removes 27-31% of the pass's
-  overhead at every resolvable region size and flips the 512 B verdict against blanket DIT
-  from a loss to a win; loop hoisting is what takes CPython and SQLite from +0.91%/+0.35%
-  to indistinguishable from the hand oracle. The previous defaults asserted that toggles
-  are free, which no measurement supports.
-- **The call-site mod-set gate is ON by default**, with its two companion rules (strict
-  source condition, return-call-site gating) unconditional. It is what takes Bitcoin Core's
-  `ConnectBlockAllEcdsa` from +51.20% to +0.67%. Its soundness claim is scoped:
-  *preserves coverage for argument-carried taint*. `-taint-no-modset-gate` is the way out.
-  See §6.
-- **Removed 2026-08-24** (five knobs, ~230 lines): `-taint-frame-addr-args` (superseded by
-  P1b; measured +44 points against the gate), `-taint-annotation-driven` (built for a flood
-  that a controlled A/B later attributed to the `$lr` artifact; equivalent to sound mode on
-  every TU measured), `-taint-call-arg-precise` (A/B for a settled question),
-  `-taint-region-merge-gap` (now a report-granularity constant), and
-  `-taint-dit-relaxed-ownership` (measured ~0 on every library; its local-linkage
-  precondition cannot fire in a shared library). The negative results they carry live in
-  `docs/design/frame-addr-fallback.md`, `docs/results/dit-relaxed-ownership.md` and §8.
-- **Shipped since this doc's previous revision:** the DIT ownership rule and
-  `AlwaysEnteredWithDIT` (2026-08-08), the tail-call leak fix (2026-08-05), DIT precision
-  accounting (2026-08-06), and the compile-time fix that made `quickjs.c` compilable at all
-  (2026-08-10).
-- **Validated:** flood 78→5 on `FilterNodeSoftware`; `FilterProcessingScalar` does not
-  flood (sound == annotation-driven on both, at `-O2`); libsodium head-to-head vs CIO
-  measured end to end (§8b), `make check` 86/86 on the hardened library; QuickJS, SQLCipher
-  and both browsers measured end to end (§7).
+- **Tests:** 58 lit tests pass: `llvm/test/CodeGen/AArch64/taint-analysis-*.mir`,
+  `llvm/test/Transforms/TaintAnnotate`, and `clang/test/CodeGen/taint-*.c`. Run:
+  `build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate clang/test/CodeGen/taint-*.c`
+- **The shipped defaults**, all one flag away for an A/B (`docs/reference/harden-runbook.md`):
+  - placement `region`, **intra-block** (`-taint-dit-sub-block`, 2026-09-05), `switch-cyc=30`,
+    `dwell-per-instr=1.0`, `loop-hoist=1` (2026-08-24);
+  - **the callee contract** (`-taint-dit-contract=callee`, 2026-09-05): every function
+    protects its own secrets, a call is never a Need, a secret reaching a callee the build
+    cannot see is an obligation in `-taint-info-loss-report`, seeding is monotone;
+  - **the DIT twins** (`-taint-dit-clone-seeded`, 2026-09-05): a DIT-on caller calls a
+    `<name>.dit` copy that is entered DIT-on and emits nothing; cross-TU on the strength of
+    the seed file and `-taint-owned-symbols`;
+  - tail calls off TU-wide under `-ftaint-harden` (`-taint-no-tail-calls`, 2026-09-01);
+  - the call-site mod-set gate with the strict source condition and return-call-site gating
+    (2026-08-24); `-taint-no-modset-gate` is the way out.
+- **Opt-in, measured, not default:** `-taint-dit-external-preserves` (a callee outside the
+  build never writes DIT; removes every re-assert after libc, the whole of argon2id's cost),
+  `-taint-dit-twin-narrow` (does not pay on libsodium), `-ftaint-dit-abi` (the callee-saved
+  ABI, not shipping), the Phase 2 "unknown means tainted" flags (byte-neutral on mbedTLS).
+- **The analysis domain** is the product lattice of `docs/design/taint-domain.md` (a value is
+  (Data, Pointee), one cell map for memory); since then: a global written with a secret is
+  secret module-wide (2026-08-31), `ReturnsPointeeTainted` and the seeded-return gate
+  (2026-09-04), seed validation with fatal out-of-range indices (2026-09-03), PHI look-through
+  for loop-carried pointers (2026-09-02), a register tuple's parts (2026-09-05), a twin
+  inheriting its original's argument taint (2026-09-05), and a stack-passed argument seeded as
+  both value and pointee (2026-09-05). Open under-taints: flowprobe C3/C6 (inline asm store)
+  and C4/C7 (the pointer-parameter write-back), 63 operations each.
+- **Two hardware facts to read every number by.** Apple's `MSR DIT` serialises (~30 cycles
+  per executed write on the M5); gem5's "renamed" switch model is a counterfactual with no
+  silicon counterpart, so the serialising column predicts the M4/M5. And DIT dwell is
+  workload-dependent: the load value predictor is what it turns off, and a constant-time
+  compare's accumulator chain is exactly the value-predictable load it hides
+  (`paper_experiments/09-libsodium-cio-parity/README.md`).
+- **Retired knobs.** `-taint-annotation-driven`, `-taint-call-arg-precise`,
+  `-taint-region-merge-gap` (a report constant now), `-taint-dit-relaxed-ownership` and the
+  `-taint-dit-preserving-symbols` file flag are gone; `-taint-frame-addr-args` survives as a
+  hidden default-off knob that should have gone with them (audit 2026-09-05). Their negative
+  results live in `docs/design/frame-addr-fallback.md` and `docs/results/dit-relaxed-ownership.md`.
 
 ### Next actions, in priority order
 
-1. **Retune the shipped placement defaults from the measured crossover.**
-   `-taint-dit-switch-cyc=0` encodes "toggles are free", which is false by ~30 cyc; the
-   end-to-end data say a region needs **~1300 cycles** of work before it is worth creating,
-   and `-taint-dit-loop-hoist=0` is the wrong default on serializing hardware (on QuickJS
-   it is the difference between a 1.07% win and no win at all). This is the cheapest
-   remaining improvement and it is fully specified by existing measurements.
-2. **Interprocedural hoisting, and with it the deferred runtime `MRS` mode.** SQLCipher is
-   the motivating case: the toggles that matter sit at a callee boundary reached through
-   `cipher_descriptor[]`, so no intraprocedural transform can remove them. Placing the
-   enable in the *caller* before the block loop is the missing piece, and `MRS DIT` = 1.00
-   cyc vs `MSR DIT` = 30.34 is what makes the runtime variant cheap enough to work through
-   indirect and cross-TU calls. See `docs/design/dit-callee-ownership.md`.
-3. **Declassification.** Without it the QuickJS result does not generalize: any realistic
-   secret-consuming API returns a secret-derived value, which taints the caller and floods
-   the instrumentation (§9.10).
-4. **~~Attack the context-insensitivity FP source (§9.6)~~ DONE, and it is now the
-   default.** The call-site mod-set gate plus the strict source condition and
-   return-call-site gating shipped on by default 2026-08-24 (+51.20% -> +0.67% on Bitcoin
-   Core's `ConnectBlockAllEcdsa`). **What remains** is closing the four channels
-   `flowprobe` found - start with inline asm (`INLINEASM` is not `isCall()`, so the pass
-   is blind to `asm volatile ::: "memory"`) and NEON register tuples, both contained; then
-   `ReturnsPointeeTainted` for a callee returning a pointer into a secret buffer. The
-   sound end state is an origin bit in the fixed point, which is what would let the gate
-   stop being a scoped claim.
-5. **Provenance recovery, THEN P1b.** Only **17 of 583** secret-writing call sites resolve
-   provenance to an argument (566 are TOP), so P1b has almost nothing to act on until more
-   stores resolve to arg-*i*, which likely means analyzing at IR and carrying facts to MIR.
-   See `docs/design/context-insensitivity.md`.
-6. **Find a workload where the prize is both real and collectable.** The blocking gap has
-   moved: a DIT-sensitive workload was found (QuickJS, and the browsers at +1.8-2.6%
-   always-on), but on SQLCipher the prize turned out not to exist, and the gem5 study bounds
-   it there at ~1.4%. The browsers are the strongest remaining candidate - the prize is
-   measured and placement has not been attempted. The shape to look for
-   (`docs/research/browser-history-leaks.md`): **public code with DIT headroom, secret code
-   with none**, at a granularity above ~1300 cycles per region.
+1. **Run the shipped defaults on the M4 and M5** with the experiment 02 and 09 rigs
+   (`docs/reference/harden-runbook.md` §7): every 2026-09-05 number is gem5, and the
+   serialising column is the prediction to test.
+2. **Decide the default for `-taint-dit-external-preserves`.** It is right for libc and
+   wrong for an external that calls back into hardened code; the numbers say on, the
+   soundness argument says name the callback-takers.
+3. **Indirect dispatch tables.** libsodium's Poly1305/ChaCha20 implementation tables keep
+   32 switches per AEAD call that no twin can reach; a table entry that is a twin, or a
+   seed on the table's targets, is the remaining lever on that workload.
+4. **Re-measure mbedTLS (experiments 03, 06, 10) on the current defaults.** Intra-block
+   placement acts on originals with public preambles, which is mbedTLS's shape; the twins
+   cost it front-end fetch (+5.4 points renamed); both are unmeasured together.
+5. **Declassification.** Without it the QuickJS result does not generalise: any realistic
+   secret-consuming API returns a secret-derived value that floods the caller (§9.10).
+6. **Close flowprobe's C3/C6 and C4/C7**, and delete `-taint-frame-addr-args`.
 
 ## 11. Code map (where things live)
 
@@ -567,7 +588,7 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 | Interproc MIR analysis + DIT insertion | `llvm/lib/CodeGen/TaintAnalysis.cpp`, `TaintFixedPointIteration.cpp` |
 | `TaintSummaryInfo` / `FunctionMemEffects` (header-only) | `llvm/include/llvm/CodeGen/TaintSummaryInfo.h` |
 | Taint cl::opts, `TaintState`, `CallArgTaint`, public helpers | `llvm/include/llvm/CodeGen/TaintAnalysis.h` |
-| `-ftaint-harden` flag + 3-phase codegen | `clang/lib/CodeGen/BackendUtil.cpp`; flag in `clang/include/clang/Options/Options.td` |
+| `-ftaint-harden` flag; `RunTaintHardenCodegen` adds the pass after PEI (no round-trip since 2026-08-30) | `clang/lib/CodeGen/BackendUtil.cpp`; flag in `clang/include/clang/Options/Options.td` |
 | `insertTimingModeSwitch` (emits `MSR DIT`) | `llvm/lib/Target/AArch64/AArch64InstrInfo.cpp` |
 | Store payload classification (`getNumStoredValueRegs`) | `AArch64InstrInfo.cpp` (never classify stores by mnemonic prefix) |
 | Tests | `llvm/test/CodeGen/AArch64/taint-analysis-*.mir` |
@@ -580,6 +601,13 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
 ## 12. Deeper reference docs (this doc is the map; these are the territory)
 
 `docs/README.md` is the full annotated index with a reading order. The essentials:
+
+- `docs/reference/harden-runbook.md` - **the current recipe**: what the defaults do, the
+  two-build seed loop with the owned list, the control arms, what to expect on an M4/M5.
+- `docs/design/dit-callee-contract.md` - the callee contract (default): every function
+  protects its own secrets; what the contract assumes about code it cannot see (§1.2).
+- `docs/design/dit-cloning.md` - the DIT twins (default), and narrowing twins (§5.3, off).
+- `docs/design/taint-domain.md` - the analysis domain as built.
 
 - `docs/reference/dit-spec.md` - what PSTATE.DIT actually guarantees (covered set; excludes
   divide/sqrt; address-timing not covered). `isDITProtected` is transcribed from this, so
