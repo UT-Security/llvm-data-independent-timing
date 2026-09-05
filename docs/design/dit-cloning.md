@@ -307,8 +307,10 @@ writing through a pointer parameter, a mod-set precision gap, not the tuple.
 
 - **Silicon.** gem5 charges ~21 cycles of rename stall per serialising
   switch by model; the ordering is the result, the magnitudes are the
-  model's. The M5 has the renamed behaviour and cannot show the serialising
-  column.
+  model's. The M5's `MSR DIT` serialises too (~30 cycles per executed write,
+  `docs/results/dit-cost-model.md`, `docs/design/dit-abi.md`), so it is the
+  serialising column that predicts silicon; the twins have not been timed
+  there yet.
 - **"Clone what is instrumented"** instead of what a seed reaches would need
   the MIR analysis's verdict at IR time: a two-phase build, which is what the
   older `-taint-dit-clone-list` (`docs/design/dit-callee-ownership.md`) was.
