@@ -99,6 +99,39 @@ On libsodium's round-two report (the shipped 65 seeds plus round one's 21):
 implementation tables), and 12 external sites on 4 callees (`memset` x7,
 `memcpy` x3, `memmove`, `__explicit_bzero_chk`) that are no longer proposed.
 
+## 1.2 What the contract assumes about code it cannot see
+
+Under the contract every instrumented function clears DIT at its own exit, so
+a caller that is DIT-on across a call must re-assert after it unless the
+callee is known to hand the mode back: an in-TU callee with `PreservesDIT`, a
+twin, or (under inherit) one that is always entered DIT-on. A callee the
+build does not define has no summary and gets the blunt answer, "may clear".
+For glibc that answer is wrong - nothing in libc writes PSTATE.DIT - and it
+is expensive exactly where a hot secret loop calls a mover: argon2id's
+`fill_block` is three `copy_block`s that compile to `memcpy`, and the twin
+re-asserted after each, 393,216 times per hash, +7.58% serialising for a
+hash the old compiler ran unprotected at +1.97%; aes256-gcm decrypt's 4-byte
+tail cost four of its six switches the same way.
+
+**`-taint-dit-preserving-symbols=<file>`** (2026-09-05, opt-in) is the model:
+one external symbol per line that never writes PSTATE.DIT
+(`utils/dit_preserving_libc.txt`: the movers and their fortified forms, the
+string and memory scans, the allocators, the raw syscall wrappers, which the
+kernel preserves PSTATE across). `calleeLeavesDITSet` answers yes for a
+declaration the file names, so no re-assert follows the call in any emitter
+and the region verifier's dataflow does not model it as a clear; step 3b
+does not retract `PreservesDIT` through such a call, so a helper whose only
+calls are to libc keeps the bit for its own callers. Two guards keep it
+sound. The file is consulted only for a callee this module does not define,
+and only when the owned list does not name it: a symbol of ours is compiled
+by this pass and may clear at its exit, whatever the file says, which is
+what makes "link a hardened `memcpy` ahead of libc" still work (put it in the
+owned list). And nothing that takes a callback belongs in the file, because
+the callback may be an instrumented original of ours, and the external
+function returns with the mode wherever the callback left it. The file says
+nothing about coverage: a mover handed a secret is still an `external-call`
+record in the obligation report. Test `clang/test/CodeGen/taint-dit-preserving.c`.
+
 ## 2. Why
 
 Three properties, none of which the inherit contract has:

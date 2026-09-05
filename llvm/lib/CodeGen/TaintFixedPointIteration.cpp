@@ -642,9 +642,10 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
   // Step 3b: Compute the PreservesDIT summary bit (greatest fixed point).
   // A function preserves PSTATE.DIT iff it will not be DIT-instrumented (no
   // tainted runs) and every call it makes is direct to a preserving in-TU
-  // callee. Tail calls count: the tail-callee runs inside the caller's frame
-  // from its own caller's perspective. Externals/indirect targets keep the
-  // conservative default (false). Used by insertTaintDITSwitches to elide
+  // callee, or to an external the -taint-dit-preserving-symbols file vouches
+  // for. Tail calls count: the tail-callee runs inside the caller's frame
+  // from its own caller's perspective. Other externals and indirect targets
+  // keep the conservative default (false). Used by insertTaintDITSwitches to elide
   // after-call DIT re-asserts; must run before instrumentation below.
   if (TaintInsertDIT) {
     // Optimistic seed: a function preserves DIT unless it is itself
@@ -675,7 +676,8 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 if (!MI.isCall())
                   continue;
                 const Function *Callee = findCalledFunction(M, MI);
-                if (Callee && TSI.getSummary(*Callee).PreservesDIT)
+                if ((Callee && TSI.getSummary(*Callee).PreservesDIT) ||
+                    taintExternalCallPreservesDIT(MI, M))
                   continue;
                 S.PreservesDIT = false;
                 TSI.storeSummary(F, S);
@@ -784,7 +786,8 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
               if (!MI.isCall() || !MI.isReturn())
                 continue; // not a tail call
               const Function *TailCallee = findCalledFunction(M, MI);
-              if (!TailCallee || !TSI.getSummary(*TailCallee).PreservesDIT)
+              if (!(TailCallee && TSI.getSummary(*TailCallee).PreservesDIT) &&
+                  !taintExternalCallPreservesDIT(MI, M))
                 return; // cannot guarantee we return with DIT still set
             }
 

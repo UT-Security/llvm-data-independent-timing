@@ -1,0 +1,107 @@
+# External functions that never write PSTATE.DIT, for
+#   -mllvm -taint-dit-preserving-symbols=<this file>
+# One symbol per line. A call to one of these from DIT-on code returns with the
+# mode exactly as it went in, so the pass emits no `msr DIT, #1` after it. The
+# list is trusted only for symbols the build does not define itself (and the
+# owned list does not name): if you link a hardened memcpy ahead of libc, put it
+# in the owned list and it is handled as ours.
+#
+# What belongs here: glibc leaf routines. They execute no `msr DIT` and call
+# nothing of ours. What does NOT belong here: anything that takes a callback
+# (qsort, bsearch, tsearch, pthread_create, pthread_once, atexit, signal,
+# sigaction, dl_iterate_phdr), anything from another hardened library, and
+# anything you interpose. The kernel saves and restores PSTATE across a
+# syscall, so the raw wrappers are leaves too.
+#
+# Says nothing about coverage: a mover handed a secret is still an obligation
+# in the info-loss report; this file only removes the re-assert.
+
+# movers and their fortified forms
+memcpy
+memmove
+memset
+mempcpy
+bcopy
+bzero
+explicit_bzero
+__memcpy_chk
+__memmove_chk
+__memset_chk
+__mempcpy_chk
+
+# string and memory scans
+memcmp
+bcmp
+memchr
+memrchr
+strlen
+strnlen
+strcmp
+strncmp
+strcasecmp
+strncasecmp
+strcpy
+strncpy
+stpcpy
+stpncpy
+strcat
+strncat
+strchr
+strrchr
+strstr
+strspn
+strcspn
+strpbrk
+__strcpy_chk
+__strncpy_chk
+__strcat_chk
+__strlen_chk
+__memcmp_chk
+
+# allocators (no hooks since glibc 2.34)
+malloc
+calloc
+realloc
+free
+posix_memalign
+aligned_alloc
+memalign
+malloc_usable_size
+
+# syscall wrappers and misc leaves
+getrandom
+getentropy
+read
+write
+pread
+pwrite
+open
+openat
+close
+fcntl
+ioctl
+lseek
+fstat
+stat
+poll
+mmap
+munmap
+mprotect
+madvise
+mlock
+munlock
+msync
+sysconf
+getpid
+gettid
+getauxval
+clock_gettime
+gettimeofday
+time
+nanosleep
+sched_yield
+sched_getcpu
+__errno_location
+abort
+__stack_chk_fail
+__assert_fail

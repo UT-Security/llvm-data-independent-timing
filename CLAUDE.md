@@ -146,7 +146,18 @@ narrows, at cost 0 wasted coverage drops 0.7% for 3x the executed writes and sig
 twin inherits its original's incoming argument taint (a propagation-reached twin used to
 be analysed with none), and a register-tuple use reads its parts' taint while a tuple def
 marks them (an `st2` of a secret used to leave its cells public). Both were masked by
-whole-twin coverage; the default build is byte-identical.
+whole-twin coverage; the default build is byte-identical. **External callees
+that never touch DIT (`-taint-dit-preserving-symbols=<file>`, opt-in, 2026-09-05):**
+without it every callee the build does not define is assumed to clear the mode, so
+DIT-on code re-asserts after each libc call; that was ALL of argon2id's 395,758 executed
+switches per hash (three glibc `memcpy` per `fill_block` inside the twin) and four of
+aes256-gcm decrypt's six. The file names external leaves that never write PSTATE.DIT
+(`utils/dit_preserving_libc.txt` is the glibc set: movers, string functions, allocators,
+syscall wrappers; nothing that takes a callback), a call to one needs no re-assert, and
+a function whose only calls are to them keeps `PreservesDIT`. Trusted only for a callee
+this module does not define and the owned list does not name, so a hardened `memcpy` of
+ours is never overridden. It removes re-asserts only; a mover handed a secret is still
+an obligation. Test `clang/test/CodeGen/taint-dit-preserving.c`.
 
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function

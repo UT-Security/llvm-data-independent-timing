@@ -101,30 +101,84 @@ cl::opt<std::string> llvm::TaintOwnedSymbolsFile(
              "library): reported as out of scope, not as a seed obligation. "
              "Generate with utils/taint_owned_symbols.sh."));
 
-const StringSet<> *llvm::taintOwnedSymbols() {
-  // One TU per process (clang and llc alike), so a process-wide cache keyed on
-  // the path is enough; the path check only matters for a driver that changes
-  // the option between modules.
-  static std::string LoadedPath;
-  static std::unique_ptr<StringSet<>> Set;
-  static bool Tried = false;
-  if (Tried && LoadedPath == TaintOwnedSymbolsFile)
-    return Set.get();
-  Tried = true;
-  LoadedPath = TaintOwnedSymbolsFile;
-  Set.reset();
-  if (TaintOwnedSymbolsFile.empty())
+namespace {
+// One TU per process (clang and llc alike), so a process-wide cache keyed on
+// the path is enough; the path check only matters for a driver that changes
+// the option between modules.
+struct SymbolFileCache {
+  std::string LoadedPath;
+  std::unique_ptr<StringSet<>> Set;
+  bool Tried = false;
+};
+} // namespace
+
+// One symbol per line; blank lines and `#` comments (whole-line or trailing)
+// ignored. Null for no path or an unreadable file (reported once).
+static const StringSet<> *loadSymbolFile(SymbolFileCache &C,
+                                         const std::string &Path,
+                                         const char *What) {
+  if (C.Tried && C.LoadedPath == Path)
+    return C.Set.get();
+  C.Tried = true;
+  C.LoadedPath = Path;
+  C.Set.reset();
+  if (Path.empty())
     return nullptr;
-  auto Buf = MemoryBuffer::getFile(TaintOwnedSymbolsFile);
+  auto Buf = MemoryBuffer::getFile(Path);
   if (!Buf) {
-    errs() << "taint: cannot read owned-symbols file " << TaintOwnedSymbolsFile
-           << ": " << Buf.getError().message() << "\n";
+    errs() << "taint: cannot read " << What << " file " << Path << ": "
+           << Buf.getError().message() << "\n";
     return nullptr;
   }
-  Set = std::make_unique<StringSet<>>();
-  for (line_iterator LI(**Buf, /*SkipBlanks=*/true, '#'); !LI.is_at_eof(); ++LI)
-    Set->insert(LI->trim());
-  return Set.get();
+  C.Set = std::make_unique<StringSet<>>();
+  for (line_iterator LI(**Buf, /*SkipBlanks=*/true, '#'); !LI.is_at_eof();
+       ++LI) {
+    StringRef Sym = LI->split('#').first.trim();
+    if (!Sym.empty())
+      C.Set->insert(Sym);
+  }
+  return C.Set.get();
+}
+
+const StringSet<> *llvm::taintOwnedSymbols() {
+  static SymbolFileCache C;
+  return loadSymbolFile(C, TaintOwnedSymbolsFile, "owned-symbols");
+}
+
+cl::opt<std::string> llvm::TaintDITPreservingSymbolsFile(
+    "taint-dit-preserving-symbols", cl::Hidden, cl::init(""),
+    cl::desc("File naming external functions that never write PSTATE.DIT, "
+             "one per line (libc leaf routines; utils/dit_preserving_libc.txt "
+             "is the glibc set). No re-assert is emitted after a call to one "
+             "from DIT-on code. Trusted only for a callee this module does not "
+             "define and -taint-owned-symbols does not name."));
+
+const StringSet<> *llvm::taintDITPreservingSymbols() {
+  static SymbolFileCache C;
+  return loadSymbolFile(C, TaintDITPreservingSymbolsFile,
+                        "DIT-preserving-symbols");
+}
+
+bool llvm::taintExternalSymbolPreservesDIT(StringRef Name, const Module &M) {
+  if (Name.empty())
+    return false;
+  // Defined here: this pass compiles it and knows whether it clears.
+  if (const Function *F = M.getFunction(Name); F && !F->isDeclaration())
+    return false;
+  const StringSet<> *Preserving = taintDITPreservingSymbols();
+  if (!Preserving || !Preserving->contains(Name))
+    return false;
+  // Ours, defined in another TU of this build: it may be instrumented and
+  // clear at its exit. The file describes code we do not compile.
+  if (const StringSet<> *Owned = taintOwnedSymbols())
+    if (Owned->contains(Name))
+      return false;
+  return true;
+}
+
+bool llvm::taintExternalCallPreservesDIT(const MachineInstr &MI,
+                                         const Module &M) {
+  return MI.isCall() && taintExternalSymbolPreservesDIT(getCalleeSymbolName(MI), M);
 }
 
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
@@ -3364,8 +3418,9 @@ static unsigned redirectCallsToDITClones(
   return N;
 }
 
-static bool calleeLeavesDITSet(const Function *Callee,
-                               const TaintSummaryInfo *TSI) {
+static bool calleeLeavesDITSet(const MachineInstr &Call,
+                               const Function *Callee,
+                               const TaintSummaryInfo *TSI, const Module &M) {
   // Under the callee-saved ABI this is the contract, not an analysis result:
   // every callee returns DIT no lower than it found it, including indirect and
   // cross-TU ones. Answering here rather than only at the emission sites means
@@ -3373,6 +3428,13 @@ static bool calleeLeavesDITSet(const Function *Callee,
   // clearing - otherwise it sees every Need after a call as uncovered and falls
   // the whole function back to whole-function granularity.
   if (TaintDITAbi)
+    return true;
+
+  // A libc leaf the -taint-dit-preserving-symbols file names never writes
+  // PSTATE.DIT, so it returns the mode as it found it. Without the file every
+  // external callee is assumed to clear: on libsodium's argon2id that was
+  // three re-asserts per block after glibc memcpy, 393,216 per hash.
+  if (taintExternalCallPreservesDIT(Call, M))
     return true;
 
   if (!TSI || !Callee)
@@ -3407,16 +3469,17 @@ static void reportDITReassert(raw_ostream *OS, const MachineFunction &MF,
   // for a clear that does not exist and hides the real cause, which is the
   // cross-TU call inside it.
   const char *Reason;
-  if (!Callee)
+  const StringRef Sym = getCalleeSymbolName(MI);
+  if (!Callee && Sym.empty())
     Reason = "indirect";
-  else if (Callee->isDeclaration())
-    Reason = "external";
+  else if (!Callee || Callee->isDeclaration())
+    Reason = "external"; // incl. a libcall symbol with no Function in the module
   else if (TSI && TSI->getSummary(*Callee).InstrumentedForDIT)
     Reason = "clears-on-exit";
   else
     Reason = "propagates-unresolvable"; // in-TU, emits no DIT of its own
   *OS << "REASSERT " << Reason
-      << " callee=" << (Callee ? Callee->getName() : "<indirect>")
+      << " callee=" << (Callee ? Callee->getName() : Sym.empty() ? "<indirect>" : Sym)
       << " caller=" << MF.getName() << " bb=" << MI.getParent()->getNumber();
   if (const DebugLoc &DL = MI.getDebugLoc())
     *OS << " line=" << DL.getLine();
@@ -3597,7 +3660,7 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
         if (isOracleRearmCall(MI))
           continue;
         const Function *Callee = findCalledFunction(*M, MI);
-        if (calleeLeavesDITSet(Callee, TSI))
+        if (calleeLeavesDITSet(MI, Callee, TSI, *M))
           continue;
         reportDITReassert(ReassertOS, MF, MI, Callee, TSI);
         TII->insertTimingModeSwitch(MBB, std::next(MI.getIterator()),
@@ -3706,7 +3769,7 @@ static bool clobbersDIT(const MachineInstr &MI, const TaintSummaryInfo *TSI,
     return false;
   if (isOracleRearmCall(MI))
     return false;
-  return !calleeLeavesDITSet(findCalledFunction(M, MI), TSI);
+  return !calleeLeavesDITSet(MI, findCalledFunction(M, MI), TSI, M);
 }
 
 // Forward 1-bit "DIT on" dataflow over the EMITTED MIR: a mode switch sets the

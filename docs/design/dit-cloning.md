@@ -159,6 +159,15 @@ one-line `hasFnAttribute(NoReturn)` test not done here. And a twin is
 covered whole, where its original may have been region-placed, which is the
 +5.6% wasted coverage below.
 
+The dynamic residual that matters is the re-assert after an EXTERNAL callee.
+A twin re-asserts after every call the build cannot see, and on libsodium
+that is glibc: argon2id's twin re-asserts three times per block after
+`memcpy` (395,758 executed switches per hash, +7.58% serialising) and
+aes256-gcm decrypt four times per call after the `memcpy`/`memset` of its
+4-byte tail. `-taint-dit-preserving-symbols` (`dit-callee-contract.md`
+§1.2) names the libc leaves that never write PSTATE.DIT and removes those
+re-asserts.
+
 ## 5. Measured: libsodium signing, gem5 oracle, round-11 seeds
 
 Two signatures, `--eves --dmp --comp-simp`, the protocol of
