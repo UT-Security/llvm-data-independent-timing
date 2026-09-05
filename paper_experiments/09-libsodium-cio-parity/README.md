@@ -448,6 +448,39 @@ protected, 0 uncovered, 54,010 wasted, identical to the round-11 library
 measured for `docs/design/dit-cloning.md`; the seeds are at their fixpoint
 on this path and the twins do not move protection.
 
+**With a different message every operation** (`build_arms.sh VARY_INPUT=1`:
+the staged drivers rewrite the message before each iteration's setup,
+outside the measured region; keys and nonces already vary per iteration in
+CIO's drivers, only the message and the empty additional data were fixed;
+the patch is `data/gem5_api_bracket_vary_driver_patch.diff`, so this lane is
+NOT byte-identical to CIO's drivers and the fixed-input lane above remains
+the parity measurement). Same libraries, same seven arms, all gates passing;
+`data/gem5_api_bracket_vary.csv`, `data/gem5_api_bracket_vary_analysis.txt`:
+
+| benchmark | blanket | API bracket, renamed / serialising | pass, renamed / serialising | pass switches/op |
+|---|---|---|---|---|
+| ed25519 sign | +1.13% | +0.58% / +0.74% | -6.53% / -1.75% | 16 |
+| chacha20-poly1305 encrypt | +3.81% | +1.99% / +1.72% | +1.72% / +37.94% | 38 |
+| chacha20-poly1305 decrypt | -0.91% | -2.53% / -0.14% | +0.29% / +36.38% | 39 |
+| aes256-gcm encrypt | +0.57% | +0.90% / +4.20% | +0.32% / +12.85% | 6 |
+| aes256-gcm decrypt | +8.09% | +10.77% / +25.10% | +9.02% / +35.18% | 6 |
+
+Nothing that matters moves. The serialising column is the same story to
+within a few points, and the renamed column shuffles inside the layout band
+(the patched drivers are different binaries, so every arm's layout term
+moved with them: ed25519's pass row is now -6.5% against a NOP twin at
+-2.7%). **The aes256-gcm decrypt row was the reason to run this, and it does
+not move: blanket +8.09% against +8.39%.** The value-predictable loads that
+DIT takes away on that row are not the message. With the message varying,
+base still makes 2,346 load-value predictions per 50 operations (3,368 with
+it fixed), 1,700 of them stride predictions (2,491), and blanket makes none;
+encrypt makes 916 and no stride predictions on either input. A stride
+prediction is a load whose value advances by a constant, which is what a
+counter mode's block counter does by construction, and the decrypt path's
+loop structure exposes it where encrypt's does not. That is a property of
+the kernel, not of the driver's input, and every placement that covers the
+kernel pays it.
+
 **argon2id** is running as this is written (one operation is 326M cycles;
 five arms, both models, about six hours) and will be appended to the data
 file; on silicon it is the null endpoint for every arm.
