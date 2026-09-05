@@ -532,6 +532,30 @@ sixteen times. **On this row the 8% is not over-approximation. It is the
 price of closing the tag-comparison channel, and every placement that
 protects the tag pays it, hand-placed or not.**
 
+**Is the hoisted enable what covers the two public reloads, and would not
+covering them buy the time back?** The first half is yes: region placement
+hoists the loop's enable to the preheader, and with the enable sunk into the
+body and the loads reordered, the two pointer reloads, `i++` and the bound
+could run DIT-off. So that was built by hand
+(`utils/dit_host_screening/cioparity/verify16_hand/`: the compare's own code
+from the pass binary, three ways, `-Wl,--wrap`ped ahead of the unhardened
+library so the compare is the only thing that runs with DIT set):
+
+| `crypto_verify_16` | DIT writes / op | renamed | serialising | load predictions / op |
+|---|---|---|---|---|
+| no switch (control) | 0 | 1,080.5 cycles | 1,080.5 | 64.5 |
+| hoisted, whole loop covered (what the pass emits) | 4 | **+8.38%** | +15.01% | 8.0 |
+| per iteration, only the 8 tainted instructions covered | 34 | **+8.19%** | +74.17% | 8.5 |
+
+Leaving the public reloads uncovered recovers nothing: +8.19% against
++8.38% on the renamed model, and +74% on the serialising one for the 34
+switches. The loop's critical path is the store-to-load chain through the
+tainted accumulator, and once that is covered the predictor has nothing
+left to shorten; the trace of the per-iteration variant shows the two
+pointer reloads predicted 3 times per two operations instead of 30 to 40,
+with every other prediction in the loop suppressed by the mode. The hoist
+is a design decision, and on this loop it is free.
+
 A side finding from the same reports, not on the benchmark's path. The
 one-shot `crypto_aead_aes256gcm_decrypt` builds the key schedule and the
 GHASH table into a local `st` and passes `&st` to
