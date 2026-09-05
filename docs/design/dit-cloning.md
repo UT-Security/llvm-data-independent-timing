@@ -252,6 +252,41 @@ Three readings.
   library, not of a call site. Seeding the table's targets already makes
   them protect themselves; making them free needs the dispatch to be direct.
 
+### 5.2 mbedTLS TLS 1.3 resumption (experiment 10): where the twins cost
+
+The same run on the workload the contract was measured on
+(`paper_experiments/10-mbedtls-session-ticket/README.md` §16; r5 seeds, the
+owned list, five `argv[0]` lengths, per run of five resumptions):
+
+| arm | renamed | serialising | DIT writes | coverage / res |
+|---|---|---|---|---|
+| blanket | -1.40% | -1.24% | 0 | |
+| r5, inherit | +3.50% | +252.62% | 12,110,336 | 99.932% |
+| r5, callee, no twins | +6.17% | +251.53% | 11,916,847 | 99.877% |
+| **r5, callee + twins** | **+11.30%** | **+40.27%** | **1,037,782** | **99.955%** |
+| r5, callee, NOP | +7.14% | +7.11% | 0 | |
+| r5, callee + twins, NOP | +12.59% | +12.50% | 0 | |
+
+The twins remove 91% of the executed switches and take the serialising cost
+from +252% to +40%, and coverage is the best of any arm because a twin is
+covered whole where region placement left holes in the bignum originals.
+But on the renamed model they cost +5.1 points over the twin-less contract,
+and the NOP control puts every point of it in the code, not in DIT:
+`fetchStats0.icacheStallCycles` 29.73M -> 34.37M, which is the whole cycle
+gap, `fetch.cacheLines` +15.7% for 5.7% fewer committed instructions, L1I
+misses flat. Both copies of the hot bignum code run (originals from DIT-off
+callers, twins from DIT-on ones), laid out apart, and the fetch stage pays.
+This is the +21% text of §4 turned into time on a large code base, and on
+renamed hardware it exceeds the switch savings. Blanket, at -1.4%, remains
+the right answer on a 65%-secret workload, as experiment 10 already said.
+
+Two things would cut the residual switches and are not done: the 311 direct
+calls a twin makes to `calloc`, `free` and `mbedtls_platform_zeroize`
+(seed the last; for the first two, a callee outside the owned list cannot
+write PSTATE.DIT unless it calls back into hardened code, so a
+known-leaf rule is sound for the allocators), and the twins' layout, which
+a linker order that keeps a twin next to its original would improve.
+
 ## 6. Not done
 
 - **Silicon.** gem5 charges ~21 cycles of rename stall per serialising
