@@ -98,6 +98,13 @@ How the analysis is built, which bugs were found in it, and what is still open.
   are pasted. Two findings that outrank it: glibc's `memcpy` blinds the oracle (the
   libsecp256k1 nonce derivation was never protected), and callee-saved restores
   reload the caller's secrets.
+- **[design/dit-cloning.md](design/dit-cloning.md)** - **DIT twins**
+  (`-taint-dit-clone-seeded`, opt-in): every seeded function and everything it
+  reaches in its TU gets a `<name>.dit` copy that is entered DIT-on by construction
+  and emits no switch; calls from DIT-on code are redirected to it, across TUs
+  through the seed file and the owned list, no LTO. libsodium signing under the
+  callee contract: 10,400 executed DIT writes -> 41 (inherit 6) at identical
+  coverage, +21% text.
 - **[results/returns-pointee-2026-09-04.md](results/returns-pointee-2026-09-04.md)** -
   **the `ReturnsPointeeTainted` summary bit and the seeded-callee return gate.**
   A callee returning a pointer INTO secret memory returned a public pointer

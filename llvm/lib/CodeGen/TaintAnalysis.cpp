@@ -18,6 +18,8 @@
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/LineIterator.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -98,6 +100,32 @@ cl::opt<std::string> llvm::TaintOwnedSymbolsFile(
              "unseen callee not in it is external code (libc, another "
              "library): reported as out of scope, not as a seed obligation. "
              "Generate with utils/taint_owned_symbols.sh."));
+
+const StringSet<> *llvm::taintOwnedSymbols() {
+  // One TU per process (clang and llc alike), so a process-wide cache keyed on
+  // the path is enough; the path check only matters for a driver that changes
+  // the option between modules.
+  static std::string LoadedPath;
+  static std::unique_ptr<StringSet<>> Set;
+  static bool Tried = false;
+  if (Tried && LoadedPath == TaintOwnedSymbolsFile)
+    return Set.get();
+  Tried = true;
+  LoadedPath = TaintOwnedSymbolsFile;
+  Set.reset();
+  if (TaintOwnedSymbolsFile.empty())
+    return nullptr;
+  auto Buf = MemoryBuffer::getFile(TaintOwnedSymbolsFile);
+  if (!Buf) {
+    errs() << "taint: cannot read owned-symbols file " << TaintOwnedSymbolsFile
+           << ": " << Buf.getError().message() << "\n";
+    return nullptr;
+  }
+  Set = std::make_unique<StringSet<>>();
+  for (line_iterator LI(**Buf, /*SkipBlanks=*/true, '#'); !LI.is_at_eof(); ++LI)
+    Set->insert(LI->trim());
+  return Set.get();
+}
 
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
     "taint-callsite-report",
@@ -3199,15 +3227,47 @@ unsigned llvm::exportTaintSourceRegions(MachineFunction &MF,
 // relaxed ownership can drop the clear, but eliding the ENABLE on a shared
 // helper would be a static assumption about the caller, and here it is not an
 // assumption but a property of who is allowed to call this symbol.
-static bool isDITClone(const Function *F) {
+bool llvm::isDITClone(const Function *F) {
   return F && F->hasFnAttribute("taint-dit-clone");
 }
 
-// The clone for `F`, if the annotator made one.
+// The clone for `F`, if one exists or can be NAMED.
+//
+// In-TU: the annotator made `<name>.dit` next to the definition. Cross-TU: `F`
+// is a declaration the seed file covers (`taint-seeded-elsewhere`), this build
+// clones every seeded function (the `taint-dit-clone-seeded` module flag), and,
+// when an owned list was given, `F` is a function this build defines. Then the
+// TU that defines `F` made the twin with F's own linkage, and the linker will
+// resolve the name, so a declaration is synthesized here and the call is
+// redirected to it without this pass ever seeing the body - no LTO, no
+// cross-module view. It is the same assumption the owned list already encodes
+// for the obligation report: a seeded callee we define is compiled with these
+// flags. A seed naming a function this build does NOT define is the one way to
+// break it, and it breaks loudly, as an undefined `<name>.dit` at link time.
 static Function *ditCloneFor(const Function *F, Module &M) {
   if (!F || isDITClone(F))
     return nullptr;
-  return M.getFunction((F->getName() + ".dit").str());
+  const std::string Name = (F->getName() + ".dit").str();
+  if (Function *Clone = M.getFunction(Name))
+    return isDITClone(Clone) ? Clone : nullptr;
+  if (!F->isDeclaration() || !F->hasFnAttribute("taint-seeded-elsewhere") ||
+      !M.getModuleFlag("taint-dit-clone-seeded"))
+    return nullptr;
+  if (const StringSet<> *Owned = taintOwnedSymbols())
+    if (!Owned->contains(F->getName()))
+      return nullptr;
+  FunctionCallee FC =
+      M.getOrInsertFunction(Name, F->getFunctionType(), F->getAttributes());
+  Function *Clone = dyn_cast<Function>(FC.getCallee());
+  if (!Clone)
+    return nullptr;
+  Clone->setCallingConv(F->getCallingConv());
+  Clone->setVisibility(F->getVisibility());
+  Clone->setDSOLocal(F->isDSOLocal());
+  Clone->setUnnamedAddr(F->getUnnamedAddr());
+  Clone->removeFnAttr("taint-seeded-elsewhere");
+  Clone->addFnAttr("taint-dit-clone");
+  return Clone;
 }
 
 // Redirect every call in `OnBlocks` whose callee has a clone to that clone.
@@ -3437,10 +3497,13 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
 
   if (!Clone)
     TII->insertTimingModeSwitch(Entry, EntryAt, DebugLoc(), /*Enable=*/true);
-  // Inside a clone DIT is on throughout, so its own calls can use clones too.
-  if (Clone)
-    redirectCallsToDITClones(MF, *M,
-                             [](const MachineBasicBlock *) { return true; });
+  // DIT is on across the whole body here - from the entry enable (or, for a
+  // clone and a function entered with DIT set, from entry itself) to the clear
+  // that sits immediately before each return - so every call is made from
+  // DIT-on code and can use the callee's clone. Before the walk below, so the
+  // re-assert decision already sees a callee that never clears.
+  redirectCallsToDITClones(MF, *M,
+                           [](const MachineBasicBlock *) { return true; });
   for (MachineBasicBlock &MBB : MF)
     for (MachineInstr &MI : MBB) {
       // Tail call: see the comment above. Emit nothing.
@@ -4681,6 +4744,15 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                 if ((needsDIT(MI, F, *TII) || isCalleeSavedRestore(MI)) &&
                     !CurOn)
                   Sound = false;
+                // A call redirected to a `.dit` clone is a promise that DIT is
+                // set at the call: the clone has no enable of its own. The
+                // redirect only touches On blocks and the enable sink treats
+                // the call as a pin, so this should never fire; it is here so
+                // that if it ever does the function falls back rather than
+                // entering a clone with DIT clear.
+                if (MI.isCall() && !CurOn &&
+                    isDITClone(findCalledFunction(M, MI)))
+                  Sound = false;
                 if (clobbersDIT(MI, TSI, M))
                   CurOn = false;
                 return true;
@@ -4791,7 +4863,14 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   if (RegionsOS)
     printTaintedRuns(MF, TaintedRuns, *RegionsOS);
 
-  if (TaintedRuns.empty())
+  // A clone with no secret of its own still owes its caller the guarantee it
+  // was redirected to for: DIT set on return. A forwarder `f(key) { g(key); }`
+  // has no Need under the callee contract, so it would emit nothing - and if
+  // `g` (or an unseeded callee before it) clears DIT on exit, the caller that
+  // chose `f.dit` precisely so that it need not re-assert runs its next secret
+  // op unprotected. So a clone always takes the whole-function path below,
+  // which re-asserts after every clobbering call and redirects the rest.
+  if (TaintedRuns.empty() && !isDITClone(&MF.getFunction()))
     return TaintedInstrCount;
 
   // Pin the mode before choosing a placement, so both region and

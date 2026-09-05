@@ -843,26 +843,17 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
     // does not define is external code the developer does not own: filed as
     // `external-call`, out of scope for the seed loop, counted separately.
     // Taint still propagates through the call exactly as before.
-    StringSet<> OwnedSymbols;
-    bool HaveOwned = false;
-    if (!TaintOwnedSymbolsFile.empty()) {
-      auto Buf = MemoryBuffer::getFile(TaintOwnedSymbolsFile);
-      if (!Buf) {
-        errs() << "taint: cannot read owned-symbols file "
-               << TaintOwnedSymbolsFile << ": " << Buf.getError().message()
-               << "\n";
-      } else {
-        HaveOwned = true;
-        for (line_iterator LI(**Buf, /*SkipBlanks=*/true, '#'); !LI.is_at_eof();
-             ++LI)
-          OwnedSymbols.insert(LI->trim());
-      }
-    }
+    const StringSet<> *OwnedSymbols = taintOwnedSymbols();
+    const bool HaveOwned = OwnedSymbols != nullptr;
     unsigned ExternalSites = 0;
     StringSet<> ExternalCallees;
     forEachAnalyzed(M, Ctx, Results,
         [&](Function &F, MachineFunction &MF, const TaintResult &TR,
             AAResults *AA) {
+          // A `.dit` twin is its original's body again; every record it
+          // would produce is already filed under the original.
+          if (isDITClone(&F))
+            return;
           const bool FnInstrumented = HasTaintedRuns.lookup(&F);
           const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
           replayTaint(
@@ -1050,7 +1041,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                     *CallsiteOS << " pointee-tainted-args";
                   *CallsiteOS << (ditCalleeContract()
                                       ? (Named && HaveOwned &&
-                                                 !OwnedSymbols.contains(CalleeName)
+                                                 !OwnedSymbols->contains(CalleeName)
                                              ? " (external: out of scope)\n"
                                          : isLibcMover(Callee, MI)
                                              ? " (UNCOVERED: libc mover, link a hardened one)\n"
@@ -1117,7 +1108,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                     Repair = std::string(R);
                 }
                 if (ditCalleeContract() && Named && HaveOwned &&
-                    !OwnedSymbols.contains(CalleeName)) {
+                    !OwnedSymbols->contains(CalleeName)) {
                   // External: not ours to seed. Say what the call does to the secret
                   // and leave the repair empty - a hardened mover or a hardened libc is
                   // the developer's call, not an obligation.
@@ -1383,7 +1374,12 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
     forEachAnalyzed(M, Ctx, Results,
                     [&](Function &F, MachineFunction &MF, const TaintResult &TR,
                         AAResults *AA) {
-                      if (!HasTaintedRuns.lookup(&F))
+                      // A `.dit` clone is emitted even when it holds nothing
+                      // secret: it owes its caller DIT-set-on-return, which
+                      // means a re-assert after any call of its own that may
+                      // clear (see insertTaintDITSwitches).
+                      if (!HasTaintedRuns.lookup(&F) &&
+                          !(TaintInsertDIT && isDITClone(&F)))
                         return;
 
                       if (TaintInsertDIT)
