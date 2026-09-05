@@ -1,0 +1,7 @@
+# Experiment 10 coverage under psk_dhe_ke, gem5 shadow-taint oracle, seeded at the ticket key and the PSA RNG; per resumption = (n2 - n0)/2.
+# Compiler: dit-tainter 64831933bc88 for the twins arm; the other rows are the 2026-09-04 measurement. No hardened movers linked (the r5cal protocol).
+arm,uncovered_per_res,protected_per_res,wasted_per_res,coverage_pct,dit_writes_n2_run
+r5 inherit,8222,12059256,15957228,99.932,12110336
+r5 callee,14803,12052674,15886636,99.877,4806407
+r5 callee + hardened movers,13295,12150728,15847660,99.891,
+r5 callee + twins (default),5484,12061255,16053806,99.955,415250

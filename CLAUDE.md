@@ -22,6 +22,24 @@ not reintroduce it. Why taint at all, rather than DIT-everywhere: DIT is not fre
 (some SPEC 2026 benchmarks lose ~15% with it fully on), so it should cover only
 secret-dependent code. See `docs/results/dit-cost-model.md`.
 
+## gem5-DIT submodule
+
+The gem5 half of every measurement is pinned as the submodule `gem5-DIT/`,
+tracking `master` of `UT-Security/gem5-DIT`. The pinned commit is the gem5 the
+compiler at this revision was measured against, so a compiler change that moves a
+gem5 number and the gem5 change it depends on land in the same PR.
+
+- Fresh checkout: `git submodule update --init gem5-DIT`. Do NOT add
+  `--recursive`: gem5-DIT's own `PolyBenchC` submodule is SSH-only and nothing
+  here needs it.
+- Move the pin to master's tip: `git submodule update --remote gem5-DIT`, then
+  commit the new `gem5-DIT` entry alongside the measurement it belongs to.
+- The submodule is sources only. `build/ARM/gem5.fast` and the benchmark
+  binaries still live in the tree the scripts point at (`GEM5_ROOT`, else
+  `~/Documents/gem5-DIT`). Either build inside the submodule and point
+  `GEM5_ROOT` at it, or keep `~/Documents/gem5-DIT` checked out at the pinned
+  commit (`git -C gem5-DIT rev-parse HEAD`) while measuring.
+
 ## Build
 
 Running builds is fine. They are long, so start them in the background rather than
@@ -157,7 +175,12 @@ gem5 against instruction-matched NOP baselines: signing on the serialising model
 cost (the 176,500-switch arm beats its own NOP baseline by 2.5%) and the twins tie
 blanket at +1.4%. AEAD keeps 38 of 58 switches per call behind the Poly1305/ChaCha20
 implementation tables, since an indirect call is never redirected, and stays +6.09%
-serialising. Test `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs). **Narrowing
+serialising. **On mbedTLS resumption (experiment 10) the twins cost time on renamed
+hardware:** serialising +252% -> +40% and coverage 99.955%, but renamed +6.17% -> +11.30%,
+and the NOP-twins arm (+12.59%) says it is all instruction fetch on the duplicated code
+(+4.6M `icacheStallCycles`, +15.7% cache lines fetched, L1I misses flat, text +12%). On a
+large code base the twins' size is a front-end cost that can exceed the switch savings;
+blanket still wins there. Test `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs). **Narrowing
 twins (`-taint-dit-twin-narrow`, opt-in; `-taint-dit-twin-switch-cyc=0` for "DIT off at
 the top of every twin") are built and measured and do NOT pay on libsodium** (results
 `docs/results/dit-twin-narrowing-2026-09-05.md`): at the shipped switch cost nothing

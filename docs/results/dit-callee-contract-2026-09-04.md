@@ -218,6 +218,14 @@ difference between them is the price of that class on its own.
 | r5 seeds, callee + naive hardened movers | +10.09% | +272.57% | 13,116,695 | 99.891% (13,295) |
 | r5 seeds, inherit, every switch a NOP | +4.84% | +4.81% | 0 | |
 | r5 seeds, callee, every switch a NOP | +7.14% | +7.11% | 0 | |
+| **r5 seeds, callee + twins (the default since 2026-09-05)** | **+11.30%** | **+40.27%** | 1,037,782 | 99.955% (5,484) |
+| r5 seeds, callee + twins, every switch a NOP | +12.59% | +12.50% | 0 | |
+
+The twins rows were added 2026-09-05 (`docs/design/dit-cloning.md` §5.2,
+experiment 10 §16): 91% fewer executed switches, the best coverage of any
+arm, and on the renamed model +5.1 points over the twin-less contract that
+the NOP control attributes entirely to instruction fetch on the duplicated
+code.
 
 Spreads are 0.00-0.27% across the five path lengths on every arm.
 
