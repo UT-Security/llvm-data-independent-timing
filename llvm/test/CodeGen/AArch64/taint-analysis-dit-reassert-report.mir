@@ -1,8 +1,10 @@
 # The inherit contract is pinned: this test is about a call being a Need and
 # the caller holding DIT across it, which the default (callee, since
 # 2026-09-05) does not do.
+# So is the external re-assert (-taint-dit-external-preserves=0, the default until
+# 2026-09-05): the `external` report line exists only when it is emitted.
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-contract=inherit \
-# RUN:   -taint-dit-placement=function -taint-dit-reassert-report=%t %s -o /dev/null
+# RUN:   -taint-dit-external-preserves=0 -taint-dit-placement=function -taint-dit-reassert-report=%t %s -o /dev/null
 # RUN: FileCheck %s --input-file=%t --implicit-check-not=caller=calls_preserving
 
 # The default mode's audit trail: every call site where the callee could not be

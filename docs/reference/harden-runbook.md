@@ -55,12 +55,14 @@ The one-line command above gives you all of this:
   placement into blanket coverage for the rest of the program.
 - **The call-site mod-set gate is on**: a callee's memory clobber applies
   only at call sites that pass it a secret (`-taint-no-modset-gate=0`).
-- **A callee outside the build is assumed to clear DIT** unless you say
-  otherwise (`-taint-dit-external-preserves=0`): DIT-on code re-asserts after
-  every libc call. Section 4 says when to turn that off.
+- **A callee outside the build is assumed to leave DIT as it found it**
+  (`-taint-dit-external-preserves=1`, the default since 2026-09-05): no
+  re-assert after a libc call. `=0` re-asserts after every external call,
+  which is right only when an external callee calls back into hardened code;
+  section 4 says when.
 
-The pre-2026-09-05 compiler is three flags away, for an A/B:
-`-mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-sub-block=0`.
+The pre-2026-09-05 compiler is four flags away, for an A/B:
+`-mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-sub-block=0 -mllvm -taint-dit-external-preserves=0`.
 
 ## 2. Build the compiler
 
@@ -169,20 +171,20 @@ call is only ever redirected to a twin when the callee is in the list**.
 Without the list the twins work inside each TU and a cross-TU call keeps the
 original, which protects itself. Nothing is lost but the optimisation.
 
-Add the external-callee assumption on the second build too:
+The external-callee assumption is on by default (since 2026-09-05): a
+callee the build does not define is assumed never to write PSTATE.DIT, so no
+re-assert follows it; a symbol the owned list names is still yours and keeps
+it. Turn it off only when an external function calls back into hardened code
+(`qsort` with a hardened comparator, `pthread_once`), which returns with the
+mode wherever the callback left it:
 
 ```
-   -mllvm -taint-dit-external-preserves \
+   -mllvm -taint-dit-external-preserves=0 \
 ```
 
-Every callee the build does not define is otherwise assumed to clear DIT, and
-DIT-on code re-asserts after each one: on libsodium that is three `msr DIT`
-per argon2 block after glibc's `memcpy`, 393,216 per hash. With the flag a
-callee outside the build is assumed never to write PSTATE.DIT and the
-re-assert after it goes; a symbol the owned list names is still yours and
-keeps it. The assumption is wrong only for an external function that calls
-back into hardened code (`qsort` with a hardened comparator, `pthread_once`),
-which returns with the mode wherever the callback left it.
+With it off every callee the build does not define is assumed to clear DIT
+and DIT-on code re-asserts after each one: on libsodium that was three
+`msr DIT` per argon2 block after glibc's `memcpy`, 393,216 per hash.
 
 ### Close the seed loop
 
@@ -265,7 +267,7 @@ you ship; one marked **retired** still parses but should not be used.
 | `-taint-dit-contract` | `callee`, `inherit` | `callee` (since 2026-09-05) | `callee`: every function protects its own secrets; a call is never a Need; a secret reaching a callee the build cannot see is an obligation in the info-loss report; a callee-saved restore is a Need. `inherit`: a secret-passing call is a Need and the caller holds DIT across it; the `AlwaysEnteredWithDIT` ownership rule and the Scenario-B assertion exist only here. |
 | `-taint-dit-clone-seeded` | 0/1 | 1 (since 2026-09-05) | The DIT twins: every seeded function and everything it reaches by direct call in its TU gets a `<name>.dit` copy entered DIT-on that emits no enable or clear (it still re-asserts after a call of its own that may clear); a call made from DIT-on code is redirected to it. Every TU must be built with the same value. `0` for an **A/B**. |
 | `-taint-owned-symbols=<file>` | file, one symbol per line | none | The functions this build defines (`utils/taint_owned_symbols.sh` over the build's objects). Two effects: the obligation report files a callee outside it as `external-call` (out of scope, no seed proposed), and a cross-TU call is redirected to a twin ONLY when the callee is in the list. Without it: in-TU twins only, originals across TUs, nothing lost but the optimisation. |
-| `-taint-dit-external-preserves` | 0/1 | 0 | Assume a direct callee this module does not define, and the owned list does not name, never writes PSTATE.DIT: no re-assert after it, and a function whose only calls are external keeps `PreservesDIT`. Right for libc (removes every re-assert after `memcpy`: argon2id 395,758 switches per hash -> 3, +7.58% -> +1.08% serialising); wrong for an external that calls back into hardened code. Indirect calls unchanged. `docs/results/dit-external-preserves-2026-09-05.md`. |
+| `-taint-dit-external-preserves` | 0/1 | 1 (since 2026-09-05) | Assume a direct callee this module does not define, and the owned list does not name, never writes PSTATE.DIT: no re-assert after it, and a function whose only calls are external keeps `PreservesDIT`. Right for libc (removes every re-assert after `memcpy`: argon2id 395,758 switches per hash -> 3, +7.58% -> +1.08% serialising); wrong for an external that calls back into hardened code. Indirect calls unchanged. `docs/results/dit-external-preserves-2026-09-05.md`. |
 | `-taint-dit-twin-narrow` | 0/1 | 0 | Region placement inside a twin: a clear at its top over a public preamble, corridors, an enable before every return. Measured not to pay on libsodium (`docs/results/dit-twin-narrowing-2026-09-05.md`). |
 | `-taint-dit-twin-switch-cyc` | cycles, -1 | -1 | The switch cost inside a narrowing twin; -1 uses `-taint-dit-switch-cyc`, 0 is maximal narrowing. |
 | `-taint-dit-clone-list=<file>` | file | none | The older, explicit twin list (local linkage only); superseded by `-taint-dit-clone-seeded`. |

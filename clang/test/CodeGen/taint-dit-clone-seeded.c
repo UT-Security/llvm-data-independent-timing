@@ -9,6 +9,10 @@
 // every seeded callee otherwise toggles for itself.
 //
 // REQUIRES: aarch64-registered-target
+//
+// The external re-assert is pinned (-taint-dit-external-preserves=0, the default
+// until 2026-09-05): fwd's twin is checked for the re-assert after a call that
+// may clear, and ext_unknown is that call only when externals are not trusted.
 // RUN: echo "outer,0,pointee" >  %t.seed
 // RUN: echo "inner,0,pointee" >> %t.seed
 // RUN: echo "fwd,0,pointee"   >> %t.seed
@@ -17,14 +21,14 @@
 //
 // TU A, the caller: it only DECLARES inner.
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.a.s -DTU_A \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-external-preserves=0 -mllvm -taint-dit-contract=callee \
 // RUN:     -mllvm -taint-owned-symbols=%t.owned -mllvm -taint-dit-clone-seeded %s
 // RUN: FileCheck --check-prefix=A --input-file=%t.a.s %s
 //
 // TU B, the callee: defines inner and leaf, and fwd, which holds no secret of
 // its own.
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.b.s -DTU_B \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-external-preserves=0 -mllvm -taint-dit-contract=callee \
 // RUN:     -mllvm -taint-owned-symbols=%t.owned -mllvm -taint-dit-clone-seeded %s
 // RUN: FileCheck --check-prefix=B --input-file=%t.b.s %s
 //
@@ -35,26 +39,26 @@
 // list's word.
 // RUN: printf 'outer\n' > %t.owned1
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.a1.s -DTU_A \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-external-preserves=0 -mllvm -taint-dit-contract=callee \
 // RUN:     -mllvm -taint-owned-symbols=%t.owned1 -mllvm -taint-dit-clone-seeded %s
 // RUN: FileCheck --check-prefix=A-NOOWN --input-file=%t.a1.s %s
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.a2.s -DTU_A \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee %s
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-external-preserves=0 -mllvm -taint-dit-contract=callee %s
 // RUN: FileCheck --check-prefix=A-NOOWN --input-file=%t.a2.s %s
 //
 // The defaults (callee contract, twins on) are exactly the explicit flags above:
 // the same TU with no contract or clone flag must come out identical.
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.a.def.s -DTU_A \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-owned-symbols=%t.owned %s
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-external-preserves=0 -mllvm -taint-owned-symbols=%t.owned %s
 // RUN: diff %t.a.s %t.a.def.s
 //
 // Twins off (-taint-dit-clone-seeded=0): no twin anywhere, nothing redirected.
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.a0.s -DTU_A \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-external-preserves=0 -mllvm -taint-dit-contract=callee \
 // RUN:     -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-owned-symbols=%t.owned %s
 // RUN: FileCheck --check-prefix=OFF --input-file=%t.a0.s %s
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o %t.b0.s -DTU_B \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-external-preserves=0 -mllvm -taint-dit-contract=callee \
 // RUN:     -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-owned-symbols=%t.owned %s
 // RUN: FileCheck --check-prefix=OFF --input-file=%t.b0.s %s
 
