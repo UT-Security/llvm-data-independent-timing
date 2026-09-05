@@ -29,8 +29,10 @@
 
 # The caller is covered too. Its store of the secret into the outgoing area is a
 # Need - a store's data-value timing is in the DIT-covered set, and the pass pins
-# it with `implicit $dit` - so DIT is on from entry, across the call (the callee
-# inherits it as well as seeding its own), and cleared before the return. Until
+# it with `implicit $dit` - so DIT is enabled for it and, under intra-block
+# placement (the default since 2026-09-05), cleared again straight after it: the
+# call is not a Need under the callee contract, the callee seeds its own frame,
+# and the clear hoists up past the call to the last Need. Until
 # 2026-09-03 this test asserted the opposite with a CHECK-NOT: the caller's
 # merged EXIT state is empty (the secret's register is overwritten before the
 # call, the outgoing-arg bit is consumed by it), and instrumentation used to be
@@ -39,9 +41,10 @@
 # docs/design/taint-domain.md S5.2 and clang/test/CodeGen/taint-instrument-gate.c.
 # CHECK-LABEL: name: caller
 # CHECK: MSRpstateImm4 26, 1
-# CHECK: STRXui killed renamable $x0, $sp, 0, implicit $dit
+# CHECK-NEXT: STRXui killed renamable $x0, $sp, 0, implicit $dit
+# CHECK-NEXT: MSRpstateImm4 26, 0
 # CHECK: BL @callee
-# CHECK: MSRpstateImm4 26, 0
+# CHECK-NOT: MSRpstateImm4
 # CHECK: RET_ReallyLR
 
 --- |

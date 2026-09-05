@@ -228,3 +228,19 @@ The ~56 switches per AEAD call are still there: `encrypt_detached` still emits 1
 and the internalized build still measures 35. `stream_ietf_ext_ref` gained the
 ownership bit, `crypto_onetimeauth_poly1305_donna_init` did not. The stack gap was
 *a* root of the ownership problem, not *the* root. Whatever remains is unmeasured.
+
+## 7. A third entry point, found by intra-block placement (2026-09-05)
+
+The section 6 fix seeded the callee's incoming fixed frame objects as a secret
+VALUE (`taintFrameObject` with data taint). For a `tainted-pointee` argument at
+index >= 8 that is the wrong kind: the slot holds a pointer whose pointee is
+secret, so the pointer loaded from it was data-tainted, the load through it
+came back public, and the multiply on the secret was not a Need. Block
+placement covered the multiply anyway because the block was On for the loads;
+intra-block placement (the default since 2026-09-05) hoisted the clear to the
+last Need and left it DIT-off. Incoming fixed frame objects are now seeded as
+BOTH kinds, since the callee cannot tell a secret value from a pointer to
+secret memory in an unnamed slot (the caller-side `OutgoingArgSecret` already
+fires on either kind). `taint-analysis-stack-seeded-arg.mir` pins the
+multiply's `implicit $dit`; it fails on the pre-fix compiler under the new
+default.

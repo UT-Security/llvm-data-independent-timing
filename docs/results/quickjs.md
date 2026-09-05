@@ -81,7 +81,7 @@ declassification mechanism that taint flows straight back into the interpreter.
 Declassification is therefore not a nicety - it is what decides whether this
 result generalises.
 
-**2. Loop placement.** At the shipped default (`-taint-dit-loop-hoist=0`,
+**2. Loop placement.** At the shipped default OF THE TIME (`-taint-dit-loop-hoist=0`; the default has been `1` since 2026-08-24, on this evidence,
 block-minimal) the switches land *inside* the FNV loop: secret work went 5 ms ->
 48 ms, a 10x per-iteration toggle tax (~36 us/call vs ~8k cycles of actual work).
 `-taint-dit-loop-hoist=1` restores it to 5 ms. On serializing-switch hardware the
@@ -159,7 +159,7 @@ in that function, so ~60-75 cyc per switch. Same order as the 30 cyc in
 
 ### Actionable for the pass
 
-The admission test (`-taint-dit-switch-cyc`) currently defaults to **0 = finest**,
+The admission test (`-taint-dit-switch-cyc`) defaulted to **0 = finest** when this was written (30 since 2026-08-24, on this evidence),
 which asserts toggles are free. These data say a region must hold **~3000+ cycles
 of work** before it is worth creating. That is far coarser than the shipped
 default and is measured end-to-end, not modelled.

@@ -159,6 +159,15 @@ one-line `hasFnAttribute(NoReturn)` test not done here. And a twin is
 covered whole, where its original may have been region-placed, which is the
 +5.6% wasted coverage below.
 
+The dynamic residual that matters is the re-assert after an EXTERNAL callee.
+A twin re-asserts after every call the build cannot see, and on libsodium
+that is glibc: argon2id's twin re-asserts three times per block after
+`memcpy` (395,758 executed switches per hash, +7.58% serialising) and
+aes256-gcm decrypt four times per call after the `memcpy`/`memset` of its
+4-byte tail. `-taint-dit-external-preserves` (`dit-callee-contract.md` §1.2) assumes
+a callee outside the build never writes PSTATE.DIT and removes those
+re-asserts.
+
 ## 5. Measured: libsodium signing, gem5 oracle, round-11 seeds
 
 Two signatures, `--eves --dmp --comp-simp`, the protocol of
@@ -287,12 +296,56 @@ write PSTATE.DIT unless it calls back into hardened code, so a
 known-leaf rule is sound for the allocators), and the twins' layout, which
 a linker order that keeps a twin next to its original would improve.
 
+### 5.3 Narrowing twins: giving back the dwell a whole twin swallows (2026-09-05)
+
+`docs/results/dit-twin-narrowing-2026-09-05.md`. A twin is covered whole, so
+it also covers whatever public stretch the original's region placement would
+have left off: the +5.6% wasted coverage in §5. **`-taint-dit-twin-narrow`**
+(default off) runs the region emitter inside a twin with the entry and exit
+inverted: a clear at entry when the leading blocks hold no secret, corridors
+cut by the ordinary admission test, an enable at each Off->On edge, and an
+enable before any return the twin would otherwise reach DIT-off, which the
+verifier checks (fallback: the whole twin, as before). A twin's leading and
+trailing corridors carry a real toggle pair, so they are priced like interior
+ones rather than refused. **`-taint-dit-twin-switch-cyc`** (-1: the global
+cost; 0: switches free) is the cost charged inside twins; 0 is the maximal
+narrowing the user asked for, "DIT off at the top of every twin".
+
+Measured on libsodium at the round-11 fixpoint: **at the shipped cost nothing
+narrows** (every corridor is shorter than its two switches; same 41 writes,
+same wasted count), and **at cost 0 the twins do clear at their tops and it
+does not pay**: 0.7% of the wasted operations bought back for 127 executed
+writes per two signatures instead of 41, the crypto matrix's signing arm
++6.74% renamed against the shipped +1.42% (4,300 vs 800 writes), experiments
+02 and 09 within layout noise on the renamed model and worse serialising. The
+twin's over-coverage is interior holes too short to open; on these workloads
+the renamed cost is dwell over secret work plus layout, not switches. The
+knob stays for a code base with real public stretches inside seeded
+functions.
+
+**Two analysis holes it exposed, both fixed, both applying to the shipped
+twins.** A twin has no callers while the fixed point runs, so the twin of a
+function reached by propagation was analysed with no argument taint at all
+and, once it could narrow, ran its body DIT-off (`fe25519_invert.dit`,
+42,848 uncovered operations per two signatures); a twin now inherits its
+original's incoming argument sets in `propagateArgTaintToCallees`. And a
+NEON register tuple (`$q3_q4`) was never set as a whole in the state, so a
+tuple use read clean and a tuple store never tainted its cells
+(`ge25519_scalarmult_base`'s `st2` of the scalar's nibbles left the carry
+loop public, 888 uncovered); a tuple use now reads any part and a tuple def
+marks its parts. The default build is byte-identical after both, because a
+whole twin, and the original's entry enable, had covered the holes by
+construction. flowprobe's C4/C7 stay at 63: their channel is the callee
+writing through a pointer parameter, a mod-set precision gap, not the tuple.
+
 ## 6. Not done
 
 - **Silicon.** gem5 charges ~21 cycles of rename stall per serialising
   switch by model; the ordering is the result, the magnitudes are the
-  model's. The M5 has the renamed behaviour and cannot show the serialising
-  column.
+  model's. The M5's `MSR DIT` serialises too (~30 cycles per executed write,
+  `docs/results/dit-cost-model.md`, `docs/design/dit-abi.md`), so it is the
+  serialising column that predicts silicon; the twins have not been timed
+  there yet.
 - **"Clone what is instrumented"** instead of what a seed reaches would need
   the MIR analysis's verdict at IR time: a two-phase build, which is what the
   older `-taint-dit-clone-list` (`docs/design/dit-callee-ownership.md`) was.
@@ -300,6 +353,8 @@ a linker order that keeps a twin next to its original would improve.
 - **Cross-TU propagation.** A callee in another TU that is instrumented by
   propagation, not seed, is not twinned from the caller's side.
 - **`noreturn`** re-asserts inside twins (§4).
+- **Narrowing** is built and measured (§5.3); it does not pay on libsodium
+  and stays off.
 - A twin of a function that is never called from DIT-on code is dead weight
   the linker keeps (no `--gc-sections` in these builds).
 
@@ -312,4 +367,6 @@ a linker order that keeps a twin next to its original would improve.
 | `taintOwnedSymbols()`: the owned list, loaded once, shared with the report | `TaintAnalysis.cpp`, declared in `TaintAnalysis.h` |
 | a clean twin still emitted; the verifier's twin-call check | `insertTaintDITSwitches`, `insertTaintDITRegions`; the emission loop in `TaintFixedPointIteration.cpp` |
 | twins skipped by the report | step 3c, `TaintFixedPointIteration.cpp` |
-| tests | `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs, both contracts' shapes), `llvm/test/Transforms/TaintAnnotate/taint-dit-clone-seeded.ll` |
+| `-taint-dit-twin-narrow`, `-taint-dit-twin-switch-cyc`: the inverted region emitter for twins, the twin corridor pricing, the pre-return enable and its verifier check | `insertTaintDITRegions`, `admitOffCorridors` (`Twin`), `TaintAnalysis.cpp` |
+| a twin inherits its original's argument taint; a tuple use reads its parts | `propagateArgTaintToCallees` (`TaintFixedPointIteration.cpp`); `regUseTainted`, `updateWithAliases` (`TaintAnalysis.cpp`) |
+| tests | `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs, both contracts' shapes), `llvm/test/Transforms/TaintAnnotate/taint-dit-clone-seeded.ll`, `clang/test/CodeGen/taint-dit-twin-narrow.c` |

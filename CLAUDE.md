@@ -2,8 +2,11 @@
 
 > **New here? Read [`docs/README.md`](docs/README.md) first** - the documentation
 > index, with a reading order and an annotated map of every design doc, measured
-> result, and research note. This file holds the authoritative *operating*
-> instructions; `docs/` holds the reasoning behind them.
+> result, and research note. **To RUN the pass, read
+> [`docs/reference/harden-runbook.md`](docs/reference/harden-runbook.md)**: the run
+> document, with the quick start, every flag and its default, the seed loop, the
+> control arms and the M4/M5 notes. This file holds the gotchas and the history behind
+> them; `docs/` holds the reasoning.
 
 This is an **LLVM fork** (branch `dit-tainter`) implementing **interprocedural taint
 analysis + PSTATE.DIT hardening** for AArch64: secret data entry points are declared
@@ -88,9 +91,26 @@ case-sensitive form silently reports zero on a correctly hardened object.)
 build with otherwise identical codegen, for A/B benchmarking). Without it, the
 analysis still runs and the report files are still produced, but codegen is untouched.
 
-**Placement granularity (`-taint-dit-placement`): DEFAULT is `region` (fine-grain).**
-Region placement covers only the secret-dependent regions - clean preambles and public
-loop scaffolding (coordinate/index math) stay DIT-off - tuned by
+**Placement granularity (`-taint-dit-placement`): DEFAULT is `region` (fine-grain),
+and since 2026-09-05 region placement is INTRA-BLOCK (`-taint-dit-sub-block`, default
+1).** The unit of analysis is the instruction (a Need = a DIT-covered instruction with a
+secret operand); the unit of placement was the basic block until 2026-09-05 and is now
+the instruction run: a block's entry enable sinks to its first Need, a pre-return clear
+hoists up past its last, and a DIT-off hole is cut across any Need-free run of at least
+`-taint-dit-sub-block-min-run` (default 8) instructions. Block entry and exit states
+are unchanged, so loop coarsening, corridor merging and the verifier are untouched.
+`-mllvm -taint-dit-sub-block=0` is BLOCK placement (a block with any Need covered
+whole), kept as the A/B. Two things to know: the scheduler bounds it (a secret load
+hoisted into a public preamble pins the enable there), and it exposed a real seeding
+bug the whole-block cover had hidden: a `tainted-pointee` argument passed on the
+stack was seeded as a secret VALUE, so the load through it came back public
+(`taint-analysis-stack-seeded-arg.mir`; incoming fixed frame objects are now seeded
+as both kinds). Measured on libsodium (`docs/results/dit-intra-block-default-2026-09-05.md`):
+executed switches and oracle identical to block placement (the hot code is whole
+twins), 4 of 113 instrumented functions change, timing inside the layout band; it acts
+where secret work sits in an original behind a public preamble (mbedTLS). Region
+placement covers only the secret-dependent regions - clean
+preambles and public loop scaffolding (coordinate/index math) stay DIT-off - tuned by
 `-taint-dit-switch-cyc` (**default 30** = the measured serializing switch cost),
 `-taint-dit-dwell-per-instr` (default 1.0), and `-taint-dit-loop-hoist` (**default 1**:
 each need-loop is coarsened On with one enable hoisted to the preheader; set `=0` for
@@ -160,7 +180,33 @@ hardware:** serialising +252% -> +40% and coverage 99.955%, but renamed +6.17% -
 and the NOP-twins arm (+12.59%) says it is all instruction fetch on the duplicated code
 (+4.6M `icacheStallCycles`, +15.7% cache lines fetched, L1I misses flat, text +12%). On a
 large code base the twins' size is a front-end cost that can exceed the switch savings;
-blanket still wins there. Test `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs).
+blanket still wins there. Test `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs). **Narrowing
+twins (`-taint-dit-twin-narrow`, opt-in; `-taint-dit-twin-switch-cyc=0` for "DIT off at
+the top of every twin") are built and measured and do NOT pay on libsodium** (results
+`docs/results/dit-twin-narrowing-2026-09-05.md`): at the shipped switch cost nothing
+narrows, at cost 0 wasted coverage drops 0.7% for 3x the executed writes and signing goes
++1.42% -> +6.74% renamed. Two analysis fixes came out of it and apply to every build: a
+twin inherits its original's incoming argument taint (a propagation-reached twin used to
+be analysed with none), and a register-tuple use reads its parts' taint while a tuple def
+marks them (an `st2` of a secret used to leave its cells public). Both were masked by
+whole-twin coverage; the default build is byte-identical. **The external-callee
+assumption (`-taint-dit-external-preserves`, opt-in, 2026-09-05):** without it every
+callee the build does not define is assumed to clear the mode, so DIT-on code re-asserts
+after each libc call; that was ALL of argon2id's 395,758 executed switches per hash (three
+glibc `memcpy` per `fill_block` inside the twin) and four of aes256-gcm decrypt's six.
+With it a direct call to a symbol this module does not define is assumed to return
+PSTATE.DIT as it found it: no re-assert, and a function whose only calls are external
+keeps `PreservesDIT`. The callee is identified by the call's SYMBOL (a `bl memcpy` lowered
+from an `llvm.memcpy` intrinsic has no Function in the module). The one exception is a
+symbol the owned list names, ours in another TU, which clears at its exit. What it gives up:
+an external that calls back into hardened code returns with the mode wherever the callback
+left it. Coverage is untouched; a mover handed a secret is still an obligation. **Measured**
+(`docs/results/dit-external-preserves-2026-09-05.md`): libsodium 358 -> 214 sites at
+identical oracle coverage; ed25519 and both AES-GCM rows of experiment 09 down to the
+bracket's 2 switches per op (signing 800 -> 100 writes per 50 signatures, +2.20% ->
++0.72% serialising), chacha 38 -> 32 (the rest are the implementation tables),
+experiment 02 serialising +28.4% -> +23.4% at L=10; renamed within each binary's
+layout term. Test `clang/test/CodeGen/taint-dit-external-preserves.c`.
 
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function
@@ -199,8 +245,9 @@ f = 9.4% on serializing hardware, so the trade is real); it is refused under
 
 The coalesced "regions" in the reports **do not drive placement** - they feed the report
 files only. The gap that merges them was `-taint-region-merge-gap` until 2026-08-24 and
-is now a fixed constant (2), because placement partitions BLOCKS and prices its own
-merges with the frequency-weighted admission test.
+is now a fixed constant (2), because placement partitions blocks (and, since
+2026-09-05, instruction runs inside them) and prices its own merges with the
+frequency-weighted admission test.
 
 **The call-site mod-set gate is ON by default** (since 2026-08-24), together with the
 strict source condition and return-call-site gating, which are unconditional. It applies
@@ -705,18 +752,24 @@ X86/AMDGPU only), so lowering and emission remain on the legacy PM.
 ## Testing
 
 ```
-build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate
+build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate clang/test/CodeGen/taint-*.c
 ```
 
-All 33 tests pass as of 2026-08-27. The whole `llvm/test/CodeGen/AArch64` suite was
-last run clean on 2026-08-27 (3898 discovered, 3894 pass, 4 pre-existing XFAIL, 0
-failures).
+All 58 tests pass as of 2026-09-05 (the clang tests carry the defaults: contract, twins,
+intra-block placement, the external-callee flag). The whole `llvm/test/CodeGen/AArch64`
+suite was last run clean on 2026-08-27 (3898 discovered, 3894 pass, 4 pre-existing XFAIL,
+0 failures).
 
 **End-to-end reference:** harden `playground/firefox_convolve_int.c` and compare
 per-symbol DIT placement between the clang flag and the wrapper - they must match
-exactly. Under the default `region` placement a tainted function's clean preamble is
-DIT-off and the `msr DIT, #0x1` sits at the loop preheader, not the entry (add
-`-mllvm -taint-dit-placement=function` for the old whole-function reference: one
+exactly. **Under the 2026-09-05 defaults** (verified that day): `run_kernel_int` emits
+NO switch, because its only secret use is passing the pointee-tainted `source` to
+`convolve_pixel_int`, and under the callee contract a call is not a Need (it keeps
+calling the original, since it is not DIT-on itself); `convolve_pixel_int` owns its
+DIT and shows exactly the region shape: its clean preamble DIT-off, one `msr DIT, #0x1`
+at the outer loop's preheader, and one enable/clear pair around its tail after the
+mixed join where the early-exit path arrives DIT-off. Add
+`-mllvm -taint-dit-placement=function` for the whole-function reference (one
 `msr DIT, #0x1` at entry, one `msr DIT, #0x0` before each return).
 
 **Under `-taint-dit-contract=inherit` only (the default until 2026-09-05; the callee

@@ -1,7 +1,7 @@
 # The callee contract, measured
 
 **Date:** 2026-09-04. **Compiler:** branch `dit-callee-contract`, one build;
-`-taint-dit-contract=inherit` (the default) vs `=callee`, nothing else
+`-taint-dit-contract=inherit` (the default at the time; `callee` is the default since 2026-09-05) vs `=callee`, nothing else
 differs. **Oracle:** gem5-DIT with the store-rule fix, `--eves --dmp
 --comp-simp`. **Host:** beckham. Design: `docs/design/dit-callee-contract.md`.
 

@@ -1,0 +1,32 @@
+# Experiment 02, canonical lane, the pass arm built with the NARROWING twins (-taint-dit-twin-narrow -taint-dit-twin-switch-cyc=0: DIT off at the top of every twin whose entry holds no secret), 2026-09-05.
+# Same driver, seeds (round-11 fixpoint), owned list, runner and gates as gem5_arms.csv; only the twin placement differs. docs/results/dit-twin-narrowing-2026-09-05.md.
+# gem5 Neoverse-V2 FDP, --eves --dmp --comp-simp, gem5.fast. Full flow (lookups + one chacha20-poly1305 AEAD encrypt of a 100-byte record),
+# CIO-parity seeds with the chacha rename patch; pass library built with -fno-optimize-sibling-calls.
+# switch=serialising is --no-speculative-dit. dit_writes is commit.ditWrites (committed mode writes).
+# f_secret_pct = (full - nosign) / full on the nodit arm's cycles, same iter.
+# cycles = median over 5 stack offset(s) (argv[0] lengths); spread_pct = (max-min)/median across them.
+L,pred_q4,f_secret_pct,arm,switch,cycles,insts,ipc,vs_base_pct,dit_writes,requests,n_offsets,spread_pct
+10,3,96.8,nodit,-,3989763,7980810,2.000,0.00,0,1600,5,1.09
+10,3,96.8,blanket,-,4281549,7980810,1.864,7.31,0,1600,5,0.18
+10,3,96.8,pass,renamed,3996264,8150410,2.040,0.16,72000,1600,5,0.26
+10,3,96.8,pass,serialising,5419206,8150410,1.504,35.83,72000,1600,5,0.04
+50,3,81.2,nodit,-,4760689,8322010,1.748,0.00,0,1500,5,1.25
+50,3,81.2,blanket,-,5362933,8322010,1.552,12.65,0,1500,5,0.58
+50,3,81.2,pass,renamed,4746095,8481010,1.787,-0.31,67500,1500,5,1.06
+50,3,81.2,pass,serialising,6109235,8481010,1.388,28.33,67500,1500,5,0.09
+200,3,45.0,nodit,-,7294186,9710430,1.331,0.00,0,1270,5,1.45
+200,3,45.0,blanket,-,8770914,9710430,1.107,20.25,0,1270,5,0.63
+200,3,45.0,pass,renamed,7291488,9845050,1.350,-0.04,57150,1270,5,0.41
+200,3,45.0,pass,serialising,8426948,9845050,1.168,15.53,57150,1270,5,0.04
+1000,3,13.1,nodit,-,13059685,12626830,0.967,0.00,0,670,5,0.21
+1000,3,13.1,blanket,-,16685900,12626830,0.757,27.77,0,670,5,0.21
+1000,3,13.1,pass,renamed,13049696,12697850,0.973,-0.08,30150,670,5,0.34
+1000,3,13.1,pass,serialising,13634224,12697850,0.931,4.40,30150,670,5,0.07
+5000,3,2.6,nodit,-,17619689,14969210,0.850,0.00,0,200,5,1.12
+5000,3,2.6,blanket,-,22988060,14969210,0.651,30.47,0,200,5,0.04
+5000,3,2.6,pass,renamed,17626833,14990410,0.850,0.04,9000,200,5,0.89
+5000,3,2.6,pass,serialising,17794341,14990410,0.842,0.99,9000,200,5,1.23
+20000,3,0.6,nodit,-,18943759,15666540,0.827,0.00,0,55,5,1.36
+20000,3,0.6,blanket,-,24883971,15666540,0.630,31.36,0,55,5,0.00
+20000,3,0.6,pass,renamed,19091646,15672370,0.821,0.78,2475,55,5,0.45
+20000,3,0.6,pass,serialising,19053921,15672370,0.823,0.58,2475,55,5,0.28

@@ -101,30 +101,75 @@ cl::opt<std::string> llvm::TaintOwnedSymbolsFile(
              "library): reported as out of scope, not as a seed obligation. "
              "Generate with utils/taint_owned_symbols.sh."));
 
-const StringSet<> *llvm::taintOwnedSymbols() {
-  // One TU per process (clang and llc alike), so a process-wide cache keyed on
-  // the path is enough; the path check only matters for a driver that changes
-  // the option between modules.
-  static std::string LoadedPath;
-  static std::unique_ptr<StringSet<>> Set;
-  static bool Tried = false;
-  if (Tried && LoadedPath == TaintOwnedSymbolsFile)
-    return Set.get();
-  Tried = true;
-  LoadedPath = TaintOwnedSymbolsFile;
-  Set.reset();
-  if (TaintOwnedSymbolsFile.empty())
+namespace {
+// One TU per process (clang and llc alike), so a process-wide cache keyed on
+// the path is enough; the path check only matters for a driver that changes
+// the option between modules.
+struct SymbolFileCache {
+  std::string LoadedPath;
+  std::unique_ptr<StringSet<>> Set;
+  bool Tried = false;
+};
+} // namespace
+
+// One symbol per line; blank lines and `#` comments (whole-line or trailing)
+// ignored. Null for no path or an unreadable file (reported once).
+static const StringSet<> *loadSymbolFile(SymbolFileCache &C,
+                                         const std::string &Path,
+                                         const char *What) {
+  if (C.Tried && C.LoadedPath == Path)
+    return C.Set.get();
+  C.Tried = true;
+  C.LoadedPath = Path;
+  C.Set.reset();
+  if (Path.empty())
     return nullptr;
-  auto Buf = MemoryBuffer::getFile(TaintOwnedSymbolsFile);
+  auto Buf = MemoryBuffer::getFile(Path);
   if (!Buf) {
-    errs() << "taint: cannot read owned-symbols file " << TaintOwnedSymbolsFile
-           << ": " << Buf.getError().message() << "\n";
+    errs() << "taint: cannot read " << What << " file " << Path << ": "
+           << Buf.getError().message() << "\n";
     return nullptr;
   }
-  Set = std::make_unique<StringSet<>>();
-  for (line_iterator LI(**Buf, /*SkipBlanks=*/true, '#'); !LI.is_at_eof(); ++LI)
-    Set->insert(LI->trim());
-  return Set.get();
+  C.Set = std::make_unique<StringSet<>>();
+  for (line_iterator LI(**Buf, /*SkipBlanks=*/true, '#'); !LI.is_at_eof();
+       ++LI) {
+    StringRef Sym = LI->split('#').first.trim();
+    if (!Sym.empty())
+      C.Set->insert(Sym);
+  }
+  return C.Set.get();
+}
+
+const StringSet<> *llvm::taintOwnedSymbols() {
+  static SymbolFileCache C;
+  return loadSymbolFile(C, TaintOwnedSymbolsFile, "owned-symbols");
+}
+
+cl::opt<bool> llvm::TaintDITExternalPreserves(
+    "taint-dit-external-preserves", cl::Hidden, cl::init(false),
+    cl::desc("Assume a callee this module does not define (and the owned "
+             "list does not name) never writes PSTATE.DIT: no re-assert after "
+             "a call to it from DIT-on code. Indirect calls unchanged."));
+
+bool llvm::taintExternalCallPreservesDIT(const MachineInstr &MI,
+                                         const Module &M) {
+  if (!TaintDITExternalPreserves || !MI.isCall())
+    return false;
+  // By SYMBOL, not Function: the `bl memcpy` that lowers an llvm.memcpy
+  // intrinsic carries an external-symbol operand and the module usually has
+  // no Function for it at all.
+  const StringRef Name = getCalleeSymbolName(MI);
+  if (Name.empty())
+    return false; // indirect: nothing to assume about
+  // Defined here: this pass compiles it and knows whether it clears.
+  if (const Function *F = M.getFunction(Name); F && !F->isDeclaration())
+    return false;
+  // Ours, defined in another TU of this build: compiled by this pass, and
+  // under the callee contract it clears at its own exit.
+  if (const StringSet<> *Owned = taintOwnedSymbols())
+    if (Owned->contains(Name))
+      return false;
+  return true;
 }
 
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
@@ -460,14 +505,17 @@ static cl::opt<double> TaintDitDwellPerInstr(
 // is continuous.
 static cl::opt<bool> TaintDitSubBlock(
     "taint-dit-sub-block",
-    cl::desc("Sink a block-entry enable to the first Need, hoist a pre-return "
-             "disable past the last, and cut DIT-off holes across long Need-free "
-             "runs. Block entry/exit states are unchanged. DEFAULT OFF: measured "
-             "2026-09-02 on mbedTLS resumption it removed 2% of over-protection "
-             "per resumption for 0.06 points of oracle coverage, and the "
-             "workload's verdict (blanket wins) did not move. Re-evaluate once "
-             "the oracle's store rule no longer counts pointer moves"),
-    cl::init(false));
+    cl::desc("Intra-block placement (DEFAULT ON since 2026-09-05): sink a "
+             "block-entry enable to the first Need, hoist a pre-return disable "
+             "past the last, and cut DIT-off holes across Need-free runs of at "
+             "least -taint-dit-sub-block-min-run instructions. Block entry/exit "
+             "states are unchanged, so the corridor test and the verifier are "
+             "untouched. =0 is block placement: a block with any Need is "
+             "covered whole. Measured 2026-09-02 on mbedTLS resumption at 2% "
+             "less over-protection per resumption for 0.06 points of oracle "
+             "coverage; made the default at the user's direction, with the "
+             "block form kept as the A/B."),
+    cl::init(true));
 
 // Minimum length of a Need-free run before a hole is worth cutting. Independent
 // of -taint-dit-switch-cyc ON PURPOSE: that knob also drives the cross-block
@@ -519,6 +567,38 @@ static cl::opt<bool> TaintNoMMOLoadTainted(
 // Where it does not help it is within ±0.5 pp, and hoisting is fail-SAFE: the
 // loop is covered for longer, never for less. Raising -taint-dit-switch-cyc
 // re-coarsens via the admission test either way. Region mode only.
+// Twins place regions too. A `.dit` twin is entered with DIT set and must
+// return it set, and until now it did nothing in between: whole-function
+// coverage, which swallows whatever public stretch the original's placement
+// would have left DIT-off. With this on, a twin runs the same region emitter
+// as an original with the entry and exit inverted: it CLEARS at entry when its
+// leading blocks hold no secret, cuts the corridors the admission test admits,
+// enables at each Off->On boundary as usual, and ENABLES again before any
+// return it would otherwise reach DIT-off. The twin's promise to its caller is
+// unchanged; the verifier checks every return is reached On and falls the twin
+// back to whole-function coverage if not. What it trades is dwell for
+// switches: two per call on each corridor it opens, priced by the admission
+// test. The twin knows its entry state, which an original never does, so the
+// leading corridor has a real toggle pair to save and is priced like an
+// interior one (admitOffCorridors).
+static cl::opt<bool> TaintDitTwinNarrow(
+    "taint-dit-twin-narrow",
+    cl::desc("A .dit twin places DIT regions like an original (clear at entry "
+             "over a public preamble, corridors, enable before every return) "
+             "instead of staying DIT-on end to end. Default off."),
+    cl::init(false));
+
+// The switch cost the admission test charges INSIDE a twin. -1 means the same
+// -taint-dit-switch-cyc as everywhere else. 0 asserts switches are free, which
+// on a renamed core is close to true, and turns the twin into the maximal
+// narrowing: every corridor stays Off and the twin clears at entry whenever its
+// entry block holds no secret (the "DIT off at the top of the twin" arm).
+static cl::opt<double> TaintDitTwinSwitchCyc(
+    "taint-dit-twin-switch-cyc",
+    cl::desc("Switch cost for corridor admission inside a .dit twin (-1: use "
+             "-taint-dit-switch-cyc; 0: free, maximal narrowing)"),
+    cl::init(-1.0));
+
 static cl::opt<bool> TaintDitLoopHoist(
     "taint-dit-loop-hoist",
     cl::desc(
@@ -951,8 +1031,13 @@ static bool unknownMemMayTaintLoad(const MachineMemOperand &MMO,
   return false;
 }
 
+static bool regUseTainted(TaintKind K, Register R, const TaintState &S,
+                          const TargetRegisterInfo *TRI);
+
 static bool anyRegUseOfKind(TaintKind K, const MachineInstr &MI,
                             const TaintState &S) {
+  const TargetRegisterInfo *TRI =
+      MI.getMF()->getSubtarget().getRegisterInfo();
   for (const MachineOperand &MO : MI.uses()) {
     // MI.uses() starts after the EXPLICIT defs, so it still spans implicit
     // DEFS (on AArch64 a 32-bit result carries `implicit-def $xN`, and calls
@@ -963,7 +1048,7 @@ static bool anyRegUseOfKind(TaintKind K, const MachineInstr &MI,
     // could never leave. taintedCallArguments already guards this way.
     if (!MO.isReg() || MO.isDef())
       continue;
-    if (S.test(K, MO.getReg()))
+    if (regUseTainted(K, MO.getReg(), S, TRI))
       return true;
   }
   return false;
@@ -986,18 +1071,40 @@ static bool isSinglePhysReg(MCPhysReg R, const TargetRegisterInfo *TRI) {
   return true;
 }
 
+/// Does a register USE carry taint of kind K? A single register reads its own
+/// bit. A register TUPLE ($q3_q4, the operand of ST2/ST3/ST4, LD2 and the
+/// like) is never set as a whole - updateWithAliases marks the parts - so it
+/// reads tainted if ANY part does. Before this a tuple use read clean: the
+/// flowprobe C4/C7 channel, and in libsodium the NEON `st2` that parks the
+/// signing scalar's nibbles on the frame (ge25519_scalarmult_base) left the
+/// cells public, which the entry enable of an owning function hid and a
+/// narrowing twin exposed (888 uncovered ops per two signatures).
+static bool regUseTainted(TaintKind K, Register R, const TaintState &S,
+                          const TargetRegisterInfo *TRI) {
+  if (S.test(K, R))
+    return true;
+  if (!R.isPhysical() || isSinglePhysReg(R.asMCReg(), TRI))
+    return false;
+  for (MCPhysReg SR : TRI->subregs(R.asMCReg()))
+    if (S.test(K, SR))
+      return true;
+  return false;
+}
+
 /// Propagate a taint change of kind K to all simple aliases of R (W↔X),
-/// skipping register tuples to avoid cascade.
+/// skipping register tuples on the way UP to avoid cascade. DOWN always: a
+/// tuple DEF ($q0_q1 written by LD2) writes every part, and each part must
+/// read tainted afterwards, so the parts are marked; a single register's
+/// subregs are its own halves as before.
 static void updateWithAliases(TaintKind K, Register R, TaintState &S,
                               const TargetRegisterInfo *TRI, bool Set) {
   S.update(K, R, Set);
   if (!R.isPhysical())
     return;
   MCPhysReg Phys = R.asMCReg();
-  // DOWN: e.g. $x0 → $w0, $w0_hi (skip if R is a tuple)
-  if (isSinglePhysReg(Phys, TRI))
-    for (MCPhysReg SR : TRI->subregs(Phys))
-      S.update(K, SR, Set);
+  // DOWN: e.g. $x0 → $w0, $w0_hi; $q0_q1 → $q0, $q1 and their halves.
+  for (MCPhysReg SR : TRI->subregs(Phys))
+    S.update(K, SR, Set);
   // UP: e.g. $w0 → $x0 (skip tuple superregs)
   for (MCPhysReg Super : TRI->superregs(Phys))
     if (isSinglePhysReg(Super, TRI)) {
@@ -1045,11 +1152,13 @@ static bool anyTaintedStoreDataRegUse(TaintKind K, const MachineInstr &MI,
   if (!StoredRegsRemaining)
     return anyRegUseOfKind(K, MI, S);
 
+  const TargetRegisterInfo *TRI =
+      MI.getMF()->getSubtarget().getRegisterInfo();
   for (const MachineOperand &MO : MI.operands()) {
     if (!MO.isReg() || !MO.isUse() || MO.isImplicit())
       continue;
 
-    if (S.test(K, MO.getReg()))
+    if (regUseTainted(K, MO.getReg(), S, TRI))
       return true;
 
     if (--*StoredRegsRemaining == 0)
@@ -2765,7 +2874,8 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
       int64_t Sz = MFI.getObjectSize(FI);
       if (Sz <= 0)
         continue;
-      Seed.taintFrameObject(FI, (uint64_t)Sz);
+      // Both kinds: the slot may hold the secret itself or a pointer to it.
+      Seed.taintFrameObject(FI, (uint64_t)Sz, TaintVal{true, true});
       ++Seeded;
     }
     LLVM_DEBUG(dbgs() << "  Seeded " << Seeded
@@ -3303,8 +3413,9 @@ static unsigned redirectCallsToDITClones(
   return N;
 }
 
-static bool calleeLeavesDITSet(const Function *Callee,
-                               const TaintSummaryInfo *TSI) {
+static bool calleeLeavesDITSet(const MachineInstr &Call,
+                               const Function *Callee,
+                               const TaintSummaryInfo *TSI, const Module &M) {
   // Under the callee-saved ABI this is the contract, not an analysis result:
   // every callee returns DIT no lower than it found it, including indirect and
   // cross-TU ones. Answering here rather than only at the emission sites means
@@ -3312,6 +3423,13 @@ static bool calleeLeavesDITSet(const Function *Callee,
   // clearing - otherwise it sees every Need after a call as uncovered and falls
   // the whole function back to whole-function granularity.
   if (TaintDITAbi)
+    return true;
+
+  // -taint-dit-external-preserves: a callee outside this build never writes
+  // PSTATE.DIT, so it returns the mode as it found it. Without it every
+  // external callee is assumed to clear: on libsodium's argon2id that was
+  // three re-asserts per block after glibc memcpy, 393,216 per hash.
+  if (taintExternalCallPreservesDIT(Call, M))
     return true;
 
   if (!TSI || !Callee)
@@ -3346,16 +3464,17 @@ static void reportDITReassert(raw_ostream *OS, const MachineFunction &MF,
   // for a clear that does not exist and hides the real cause, which is the
   // cross-TU call inside it.
   const char *Reason;
-  if (!Callee)
+  const StringRef Sym = getCalleeSymbolName(MI);
+  if (!Callee && Sym.empty())
     Reason = "indirect";
-  else if (Callee->isDeclaration())
-    Reason = "external";
+  else if (!Callee || Callee->isDeclaration())
+    Reason = "external"; // incl. a libcall symbol with no Function in the module
   else if (TSI && TSI->getSummary(*Callee).InstrumentedForDIT)
     Reason = "clears-on-exit";
   else
     Reason = "propagates-unresolvable"; // in-TU, emits no DIT of its own
   *OS << "REASSERT " << Reason
-      << " callee=" << (Callee ? Callee->getName() : "<indirect>")
+      << " callee=" << (Callee ? Callee->getName() : Sym.empty() ? "<indirect>" : Sym)
       << " caller=" << MF.getName() << " bb=" << MI.getParent()->getNumber();
   if (const DebugLoc &DL = MI.getDebugLoc())
     *OS << " line=" << DL.getLine();
@@ -3536,7 +3655,7 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
         if (isOracleRearmCall(MI))
           continue;
         const Function *Callee = findCalledFunction(*M, MI);
-        if (calleeLeavesDITSet(Callee, TSI))
+        if (calleeLeavesDITSet(MI, Callee, TSI, *M))
           continue;
         reportDITReassert(ReassertOS, MF, MI, Callee, TSI);
         TII->insertTimingModeSwitch(MBB, std::next(MI.getIterator()),
@@ -3645,7 +3764,7 @@ static bool clobbersDIT(const MachineInstr &MI, const TaintSummaryInfo *TSI,
     return false;
   if (isOracleRearmCall(MI))
     return false;
-  return !calleeLeavesDITSet(findCalledFunction(M, MI), TSI);
+  return !calleeLeavesDITSet(MI, findCalledFunction(M, MI), TSI, M);
 }
 
 // Forward 1-bit "DIT on" dataflow over the EMITTED MIR: a mode switch sets the
@@ -4362,7 +4481,7 @@ static void fallbackToFunctionGranularity(MachineFunction &MF,
 static void admitOffCorridors(MachineFunction &MF, Module &M,
                               DenseSet<const MachineBasicBlock *> &OnBlocks,
                               const TaintSummaryInfo *TSI,
-                              const MachineLoopInfo &MLI) {
+                              const MachineLoopInfo &MLI, bool Twin = false) {
   auto On = [&](const MachineBasicBlock *B) { return OnBlocks.count(B) != 0; };
 
   // Nothing to do unless some block is Off - skip the block-frequency dataflow in
@@ -4380,7 +4499,9 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
   // the measured serializing cost on the M4 (docs/results/dit-cost-model.md).
   // Setting it to 0 asserts that toggles are free, so the test never merges: the
   // finest-grain placement, and measurably wrong.
-  const double SwitchCyc = TaintDitSwitchCyc;
+  const double SwitchCyc =
+      (Twin && TaintDitTwinSwitchCyc >= 0) ? double(TaintDitTwinSwitchCyc)
+                                            : double(TaintDitSwitchCyc);
 
   // Partition the Off blocks into maximal CFG-connected components. Two Off blocks
   // that are CFG-adjacent are in the same component, so distinct components are
@@ -4428,12 +4549,25 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
         if (MI.isReturn())
           HasReturn = true;
       }
-      if (HasReturn)
-        AddedFreq += Fb; // emit disables DIT before the block's return
+      if (HasReturn) {
+        // An original disables before a return inside a merged corridor (a
+        // switch added by merging). A twin does the opposite: a return in an
+        // Off corridor needs an ENABLE, which merging removes.
+        if (Twin)
+          SavedFreq += Fb;
+        else
+          AddedFreq += Fb;
+      }
       Dwell += Fb * NumReal;
       if (llvm::any_of(B->predecessors(), On)) {
         HasOnPred = true;
         SavedFreq += Fb; // emit's disable at this block's entry disappears
+      }
+      // A twin arrives DIT-on, so an Off entry block costs a clear at entry
+      // that merging removes: the leading corridor has a toggle pair to save.
+      if (Twin && B->pred_empty()) {
+        HasOnPred = true;
+        SavedFreq += Fb;
       }
       for (const MachineBasicBlock *S : B->successors())
         if (On(S))
@@ -4443,8 +4577,12 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
     for (const MachineBasicBlock *S : OnSuccs)
       SavedFreq += Freq(S);
 
-    // Only an interior corridor (an actual toggle pair to save) qualifies.
-    if (!HasOnPred || !HasOnSucc)
+    // Only an interior corridor (an actual toggle pair to save) qualifies. In
+    // a twin a trailing corridor also has one (its clear on entry, its enable
+    // before the return), which the accounting above already counted.
+    if (!Twin && (!HasOnPred || !HasOnSucc))
+      continue;
+    if (Twin && !HasOnPred)
       continue;
 
     double ToggleNet = SwitchCyc * (SavedFreq - AddedFreq);
@@ -4479,6 +4617,10 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                                       raw_ostream *NonlocalOS = nullptr) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   Module &M = *const_cast<Module *>(MF.getFunction().getParent());
+  // A twin is entered DIT-on and must return DIT-on (see TaintDitTwinNarrow):
+  // its entry clear, its lack of exit clears and its pre-return enables are
+  // the three places this differs from an owning function.
+  const bool Twin = isDITClone(&MF.getFunction());
 
   // Re-assert sites are BUFFERED, not written as they are emitted: a later
   // fallback erases every switch this function placed and re-runs whole-function
@@ -4539,7 +4681,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   // only EXTENDS OnBlocks (coverage grows), so every Need stays covered and the
   // soundness verifier below still passes; on a dwell≈0 core it coarsens toward
   // function granularity, on a DIT-sensitive core it stays narrow. §5.6.
-  admitOffCorridors(MF, M, OnBlocks, TSI, MLI);
+  admitOffCorridors(MF, M, OnBlocks, TSI, MLI, Twin);
 
   auto On = [&](const MachineBasicBlock *B) { return OnBlocks.count(B) != 0; };
 
@@ -4574,7 +4716,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
     // On from its entry, by a predecessor or a hoisted loop enable).
     MachineBasicBlock::iterator EnableAt = MBB.end();
     if (On(&MBB)) {
-      bool OnAtEntry = !MBB.pred_empty();
+      // The function entry arrives DIT-off for an owning function and DIT-ON
+      // for a twin, which therefore needs no enable at its entry block.
+      bool OnAtEntry = MBB.pred_empty() ? Twin : true;
       unsigned OnPreds = 0, OffPreds = 0;
       for (MachineBasicBlock *P : MBB.predecessors()) {
         OnAtEntry &= On(P);
@@ -4675,7 +4819,8 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       for (MachineInstr &MI : MBB) {
         if (!MI.isReturn())
           continue;
-        if (!NeedSet.count(&MI) && !ABI) {
+        // A twin owes its caller DIT set on return: no clear at its exits.
+        if (!NeedSet.count(&MI) && !ABI && !Twin) {
           TII->insertTimingModeSwitch(
               MBB, hoistExitDisableTo(MBB, MI, NeedSet, TSI, M, TII, ABI),
               MI.getDebugLoc(), /*Enable=*/false);
@@ -4700,11 +4845,25 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       bool AnyPredOn = false;
       for (MachineBasicBlock *P : MBB.predecessors())
         AnyPredOn |= On(P);
-      if (AnyPredOn) {
+      // A twin arrives with DIT set, so an Off entry block clears at entry:
+      // this is the "DIT off at the top of the twin" the admission test has
+      // just priced against the enable that follows.
+      if (AnyPredOn || (Twin && MBB.pred_empty())) {
         TII->insertTimingModeSwitch(MBB, regionEntryInsertPt(MBB), DebugLoc(),
                                     /*Enable=*/false);
         ++Toggles;
       }
+      // A twin must leave DIT set: a return reached in an Off block gets an
+      // enable immediately before it (the epilogue's callee-saved restores are
+      // Needs, so a block that restores is On and never lands here).
+      if (Twin)
+        for (MachineInstr &MI : MBB)
+          if (MI.isReturn()) {
+            TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
+                                        /*Enable=*/true);
+            ++Toggles;
+            break;
+          }
     }
   }
 
@@ -4757,6 +4916,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                 // entering a clone with DIT clear.
                 if (MI.isCall() && !CurOn &&
                     isDITClone(findCalledFunction(M, MI)))
+                  Sound = false;
+                // A twin's promise: every exit it controls returns DIT set.
+                if (Twin && MI.isReturn() && !MI.isCall() && !CurOn)
                   Sound = false;
                 if (clobbersDIT(MI, TSI, M))
                   CurOn = false;
@@ -5036,6 +5198,26 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
     emitDITPrecisionReport(MF, TR, TSI, AA);
     return TaintedInstrCount;
   }
+  // A twin under -taint-dit-twin-narrow places regions with the entry and
+  // exit inverted (see the knob). It cannot own DIT, so the ABI path above
+  // does not apply; and a twin with no Need at all still owes its caller the
+  // re-asserts, which only the whole-function emitter provides, so it takes
+  // that path when the region emitter finds nothing to place.
+  if (TaintDITPlacement == DITPlacementMode::Region && !TaintDITAbi &&
+      TaintDitTwinNarrow && isDITClone(&MF.getFunction())) {
+    bool FellBack = false;
+    const unsigned Placed = insertTaintDITRegions(MF, TR, TSI, AA, ReassertOS,
+                                                  /*ABI=*/false, &FellBack,
+                                                  NonlocalOS);
+    if (Placed == 0)
+      emitFunctionGranularityDIT(MF, TSI, /*OwnsDIT=*/false, ReassertOS,
+                                 NonlocalOS);
+    reportUnbalancedDITExits(MF, TSI, M, TII, /*OwnsDIT=*/false, ExitOS);
+    reportNonlocalDITExits(MF, M, /*OwnsDIT=*/false, NonlocalOS);
+    emitDITPrecisionReport(MF, TR, TSI, AA);
+    return TaintedInstrCount;
+  }
+
   // Make the routing visible: under the default `region` policy a non-owning
   // function silently lands on whole-function coverage, which is correct but
   // changes what an objdump of a hardened build looks like.

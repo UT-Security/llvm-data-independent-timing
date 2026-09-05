@@ -38,14 +38,16 @@
 // RUN:   | FileCheck %s --check-prefix=REGION
 
 // REGION-LABEL: _two_calls:
-// The read must precede the enable that region placement puts at the very top of
-// the entry block, and the store must follow the prologue because it is a frame
-// access - SP is still the caller's before then. Two constraints, two insertion
-// points; a single one writes above the caller's stack pointer.
+// The read must precede the enable, and the store must follow the prologue
+// because it is a frame access - SP is still the caller's before then. Two
+// constraints, two insertion points; a single one writes above the caller's
+// stack pointer. Under intra-block placement (the default since 2026-09-05) the
+// enable itself sinks below the prologue to the first Need, so the order is
+// read, prologue, save, enable.
 // REGION:      mrs x[[C:[0-9]+]], {{DIT|S3_3_C4_C2_5}}
-// REGION-NEXT: msr {{#26|DIT}}, #1
 // REGION:      sub sp, sp
 // REGION:      str x[[C]], [sp
+// REGION:      msr {{#26|DIT}}, #1
 //
 // No call site emits anything.
 // REGION:      bl {{_?}}sink_a

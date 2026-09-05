@@ -31,9 +31,16 @@
 
 # THE FIX: index 8 is the first stack-passed argument. Before 2026-08-26 the
 # multiply below ran on secret data with PSTATE.DIT clear.
+#
+# And the second fix, 2026-09-05: the slot was seeded as a secret VALUE, so the
+# pointer loaded from it was data-tainted, the load through it came back
+# public, and the multiply was not a Need. Block placement covered it anyway
+# (the block was On for the loads); intra-block placement hoists the clear to
+# the last Need, which left the multiply DIT-off. The slot is now seeded as
+# both kinds. The `implicit $dit` on the multiply is the pin.
 # CHECK-LABEL: name: stack_arg8
 # CHECK: MSRpstateImm4 26, 1
-# CHECK: MADDXrrr
+# CHECK: MADDXrrr {{.*}} implicit $dit
 # CHECK: MSRpstateImm4 26, 0
 
 --- |

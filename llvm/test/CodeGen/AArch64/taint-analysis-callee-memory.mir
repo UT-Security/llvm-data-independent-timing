@@ -23,12 +23,15 @@
 # assert(false) ABORT the compiler. Both are fixed: the pointee-carrying call is
 # a tainted instruction (function instrumented) and sets ExternalMemClobbered
 # (reload tainted). This test aborts llc on any build with the pre-fix data-only
-# checks.
+# checks. Under intra-block placement (the default since 2026-09-05) the enable
+# sinks past the call to the reload, which is the first Need: the callee protects
+# itself under the callee contract, and a mover handed the pointee is an
+# obligation in the info-loss report, not something the caller covers.
 # CHECK-LABEL: name: via_pointee_ext
-# CHECK: MSRpstateImm4 26, 1
 # CHECK: BL @ext_copy2
-# CHECK: LDRWui
-# CHECK: MSRpstateImm4 26, 0
+# CHECK-NEXT: MSRpstateImm4 26, 1
+# CHECK-NEXT: LDRWui {{.*}} implicit $dit
+# CHECK-NEXT: MSRpstateImm4 26, 0
 
 # via_ext_memory: secret passed to an EXTERNAL callee, then a stack reload.
 # The reload is now tainted (TOP), so the function is DIT-instrumented.

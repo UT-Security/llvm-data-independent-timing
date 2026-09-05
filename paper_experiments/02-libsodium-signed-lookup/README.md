@@ -23,10 +23,13 @@ seals the gathered record. The knob L, lookups per record, moves only the ratio.
 | **public** | `lookup_lane()` - L serial, value-dependent loads into a 4 KB table: hashed contents, next index from the high bits of a 64-bit state. On 3 iterations in 4 the record's header is read first: data-dependent address, constant value, the way every record's type field is the same. | a pointer chase whose critical path is 75% LVP-predictable loads |
 | **secret** | `crypto_aead_chacha20poly1305_ietf_encrypt()` of a 100-byte record carrying the digest - experiment 09's op and message size | ~2.2k cycles, 49 committed switches per op under the pass |
 
-Seeds are the callee contract's fixpoint for libsodium
-(`benchmarks/crypto/libsodium_secret_contract.txt`, the CIO-parity set plus
-the 123 lines the obligation loop added, with the chacha rename patch
-applied), and the build carries the owned-symbols list it generates from its
+Seeds are the callee contract's round-2 file for libsodium
+(`benchmarks/crypto/libsodium_secret_contract.txt` as the gem5 tree carried
+it on 2026-09-05: the CIO-parity set plus the first report's 21 lines, 86
+seeds; the round-11 fixpoint of 188 replaced it in gem5-DIT PR #101 and is
+`libsodium_secret_contract.txt` now, the round-2 file being `_r2`). The
+AEAD path is fully seeded by round 2, and the oracle frontier below confirms
+it at the floor, so the numbers stand. The build carries the owned-symbols list it generates from its
 own base objects, which is what lets a DIT-on caller name a twin in another
 TU. The pass arm is built with `-fno-optimize-sibling-calls` (redundant since
 the tail-call disable rides on `-ftaint-harden`, kept so the arm is the same
@@ -204,6 +207,69 @@ session scratchpad `exp02_oracle/`; compare with
 `gem5-DIT/benchmarks/signed_lookup/frontier_compare.py`.
 
 Not moved: the retired-driver data and the three frozen-evidence files.
+
+### Narrowing twins (2026-09-05, `data/gem5_arms_twin_narrow{,0}.csv`)
+
+The pass arm rebuilt twice with the twins narrowing (`-taint-dit-twin-narrow`;
+`gem5_arms_twin_narrow0.csv` adds `-taint-dit-twin-switch-cyc=0`, DIT off at
+the top of every twin whose entry holds no secret), everything else as
+`gem5_arms.csv`; `docs/results/dit-twin-narrowing-2026-09-05.md`. IPC overhead
+vs unhardened, renamed / serialising, switches per request in brackets:
+
+| L | shipped twins | narrowing, default cost | narrowing, cost 0 |
+|---|---|---|---|
+| 10 | -1.0 / +28.4 (38) | +3.5 / +30.5 (38) | -2.0 / +33.0 (45) |
+| 50 | -0.5 / +22.1 (38) | -1.2 / +23.7 (38) | -2.2 / +25.9 (45) |
+| 200 | -0.4 / +11.8 (38) | +0.1 / +12.3 (38) | -1.4 / +14.0 (45) |
+| 1000 | +0.2 / +3.2 (38) | +0.1 / +3.4 (38) | -0.6 / +3.9 (45) |
+| 5000 | +0.1 / +0.7 (38) | -0.2 / +0.6 (38) | +0.0 / +1.0 (45) |
+| 20000 | +0.4 / -0.1 (38) | +0.2 / +0.5 (38) | +0.7 / +0.5 (45) |
+
+At the default cost the binary's switch count and coverage are the shipped
+arm's and the renamed differences are layout; at cost 0 seven more switches
+per request buy nothing on the renamed model and cost 2 to 5 points on the
+serialising one. The twins stay whole by default.
+
+### The external-callee assumption (2026-09-05, `data/gem5_arms_external_preserves.csv`)
+
+The pass arm rebuilt with `-taint-dit-external-preserves`
+(a callee outside the build is assumed never to write PSTATE.DIT, so no re-assert after it;
+`docs/results/dit-external-preserves-2026-09-05.md`), everything else as
+`gem5_arms.csv`. IPC overhead vs unhardened, renamed / serialising, switches
+per request in brackets:
+
+| L | shipped twins | + external assumption |
+|---|---|---|
+| 10 | -1.0 / +28.4 (38) | -2.4 / +23.4 (32) |
+| 50 | -0.5 / +22.1 (38) | -0.1 / +18.0 (32) |
+| 200 | -0.4 / +11.8 (38) | -1.0 / +9.9 (32) |
+| 1000 | +0.2 / +3.2 (38) | -0.7 / +2.4 (32) |
+| 5000 | +0.1 / +0.7 (38) | -0.1 / +1.0 (32) |
+| 20000 | +0.4 / -0.1 (38) | +0.2 / +0.7 (32) |
+
+Six of the 38 switches per request were re-asserts after glibc movers inside
+the AEAD twins; the 32 that remain are the Poly1305/ChaCha20 implementation
+table calls. Gates 210/210, coverage unchanged.
+
+### Intra-block placement, the default since later on 2026-09-05 (`data/gem5_arms_intra_block{,_ext}.csv`)
+
+Same rig, the pass arm with `-taint-dit-sub-block` (now the default; `=0`
+is the block placement of every table above), without and with the
+external-callee assumption. IPC overhead vs unhardened, renamed /
+serialising, switches per request:
+
+| L | block | block + ext | intra-block | intra-block + ext |
+|---|---|---|---|---|
+| 10 | -1.0 / +28.4 (38) | -2.1 / +23.8 (32) | +0.1 / +32.0 (38) | -1.7 / +24.8 (32) |
+| 50 | -0.5 / +22.1 (38) | -0.1 / +18.0 (32) | -0.6 / +24.9 (38) | -0.1 / +19.2 (32) |
+| 200 | -0.4 / +11.8 (38) | -1.0 / +9.9 (32) | +1.2 / +13.5 (38) | -1.1 / +10.0 (32) |
+| 1000 | +0.2 / +3.2 (38) | -0.7 / +2.4 (32) | +0.1 / +3.8 (38) | -0.1 / +2.1 (32) |
+| 5000 | +0.1 / +0.7 (38) | -0.1 / +1.0 (32) | +0.0 / +0.8 (38) | +0.0 / +0.1 (32) |
+| 20000 | +0.4 / -0.1 (38) | +0.2 / +0.7 (32) | +0.2 / +0.5 (38) | +0.2 / +0.0 (32) |
+
+Identical switch counts, gates 210/210 in both, coverage unchanged; the
+differences are the layout band of a library that changed in four
+functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 
 ## Known limits
 

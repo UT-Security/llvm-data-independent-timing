@@ -1,5 +1,12 @@
 # 08 - seed ground truth
 
+> **Compiler note (audit 2026-09-05).** The numbers here were measured under the
+> defaults of their date: the inherit contract, no DIT twins, block placement. The
+> shipped defaults changed on 2026-09-05 (callee contract, twins, intra-block
+> placement; `docs/reference/harden-runbook.md`), and the pre-contract seed files
+> protect nothing under them. See the status table in `paper_experiments/README.md`
+> before re-running.
+
 **Status: complete, both tiers.** Static comparison and gem5 shadow-taint
 confirmation, measured 2026-09-01 against compiler `845f69038a4e`,
 libhydrogen as shipped in CryptoMPK's artifact, their shipped taint report as

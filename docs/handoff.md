@@ -1,7 +1,9 @@
 # Session handoff - taint analysis / DIT hardening
 
 > ⚠️ **HISTORICAL (written 2026-07-14). Do not use this as guidance.**
-> The current entry points are [`README.md`](README.md) and [`overview.md`](overview.md).
+> The current entry points are [`README.md`](README.md), [`overview.md`](overview.md)
+> and, for the shipped defaults (callee contract, twins, intra-block placement, no
+> round-trip), `../CLAUDE.md` and [`reference/harden-runbook.md`](reference/harden-runbook.md).
 > Most of what follows has been overtaken: the branch is now `dit-tainter`, the
 > callee→caller memory bug is FIXED, region placement is the default (not function
 > granularity), the lit suite is 29 tests (not 12), the flood attribution here and

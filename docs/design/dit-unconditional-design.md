@@ -1,6 +1,13 @@
 # The unconditional design: deleting the after-call re-assert
 
-**Status 2026-08-27: PROPOSED, nothing implemented.** This is the design record for
+**Status 2026-09-05: OVERTAKEN.** The after-call re-assert this file set out to
+delete is gone in the cases that mattered, by other means: a DIT-on caller now
+calls a `.dit` twin that never clears (`dit-cloning.md`, default), a callee
+outside the build is assumed not to touch the mode under
+`-taint-dit-external-preserves`, and the callee-saved ABI of `dit-abi.md` was
+built, measured and shelved. What survives of this design is the record of why
+the mode is published at commit (§3.2), which the gem5 model still relies on.
+Written 2026-08-27 as: **PROPOSED, nothing implemented.** This is the design record for
 removing the post-call `MSR DIT` re-assert, which is the largest remaining per-call
 cost in the pass and the one `PreservesDIT` provably cannot reach. It supersedes the
 `-taint-dit-preserve-abi` forward references in `TaintAnalysis.cpp` and

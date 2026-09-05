@@ -27,7 +27,7 @@ were run.
 | 06 | [switch-model generality](06-switch-model-generality/) | - | experiments 02 and 03's workloads | **MSR DIT implementation - measures TRANSFERABILITY** | **complete, gem5** |
 | 07 | [annotation cost](07-annotation-cost/) | - | libsodium signing path | **seed DEPTH - measures DEVELOPER cost** | **complete, silicon** |
 | 08 | [seed ground truth](08-seed-ground-truth/) | - | libhydrogen signing, their exact source | **none - compares our taint set against an INDEPENDENT one** | **complete** |
-| 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon x2 (M5 + M4) + gem5 switch model; percentages corrected 4-15x, conclusions unchanged** |
+| 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon x2 (M5 + M4) + gem5 switch model; percentages corrected 4-15x, conclusions unchanged**; **gem5 2026-09-05: the hand-placed API bracket arm added and the pass re-run on the new defaults (twins cut the serialising cost 13-14 points on every AEAD row; the bracket is within 1-4 points of blanket; verdict unchanged)** |
 | 10 | [mbedTLS session ticket](10-mbedtls-session-ticket/) | ClientHello and record handling; the application behind the server | AES-GCM ticket decrypt, then the PARSE of the resumption secret in plain C (TLS 1.2 RSA premaster as the literature anchor) | resumption rate, records per connection | **gates G0/G1 passed 2026-09-03; re-run 2026-09-05 on the compiler's new defaults (section 16): serialising +252% -> +40%, coverage 99.955%, renamed +11.3% of which all is instruction fetch on the duplicated code; blanket still wins** |
 
 ## Compiler changes and experiment validity
@@ -53,7 +53,9 @@ scope. Checked:
 
 **2026-09-05, the default flip** (`-taint-dit-contract=callee` and the DIT
 twins on by default; `docs/design/dit-cloning.md`,
-`docs/reference/harden-runbook.md`). This changes what every `-ftaint-harden`
+`docs/reference/harden-runbook.md`; and, later the same day, intra-block
+placement on by default, `-taint-dit-sub-block`, with `=0` the old block
+placement: `docs/design/dit-placement.md` §5.7). This changes what every `-ftaint-harden`
 build does, so every experiment is in scope, and two things follow for any
 re-run. First, **the pre-contract seed files protect nothing under the
 contract**: a build with `libsodium_secret.txt` under the new defaults
@@ -67,8 +69,9 @@ and not where they go through tables (the AEAD keeps 38 of 49). Status:
 | # | workload | status |
 |---|---|---|
 | **02** | libsodium signed lookup | **re-run 2026-09-05**: serialising -25 to -35% at every point, renamed within 1%, blanket unchanged, oracle frontier unchanged; the crossover against blanket moved from ~50% to between 45% and 81% secret |
-| 07, 09 | libsodium | **not re-run**; need the contract seed file, and 09's "blanket wins" verdict is where the twins change the least (everything is secret, so a twin's dwell is blanket's) |
+| **09** | libsodium, CIO parity | **re-run on gem5 2026-09-05** with a new hand-placed API-bracket arm (`api_bracket.c`): the pass under the new defaults executes 38-39 switches per AEAD call (was 49-51) and 6 per AES-GCM (was 12-13), serialising -13 to -14 points on every AEAD row; the bracket costs 1-4 points over blanket; verdict unchanged, blanket wins on all-crypto work. argon2id pending |
 | **10** | mbedTLS session ticket | **re-run 2026-09-05** (section 16): serialising +252% -> +40% (switches -91%), coverage 99.877% -> 99.955%, renamed +6.2% -> +11.3% and the NOP control puts all of it in instruction fetch on the duplicated code; blanket still wins on this workload |
+| 07 | libsodium | **not re-run**; needs the contract seed file |
 | 03, 06 | mbedTLS | **not re-run**; the 727-seed contract file exists (`tls_resume/`); 10's re-run says what to expect on the same library |
 | 04 | libsecp256k1 | **not re-run**; the contract seed file exists (`secp_seed_contract.txt`) |
 | 01, 05, 08 | | **not re-run** |
