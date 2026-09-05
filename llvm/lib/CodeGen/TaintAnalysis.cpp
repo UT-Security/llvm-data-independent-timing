@@ -983,8 +983,13 @@ static bool unknownMemMayTaintLoad(const MachineMemOperand &MMO,
   return false;
 }
 
+static bool regUseTainted(TaintKind K, Register R, const TaintState &S,
+                          const TargetRegisterInfo *TRI);
+
 static bool anyRegUseOfKind(TaintKind K, const MachineInstr &MI,
                             const TaintState &S) {
+  const TargetRegisterInfo *TRI =
+      MI.getMF()->getSubtarget().getRegisterInfo();
   for (const MachineOperand &MO : MI.uses()) {
     // MI.uses() starts after the EXPLICIT defs, so it still spans implicit
     // DEFS (on AArch64 a 32-bit result carries `implicit-def $xN`, and calls
@@ -995,7 +1000,7 @@ static bool anyRegUseOfKind(TaintKind K, const MachineInstr &MI,
     // could never leave. taintedCallArguments already guards this way.
     if (!MO.isReg() || MO.isDef())
       continue;
-    if (S.test(K, MO.getReg()))
+    if (regUseTainted(K, MO.getReg(), S, TRI))
       return true;
   }
   return false;
@@ -1018,18 +1023,40 @@ static bool isSinglePhysReg(MCPhysReg R, const TargetRegisterInfo *TRI) {
   return true;
 }
 
+/// Does a register USE carry taint of kind K? A single register reads its own
+/// bit. A register TUPLE ($q3_q4, the operand of ST2/ST3/ST4, LD2 and the
+/// like) is never set as a whole - updateWithAliases marks the parts - so it
+/// reads tainted if ANY part does. Before this a tuple use read clean: the
+/// flowprobe C4/C7 channel, and in libsodium the NEON `st2` that parks the
+/// signing scalar's nibbles on the frame (ge25519_scalarmult_base) left the
+/// cells public, which the entry enable of an owning function hid and a
+/// narrowing twin exposed (888 uncovered ops per two signatures).
+static bool regUseTainted(TaintKind K, Register R, const TaintState &S,
+                          const TargetRegisterInfo *TRI) {
+  if (S.test(K, R))
+    return true;
+  if (!R.isPhysical() || isSinglePhysReg(R.asMCReg(), TRI))
+    return false;
+  for (MCPhysReg SR : TRI->subregs(R.asMCReg()))
+    if (S.test(K, SR))
+      return true;
+  return false;
+}
+
 /// Propagate a taint change of kind K to all simple aliases of R (W↔X),
-/// skipping register tuples to avoid cascade.
+/// skipping register tuples on the way UP to avoid cascade. DOWN always: a
+/// tuple DEF ($q0_q1 written by LD2) writes every part, and each part must
+/// read tainted afterwards, so the parts are marked; a single register's
+/// subregs are its own halves as before.
 static void updateWithAliases(TaintKind K, Register R, TaintState &S,
                               const TargetRegisterInfo *TRI, bool Set) {
   S.update(K, R, Set);
   if (!R.isPhysical())
     return;
   MCPhysReg Phys = R.asMCReg();
-  // DOWN: e.g. $x0 → $w0, $w0_hi (skip if R is a tuple)
-  if (isSinglePhysReg(Phys, TRI))
-    for (MCPhysReg SR : TRI->subregs(Phys))
-      S.update(K, SR, Set);
+  // DOWN: e.g. $x0 → $w0, $w0_hi; $q0_q1 → $q0, $q1 and their halves.
+  for (MCPhysReg SR : TRI->subregs(Phys))
+    S.update(K, SR, Set);
   // UP: e.g. $w0 → $x0 (skip tuple superregs)
   for (MCPhysReg Super : TRI->superregs(Phys))
     if (isSinglePhysReg(Super, TRI)) {
@@ -1077,11 +1104,13 @@ static bool anyTaintedStoreDataRegUse(TaintKind K, const MachineInstr &MI,
   if (!StoredRegsRemaining)
     return anyRegUseOfKind(K, MI, S);
 
+  const TargetRegisterInfo *TRI =
+      MI.getMF()->getSubtarget().getRegisterInfo();
   for (const MachineOperand &MO : MI.operands()) {
     if (!MO.isReg() || !MO.isUse() || MO.isImplicit())
       continue;
 
-    if (S.test(K, MO.getReg()))
+    if (regUseTainted(K, MO.getReg(), S, TRI))
       return true;
 
     if (--*StoredRegsRemaining == 0)
