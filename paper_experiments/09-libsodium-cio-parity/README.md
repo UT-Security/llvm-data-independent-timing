@@ -492,7 +492,7 @@ make the callee owned and get the same effect through the owned list.
 **With the external-callee assumption** (`-taint-dit-external-preserves`,
 2026-09-05: a callee outside the build is assumed never to write PSTATE.DIT,
 so no re-assert after it; `docs/results/dit-external-preserves-2026-09-05.md`,
-`data/gem5_preserving.csv`, `data/gem5_preserving_analysis.txt`). Same
+`data/gem5_external_preserves.csv`, `data/gem5_external_preserves_analysis.txt`). Same
 libraries otherwise, same arms, all gates pass, signing oracle identical:
 
 | benchmark | blanket | API bracket (2 sw) | pass, shipped | pass + external assumption |

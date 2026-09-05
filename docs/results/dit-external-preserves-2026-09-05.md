@@ -69,13 +69,19 @@ its own instruction-matched NOP twin):
 |---|---|---|---|---|
 | twins as shipped | +1.42% / +2.20% | 800 | +0.64% / +6.09% | 7,600 |
 | blanket | +1.77% | 0 | +0.80% | 0 |
-| **+ external assumption** | **+0.53% / +0.57%** | **100** | **+0.54% / +4.77%** | **6,400** |
+| **+ external assumption** | **+0.64% / +0.72%** | **100** | **-0.04% / +4.61%** | **6,400** |
 
 Two DIT writes per signature: the entry enable and exit clear of the public
 function, the same two a hand-placed bracket executes.
 
+The file-based first cut of the flag was measured first and the boolean flag
+re-measured on every rig: the libraries disassemble identically, experiment
+09 reproduces to the cycle, experiment 02's pass rows reproduce to the cycle,
+and the crypto matrix moves within its driver's relink (+0.53% / +0.57% and
++0.54% / +4.77% under the first cut). The tables are the boolean flag's runs.
+
 **Experiment 09** (cycles per op vs base, renamed / serialising, switches per
-op; `data/gem5_preserving.csv`):
+op; `data/gem5_external_preserves.csv`):
 
 | benchmark | blanket | API bracket (2 sw) | pass, shipped | pass + external assumption |
 |---|---|---|---|---|
@@ -87,7 +93,7 @@ op; `data/gem5_preserving.csv`):
 | argon2id | +0.51% | +2.06% / +2.04% | +2.37% / +7.58% (395,758) | pending |
 
 **Experiment 02** (IPC overhead vs unhardened, switches per request;
-`data/gem5_arms_preserving.csv`):
+`data/gem5_arms_external_preserves.csv`):
 
 | L | f | blanket | pass, shipped ren / ser | pass + external assumption |
 |---|---|---|---|---|

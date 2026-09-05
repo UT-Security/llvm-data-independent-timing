@@ -230,7 +230,7 @@ arm's and the renamed differences are layout; at cost 0 seven more switches
 per request buy nothing on the renamed model and cost 2 to 5 points on the
 serialising one. The twins stay whole by default.
 
-### The external-callee assumption (2026-09-05, `data/gem5_arms_preserving.csv`)
+### The external-callee assumption (2026-09-05, `data/gem5_arms_external_preserves.csv`)
 
 The pass arm rebuilt with `-taint-dit-external-preserves`
 (a callee outside the build is assumed never to write PSTATE.DIT, so no re-assert after it;
