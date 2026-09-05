@@ -23,11 +23,18 @@ end; on silicon the same binaries run as they are.
 - **Tail calls are off** TU-wide under `-ftaint-harden` (a tail call has no
   epilogue to clear DIT in). No extra flag is needed for that any more;
   `-fno-optimize-sibling-calls` is harmless but redundant.
+- **Placement is intra-block** (`-taint-dit-sub-block`, default on since
+  2026-09-05): inside a covered block the enable sinks to the first secret
+  instruction, the clear hoists up past the last, and a DIT-off hole is cut
+  across any public run of 8 or more instructions. `-mllvm
+  -taint-dit-sub-block=0` is the older block placement, where a block with
+  any secret instruction is covered whole.
 - Region placement, `switch-cyc=30`, loop hoist, the call-site mod-set gate:
   unchanged.
 
 The old behaviour is one flag away for an A/B: `-mllvm
--taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0`.
+-taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0 -mllvm
+-taint-dit-sub-block=0`.
 
 ## 1. Build the compiler
 

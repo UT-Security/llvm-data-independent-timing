@@ -53,7 +53,9 @@ scope. Checked:
 
 **2026-09-05, the default flip** (`-taint-dit-contract=callee` and the DIT
 twins on by default; `docs/design/dit-cloning.md`,
-`docs/reference/harden-runbook.md`). This changes what every `-ftaint-harden`
+`docs/reference/harden-runbook.md`; and, later the same day, intra-block
+placement on by default, `-taint-dit-sub-block`, with `=0` the old block
+placement: `docs/design/dit-placement.md` §5.7). This changes what every `-ftaint-harden`
 build does, so every experiment is in scope, and two things follow for any
 re-run. First, **the pre-contract seed files protect nothing under the
 contract**: a build with `libsodium_secret.txt` under the new defaults

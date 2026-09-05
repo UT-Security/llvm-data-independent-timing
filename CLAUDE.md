@@ -70,9 +70,22 @@ case-sensitive form silently reports zero on a correctly hardened object.)
 build with otherwise identical codegen, for A/B benchmarking). Without it, the
 analysis still runs and the report files are still produced, but codegen is untouched.
 
-**Placement granularity (`-taint-dit-placement`): DEFAULT is `region` (fine-grain).**
-Region placement covers only the secret-dependent regions - clean preambles and public
-loop scaffolding (coordinate/index math) stay DIT-off - tuned by
+**Placement granularity (`-taint-dit-placement`): DEFAULT is `region` (fine-grain),
+and since 2026-09-05 region placement is INTRA-BLOCK (`-taint-dit-sub-block`, default
+1).** The unit of analysis is the instruction (a Need = a DIT-covered instruction with a
+secret operand); the unit of placement was the basic block until 2026-09-05 and is now
+the instruction run: a block's entry enable sinks to its first Need, a pre-return clear
+hoists up past its last, and a DIT-off hole is cut across any Need-free run of at least
+`-taint-dit-sub-block-min-run` (default 8) instructions. Block entry and exit states
+are unchanged, so loop coarsening, corridor merging and the verifier are untouched.
+`-mllvm -taint-dit-sub-block=0` is BLOCK placement (a block with any Need covered
+whole), kept as the A/B. Two things to know: the scheduler bounds it (a secret load
+hoisted into a public preamble pins the enable there), and it exposed a real seeding
+bug the whole-block cover had hidden: a `tainted-pointee` argument passed on the
+stack was seeded as a secret VALUE, so the load through it came back public
+(`taint-analysis-stack-seeded-arg.mir`; incoming fixed frame objects are now seeded
+as both kinds). Region placement covers only the secret-dependent regions - clean
+preambles and public loop scaffolding (coordinate/index math) stay DIT-off - tuned by
 `-taint-dit-switch-cyc` (**default 30** = the measured serializing switch cost),
 `-taint-dit-dwell-per-instr` (default 1.0), and `-taint-dit-loop-hoist` (**default 1**:
 each need-loop is coarsened On with one enable hoisted to the preheader; set `=0` for
@@ -202,8 +215,9 @@ f = 9.4% on serializing hardware, so the trade is real); it is refused under
 
 The coalesced "regions" in the reports **do not drive placement** - they feed the report
 files only. The gap that merges them was `-taint-region-merge-gap` until 2026-08-24 and
-is now a fixed constant (2), because placement partitions BLOCKS and prices its own
-merges with the frequency-weighted admission test.
+is now a fixed constant (2), because placement partitions blocks (and, since
+2026-09-05, instruction runs inside them) and prices its own merges with the
+frequency-weighted admission test.
 
 **The call-site mod-set gate is ON by default** (since 2026-08-24), together with the
 strict source condition and return-call-site gating, which are unconditional. It applies

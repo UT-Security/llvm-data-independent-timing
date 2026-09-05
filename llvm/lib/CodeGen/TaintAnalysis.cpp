@@ -505,14 +505,17 @@ static cl::opt<double> TaintDitDwellPerInstr(
 // is continuous.
 static cl::opt<bool> TaintDitSubBlock(
     "taint-dit-sub-block",
-    cl::desc("Sink a block-entry enable to the first Need, hoist a pre-return "
-             "disable past the last, and cut DIT-off holes across long Need-free "
-             "runs. Block entry/exit states are unchanged. DEFAULT OFF: measured "
-             "2026-09-02 on mbedTLS resumption it removed 2% of over-protection "
-             "per resumption for 0.06 points of oracle coverage, and the "
-             "workload's verdict (blanket wins) did not move. Re-evaluate once "
-             "the oracle's store rule no longer counts pointer moves"),
-    cl::init(false));
+    cl::desc("Intra-block placement (DEFAULT ON since 2026-09-05): sink a "
+             "block-entry enable to the first Need, hoist a pre-return disable "
+             "past the last, and cut DIT-off holes across Need-free runs of at "
+             "least -taint-dit-sub-block-min-run instructions. Block entry/exit "
+             "states are unchanged, so the corridor test and the verifier are "
+             "untouched. =0 is block placement: a block with any Need is "
+             "covered whole. Measured 2026-09-02 on mbedTLS resumption at 2% "
+             "less over-protection per resumption for 0.06 points of oracle "
+             "coverage; made the default at the user's direction, with the "
+             "block form kept as the A/B."),
+    cl::init(true));
 
 // Minimum length of a Need-free run before a hole is worth cutting. Independent
 // of -taint-dit-switch-cyc ON PURPOSE: that knob also drives the cross-block
@@ -2871,7 +2874,8 @@ TaintResult TaintAnalysis::run(MachineFunction &MF,
       int64_t Sz = MFI.getObjectSize(FI);
       if (Sz <= 0)
         continue;
-      Seed.taintFrameObject(FI, (uint64_t)Sz);
+      // Both kinds: the slot may hold the secret itself or a pointer to it.
+      Seed.taintFrameObject(FI, (uint64_t)Sz, TaintVal{true, true});
       ++Seeded;
     }
     LLVM_DEBUG(dbgs() << "  Seeded " << Seeded
