@@ -127,8 +127,13 @@ re-asserts after any call of its own that may clear, even with nothing secret in
 that is the guarantee its caller bought. Every TU must be built with the flag. libsodium
 signing at the contract's fixpoint: **10,400 executed DIT writes -> 41** (inherit 6),
 identical coverage, +21% text; the reached set (not just the seeds) is what makes it
-work, since propagation instruments `ge25519_cmov` and the like without a seed. Test
-`clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs).
+work, since propagation instruments `ge25519_cmov` and the like without a seed. Timed on
+gem5 against instruction-matched NOP baselines: signing on the serialising model
+**+76.22% -> +2.20%** (blanket +1.77%); on the renamed model the switches were never the
+cost (the 176,500-switch arm beats its own NOP baseline by 2.5%) and the twins tie
+blanket at +1.4%. AEAD keeps 38 of 58 switches per call behind the Poly1305/ChaCha20
+implementation tables, since an indirect call is never redirected, and stays +6.09%
+serialising. Test `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs).
 
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function

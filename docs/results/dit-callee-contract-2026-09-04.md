@@ -154,6 +154,23 @@ below it enables once and calls nothing but twins). Price: +21% text, and
 the twins' whole-function coverage is the +5.6% wasted. The no-flag build is
 byte-identical to round 11 (whole-archive disassembly).
 
+**Timed** (gem5, both switch models, against instruction-matched NOP
+baselines; the full tables are in `docs/design/dit-cloning.md` §5.1):
+
+| workload | model | no twins | twins | blanket |
+|---|---|---|---|---|
+| ed25519, 50 x 1 KiB | serialising | +76.22% | **+2.20%** | +1.77% |
+| ed25519 | renamed | -2.49% | +1.42% | +1.77% |
+| AEAD, 200 x 1400 B | serialising | +8.19% | +6.09% | +0.80% |
+| AEAD | renamed | +0.68% | +0.64% | +0.80% |
+
+Serialising: the twins are the result (3,530 -> 16 switches per signature).
+Renamed: the switches were never the cost; the no-twin arm beats its own
+NOP baseline because a renamed `MSR DIT` is cheaper than the NOP standing
+in for it, and the twins cost what blanket costs, dwell. AEAD keeps 38 of 58
+switches per call behind the Poly1305/ChaCha20 implementation tables, since
+an indirect call is never redirected.
+
 ## 5. mbedTLS 3.6.2, TLS 1.3 resumption (`--resumptions 5 --kex dhe`)
 
 ### Static

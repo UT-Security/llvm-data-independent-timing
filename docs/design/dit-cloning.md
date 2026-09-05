@@ -5,7 +5,12 @@
 item 1 of the callee contract (`dit-callee-contract.md` §5). Measured on
 libsodium's signing path under the contract with the converged round-11 seed
 file: executed DIT writes per two signatures **10,400 -> 41** (inherit: 6)
-at identical coverage, for **+21% text**. Timing is not measured here.
+at identical coverage, for **+21% text**. Timed on gem5 (§5.1): on the
+serialising switch model signing goes from **+76% to +2.2%** over the
+instruction-matched NOP baseline, and the twins beat blanket by 0.4 points;
+on the renamed model the switches were never the cost and the twins tie
+blanket. AEAD keeps 38 of its 58 switches per call behind implementation
+tables (indirect calls are never redirected) and stays +6.1% serialising.
 
 ## 1. The problem it removes
 
@@ -174,11 +179,76 @@ The 4,511 fewer instructions are the removed switches net of the twins'
 whole-function coverage; nothing else in the binary changed, which the
 identical coverage counts confirm.
 
+### 5.1 Timing, gem5 NeoverseV2 FDP, both switch models
+
+Five arms, all callee contract, round-11 seeds, one binary per arm and
+workload (`benchmarks/crypto/run_clone_timing.sh` in gem5-DIT). The baseline
+the user asked for and the one used throughout: the same build with every
+switch emitted as `HINT #0`, so the instruction stream is matched; blanket is
+that NOP library plus the constructor that sets DIT before `main` and never
+clears it, so it is matched too. The renamed model runs every arm; the
+serialising model (`--no-speculative-dit`) runs the two arms whose switches
+execute, since a NOP or blanket arm executes no switch inside the ROI.
+(gem5's `simInsts` skips `isNop()` at commit, so a NOP arm's instruction
+count reads lower than its real arm's by exactly the executed switches; the
+binaries are matched, the stat is not.)
+
+**ed25519, 50 signatures of 1 KiB** (`crypto_sign`):
+
+| arm | switch model | cycles | DIT writes | vs own NOP baseline | vs blanket |
+|---|---|---|---|---|---|
+| no twins, NOP | | 4,579,009 | 0 | | |
+| no twins | renamed | 4,465,099 | 176,500 | -2.49% | -3.58% |
+| no twins | serialising | 8,069,259 | 176,500 | **+76.22%** | +74.24% |
+| twins, NOP | | 4,550,491 | 0 | | |
+| **twins** | renamed | 4,615,182 | 800 | +1.42% | -0.34% |
+| **twins** | serialising | 4,650,441 | 800 | **+2.20%** | +0.42% |
+| blanket (twins' NOP library + constructor) | | 4,631,047 | 0 | +1.77% | |
+
+**AEAD ChaCha20-Poly1305, 200 encryptions of 1400 B:**
+
+| arm | switch model | cycles | DIT writes | vs own NOP baseline | vs blanket |
+|---|---|---|---|---|---|
+| no twins, NOP | | 3,051,306 | 0 | | |
+| no twins | renamed | 3,072,053 | 11,600 | +0.68% | -0.19% |
+| no twins | serialising | 3,301,260 | 11,600 | +8.19% | +7.26% |
+| twins, NOP | | 3,053,529 | 0 | | |
+| **twins** | renamed | 3,073,056 | 7,600 | +0.64% | -0.16% |
+| **twins** | serialising | 3,239,461 | 7,600 | **+6.09%** | +5.25% |
+| blanket | | 3,077,912 | 0 | +0.80% | |
+
+Three readings.
+
+- **On serialising hardware the twins are the whole result.** Signing pays
+  3,530 switches per signature without them and 16 with, and the cost goes
+  from +76% to +2.2%, 0.4 points above blanket. That is the regime the
+  contract was uneconomic in, and it is closed.
+- **On renamed hardware the switches were never the cost.** The no-twin
+  arm with 176,500 executed switches is the fastest binary in the table,
+  faster than its own NOP baseline by 2.5%: a renamed `MSR DIT` is cheaper
+  than the `HINT #0` standing in for it, which is the NOP-not-neutral
+  effect already recorded for mbedTLS, at a size that makes the NOP-relative
+  number for that arm meaningless. What the twins cost there is dwell: a
+  twin is covered whole, the no-twin arm's callees clear between calls, and
+  the twin arm lands where blanket does (+1.4% against +1.8%). The renamed
+  cost of the contract with twins is the cost of DIT being on, not of
+  turning it on.
+- **AEAD shows the limit.** Poly1305 and ChaCha20 are reached through
+  implementation tables (`blr`), and an indirect call is never redirected,
+  so `poly1305_blocks`, `chacha20_encrypt_bytes` and the donna entry points
+  toggle for themselves on every block: 38 of the 58 switches per encryption
+  survive, and serialising stays +6.1%, five points worse than blanket. The
+  repair is not in the compiler: a table entry can point at the twin only
+  if every caller of the table is DIT-on, which is a property of the
+  library, not of a call site. Seeding the table's targets already makes
+  them protect themselves; making them free needs the dispatch to be direct.
+
 ## 6. Not done
 
-- **Timing.** This is a switch-count and coverage result on gem5; the
-  serialising-model cost of 10,400 writes was never measured on this
-  workload either (experiment 9's rig is the place).
+- **Silicon.** gem5 charges ~21 cycles of rename stall per serialising
+  switch by model; the ordering is the result, the magnitudes are the
+  model's. The M5 has the renamed behaviour and cannot show the serialising
+  column.
 - **"Clone what is instrumented"** instead of what a seed reaches would need
   the MIR analysis's verdict at IR time: a two-phase build, which is what the
   older `-taint-dit-clone-list` (`docs/design/dit-callee-ownership.md`) was.
