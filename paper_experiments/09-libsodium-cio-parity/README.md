@@ -547,14 +547,32 @@ library so the compare is the only thing that runs with DIT set):
 | hoisted, whole loop covered (what the pass emits) | 2 | **+7.73%** | +11.71% | 5.4 |
 | per iteration, only the 8 tainted instructions covered | 34 | **+8.19%** | +74.17% | 8.5 |
 
-Leaving the public reloads uncovered recovers nothing: +8.19% against
-+7.73% on the renamed model, and +74% on the serialising one for the 34
-switches. The loop's critical path is the store-to-load chain through the
-tainted accumulator, and once that is covered the predictor has nothing
-left to shorten; the trace of the per-iteration variant shows the two
-pointer reloads predicted 3 times per two operations instead of 30 to 40,
-with every other prediction in the loop suppressed by the mode. The hoist
-is a design decision, and on this loop it is free.
+The per-iteration cover costs the same on the renamed model and 62 points
+more on the serialising one, **but not for the reason a first reading
+suggests.** The trace of the per-iteration run shows the two pointer
+reloads, `i++` and `cmp`, the instructions placed DIT-off, suppressed by the
+predictor as `DIT=1` on 39 of their 42 lookups per two operations and
+predicted 3 times. In the renamed model a DIT write "resolves to 1 at rename
+in both directions: a DIT region is entered speculatively and left only
+architecturally" (gem5-DIT `src/arch/arm/insts/misc64.hh`, `MsrImmDitOp64`);
+the clear takes effect when it commits, so every younger instruction in the
+reorder-buffer shadow of a clear still reads the mode as set. Inside a
+twelve-instruction loop body that shadow covers the whole next iteration,
+and no toggle placement, however fine, can make the clean reloads
+predictable. The serialising model drains at each write instead, which is
+precise and is the +74%.
+
+So what this experiment measures is the model's visibility of the mode, not
+the value of the two public predictions. The hoist is free on this loop
+because nothing finer is visible to the predictor; whether predicting the
+pointer reloads alone would shorten the loop is bounded, not measured: all
+three predicted is the control at 1,080.5 cycles, none of them is +7.7%,
+and the loop-carried chain runs through the tainted accumulator, which is
+the one that must stay covered. A clear that took effect speculatively
+would run a mispredicted path with the mode off, so the model's choice is
+the natural one for any renamed implementation, and Apple's silicon cannot
+be asked, since the renamed and serialising behaviours are not separable
+there.
 
 A side finding from the same reports, not on the benchmark's path. The
 one-shot `crypto_aead_aes256gcm_decrypt` builds the key schedule and the
