@@ -107,8 +107,11 @@ __attribute__((noinline))
 unsigned long via_unseeded_value(void) { return g_bit * 29; }
 
 // Each caller: the call (secret-passing), the load through the result, and
-// the multiply; via_heap also pins the result move. need=1 (the call alone)
-// is the pre-fix reading, measured on this compiler before the change.
+// the multiply. need=1 (the call alone) is the pre-fix reading, measured on
+// this compiler before the change. via_heap reads 4: fill_heap's mod-set is
+// TOP (it stores through a malloc'd pointer), which under the shipped contract
+// poisons the caller's own link-register reload too; under
+// -taint-dit-contract=callee spill slots are exempt and it reads 3.
 // CHECK-DAG: {{^}}via_arg need=3 {{.*}}
 // CHECK-DAG: {{^}}via_global need=3 {{.*}}
 // CHECK-DAG: {{^}}via_heap need=4 {{.*}}

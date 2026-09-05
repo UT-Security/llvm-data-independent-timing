@@ -318,7 +318,19 @@ static cl::opt<DITPlacementMode> TaintDITPlacement(
                           "whole-function: DIT on entry-to-return for any tainted "
                           "function (coarse)"),
                clEnumValN(DITPlacementMode::Region, "region",
-                          "fine-grain cost-model region placement (default)")));
+                            "fine-grain cost-model region placement (default)")));
+
+cl::opt<DITContract> llvm::TaintDITContract(
+    "taint-dit-contract",
+    cl::desc("Who covers a callee's secrets at a call boundary"),
+    cl::init(DITContract::Inherit),
+    cl::values(clEnumValN(DITContract::Inherit, "inherit",
+                          "the caller holds DIT across a secret-passing call and "
+                          "an unseen callee inherits it (default)"),
+               clEnumValN(DITContract::Callee, "callee",
+                          "every function protects its own secrets; a secret "
+                          "reaching a callee this build cannot see is a reported "
+                          "obligation, not the caller's job")));
 
 // Track B increment (c): the admission test (docs/design/dit-placement.md
 // §5.6). A DIT mode switch (MSR DIT) costs `switch-cyc` cycles; DIT dwell costs
@@ -603,7 +615,7 @@ static std::optional<LibcMoveModel> getLibcMoveModel(const Function *Callee,
 
 /// The callee's symbol name at a direct call, whether or not the module has a
 /// Function for it. Empty for an indirect call.
-static StringRef getCalleeSymbolName(const MachineInstr &MI) {
+StringRef llvm::getCalleeSymbolName(const MachineInstr &MI) {
   for (const MachineOperand &MO : MI.operands()) {
     if (MO.isGlobal())
       if (const auto *GV = MO.getGlobal())
@@ -612,6 +624,22 @@ static StringRef getCalleeSymbolName(const MachineInstr &MI) {
       return MO.getSymbolName();
   }
   return StringRef();
+}
+
+bool llvm::isLibcAllocator(const Function *Callee, const MachineInstr &MI) {
+  if (Callee && !Callee->isDeclaration())
+    return false;
+  StringRef N = Callee ? Callee->getName() : getCalleeSymbolName(MI);
+  return N == "malloc" || N == "calloc" || N == "realloc" || N == "free" ||
+         N == "aligned_alloc" || N == "posix_memalign";
+}
+
+bool llvm::isLibcMover(const Function *Callee, const MachineInstr &MI) {
+  // A definition in this TU is analysed for real and is whatever it is.
+  if (Callee && !Callee->isDeclaration())
+    return false;
+  StringRef N = Callee ? Callee->getName() : getCalleeSymbolName(MI);
+  return N == "memcpy" || N == "memmove" || N == "mempcpy" || N == "memset";
 }
 
 /// The physical register holding argument ArgNo at this call site, if present.
@@ -1640,9 +1668,28 @@ static void propagateTaintMI(const MachineInstr &MI, TaintState &S,
         // through a pointer into this frame - blunt P0 poisons every stack load
         // after such a call. Provenance-based escaped-object precision (only
         // poison stack objects whose address escaped) is the P1 refinement.
+        //
+        // Except a SPILL SLOT. A spill slot is compiler-private: no pointer to
+        // it ever exists, so no callee can have written it, and without this
+        // the callee-saved restores in every epilogue (`ldr x30, [sp]`) become
+        // a Need after any external secret-passing call. Under the callee
+        // contract that was the ONLY Need left in a thin wrapper around such a
+        // call, keeping it instrumented, with three switches, for a load
+        // nothing can reach. The cell itself still applies: a spilled secret
+        // reloads as one.
         TaintVal Cell = S.readCell(TaintObject::frame(CI.FI), CI.Offset,
                                    CI.Size.value_or(0));
-        if (S.isExternalMemClobbered())
+        const MachineFrameInfo &MFI = MI.getMF()->getFrameInfo();
+        // Gated on the contract only to keep the default byte-identical; the
+        // argument holds under either. Under inherit the poisoned reload was also,
+        // by accident, what kept the exit clear below the callee-saved restores;
+        // the contract puts that rule where it belongs, in the placement
+        // (hoistExitDisableTo).
+        const bool SpillSlot = ditCalleeContract() &&
+                               CI.FI >= MFI.getObjectIndexBegin() &&
+                               CI.FI < MFI.getObjectIndexEnd() &&
+                               MFI.isSpillSlotObjectIndex(CI.FI);
+        if (S.isExternalMemClobbered() && !SpillSlot)
           Cell.Data = true;
         Loaded |= Cell;
         LLVM_DEBUG({
@@ -2059,6 +2106,13 @@ static bool hasTaintedRegDef(const MachineInstr &MI, const TaintState &S) {
 
 // Public: declared in TaintAnalysis.h - shared by the barrier and export paths.
 bool llvm::isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F) {
+  // Under the callee contract a call is never a Need. A `bl` has no
+  // data-dependent timing; the marshalling of its secret arguments is covered by
+  // the instructions that did it; the callee protects its own secrets; and a
+  // callee this build cannot see is step 3c's obligation record, not something
+  // the caller covers by holding DIT across the call.
+  if (MI.isCall() && ditCalleeContract())
+    return false;
   // A memory access whose ADDRESS is secret is covered by F.UsesData: every
   // register a load or store reads, address or data, is a use of it.
   bool LoadsSecretPointee = MI.mayLoad() && F.UsesPointee;
@@ -3429,6 +3483,45 @@ static void emitFunctionGranularityDIT(MachineFunction &MF,
 // is false for a call, so the call term is explicit). Divides/sqrt, secret
 // branches, and returns are NOT needs - DIT cannot protect them (they are
 // residuals, see classifyDITUncovered). §5.6 Correction 1.
+// Callee contract: a callee-saved register restore in an INSTRUMENTED function
+// is a Need for placement. It reloads the CALLER's value, which may be a secret
+// no summary carries (a summary knows the callee's parameters, not its caller's
+// live registers), and the load's data-value timing is the channel DIT covers.
+// Under inherit the blunt-TOP poisoning of every reload after an external call
+// made these Needs by accident, which was the only reason the exit clear sat
+// below them; the spill-slot exemption removed the accident, and the oracle
+// showed the price: 19 ops per signature on libsecp256k1, and 224k per run in
+// mbedTLS's `mbedtls_mpi_sub_abs` alone, whose callers keep limb pointers and
+// carries in x19-x26 across every call. Only the placement consults this -
+// `functionHasTaintedRuns` and the precision report do not - so a clean
+// function stays clean and `need=` keeps counting real Needs.
+static bool isCalleeSavedRestore(const MachineInstr &MI) {
+  if (!ditCalleeContract() || !MI.getFlag(MachineInstr::FrameDestroy) ||
+      !MI.mayLoad() || MI.isMetaInstruction())
+    return false;
+  // Only a DATA register can carry the caller's secret. The frame pointer, the
+  // return address and the stack pointer writeback are addresses, and a restore
+  // that reloads nothing else (`ldp x29, x30, [sp], #16`, every thin wrapper's
+  // whole epilogue) must not become a Need, or the wrapper is instrumented for
+  // it and its entry enable covers the call it wraps - inheritance again.
+  const MachineFunction &MF = *MI.getMF();
+  const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
+  const Register FP = TRI->getFrameRegister(MF), RA = TRI->getRARegister();
+  const Register SP =
+      MF.getSubtarget().getTargetLowering()->getStackPointerRegisterToSaveRestore();
+  for (const MachineOperand &MO : MI.defs()) {
+    if (!MO.isReg() || !MO.getReg().isValid())
+      continue;
+    const Register R = MO.getReg();
+    if ((FP.isValid() && TRI->regsOverlap(R, FP)) ||
+        (RA.isValid() && TRI->regsOverlap(R, RA)) ||
+        (SP.isValid() && TRI->regsOverlap(R, SP)))
+      continue;
+    return true;
+  }
+  return false;
+}
+
 static bool needsDIT(const MachineInstr &MI, const TaintFacts &F,
                      const TargetInstrInfo &TII) {
   // A meta instruction never executes, so it can never need the mode. Same
@@ -3464,7 +3557,9 @@ static bool needsDIT(const MachineInstr &MI, const TaintFacts &F,
   if (MI.isReturn() && !MI.isCall())
     return false;
 
-  return TII.isDITProtected(MI) || MI.isCall();
+  // The call term is the inherit contract's Scenario B; under the callee
+  // contract isTaintedInstruction has already rejected the call above.
+  return TII.isDITProtected(MI) || (MI.isCall() && !ditCalleeContract());
 }
 
 // A call whose callee may clear PSTATE.DIT on its own exit (no callee-saved
@@ -3983,8 +4078,15 @@ sinkEntryEnableTo(MachineBasicBlock &MBB,
       return It;                       // sink to here
     if (MI.isMetaInstruction())
       continue;                        // costs nothing, keep scanning
-    if (MI.isCall() || MI.isTerminator() || MI.isReturn() || MI.isInlineAsm() ||
-        (!ABI && clobbersDIT(MI, TSI, M)) ||
+    // Under the callee contract the callee protects itself, so a call does
+    // not pin the enable above it - except a `.dit` clone, which is entered
+    // DIT-on by construction and has no enable of its own. A clobbering call
+    // outside the covered span gets no re-assert either (see the emitter).
+    const bool CallPins =
+        MI.isCall() &&
+        (!ditCalleeContract() || isDITClone(findCalledFunction(M, MI)));
+    if (CallPins || MI.isTerminator() || MI.isReturn() || MI.isInlineAsm() ||
+        (!ABI && !ditCalleeContract() && clobbersDIT(MI, TSI, M)) ||
         TII->getTimingModeStateAfter(MI).has_value())
       return Start;                    // cannot sink past this
   }
@@ -4012,8 +4114,13 @@ hoistExitDisableTo(MachineBasicBlock &MBB, MachineInstr &Ret,
       return std::next(It);            // disable immediately after the last Need
     if (MI.isMetaInstruction())
       continue;
-    if (MI.isCall() || MI.isInlineAsm() ||
-        (!ABI && clobbersDIT(MI, TSI, M)) ||
+    // (Under the callee contract a callee-saved restore is in NeedSet - see
+    // isCalleeSavedRestore - so the scan above already stops below it.)
+    const bool CallPins =
+        MI.isCall() &&
+        (!ditCalleeContract() || isDITClone(findCalledFunction(M, MI)));
+    if (CallPins || MI.isInlineAsm() ||
+        (!ABI && !ditCalleeContract() && clobbersDIT(MI, TSI, M)) ||
         TII->getTimingModeStateAfter(MI).has_value())
       return Pin;                      // cannot hoist past this
   }
@@ -4311,7 +4418,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   unsigned NeedCount = 0;
   replayTaint(MF, TR, TSI, AA,
               [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
-                if (needsDIT(MI, F, *TII)) {
+                if (needsDIT(MI, F, *TII) || isCalleeSavedRestore(MI)) {
                   HasNeed[MI.getParent()] = true;
                   NeedSet.insert(&MI);
                   ++NeedCount;
@@ -4388,6 +4495,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   unsigned Toggles = 0;
   bool NeedFallback = false;
   for (MachineBasicBlock &MBB : MF) {
+    // Where this block's own entry enable went (MBB.end() = none: the block is
+    // On from its entry, by a predecessor or a hoisted loop enable).
+    MachineBasicBlock::iterator EnableAt = MBB.end();
     if (On(&MBB)) {
       bool OnAtEntry = !MBB.pred_empty();
       unsigned OnPreds = 0, OffPreds = 0;
@@ -4439,9 +4549,8 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
           // backedge, so the enable (and the matching disable on the On→Off exit)
           // is per-iteration - the deliberate cost of covering the fewest
           // instructions. Sound either way: the verifier below is the hard gate.
-          TII->insertTimingModeSwitch(
-              MBB, sinkEntryEnableTo(MBB, NeedSet, TSI, M, TII, ABI),
-              DebugLoc(), /*Enable=*/true);
+          EnableAt = sinkEntryEnableTo(MBB, NeedSet, TSI, M, TII, ABI);
+          TII->insertTimingModeSwitch(MBB, EnableAt, DebugLoc(), /*Enable=*/true);
           ++Toggles;
         }
       }
@@ -4451,11 +4560,34 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       // Under the callee-saved ABI the callee puts DIT back, so a caller emits
       // nothing at any call site - the same deletion function granularity makes,
       // and the one this whole convention exists for.
-      SmallVector<MachineInstr *, 8> Clobbers;
-      if (!ABI)
+      // Under the callee contract a clobber is re-asserted only inside the
+      // span this block actually covers: from the (sunk) enable to the
+      // (hoisted) exit clear when the block returns. A call before the enable
+      // or after the clear runs uncovered by design, and a re-assert there
+      // would be an enable with nothing to cover. Under inherit every clobber
+      // is re-asserted, as before.
+      MachineBasicBlock::iterator ClearAt = MBB.end();
+      if (ditCalleeContract() && !ABI)
         for (MachineInstr &MI : MBB)
-          if (clobbersDIT(MI, TSI, M) && !MI.isTerminator())
+          if (MI.isReturn() && !NeedSet.count(&MI)) {
+            ClearAt = hoistExitDisableTo(MBB, MI, NeedSet, TSI, M, TII, ABI);
+            break;
+          }
+      SmallVector<MachineInstr *, 8> Clobbers;
+      if (!ABI) {
+        bool Inside = !ditCalleeContract() || EnableAt == MBB.end();
+        for (auto It = MBB.begin(), E = MBB.end(); It != E; ++It) {
+          MachineInstr &MI = *It;
+          if (ditCalleeContract()) {
+            if (It == EnableAt)
+              Inside = true;
+            if (It == ClearAt)
+              Inside = false;
+          }
+          if (Inside && clobbersDIT(MI, TSI, M) && !MI.isTerminator())
             Clobbers.push_back(&MI);
+        }
+      }
       for (MachineInstr *C : Clobbers) {
         PendingReassertSites.push_back(C);
         TII->insertTimingModeSwitch(MBB, std::next(C->getIterator()),
@@ -4539,7 +4671,8 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                   CurOn = *Sw;
                   return true;
                 }
-                if (needsDIT(MI, F, *TII) && !CurOn)
+                if ((needsDIT(MI, F, *TII) || isCalleeSavedRestore(MI)) &&
+                    !CurOn)
                   Sound = false;
                 if (clobbersDIT(MI, TSI, M))
                   CurOn = false;
@@ -4577,6 +4710,7 @@ void llvm::reportInfoLoss(raw_ostream *OS, TaintLossSeverity Sev,
                           StringRef CalleeName, const DebugLoc &DL,
                           StringRef Action, StringRef Cost, StringRef Repair) {
   const char *SevStr = Sev == TaintLossSeverity::Unsound    ? "UNSOUND"
+                       : Sev == TaintLossSeverity::Uncovered ? "UNCOVERED"
                        : Sev == TaintLossSeverity::Severe   ? "SEVERE"
                        : Sev == TaintLossSeverity::Moderate ? "moderate"
                                                             : "info";
@@ -4669,7 +4803,7 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
   const TargetInstrInfo *PinTII = MF.getSubtarget().getInstrInfo();
   replayTaint(MF, TR, TSI, AA,
               [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
-                if (needsDIT(MI, F, *PinTII))
+                if (needsDIT(MI, F, *PinTII) || isCalleeSavedRestore(MI))
                   PinTII->pinToTimingMode(MI);
                 return true;
               });

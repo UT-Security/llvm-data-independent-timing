@@ -87,6 +87,33 @@ Requires FEAT_DIT (Armv8.4+) at run time - Apple M-series has it
 (`sysctl hw.optional.arm.FEAT_DIT`), Neoverse N1 does not, so SIGILL there; verify via
 objdump/lit or `qemu-aarch64 -cpu max`.
 
+**The coverage contract at a call boundary (`-taint-dit-contract`, default `inherit`;
+`docs/design/dit-callee-contract.md`).** Under `inherit` a secret-passing call is a Need,
+the caller holds DIT across it and an unseen callee inherits protection; that is what
+makes the seed loop non-monotone (`ecp_mod_p256` lost 1.16M ops of inherited coverage
+when a callee inside it was seeded) and what the callee-saved ABI existed to repair.
+**`=callee`** is the opt-in alternative (2026-09-04): every function protects its own
+secrets, a call is never a Need for its arguments, `AlwaysEnteredWithDIT` and the
+Scenario-B assertion are off, and a secret reaching a callee this build cannot see is an
+`UNCOVERED` obligation in `-taint-info-loss-report` with the seed line as the repair,
+summarised once per TU on stderr. A libc mover handed a secret IS an obligation (its loads
+and stores of the secret are the data-value channel DIT covers; the repair is a hardened
+`memcpy` linked ahead of libc), an allocator's is unfillable (the repair is upstream). Two
+placement facts ride on the flag: spill slots are exempt from blunt-TOP poisoning, and a
+callee-saved restore is a placement Need in an instrumented function (it reloads the
+CALLER's value, which may be a secret; under inherit the poisoned reload covered it by
+accident - 224k ops per run in `mbedtls_mpi_sub_abs` alone). Seeding is monotone under it, no
+function needs its entry state, and a callee that leaves DIT set breaks nobody - which is
+what makes the cross-boundary cost model (sticky exits, automatic cloning) safe to build
+next. **Measured** (`docs/results/dit-callee-contract-2026-09-04.md`): mbedTLS 727 seeds
++6.17% renamed / +251.53% serialising vs +3.50% / +252.62% inherit at 1.6% fewer executed
+switches and 99.88% vs 99.93% coverage; libsodium's shipped seeds protect NOTHING under it
+until the report's 21 lines are pasted (then identical coverage); and two findings that
+outrank it: glibc's `memcpy` blinds the oracle (libsecp256k1's nonce derivation was never
+protected; link `gem5-DIT benchmarks/taint_oracle/dit_movers/dit_movers.o` ahead of libc
+or every oracle number is an undercount), and callee-saved restores reload the caller's
+secrets. Test `clang/test/CodeGen/taint-dit-contract.c`.
+
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function
 coverage avoids per-region toggles clearing an enclosing region's DIT across calls;
@@ -586,6 +613,15 @@ X86/AMDGPU only), so lowering and emission remain on the legacy PM.
   round-tripping in `4fb7600db532`. That cannot be all of +17.10 pp, so do not
   treat it as settled - **rebuild the SQLCipher NOP arms on the current path
   before quoting either side.**
+
+  **Measured on the clang path, mbedTLS 727 seeds, 2026-09-04**
+  (`docs/results/dit-callee-contract-2026-09-04.md`): every switch a `HINT #0` costs
+  **+4.84% (inherit) / +7.14% (callee) on BOTH switch models**, MORE than the real arms
+  on the renamed model (+3.50% / +6.17%) - executing DIT in place of the NOPs recovers
+  about a point, blanket's -1.40% direction. On renamed hardware the entire cost of
+  selective placement on this workload is the inserted instructions and their layout;
+  on serialising hardware the mode adds +244 to +248 points on top of that same share.
+  The NOP-not-neutral caveat (~0.25%) applies.
 - **A gem5 ROI delimited by `m5_reset_stats` does NOT give exactly equal
   instruction counts across machine configs.** The marker lands as a scheduled
   event, so a ROB-scale number of in-flight instructions commit on either side.

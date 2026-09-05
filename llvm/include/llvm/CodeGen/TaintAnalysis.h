@@ -70,6 +70,31 @@ extern cl::opt<bool> TaintInsertDIT;
 /// never use.
 extern cl::opt<bool> TaintDITAbi;
 
+/// The coverage contract at a call boundary (docs/design/dit-callee-contract.md).
+///
+/// `inherit` (shipped): a secret-passing call is a Need, so the caller holds DIT
+/// across it and the callee inherits protection; a callee this pass cannot see
+/// runs covered by that inheritance, and `AlwaysEnteredWithDIT` is derived from
+/// the same guarantee.
+///
+/// `callee`: every function protects its own secrets. A call is never a Need for
+/// its arguments (a `bl` has no data-dependent timing), whether the caller's
+/// region spans a call is a cost decision the corridor pricing makes, and a
+/// secret reaching a callee this build cannot see - another TU, an indirect
+/// target, a library - is an OBLIGATION the info-loss report lists for the
+/// developer to fill with a seed, not something the caller covers on the
+/// callee's behalf. What it buys: seeding becomes monotone (instrumenting a
+/// callee can never strip a caller that was relying on inheritance), no function
+/// needs to know its entry DIT state, and whether a callee clears at exit becomes
+/// a pure cost question. A secret handed to a libc mover (memcpy, memset) is
+/// an obligation like any other, filled by linking a hardened mover: its loads
+/// and stores of the secret are the data-value channel DIT covers.
+enum class DITContract { Inherit, Callee };
+extern cl::opt<DITContract> TaintDITContract;
+inline bool ditCalleeContract() {
+  return TaintDITContract == DITContract::Callee;
+}
+
 /// TU-wide tail-call disable, ON by default whenever hardening runs.
 ///
 /// A tail call is an exit with no epilogue, so an instrumented function that
@@ -839,6 +864,29 @@ void replayTaint(
 /// True if MI is secret-dependent and therefore belongs inside a barrier region.
 bool isTaintedInstruction(const MachineInstr &MI, const TaintFacts &F);
 
+/// A libc mover (memcpy, memmove, mempcpy, memset), matched the way
+/// getLibcMoveModel matches: a declaration or a bare libcall symbol. Under the
+/// callee contract a secret passed to one IS an obligation: its loads and
+/// stores of the secret bytes are exactly the data-value channel DIT covers
+/// (docs/reference/dit-spec.md lists loads and stores; the gem5 oracle counts
+/// them), and libc's copy runs with whatever mode it finds. The repair is a
+/// hardened mover linked ahead of libc, seeded on the source pointee, which
+/// the record names. This predicate only labels the ESCAPE line.
+bool isLibcMover(const Function *Callee, const MachineInstr &MI);
+
+/// The symbol a call targets when it has no Function: a libcall ISel emitted
+/// for an intrinsic (`memcpy`, `memset`) references the bare external symbol,
+/// so `findCalledFunction` returns null although the callee is perfectly well
+/// named. Empty for a genuinely indirect call.
+StringRef getCalleeSymbolName(const MachineInstr &MI);
+
+/// A libc allocator (malloc, calloc, realloc, free, aligned_alloc, posix_memalign),
+/// matched the same way. A secret reaching one is a size or a pointer derived
+/// from a secret: DIT cannot cover an allocator's size-dependent control flow,
+/// and no seed can fill it, so the obligation record says the repair is
+/// upstream - stop deriving the size or the pointer from the secret.
+bool isLibcAllocator(const Function *Callee, const MachineInstr &MI);
+
 /// G2 diagnostic: if MI is a tainted instruction that PSTATE.DIT does NOT
 /// protect, return the reason ("divide-or-sqrt", "secret-address",
 /// "secret-branch"); otherwise nullptr. Distinguishes a secret store *address*
@@ -883,6 +931,13 @@ enum class TaintLossSeverity {
   /// distinct from Severe so a report reader and a build gate can tell "we
   /// protected too much" from "we may have protected nothing".
   Unsound,
+  /// The callee contract's obligation: a secret reaches a callee this build
+  /// cannot see, and under `-taint-dit-contract=callee` nothing covers it on the
+  /// callee's behalf. Coverage is ABSENT by design until the developer seeds the
+  /// TU that defines the callee; the repair line is the seed. Known, not lost -
+  /// which is what separates it from Unsound. Summarised on stderr once per TU
+  /// by the writer rather than once per record.
+  Uncovered,
 };
 
 /// One record in the information-loss report. See `-taint-info-loss-report`.
