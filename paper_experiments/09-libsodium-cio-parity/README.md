@@ -502,7 +502,7 @@ libraries otherwise, same arms, all gates pass, signing oracle identical:
 | chacha20-poly1305 decrypt | +0.70% | +1.50% / +4.33% | +3.29% / +42.42% (39) | +6.64% / +35.89% (32) |
 | aes256-gcm encrypt | +0.41% | +0.25% / +3.78% | +0.25% / +12.42% (6) | -6.16% / +3.53% (**2**) |
 | aes256-gcm decrypt | +8.39% | +9.13% / +23.75% | +10.06% / +36.06% (6) | +9.32% / +23.80% (**2**) |
-| argon2id | +0.51% | +2.06% / +2.04% | +2.37% / +7.58% (395,758) | pending |
+| argon2id | +0.51% | +2.06% / +2.04% | +2.37% / +7.58% (395,758) | **+1.06% / +1.08% (3)** |
 
 Where the library's calls are direct the pass now executes the bracket's two
 switches per operation and pays the bracket's serialising cost; chacha keeps
@@ -1038,7 +1038,14 @@ NOP twin in brackets:
 Narrowing at cost 0 raises every switch count and every serialising number and
 moves nothing on the renamed model beyond its NOP twin: the renamed cost here
 is dwell over the kernels (and the `crypto_verify_16` chain on decrypt), which
-any placement that protects them pays. argon2id was not run on the
+any placement that protects them pays.
+
+argon2id under the assumption (landed 13:1x, one measured op per cell, all
+gates pass): **395,758 switches per hash -> 3** (the public entry's enable and
+clear, and one more), serialising **+7.58% -> +1.08%**, renamed +2.37% ->
++1.06% with a NOP twin at -0.04%, against blanket's +0.51% / +0.64% and the
+bracket's +2.06%. The whole of the pass's cost on this hash was the re-assert
+after `memcpy`. argon2id was not run on the
 narrowing arms: its 395,758 switches are re-asserts after `memcpy` inside a
 twin (above), which narrowing does not touch.
 
