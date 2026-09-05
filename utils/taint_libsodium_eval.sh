@@ -136,9 +136,32 @@ if want build; then
   info "configure + build with wllvm (-O2, --disable-asm)"
   command -v wllvm >/dev/null || die "wllvm not found -- pip3 install --user wllvm"
   ( cd "$WORK"
+    # A Makefile being present is not proof it is libsodium's. The CIO rigs
+    # stage CIO's own Makefile into whatever directory they are pointed at, and
+    # on 2026-09-02 it landed here; `make` then ran CIO's file, which GNU make
+    # 3.81 rejects as "multiple target patterns" (it uses ::=), and the build
+    # died without ever configuring. Trust only the configure-generated file.
+    if [[ -f Makefile ]] && ! grep -q 'Generated from Makefile.in by configure' Makefile; then
+      info "    Makefile is not libsodium's (a CIO rig staged its own) - regenerating"
+      if [[ -x config.status ]]; then
+        ./config.status > config.status.log 2>&1 \
+          || { tail -20 config.status.log >&2; exit 1; }
+      else
+        rm -f Makefile
+      fi
+    fi
     [[ -f Makefile ]] || ./configure CC=wllvm CFLAGS="-O2" \
         --disable-asm --disable-shared --disable-pie > config.log 2>&1 \
       || { tail -20 config.log >&2; exit 1; }
+    # Objects compiled by a different toolchain must not survive into this
+    # build: make sees them as up to date and the bitcode would come from the
+    # old compiler. Stamp the toolchain and clean when it changes.
+    stamp="$(stat -L -f '%m %z' "$LLVM_BIN/clang" 2>/dev/null || stat -L -c '%Y %s' "$LLVM_BIN/clang") $LLVM_BIN"
+    if [[ -f .toolchain_stamp ]] && [[ "$(cat .toolchain_stamp)" != "$stamp" ]]; then
+      info "    toolchain changed since the last build - make clean"
+      make clean > clean.log 2>&1 || { tail -10 clean.log >&2; exit 1; }
+    fi
+    printf '%s\n' "$stamp" > .toolchain_stamp
     make -j"$JOBS" > build.log 2>&1 || { tail -30 build.log >&2; exit 1; }
   ) || die "libsodium build failed (see $WORK/{config,build}.log)"
   cp -f "$WORK/src/libsodium/.libs/libsodium.a" "$WORK/libsodium.a.ORIG"
