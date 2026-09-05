@@ -47,7 +47,10 @@ export CIO_DIR="${CIO_DIR:-$HOME/Documents/cio-eval}"
 BENCH_DIR="${BENCH_DIR:-$HOME/Documents/crypto-dit-benchmarks}"
 OUT_ROOT="${OUT_ROOT:-$HOME/Documents/dit-m5-$(date +%Y%m%d-%H%M%S)}"
 CIO_REPS="${CIO_REPS:-15}"
-ARMS_ALL="A:baseline:0 C:baseline:1 P:hardened:0 F:func:0 X:fine:0 N:narrow:0 Z:nopsw:0"
+# The README's silicon recipe ("Running this on another host"). B is the Apple
+# bracket (api_bracket.c around each entry point, sb barrier), added 2026-09-05;
+# it needs no archive of its own, only the baseline one.
+ARMS_ALL="${ARMS_ALL:-A:baseline:0 C:baseline:1 B:baseline:api P:hardened:0 F:func:0 X:fine:0 N:narrow:0 Z:nopsw:0}"
 
 red()  { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
