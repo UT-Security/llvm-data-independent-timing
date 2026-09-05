@@ -140,6 +140,19 @@ BRACKET(int, crypto_aead_aes256gcm_decrypt,
         (m, mlen_p, nsec, c, clen, ad, adlen, npub, k))
 #endif
 
+#ifdef API_SECP
+/* libsecp256k1, the wallet flow's secret lane (CKey::Sign): the two entry
+ * points handed the private key. Pointer-only signatures spelled with void
+ * pointers, ABI-identical on AArch64, so this file needs no secp256k1.h. */
+BRACKET(int, secp256k1_ecdsa_sign,
+        (const void *ctx, void *sig, const void *msg32, const void *seckey,
+         const void *noncefp, const void *ndata),
+        (ctx, sig, msg32, seckey, noncefp, ndata))
+BRACKET(int, secp256k1_ec_pubkey_create,
+        (const void *ctx, void *pubkey, const void *seckey),
+        (ctx, pubkey, seckey))
+#endif
+
 #ifdef API_PWHASH
 BRACKET(int, crypto_pwhash,
         (uc *const out, ull outlen, const char *const passwd, ull passwdlen,

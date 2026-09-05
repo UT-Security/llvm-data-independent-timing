@@ -1,0 +1,18 @@
+# libsecp256k1 seeds for the wallet flow under the callee contract (2026-09-05):
+# seed9.txt (the nine entry points handed the private key) plus the
+# nonce-derivation hops secp_seed_contract.txt names, which the contract
+# needs because a callee no longer inherits its caller's DIT.
+secp256k1_ecdsa_sign,3,pointee
+secp256k1_ecdsa_sign_recoverable,3,pointee
+secp256k1_schnorrsig_sign32,3,pointee
+secp256k1_ec_seckey_tweak_add,1,pointee
+secp256k1_keypair_create,2,pointee
+secp256k1_ec_pubkey_create,2,pointee
+secp256k1_ellswift_create,2,pointee
+secp256k1_ellswift_xdh,4,pointee
+secp256k1_ec_seckey_verify,1,pointee
+nonce_function_rfc6979,2,pointee
+secp256k1_rfc6979_hmac_sha256_initialize,2,pointee
+secp256k1_rfc6979_hmac_sha256_generate,1,pointee
+secp256k1_hmac_sha256_initialize,2,pointee
+secp256k1_sha256_write,1,pointee
