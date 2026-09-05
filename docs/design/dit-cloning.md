@@ -164,8 +164,8 @@ A twin re-asserts after every call the build cannot see, and on libsodium
 that is glibc: argon2id's twin re-asserts three times per block after
 `memcpy` (395,758 executed switches per hash, +7.58% serialising) and
 aes256-gcm decrypt four times per call after the `memcpy`/`memset` of its
-4-byte tail. `-taint-dit-preserving-symbols` (`dit-callee-contract.md`
-§1.2) names the libc leaves that never write PSTATE.DIT and removes those
+4-byte tail. `-taint-dit-external-preserves` (`dit-callee-contract.md` §1.2) assumes
+a callee outside the build never writes PSTATE.DIT and removes those
 re-asserts.
 
 ## 5. Measured: libsodium signing, gem5 oracle, round-11 seeds

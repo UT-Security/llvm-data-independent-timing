@@ -145,40 +145,31 @@ const StringSet<> *llvm::taintOwnedSymbols() {
   return loadSymbolFile(C, TaintOwnedSymbolsFile, "owned-symbols");
 }
 
-cl::opt<std::string> llvm::TaintDITPreservingSymbolsFile(
-    "taint-dit-preserving-symbols", cl::Hidden, cl::init(""),
-    cl::desc("File naming external functions that never write PSTATE.DIT, "
-             "one per line (libc leaf routines; utils/dit_preserving_libc.txt "
-             "is the glibc set). No re-assert is emitted after a call to one "
-             "from DIT-on code. Trusted only for a callee this module does not "
-             "define and -taint-owned-symbols does not name."));
+cl::opt<bool> llvm::TaintDITExternalPreserves(
+    "taint-dit-external-preserves", cl::Hidden, cl::init(false),
+    cl::desc("Assume a callee this module does not define (and the owned "
+             "list does not name) never writes PSTATE.DIT: no re-assert after "
+             "a call to it from DIT-on code. Indirect calls unchanged."));
 
-const StringSet<> *llvm::taintDITPreservingSymbols() {
-  static SymbolFileCache C;
-  return loadSymbolFile(C, TaintDITPreservingSymbolsFile,
-                        "DIT-preserving-symbols");
-}
-
-bool llvm::taintExternalSymbolPreservesDIT(StringRef Name, const Module &M) {
-  if (Name.empty())
+bool llvm::taintExternalCallPreservesDIT(const MachineInstr &MI,
+                                         const Module &M) {
+  if (!TaintDITExternalPreserves || !MI.isCall())
     return false;
+  // By SYMBOL, not Function: the `bl memcpy` that lowers an llvm.memcpy
+  // intrinsic carries an external-symbol operand and the module usually has
+  // no Function for it at all.
+  const StringRef Name = getCalleeSymbolName(MI);
+  if (Name.empty())
+    return false; // indirect: nothing to assume about
   // Defined here: this pass compiles it and knows whether it clears.
   if (const Function *F = M.getFunction(Name); F && !F->isDeclaration())
     return false;
-  const StringSet<> *Preserving = taintDITPreservingSymbols();
-  if (!Preserving || !Preserving->contains(Name))
-    return false;
-  // Ours, defined in another TU of this build: it may be instrumented and
-  // clear at its exit. The file describes code we do not compile.
+  // Ours, defined in another TU of this build: compiled by this pass, and
+  // under the callee contract it clears at its own exit.
   if (const StringSet<> *Owned = taintOwnedSymbols())
     if (Owned->contains(Name))
       return false;
   return true;
-}
-
-bool llvm::taintExternalCallPreservesDIT(const MachineInstr &MI,
-                                         const Module &M) {
-  return MI.isCall() && taintExternalSymbolPreservesDIT(getCalleeSymbolName(MI), M);
 }
 
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
@@ -3430,8 +3421,8 @@ static bool calleeLeavesDITSet(const MachineInstr &Call,
   if (TaintDITAbi)
     return true;
 
-  // A libc leaf the -taint-dit-preserving-symbols file names never writes
-  // PSTATE.DIT, so it returns the mode as it found it. Without the file every
+  // -taint-dit-external-preserves: a callee outside this build never writes
+  // PSTATE.DIT, so it returns the mode as it found it. Without it every
   // external callee is assumed to clear: on libsodium's argon2id that was
   // three re-asserts per block after glibc memcpy, 393,216 per hash.
   if (taintExternalCallPreservesDIT(Call, M))

@@ -642,10 +642,10 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
   // Step 3b: Compute the PreservesDIT summary bit (greatest fixed point).
   // A function preserves PSTATE.DIT iff it will not be DIT-instrumented (no
   // tainted runs) and every call it makes is direct to a preserving in-TU
-  // callee, or to an external the -taint-dit-preserving-symbols file vouches
-  // for. Tail calls count: the tail-callee runs inside the caller's frame
-  // from its own caller's perspective. Other externals and indirect targets
-  // keep the conservative default (false). Used by insertTaintDITSwitches to elide
+  // callee, or to an external under -taint-dit-external-preserves. Tail calls
+  // count: the tail-callee runs inside the caller's frame from its own
+  // caller's perspective. Other externals and indirect targets keep the
+  // conservative default (false). Used by insertTaintDITSwitches to elide
   // after-call DIT re-asserts; must run before instrumentation below.
   if (TaintInsertDIT) {
     // Optimistic seed: a function preserves DIT unless it is itself
