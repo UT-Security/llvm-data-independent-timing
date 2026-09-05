@@ -481,6 +481,72 @@ loop structure exposes it where encrypt's does not. That is a property of
 the kernel, not of the driver's input, and every placement that covers the
 kernel pays it.
 
+### What the value predictor is predicting on aes256-gcm decrypt, and whether it is secret
+
+The 8% every covering arm pays on that row is the load value predictor
+being switched off. The natural worry is that the predicted loads are
+public and the pass is over-approximating: if so, a placement that left
+them uncovered would beat blanket on this row. So the predictor was traced
+(gem5 `--debug-flags=LVP`; the EVES predictor prints each prediction and its
+validation with the PC, gem5-DIT-pmull branch `ditcycles`, commit
+`4fdc491e5b`; `lvp_pcs.py` aggregates the trace over the measured window).
+Two operations of the decrypt driver, base arm:
+
+| PC | correct predictions / 2 ops | kind | where |
+|---|---|---|---|
+| `0x40c704` | 41 | stride | `crypto_verify_16+0x1c`: `ldr x10, [sp, #0x10]`, the volatile pointer `y` |
+| `0x40c70c` | 33 | stride | `crypto_verify_16+0x24`: `ldrh w11, [sp, #0xc]`, the volatile accumulator `d` |
+| `0x40c6fc` | 27 | stride | `crypto_verify_16+0x14`: `ldr x9, [sp, #0x18]`, the volatile pointer `x` |
+| `_init`, `getrandom` | 15 | vtage | startup, outside the kernel |
+
+**None of them is in the AES-GCM kernel.** They are the three reloads in
+the 16-iteration loop of `crypto_verify_16`, libsodium's constant-time
+comparison of the computed tag against the received one
+(`crypto_verify/verify.c`: `volatile` pointers `x` and `y`, `volatile
+uint16_t d; for (i) d |= x[i] ^ y[i];`). `volatile` makes each iteration
+reload both pointers and the accumulator from the stack and store the
+accumulator back, so the loop is a store-to-load chain through `d` of about
+five cycles per iteration; the predictor breaks the chain (the pointers
+never change and `d` stays 0 while the tags agree) and the sixteen
+iterations overlap. With DIT set the chain serialises: roughly 80 cycles on
+a 1,077-cycle operation, which is the 8%. Encrypt never calls it, which is
+why its blanket cost is +0.4%. The pass arm predicts the same three loads in
+`crypto_verify_16.dit`, the twin the DIT-on decrypt path calls.
+
+**Two of the three loads are public and one is the secret that matters.**
+The pointer reloads carry addresses. The accumulator `d` carries the OR of
+every `x[i] ^ y[i]` so far: it is 0 exactly while the received tag has
+matched the computed one byte for byte, and a predictor that speculates on
+it makes the loop faster while the bytes match and squashes at the first
+mismatch. That is a timing that depends on how many bytes of a forged tag
+were right, the byte-by-byte MAC-comparison oracle that the constant-time
+compare exists to prevent, moved from the branch predictor to the value
+predictor. It is precisely the class of channel DIT closes on a core that
+ties value prediction to the mode, and the analysis agrees: `crypto_verify_16`
+is seeded on both arguments (fixpoint file, lines 129-130), the `d` loads,
+the byte loads and the XOR/OR are its 17 Needs, and the two pointer reloads
+are clean. No placement can keep the two public reloads predicted while
+covering the third: they are three instructions apart in a twelve-instruction
+loop body, and a toggle per iteration would cost two serialising switches
+sixteen times. **On this row the 8% is not over-approximation. It is the
+price of closing the tag-comparison channel, and every placement that
+protects the tag pays it, hand-placed or not.**
+
+A side finding from the same reports, not on the benchmark's path. The
+one-shot `crypto_aead_aes256gcm_decrypt` builds the key schedule and the
+GHASH table into a local `st` and passes `&st` to
+`crypto_aead_aes256gcm_decrypt_detached_afternm`; that is the frame-address
+gap (`docs/design/frame-address-gap.md`), the callee sees its state as
+public, and the ORIGINAL `_afternm` has 9 Needs in 1,553 instructions (2.6%
+coverage). The benchmark never runs that original: the DIT-on chain from
+the seeded entry calls the twin, which is covered whole. A user of the
+precomputed-state API (`crypto_aead_aes256gcm_*_afternm` with their own
+state, entered DIT-off) would get the 2.6%, and the repair is one seed line
+on the state argument. The exposure is small on this hardware (`aese` and
+`pmull` are constant-time by construction) and the AES-GCM path has not
+been oracle-verified in this experiment; it is recorded here so it is not
+rediscovered.
+
 **argon2id** is running as this is written (one operation is 326M cycles;
 five arms, both models, about six hours) and will be appended to the data
 file; on silicon it is the null endpoint for every arm.
