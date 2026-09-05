@@ -22,7 +22,7 @@ it is expensive exactly where a secret loop calls a mover:
 
 ## 2. The flag
 
-`-taint-dit-external-preserves` (bool, default off): a direct call whose
+`-taint-dit-external-preserves` (bool, default on since later on 2026-09-05; measured here as opt-in): a direct call whose
 callee this module does not define is assumed to return PSTATE.DIT exactly as
 it found it. `calleeLeavesDITSet` answers yes for such a call, so no re-assert
 follows it in any emitter and the region verifier does not model it as a
@@ -123,9 +123,11 @@ op; `data/gem5_external_preserves.csv`):
   after the fact, argon2id goes from 395,758 switches per hash to 3 and from
   +7.58% to +1.08% serialising (+1.06% renamed, NOP twin -0.04%), a point
   above blanket and a point under the old bracket.
-- **Default or not.** Opt-in for now; the numbers say it should be on in
-  every hardened build whose external callees are libc, and flipping the
-  default is one line.
+- **Default or not.** Flipped to ON later on 2026-09-05, after the M5 run of
+  experiment 09 on the shipped defaults measured the re-assert at +11.6% on
+  argon2id (`dit-m5-20260905-143546`, kperf: +0.06% instructions = 395,758
+  switches x 125 hashes, +12.9% cycles). The numbers said it should be on in
+  every hardened build whose external callees are libc; `=0` is the A/B.
 
 ## 6. Reproduce
 

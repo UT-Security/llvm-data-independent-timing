@@ -191,7 +191,8 @@ twin inherits its original's incoming argument taint (a propagation-reached twin
 be analysed with none), and a register-tuple use reads its parts' taint while a tuple def
 marks them (an `st2` of a secret used to leave its cells public). Both were masked by
 whole-twin coverage; the default build is byte-identical. **The external-callee
-assumption (`-taint-dit-external-preserves`, opt-in, 2026-09-05):** without it every
+assumption (`-taint-dit-external-preserves`, the DEFAULT since 2026-09-05; `=0` restores the
+re-assert):** without it every
 callee the build does not define is assumed to clear the mode, so DIT-on code re-asserts
 after each libc call; that was ALL of argon2id's 395,758 executed switches per hash (three
 glibc `memcpy` per `fill_block` inside the twin) and four of aes256-gcm decrypt's six;

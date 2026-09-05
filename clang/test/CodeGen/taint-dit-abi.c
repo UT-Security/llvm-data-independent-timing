@@ -21,9 +21,13 @@
 // EMIT NOTHING - including indirect and cross-TU ones, which no per-callee
 // analysis could ever have cleared.
 //
+// TODAY is the pre-ABI call-site scheme WITH the external re-assert
+// (-taint-dit-external-preserves=0, the default until 2026-09-05), which is
+// the scheme the ABI was measured against.
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
 // RUN:     -ftaint-harden=%S/Inputs/dit-abi-secret.txt \
-// RUN:     -mllvm -taint-dit-placement=function %s -o - \
+// RUN:     -mllvm -taint-dit-placement=function \
+// RUN:     -mllvm -taint-dit-external-preserves=0 %s -o - \
 // RUN:   | FileCheck %s --check-prefix=TODAY
 //
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
