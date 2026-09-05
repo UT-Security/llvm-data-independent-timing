@@ -9,7 +9,8 @@ flow in mbedTLS's legacy bignum and is a finding, not a patch.
 
 ## How it surfaced
 
-Sub-block DIT placement (`-taint-dit-sub-block`, default OFF) sinks a block's
+Sub-block DIT placement (`-taint-dit-sub-block`, default OFF then, the default
+since 2026-09-05) sinks a block's
 entry enable to its first Need. On the mbedTLS TLS 1.3 resumption workload it
 exposed 262 "unprotected secret operations" in `mbedtls_mpi_mul_mod` that
 block placement had covered by accident. All 262 were register moves of

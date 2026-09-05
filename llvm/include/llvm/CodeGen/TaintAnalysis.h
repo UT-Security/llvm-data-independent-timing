@@ -684,8 +684,14 @@ public:
 
   /// A whole frame object became secret (a callee wrote it, or a stack
   /// argument arrived in it). Weak: nothing else in the object is cleared.
-  void taintFrameObject(int FI, uint64_t Sz) {
-    taintCell(MemCell{TaintObject::frame(FI), 0, Sz}, TaintVal::data());
+  /// V says which kind: a callee's write is data; an incoming stack argument
+  /// is seeded as BOTH, because the callee cannot tell a secret value from a
+  /// pointer to secret memory in an unnamed slot (a `tainted-pointee` pointer
+  /// at argument 8 used to be seeded as data, so the load through it came
+  /// back public and the multiply on the secret ran DIT-off; block placement
+  /// had hidden that by covering the whole block).
+  void taintFrameObject(int FI, uint64_t Sz, TaintVal V = TaintVal::data()) {
+    taintCell(MemCell{TaintObject::frame(FI), 0, Sz}, V);
   }
   bool frameObjectHoldsSecret(int FI) const {
     return objectHoldsSecret(TaintObject::frame(FI));

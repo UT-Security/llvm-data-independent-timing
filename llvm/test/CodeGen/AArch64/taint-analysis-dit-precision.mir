@@ -29,9 +29,17 @@
 # FUNC: mixed need=1 underdit=4 collateral=3 total=5 switches=2 precision=25.0 coverage=80.0
 
 # Region placement must do no worse on precision: it may leave clean code outside
-# the region, never more inside it. On a function this small the two policies
-# coincide exactly.
-# REGION: mixed need=1 underdit=4 collateral=3 total=5 switches=2 precision=25.0
+# the region, never more inside it. With intra-block placement (the default since
+# 2026-09-05) the enable sinks to the tainted ADD and the disable hoists to just
+# after it, so the region is exactly the one Need: precision 100, coverage 20.
+# REGION: mixed need=1 underdit=1 collateral=0 total=5 switches=2 precision=100.0 coverage=20.0
+#
+# Block placement (-taint-dit-sub-block=0) covers the whole block and coincides
+# with whole-function placement on a function this small.
+# RUN: rm -f %t.blk
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-placement=region -taint-dit-sub-block=0 -taint-dit-precision-report=%t.blk %s -o /dev/null
+# RUN: FileCheck %s --input-file=%t.blk --check-prefix=BLOCK
+# BLOCK: mixed need=1 underdit=4 collateral=3 total=5 switches=2 precision=25.0
 
 --- |
   target triple = "aarch64-unknown-linux-gnu"

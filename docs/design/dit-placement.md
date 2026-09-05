@@ -639,6 +639,43 @@ correctly, but true per-sub-gap decisions would need to decompose the component.
 
 ---
 
+## 5.7 Intra-block placement is the default (2026-09-05)
+
+Everything above partitions BLOCKS: a block with any Need is On and covered
+whole, public instructions included, and §7 argues that the remaining waste
+at mixed joins is not worth an edge-splitting emitter. The sub-block emitter
+built on 2026-09-02 (`-taint-dit-sub-block`) works INSIDE a block without
+changing the block partition: the entry enable sinks to the block's first
+Need, a pre-return clear hoists up past the last, and a DIT-off hole is cut
+across any Need-free run of at least `-taint-dit-sub-block-min-run` (8)
+instructions. Block entry and exit states are what the corridor test and the
+verifier reason about, and they are unchanged, so both apply as before. It
+shipped default OFF after the mbedTLS resumption measurement (2% less
+over-protection per resumption for 0.06 points of oracle coverage, verdict
+unchanged); **the user made it the default on 2026-09-05**, and
+`-taint-dit-sub-block=0` is block placement, kept as the A/B.
+
+Two things it taught on the way in. The scheduler bounds it: on a one-block
+function with a public hash preamble and four secret multiplies, the enable
+sinks past three of four public rounds and stops at the key loads, which the
+scheduler had hoisted up into the preamble, since a load of secret data is
+itself a Need. And it exposed a seeding bug that whole-block cover had
+hidden: a `tainted-pointee` argument passed on the STACK (index >= 8) was
+seeded into its fixed frame object as a secret value, so the pointer loaded
+from the slot was data-tainted, the load through it came back public, and
+the multiply on the secret ran DIT-off once the clear could hoist above it
+(`taint-analysis-stack-seeded-arg.mir` fails on the pre-fix compiler under
+the new default). Incoming fixed frame objects are now seeded as both kinds,
+value and pointee, since the callee cannot tell which a slot holds.
+
+Tests whose expectations moved: `taint-analysis-stack-args.mir` (the
+caller's clear hoists above the call, which is not a Need under the callee
+contract), `taint-analysis-callee-memory.mir` (the enable sinks past the
+pointee-carrying call to the tainted reload), `taint-analysis-dit-precision.mir`
+(`mixed` is now precision 100, coverage 20; the block form is pinned as a
+second run line), `taint-dit-abi.c` (the entry read still precedes the
+enable, which now sits below the prologue).
+
 ## 6. Evaluation plan
 
 - **Static:** toggle count and expected dynamic toggles (Σ toggle-site freq ×

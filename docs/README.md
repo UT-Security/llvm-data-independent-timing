@@ -67,7 +67,8 @@ How the analysis is built, which bugs were found in it, and what is still open.
 - **[design/dit-placement.md](design/dit-placement.md)** - the central design doc for
   where DIT switches go: what exists today, the placement constraints the spec
   imposes, the remaining security and performance gaps, and the proposed spec-aware
-  optimal placement with its evaluation plan.
+  optimal placement with its evaluation plan. §5.7: intra-block placement is the
+  default since 2026-09-05 (`-taint-dit-sub-block`; `=0` is block placement).
 - **[results/dit-abi-nginx-tls.md](results/dit-abi-nginx-tls.md)** - **the ABI on a
   deployed server.** nginx + OpenSSL, TLS 1.3, session reuse off so every connection
   is a full handshake. Hardening the reachable C key schedule costs **+0.65%** of
