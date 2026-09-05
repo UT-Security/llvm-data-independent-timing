@@ -390,11 +390,14 @@ the write. Executed switches per op in brackets.
 | chacha20-poly1305 decrypt | 2,290 | +0.70% | +4.14% (2) | +45.63% (39) | +3.43% |
 | aes256-gcm encrypt | 1,217 | +0.41% | +6.08% (2) | +13.39% (6) | +0.25% |
 | aes256-gcm decrypt | 1,077 | +8.39% | +26.87% (2) | +36.34% (6) | +9.87% |
-| argon2id | 326,450,006 | +0.64% | running (old two-write bracket +2.04%) | +7.58% (395,758) | +2.37% |
+| argon2id | 326,450,006 | +0.64% | +1.67% (2) | +7.58% (395,758) | +2.37% |
 
-argon2id's Apple-bracket cells are running; its old two-write bracket and
-the pass's row are the block-placement build, whose argon2 TUs the current
-default compiles identically.
+argon2id's pass row is the block-placement build, whose argon2 TUs the
+current default compiles identically; with `-taint-dit-external-preserves`
+it is +1.08% (3 switches). Its bracket arms sit within 1.6 points of each
+other on a 326-million-cycle operation with two switches each (old two-write
+bracket +2.04%, `msr, isb, msr` +0.43%, Apple's full sequence +1.67%, the
+`dsb nsh; isb` variant +1.37%): the layout band, not the switches.
 
 
 What a careful library author does by hand, and what Apple's corecrypto scope
@@ -615,6 +618,7 @@ serialising; every bracket arm commits exactly two writes per op:
 | chacha20-poly1305 decrypt | 2,290 | +0.70% | +1.50 / +4.33 | +4.80 / +6.52 | +5.90 / +7.69 | +25 / +27 | +2.50 / +4.14 | +4.96 / +6.48 |
 | aes256-gcm encrypt | 1,217 | +0.41% | +0.25 / +3.78 | +0.58 / +3.70 | +2.05 / +5.26 | +18 / +19 | +2.96 / +6.08 | +4.11 / +7.23 |
 | aes256-gcm decrypt | 1,077 | +8.39% | +9.13 / +23.75 | +9.50 / +24.19 | +22.13 / +26.04 | +136 / +20 | +23.43 / +26.87 | +26.40 / +29.84 |
+| argon2id | 326,450,006 | +0.51% / +0.64% | +2.06 / +2.04 | (not run) | +0.36 / +0.43 | | +1.70 / +1.67 | +1.25 / +1.37 |
 
 Three readings.
 
