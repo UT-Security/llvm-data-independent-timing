@@ -99,8 +99,10 @@ lib_cflags() {
     nop)     echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-dit-nop-switches" ;;
     # Shipped defaults (2026-09-05): region placement, callee contract, DIT twins,
     # the contract seeds and the owned list.
-    taint)      echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED" ;;
-    taintnop)   echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED -mllvm -taint-dit-nop-switches" ;;
+    # TAINT_EXTRA: extra -mllvm flags for the pass arm and its NOP twin (e.g.
+    # the twin-narrowing knobs), so an A/B differs from the default by them alone.
+    taint)      echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED ${TAINT_EXTRA:-}" ;;
+    taintnop)   echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED ${TAINT_EXTRA:-} -mllvm -taint-dit-nop-switches" ;;
     # The pre-2026-09-05 compiler: inherit contract, no twins, the CIO seeds.
     taintold)    echo "-O2 -ftaint-harden=$SEEDS_OLD -mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0" ;;
     taintoldnop) echo "-O2 -ftaint-harden=$SEEDS_OLD -mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-nop-switches" ;;

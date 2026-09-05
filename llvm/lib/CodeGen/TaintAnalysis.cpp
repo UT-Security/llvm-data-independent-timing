@@ -519,6 +519,38 @@ static cl::opt<bool> TaintNoMMOLoadTainted(
 // Where it does not help it is within ±0.5 pp, and hoisting is fail-SAFE: the
 // loop is covered for longer, never for less. Raising -taint-dit-switch-cyc
 // re-coarsens via the admission test either way. Region mode only.
+// Twins place regions too. A `.dit` twin is entered with DIT set and must
+// return it set, and until now it did nothing in between: whole-function
+// coverage, which swallows whatever public stretch the original's placement
+// would have left DIT-off. With this on, a twin runs the same region emitter
+// as an original with the entry and exit inverted: it CLEARS at entry when its
+// leading blocks hold no secret, cuts the corridors the admission test admits,
+// enables at each Off->On boundary as usual, and ENABLES again before any
+// return it would otherwise reach DIT-off. The twin's promise to its caller is
+// unchanged; the verifier checks every return is reached On and falls the twin
+// back to whole-function coverage if not. What it trades is dwell for
+// switches: two per call on each corridor it opens, priced by the admission
+// test. The twin knows its entry state, which an original never does, so the
+// leading corridor has a real toggle pair to save and is priced like an
+// interior one (admitOffCorridors).
+static cl::opt<bool> TaintDitTwinNarrow(
+    "taint-dit-twin-narrow",
+    cl::desc("A .dit twin places DIT regions like an original (clear at entry "
+             "over a public preamble, corridors, enable before every return) "
+             "instead of staying DIT-on end to end. Default off."),
+    cl::init(false));
+
+// The switch cost the admission test charges INSIDE a twin. -1 means the same
+// -taint-dit-switch-cyc as everywhere else. 0 asserts switches are free, which
+// on a renamed core is close to true, and turns the twin into the maximal
+// narrowing: every corridor stays Off and the twin clears at entry whenever its
+// entry block holds no secret (the "DIT off at the top of the twin" arm).
+static cl::opt<double> TaintDitTwinSwitchCyc(
+    "taint-dit-twin-switch-cyc",
+    cl::desc("Switch cost for corridor admission inside a .dit twin (-1: use "
+             "-taint-dit-switch-cyc; 0: free, maximal narrowing)"),
+    cl::init(-1.0));
+
 static cl::opt<bool> TaintDitLoopHoist(
     "taint-dit-loop-hoist",
     cl::desc(
@@ -4362,7 +4394,7 @@ static void fallbackToFunctionGranularity(MachineFunction &MF,
 static void admitOffCorridors(MachineFunction &MF, Module &M,
                               DenseSet<const MachineBasicBlock *> &OnBlocks,
                               const TaintSummaryInfo *TSI,
-                              const MachineLoopInfo &MLI) {
+                              const MachineLoopInfo &MLI, bool Twin = false) {
   auto On = [&](const MachineBasicBlock *B) { return OnBlocks.count(B) != 0; };
 
   // Nothing to do unless some block is Off - skip the block-frequency dataflow in
@@ -4380,7 +4412,9 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
   // the measured serializing cost on the M4 (docs/results/dit-cost-model.md).
   // Setting it to 0 asserts that toggles are free, so the test never merges: the
   // finest-grain placement, and measurably wrong.
-  const double SwitchCyc = TaintDitSwitchCyc;
+  const double SwitchCyc =
+      (Twin && TaintDitTwinSwitchCyc >= 0) ? double(TaintDitTwinSwitchCyc)
+                                            : double(TaintDitSwitchCyc);
 
   // Partition the Off blocks into maximal CFG-connected components. Two Off blocks
   // that are CFG-adjacent are in the same component, so distinct components are
@@ -4428,12 +4462,25 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
         if (MI.isReturn())
           HasReturn = true;
       }
-      if (HasReturn)
-        AddedFreq += Fb; // emit disables DIT before the block's return
+      if (HasReturn) {
+        // An original disables before a return inside a merged corridor (a
+        // switch added by merging). A twin does the opposite: a return in an
+        // Off corridor needs an ENABLE, which merging removes.
+        if (Twin)
+          SavedFreq += Fb;
+        else
+          AddedFreq += Fb;
+      }
       Dwell += Fb * NumReal;
       if (llvm::any_of(B->predecessors(), On)) {
         HasOnPred = true;
         SavedFreq += Fb; // emit's disable at this block's entry disappears
+      }
+      // A twin arrives DIT-on, so an Off entry block costs a clear at entry
+      // that merging removes: the leading corridor has a toggle pair to save.
+      if (Twin && B->pred_empty()) {
+        HasOnPred = true;
+        SavedFreq += Fb;
       }
       for (const MachineBasicBlock *S : B->successors())
         if (On(S))
@@ -4443,8 +4490,12 @@ static void admitOffCorridors(MachineFunction &MF, Module &M,
     for (const MachineBasicBlock *S : OnSuccs)
       SavedFreq += Freq(S);
 
-    // Only an interior corridor (an actual toggle pair to save) qualifies.
-    if (!HasOnPred || !HasOnSucc)
+    // Only an interior corridor (an actual toggle pair to save) qualifies. In
+    // a twin a trailing corridor also has one (its clear on entry, its enable
+    // before the return), which the accounting above already counted.
+    if (!Twin && (!HasOnPred || !HasOnSucc))
+      continue;
+    if (Twin && !HasOnPred)
       continue;
 
     double ToggleNet = SwitchCyc * (SavedFreq - AddedFreq);
@@ -4479,6 +4530,10 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                                       raw_ostream *NonlocalOS = nullptr) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   Module &M = *const_cast<Module *>(MF.getFunction().getParent());
+  // A twin is entered DIT-on and must return DIT-on (see TaintDitTwinNarrow):
+  // its entry clear, its lack of exit clears and its pre-return enables are
+  // the three places this differs from an owning function.
+  const bool Twin = isDITClone(&MF.getFunction());
 
   // Re-assert sites are BUFFERED, not written as they are emitted: a later
   // fallback erases every switch this function placed and re-runs whole-function
@@ -4539,7 +4594,7 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
   // only EXTENDS OnBlocks (coverage grows), so every Need stays covered and the
   // soundness verifier below still passes; on a dwell≈0 core it coarsens toward
   // function granularity, on a DIT-sensitive core it stays narrow. §5.6.
-  admitOffCorridors(MF, M, OnBlocks, TSI, MLI);
+  admitOffCorridors(MF, M, OnBlocks, TSI, MLI, Twin);
 
   auto On = [&](const MachineBasicBlock *B) { return OnBlocks.count(B) != 0; };
 
@@ -4675,7 +4730,8 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       for (MachineInstr &MI : MBB) {
         if (!MI.isReturn())
           continue;
-        if (!NeedSet.count(&MI) && !ABI) {
+        // A twin owes its caller DIT set on return: no clear at its exits.
+        if (!NeedSet.count(&MI) && !ABI && !Twin) {
           TII->insertTimingModeSwitch(
               MBB, hoistExitDisableTo(MBB, MI, NeedSet, TSI, M, TII, ABI),
               MI.getDebugLoc(), /*Enable=*/false);
@@ -4700,11 +4756,25 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
       bool AnyPredOn = false;
       for (MachineBasicBlock *P : MBB.predecessors())
         AnyPredOn |= On(P);
-      if (AnyPredOn) {
+      // A twin arrives with DIT set, so an Off entry block clears at entry:
+      // this is the "DIT off at the top of the twin" the admission test has
+      // just priced against the enable that follows.
+      if (AnyPredOn || (Twin && MBB.pred_empty())) {
         TII->insertTimingModeSwitch(MBB, regionEntryInsertPt(MBB), DebugLoc(),
                                     /*Enable=*/false);
         ++Toggles;
       }
+      // A twin must leave DIT set: a return reached in an Off block gets an
+      // enable immediately before it (the epilogue's callee-saved restores are
+      // Needs, so a block that restores is On and never lands here).
+      if (Twin)
+        for (MachineInstr &MI : MBB)
+          if (MI.isReturn()) {
+            TII->insertTimingModeSwitch(MBB, MI.getIterator(), MI.getDebugLoc(),
+                                        /*Enable=*/true);
+            ++Toggles;
+            break;
+          }
     }
   }
 
@@ -4757,6 +4827,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
                 // entering a clone with DIT clear.
                 if (MI.isCall() && !CurOn &&
                     isDITClone(findCalledFunction(M, MI)))
+                  Sound = false;
+                // A twin's promise: every exit it controls returns DIT set.
+                if (Twin && MI.isReturn() && !MI.isCall() && !CurOn)
                   Sound = false;
                 if (clobbersDIT(MI, TSI, M))
                   CurOn = false;
@@ -5036,6 +5109,26 @@ unsigned llvm::insertTaintDITSwitches(MachineFunction &MF,
     emitDITPrecisionReport(MF, TR, TSI, AA);
     return TaintedInstrCount;
   }
+  // A twin under -taint-dit-twin-narrow places regions with the entry and
+  // exit inverted (see the knob). It cannot own DIT, so the ABI path above
+  // does not apply; and a twin with no Need at all still owes its caller the
+  // re-asserts, which only the whole-function emitter provides, so it takes
+  // that path when the region emitter finds nothing to place.
+  if (TaintDITPlacement == DITPlacementMode::Region && !TaintDITAbi &&
+      TaintDitTwinNarrow && isDITClone(&MF.getFunction())) {
+    bool FellBack = false;
+    const unsigned Placed = insertTaintDITRegions(MF, TR, TSI, AA, ReassertOS,
+                                                  /*ABI=*/false, &FellBack,
+                                                  NonlocalOS);
+    if (Placed == 0)
+      emitFunctionGranularityDIT(MF, TSI, /*OwnsDIT=*/false, ReassertOS,
+                                 NonlocalOS);
+    reportUnbalancedDITExits(MF, TSI, M, TII, /*OwnsDIT=*/false, ExitOS);
+    reportNonlocalDITExits(MF, M, /*OwnsDIT=*/false, NonlocalOS);
+    emitDITPrecisionReport(MF, TR, TSI, AA);
+    return TaintedInstrCount;
+  }
+
   // Make the routing visible: under the default `region` policy a non-owning
   // function silently lands on whole-function coverage, which is correct but
   // changes what an objdump of a hardened build looks like.
