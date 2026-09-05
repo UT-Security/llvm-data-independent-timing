@@ -1,4 +1,4 @@
-# FastDIT compile-time scalability: the dispatch-loop wall
+# ExpeDITe compile-time scalability: the dispatch-loop wall
 
 **RESOLVED 2026-08-10.** `quickjs.c` now compiles in **733 s (10.7x baseline)**,
 down from "never finished" (killed at 23 min, then at 420 s). Three changes, all

@@ -9,7 +9,7 @@
 > magnitude was inflated ~15x by the metric. Both tables are kept below.
 
 **Date:** 2026-08-10. First positive result for the performance claim. Prior to
-this, `fastdit-thesis-status` recorded "the performance claim has no supporting
+this, `expedite-thesis-status` recorded "the performance claim has no supporting
 workload" - true on libsodium, SQLCipher, and the SVG filters.
 
 ## The numbers - END-TO-END WALL TIME (the metric to quote)

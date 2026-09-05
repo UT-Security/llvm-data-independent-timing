@@ -8,8 +8,9 @@
 > control arms and the M4/M5 notes. This file holds the gotchas and the history behind
 > them; `docs/` holds the reasoning.
 
-This is an **LLVM fork** (branch `dit-tainter`) implementing **interprocedural taint
-analysis + PSTATE.DIT hardening** for AArch64: secret data entry points are declared
+**The project is ExpeDITe** (that spelling, with DIT capitalised, in every document,
+figure and table; never "FastDIT"). It is an **LLVM fork** (branch `dit-tainter`)
+implementing **interprocedural taint analysis + PSTATE.DIT hardening** for AArch64: secret data entry points are declared
 in a taint-source file, taint is propagated through registers/stack/global memory at
 the MIR level across all functions of a TU, and **PSTATE.DIT (data-independent
 timing) mode switches** are inserted so secret-dependent code runs with data-operand
