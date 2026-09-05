@@ -230,15 +230,15 @@ arm's and the renamed differences are layout; at cost 0 seven more switches
 per request buy nothing on the renamed model and cost 2 to 5 points on the
 serialising one. The twins stay whole by default.
 
-### The libc model (2026-09-05, `data/gem5_arms_preserving.csv`)
+### The external-callee assumption (2026-09-05, `data/gem5_arms_preserving.csv`)
 
-The pass arm rebuilt with `-taint-dit-preserving-symbols=utils/dit_preserving_libc.txt`
-(external functions that never write PSTATE.DIT get no re-assert after them;
-`docs/results/dit-preserving-symbols-2026-09-05.md`), everything else as
+The pass arm rebuilt with `-taint-dit-external-preserves`
+(a callee outside the build is assumed never to write PSTATE.DIT, so no re-assert after it;
+`docs/results/dit-external-preserves-2026-09-05.md`), everything else as
 `gem5_arms.csv`. IPC overhead vs unhardened, renamed / serialising, switches
 per request in brackets:
 
-| L | shipped twins | + libc model |
+| L | shipped twins | + external assumption |
 |---|---|---|
 | 10 | -1.0 / +28.4 (38) | -2.4 / +23.4 (32) |
 | 50 | -0.5 / +22.1 (38) | -0.1 / +18.0 (32) |

@@ -1,9 +1,8 @@
-# The libc model: external functions that never write PSTATE.DIT
+# The external-callee assumption: a callee outside the build never writes PSTATE.DIT
 
 **Measured 2026-09-05, gem5 NeoverseV2 FDP, libsodium 1.0.21, the shipped
 defaults (callee contract, twins, round-11 fixpoint seeds, owned list) with
-and without `-taint-dit-preserving-symbols=utils/dit_preserving_libc.txt`.**
-Branch `dit-preserving-symbols`.
+and without `-taint-dit-external-preserves`.** Branch `dit-preserving-symbols`.
 
 ## 1. The problem
 
@@ -23,30 +22,34 @@ it is expensive exactly where a secret loop calls a mover:
 
 ## 2. The flag
 
-`-taint-dit-preserving-symbols=<file>`: one external symbol per line (`#`
-comments) that never writes PSTATE.DIT. `calleeLeavesDITSet` answers yes for
-a call to one, so no re-assert follows it in any emitter and the region
-verifier does not model it as a clear; step 3b does not retract
-`PreservesDIT` through it, so a helper whose only calls are to libc keeps the
-bit for its callers. The lookup is by the call's **symbol**, not by module
-Function: the `bl memcpy` that lowers an `llvm.memcpy` intrinsic carries an
-external-symbol operand and the module usually has no Function for it, which
-is exactly the call this is for (the first version tested the Function and
-missed every one of them). Two guards keep it sound: the file is consulted
-only for a symbol this module does not define, and only when the owned list
-does not name it, so a hardened `memcpy` of ours is never overridden. Nothing
-that takes a callback belongs in the file. It removes re-asserts only; a
-mover handed a secret is still an `external-call` obligation.
+`-taint-dit-external-preserves` (bool, default off): a direct call whose
+callee this module does not define is assumed to return PSTATE.DIT exactly as
+it found it. `calleeLeavesDITSet` answers yes for such a call, so no re-assert
+follows it in any emitter and the region verifier does not model it as a
+clear; step 3b does not retract `PreservesDIT` through it, so a helper whose
+only calls are external keeps the bit for its callers. The callee is
+identified by the call's **symbol**, not by a module Function: the `bl
+memcpy` that lowers an `llvm.memcpy` intrinsic carries an external-symbol
+operand and the module usually has no Function for it, which is exactly the
+call this is for. One exception: a symbol the owned list names is our own
+function in another TU, compiled by this pass, and under the callee contract
+it clears at its exit, so its re-assert stays. Indirect calls are unchanged.
 
-`utils/dit_preserving_libc.txt` is the glibc set: the movers and their
-fortified forms, `explicit_bzero` and its `_chk`, the string and memory
-scans, the allocators, the raw syscall wrappers (the kernel saves and
-restores PSTATE across a syscall). Test
-`clang/test/CodeGen/taint-dit-preserving.c`.
+What the assumption gives up is stated, not hidden: an external function that
+calls back into our instrumented code (`qsort` with a hardened comparator,
+`pthread_once`, `atexit`) returns with the mode wherever the callback left
+it, and this flag drops the re-assert that would have repaired that. It
+removes re-asserts only; a mover handed a secret is still an `external-call`
+obligation. Test `clang/test/CodeGen/taint-dit-external-preserves.c`.
+
+A first cut of this was a file of named libc leaves
+(`-taint-dit-preserving-symbols`); the user asked for the assumption
+instead, no name matching. On libsodium the two produce the same executed
+switch counts on every rig, because every external callee there is libc.
 
 ## 3. Static and oracle
 
-| | shipped | + libc model |
+| | shipped | + external assumption |
 |---|---|---|
 | `msr DIT` sites in libsodium.a | 358 | 214 |
 | functions carrying a site | 113 | 84 |
@@ -66,7 +69,7 @@ its own instruction-matched NOP twin):
 |---|---|---|---|---|
 | twins as shipped | +1.42% / +2.20% | 800 | +0.64% / +6.09% | 7,600 |
 | blanket | +1.77% | 0 | +0.80% | 0 |
-| **+ libc model** | **+0.53% / +0.57%** | **100** | **+0.54% / +4.77%** | **6,400** |
+| **+ external assumption** | **+0.53% / +0.57%** | **100** | **+0.54% / +4.77%** | **6,400** |
 
 Two DIT writes per signature: the entry enable and exit clear of the public
 function, the same two a hand-placed bracket executes.
@@ -74,7 +77,7 @@ function, the same two a hand-placed bracket executes.
 **Experiment 09** (cycles per op vs base, renamed / serialising, switches per
 op; `data/gem5_preserving.csv`):
 
-| benchmark | blanket | API bracket (2 sw) | pass, shipped | pass + libc model |
+| benchmark | blanket | API bracket (2 sw) | pass, shipped | pass + external assumption |
 |---|---|---|---|---|
 | ed25519 sign | +0.22% | +0.73% / +1.14% | -3.75% / -2.60% (16) | -1.78% / -3.50% (**2**) |
 | chacha20-poly1305 encrypt | +1.31% | +3.19% / +3.28% | +2.37% / +43.88% (38) | +4.13% / +36.37% (32) |
@@ -86,7 +89,7 @@ op; `data/gem5_preserving.csv`):
 **Experiment 02** (IPC overhead vs unhardened, switches per request;
 `data/gem5_arms_preserving.csv`):
 
-| L | f | blanket | pass, shipped ren / ser | pass + libc model |
+| L | f | blanket | pass, shipped ren / ser | pass + external assumption |
 |---|---|---|---|---|
 | 10 | 96.8% | +7.3% | -1.0 / +28.4 (38) | -2.4 / +23.4 (32) |
 | 50 | 81.2% | +12.6% | -0.5 / +22.1 (38) | -0.1 / +18.0 (32) |
@@ -102,25 +105,24 @@ op; `data/gem5_preserving.csv`):
   both AES-GCM rows, and the signing matrix (800 -> 100 writes).
 - **Chacha keeps 32 switches** behind the Poly1305 and ChaCha20
   implementation tables: indirect calls no twin is reached through. The
-  libc model took the six that were movers; the rest is a property of the
+  assumption took the six that were movers; the rest is a property of the
   library's dispatch, and the bracket (+3.3%) is the bound the pass would
   reach if those tables pointed at twins.
 - **The renamed column moves with each binary's layout term, not with the
   switches**, as before: every difference between the shipped and model
   columns is matched by the arm's NOP twin (aes256-gcm encrypt's -6.16% is
   a -5.94% NOP twin). On renamed hardware the cost of the solution is dwell
-  over secret work plus layout; on serialising hardware the libc model is
+  over secret work plus layout; on serialising hardware the assumption is
   worth 5 to 12 points per AEAD call and the whole of argon2id's cost.
-- **Default or not.** The flag is opt-in with the file at
-  `utils/dit_preserving_libc.txt`; the numbers say the glibc set should be
-  on in every hardened build, and the open design question is whether that
-  set belongs inside the compiler with the file as an extension.
+- **Default or not.** Opt-in for now; the numbers say it should be on in
+  every hardened build whose external callees are libc, and flipping the
+  default is one line.
 
 ## 6. Reproduce
 
 Libraries: `build_libsodium_native.sh` with `EXTRA_CFLAGS="-mllvm
 -taint-dit-contract=callee -mllvm -taint-owned-symbols=<list> -mllvm
--taint-dit-preserving-symbols=<llvm>/utils/dit_preserving_libc.txt"`; the
+-taint-dit-external-preserves"`; the
 oracle and the crypto matrix as `run_clone_timing.sh`; experiment 02 via
 `build_gem5_linux.sh` and experiment 09 via `build_arms.sh`, both with
 `TAINT_EXTRA` set to the flag.

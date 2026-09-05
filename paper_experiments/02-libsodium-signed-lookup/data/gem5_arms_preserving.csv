@@ -1,5 +1,5 @@
-# Experiment 02, canonical lane, the pass arm built with the libc model (-taint-dit-preserving-symbols=utils/dit_preserving_libc.txt), 2026-09-05.
-# Same driver, seeds (round-11 fixpoint), owned list, runner and gates as gem5_arms.csv; only the libc model differs. docs/results/dit-preserving-symbols-2026-09-05.md.
+# Experiment 02, canonical lane, the pass arm built with the external-callee assumption (-taint-dit-external-preserves), 2026-09-05.
+# Same driver, seeds (round-11 fixpoint), owned list, runner and gates as gem5_arms.csv; only the libc model differs. docs/results/dit-external-preserves-2026-09-05.md.
 # gem5 Neoverse-V2 FDP, --eves --dmp --comp-simp, gem5.fast. Full flow (lookups + one chacha20-poly1305 AEAD encrypt of a 100-byte record),
 # CIO-parity seeds with the chacha rename patch; pass library built with -fno-optimize-sibling-calls.
 # switch=serialising is --no-speculative-dit. dit_writes is commit.ditWrites (committed mode writes).

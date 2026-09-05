@@ -146,25 +146,24 @@ narrows, at cost 0 wasted coverage drops 0.7% for 3x the executed writes and sig
 twin inherits its original's incoming argument taint (a propagation-reached twin used to
 be analysed with none), and a register-tuple use reads its parts' taint while a tuple def
 marks them (an `st2` of a secret used to leave its cells public). Both were masked by
-whole-twin coverage; the default build is byte-identical. **External callees
-that never touch DIT (`-taint-dit-preserving-symbols=<file>`, opt-in, 2026-09-05):**
-without it every callee the build does not define is assumed to clear the mode, so
-DIT-on code re-asserts after each libc call; that was ALL of argon2id's 395,758 executed
-switches per hash (three glibc `memcpy` per `fill_block` inside the twin) and four of
-aes256-gcm decrypt's six. The file names external leaves that never write PSTATE.DIT
-(`utils/dit_preserving_libc.txt` is the glibc set: movers, string functions, allocators,
-syscall wrappers; nothing that takes a callback), a call to one needs no re-assert, and
-a function whose only calls are to them keeps `PreservesDIT`. Trusted only for a callee
-this module does not define and the owned list does not name, so a hardened `memcpy` of
-ours is never overridden. It removes re-asserts only; a mover handed a secret is still
-an obligation. The lookup is by the call's SYMBOL, since a `bl memcpy` lowered from an
-`llvm.memcpy` intrinsic has no Function in the module. **Measured**
-(`docs/results/dit-preserving-symbols-2026-09-05.md`): libsodium 358 -> 214 sites at
+whole-twin coverage; the default build is byte-identical. **The external-callee
+assumption (`-taint-dit-external-preserves`, opt-in, 2026-09-05):** without it every
+callee the build does not define is assumed to clear the mode, so DIT-on code re-asserts
+after each libc call; that was ALL of argon2id's 395,758 executed switches per hash (three
+glibc `memcpy` per `fill_block` inside the twin) and four of aes256-gcm decrypt's six.
+With it a direct call to a symbol this module does not define is assumed to return
+PSTATE.DIT as it found it: no re-assert, and a function whose only calls are external
+keeps `PreservesDIT`. The callee is identified by the call's SYMBOL (a `bl memcpy` lowered
+from an `llvm.memcpy` intrinsic has no Function in the module). The one exception is a
+symbol the owned list names, ours in another TU, which clears at its exit. What it gives up:
+an external that calls back into hardened code returns with the mode wherever the callback
+left it. Coverage is untouched; a mover handed a secret is still an obligation. **Measured**
+(`docs/results/dit-external-preserves-2026-09-05.md`): libsodium 358 -> 214 sites at
 identical oracle coverage; ed25519 and both AES-GCM rows of experiment 09 down to the
 bracket's 2 switches per op (signing 800 -> 100 writes per 50 signatures, +2.20% ->
 +0.57% serialising), chacha 38 -> 32 (the rest are the implementation tables),
 experiment 02 serialising +28.4% -> +23.4% at L=10; renamed within each binary's
-layout term. Test `clang/test/CodeGen/taint-dit-preserving.c`.
+layout term. Test `clang/test/CodeGen/taint-dit-external-preserves.c`.
 
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function

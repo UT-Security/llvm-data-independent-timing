@@ -489,13 +489,13 @@ and it is the next change to make; a hardened `memcpy` linked ahead of libc
 (the obligation report's own repair for a mover handed a secret) would
 make the callee owned and get the same effect through the owned list.
 
-**With the libc model** (`-taint-dit-preserving-symbols=utils/dit_preserving_libc.txt`,
-2026-09-05: external functions that never write PSTATE.DIT get no re-assert
-after them; `docs/results/dit-preserving-symbols-2026-09-05.md`,
+**With the external-callee assumption** (`-taint-dit-external-preserves`,
+2026-09-05: a callee outside the build is assumed never to write PSTATE.DIT,
+so no re-assert after it; `docs/results/dit-external-preserves-2026-09-05.md`,
 `data/gem5_preserving.csv`, `data/gem5_preserving_analysis.txt`). Same
 libraries otherwise, same arms, all gates pass, signing oracle identical:
 
-| benchmark | blanket | API bracket (2 sw) | pass, shipped | pass + libc model |
+| benchmark | blanket | API bracket (2 sw) | pass, shipped | pass + external assumption |
 |---|---|---|---|---|
 | ed25519 sign | +0.22% | +0.73% / +1.14% | -3.75% / -2.60% (16) | -1.78% / -3.50% (**2**) |
 | chacha20-poly1305 encrypt | +1.31% | +3.19% / +3.28% | +2.37% / +43.88% (38) | +4.13% / +36.37% (32) |

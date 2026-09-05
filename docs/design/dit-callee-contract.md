@@ -113,24 +113,25 @@ re-asserted after each, 393,216 times per hash, +7.58% serialising for a
 hash the old compiler ran unprotected at +1.97%; aes256-gcm decrypt's 4-byte
 tail cost four of its six switches the same way.
 
-**`-taint-dit-preserving-symbols=<file>`** (2026-09-05, opt-in) is the model:
-one external symbol per line that never writes PSTATE.DIT
-(`utils/dit_preserving_libc.txt`: the movers and their fortified forms, the
-string and memory scans, the allocators, the raw syscall wrappers, which the
-kernel preserves PSTATE across). `calleeLeavesDITSet` answers yes for a
-declaration the file names, so no re-assert follows the call in any emitter
-and the region verifier's dataflow does not model it as a clear; step 3b
-does not retract `PreservesDIT` through such a call, so a helper whose only
-calls are to libc keeps the bit for its own callers. Two guards keep it
-sound. The file is consulted only for a callee this module does not define,
-and only when the owned list does not name it: a symbol of ours is compiled
-by this pass and may clear at its exit, whatever the file says, which is
-what makes "link a hardened `memcpy` ahead of libc" still work (put it in the
-owned list). And nothing that takes a callback belongs in the file, because
-the callback may be an instrumented original of ours, and the external
-function returns with the mode wherever the callback left it. The file says
-nothing about coverage: a mover handed a secret is still an `external-call`
-record in the obligation report. Test `clang/test/CodeGen/taint-dit-preserving.c`.
+**`-taint-dit-external-preserves`** (2026-09-05, opt-in, bool) is the
+assumption, stated as such: a direct call whose callee this module does not
+define returns PSTATE.DIT as it found it. `calleeLeavesDITSet` answers yes
+for it, so no re-assert follows the call in any emitter and the region
+verifier's dataflow does not model it as a clear; step 3b does not retract
+`PreservesDIT` through such a call, so a helper whose only calls are
+external keeps the bit for its own callers. The callee is identified by the
+call's symbol, since the `bl memcpy` that lowers an `llvm.memcpy` intrinsic
+has no Function in the module. One exception keeps our own cross-TU code
+right: a symbol the owned list names is compiled by this pass and clears at
+its exit, whatever it is called, so its re-assert stays; and that is what
+still makes "link a hardened `memcpy` ahead of libc" work (put it in the
+owned list). What the assumption gives up is an external function that calls
+back into an instrumented original of ours: it returns with the mode
+wherever the callback left it. It says nothing about coverage: a mover
+handed a secret is still an `external-call` record in the obligation
+report. A first cut matched external names against a file of libc leaves;
+the user asked for the assumption instead. Test
+`clang/test/CodeGen/taint-dit-external-preserves.c`.
 
 ## 2. Why
 

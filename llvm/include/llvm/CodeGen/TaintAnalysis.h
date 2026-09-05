@@ -172,34 +172,21 @@ extern cl::opt<std::string> TaintOwnedSymbolsFile;
 /// cross-TU DIT cloning, which must agree on what "a callee we define" means.
 const StringSet<> *taintOwnedSymbols();
 
-/// A file naming EXTERNAL functions that never write PSTATE.DIT, one per line
-/// (`#` comments): libc's leaf routines - the movers, the string functions, the
-/// allocators, the syscall wrappers. `utils/dit_preserving_libc.txt` is the
-/// glibc set. A call to one from DIT-on code returns with the mode exactly as
-/// it went in, so no re-assert is emitted after it, and an in-TU function whose
-/// only calls are to such symbols keeps its PreservesDIT bit. Trusted ONLY for
-/// a callee this module does not define and the owned list (when given) does
-/// not name: a function of ours clears at its own exit under the callee
-/// contract, and the file never overrides that. Not for anything that takes a
-/// callback (qsort, pthread_once, atexit): the callback may be ours. Says
-/// nothing about coverage - a mover handed a secret is still an obligation.
-extern cl::opt<std::string> TaintDITPreservingSymbolsFile;
+/// Assume that a callee this module does not define never writes PSTATE.DIT
+/// (libc, the kernel behind a syscall wrapper, another library): a call to it
+/// from DIT-on code returns with the mode exactly as it went in, so no
+/// re-assert is emitted after it, and a function whose only calls are to
+/// such callees keeps its PreservesDIT bit. The one exception is a symbol the
+/// owned list names: that is our own function in another TU, compiled by this
+/// pass, and under the callee contract it clears at its exit. Indirect calls
+/// are unchanged (no callee to reason about). What the assumption gives up:
+/// an external function that calls back into our instrumented code returns
+/// with the mode wherever the callback left it. Says nothing about coverage -
+/// a mover handed a secret is still an obligation. Default off.
+extern cl::opt<bool> TaintDITExternalPreserves;
 
-/// The set that file names, loaded once per process; null when no file was
-/// given or it could not be read.
-const StringSet<> *taintDITPreservingSymbols();
-
-/// True when `Name` is a symbol the preserving file names, this module does
-/// not define, and the owned list does not name: it hands PSTATE.DIT back as
-/// it found it. By NAME, not Function: the `bl memcpy` that lowers an
-/// `llvm.memcpy` intrinsic carries an external-symbol operand and the module
-/// often has no Function for it at all, so a Function-based test misses the
-/// exact calls this is for.
-bool taintExternalSymbolPreservesDIT(StringRef Name, const Module &M);
-
-/// The same for a call instruction: its direct callee's symbol, if any. A call
-/// to such a symbol neither needs a re-assert after it nor retracts its
-/// caller's PreservesDIT.
+/// True for a direct call the assumption above covers: the callee's symbol is
+/// not defined in this module and the owned list does not name it.
 bool taintExternalCallPreservesDIT(const MachineInstr &MI, const Module &M);
 
 /// A `<name>.dit` twin of a seeded function (`-taint-dit-clone-seeded`, or the
