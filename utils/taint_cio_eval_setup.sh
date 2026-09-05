@@ -20,13 +20,21 @@
 #   x86              CIO's original rdtsc/rdtscp, untouched, behind #else.
 #
 # USAGE   utils/taint_cio_eval_setup.sh
-# ENV     WORK=<dir>    output           (default ~/Documents/cio-eval)
+# ENV     CIO_DIR=<dir> output           (default ~/Documents/cio-eval), the
+#                                         same name every consumer reads it by
 #         CIO_SRC=<dir> local CIO clone  (default ~/Documents/cio; falls back to
 #                                         curl from GitHub if absent)
+#
+# WORK is deliberately NOT read. The libsodium scripts use WORK for the library
+# tree, and run_m5_corrected.sh exports it before calling this script; until
+# 2026-09-05 this script took the same name for its own output, so every rooted
+# run staged CIO's Makefile, eval.sh and drivers INTO the libsodium tree (where
+# CIO's Makefile then hijacked taint_libsodium_eval.sh's build) and never
+# refreshed the directory the run actually reads.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORK="${WORK:-$HOME/Documents/cio-eval}"
+WORK="${CIO_DIR:-$HOME/Documents/cio-eval}"   # internal name kept; sourced from CIO_DIR only
 CIO_SRC="${CIO_SRC:-$HOME/Documents/cio}"
 CIO_RAW="https://raw.githubusercontent.com/counter-optimization/cio/HEAD"
 
