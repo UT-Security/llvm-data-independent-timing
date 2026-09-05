@@ -128,6 +128,49 @@ number the serialising model prices; under the renamed model the NOP arms
 say the sites' placement dominates. Neither is measured here; experiment
 9's timing rig with the round-11 seed file is the measurement.
 
+### 4.1 Cloning: the 10,400 become 41 (`docs/design/dit-cloning.md`)
+
+`-mllvm -taint-dit-clone-seeded` gives every seeded function, and every
+function it reaches by direct call in its TU, a `<name>.dit` twin that is
+entered DIT-on by construction and emits no switch of its own; a call made
+from DIT-on code is redirected to the twin, in the TU and across TUs (a
+seeded declaration in the owned list is assumed to have one; the linker
+resolves it). Same round-11 seeds, same driver, same oracle protocol:
+
+| arm | sites | twins | `.text` | protected | uncovered | wasted | DIT writes |
+|---|---|---|---|---|---|---|---|
+| round 11, no twins (the row above) | 489 | 0 | 316,119 | 294,164 | 0 | 51,134 | 10,400 |
+| seeded twins only | 382 | 68 | 360,219 | 294,164 | 0 | 53,972 | 4,784 |
+| **seeded + reached twins** | **358** | **83** | **383,255** | **294,164** | **0** | **54,010** | **41** |
+| inherit, for reference | 129 | 0 | 314,943 | 294,164 | 0 | 53,996 | 6 |
+
+Protection does not move; the switches do. The intermediate row is why the
+twin set is the call graph under the seeds and not the seeds alone:
+`ge25519_cmov` is unseeded, instrumented by propagation, and called eight
+times per table lookup from `ge25519_cmov8_base`, and with only seeded twins
+that one callee was most of what was left. The 41 are the entries into the
+library from unhardened code (the signing forwarder is Off; the function
+below it enables once and calls nothing but twins). Price: +21% text, and
+the twins' whole-function coverage is the +5.6% wasted. The no-flag build is
+byte-identical to round 11 (whole-archive disassembly).
+
+**Timed** (gem5, both switch models, against instruction-matched NOP
+baselines; the full tables are in `docs/design/dit-cloning.md` §5.1):
+
+| workload | model | no twins | twins | blanket |
+|---|---|---|---|---|
+| ed25519, 50 x 1 KiB | serialising | +76.22% | **+2.20%** | +1.77% |
+| ed25519 | renamed | -2.49% | +1.42% | +1.77% |
+| AEAD, 200 x 1400 B | serialising | +8.19% | +6.09% | +0.80% |
+| AEAD | renamed | +0.68% | +0.64% | +0.80% |
+
+Serialising: the twins are the result (3,530 -> 16 switches per signature).
+Renamed: the switches were never the cost; the no-twin arm beats its own
+NOP baseline because a renamed `MSR DIT` is cheaper than the NOP standing
+in for it, and the twins cost what blanket costs, dwell. AEAD keeps 38 of 58
+switches per call behind the Poly1305/ChaCha20 implementation tables, since
+an indirect call is never redirected.
+
 ## 5. mbedTLS 3.6.2, TLS 1.3 resumption (`--resumptions 5 --kex dhe`)
 
 ### Static
@@ -248,6 +291,13 @@ The restore rule on its own is worth 372,635 uncovered ops per resumption
   secrets were only ever covered by accident. Both are now visible, one is
   fixed by a placement rule, the other by the existing frame-address flag
   once the movers let the oracle see it.
+- **Phase C item 1 is done and it is the whole switch cost.** Twins
+  (section 4.1) take libsodium's contract from 10,400 executed DIT writes to
+  41 against inherit's 6, at identical coverage and +21% text.
+- **Flipped 2026-09-05, with the twins** (section 4.1 and
+  `docs/design/dit-cloning.md` §5.1: the twins remove the switch cost that
+  was the reason not to). The bullet below is the verdict as it stood the
+  day before, kept as written.
 - **Do not flip the default yet.** The +2.59% is placement, not DIT (the NOP
   arms), which makes it Phase C's to reduce along with the limb-traffic loss;
   and the naive movers are not a shippable `memcpy`. The flag, the obligation report, and the movers are

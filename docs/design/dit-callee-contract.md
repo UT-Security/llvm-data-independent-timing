@@ -1,11 +1,16 @@
 # The callee contract: every function protects its own secrets
 
-**Status 2026-09-04.** Landed OPT-IN as `-taint-dit-contract=callee`
+**Status 2026-09-05: the DEFAULT**, together with the twins
+(`dit-cloning.md`; `-taint-dit-contract=inherit -taint-dit-clone-seeded=0`
+is the pre-flip compiler for an A/B; the recipe is
+`docs/reference/harden-runbook.md`). Landed 2026-09-04 as opt-in
 (default `inherit`, byte-identical to before). Phases A and B of the plan:
 the contract in placement, the obligation report, tests, and the four
 measurements. Phase C, the cross-boundary cost model (sticky exits chosen by
 frequency, automatic cloning, tail calls to in-TU callees), is a follow-up
-and is only safe once this contract holds. Measurements:
+and is only safe once this contract holds; its first item, cloning, landed
+the same day (`dit-cloning.md`: libsodium's 10,400 DIT writes -> 41 at
+identical coverage). Measurements:
 `docs/results/dit-callee-contract-2026-09-04.md`.
 
 ## 1. The two contracts
@@ -161,8 +166,8 @@ the same five shapes so every check is a difference between them.
 ## 5. Not in this phase
 
 - Post-call clears in Off regions when a callee may leave DIT set, sticky
-  exits by frequency, automatic cloning, tail calls to in-TU instrumented
-  callees: Phase C.
+  exits by frequency, tail calls to in-TU instrumented callees: Phase C.
+  Cloning is done (`dit-cloning.md`, `-taint-dit-clone-seeded`, opt-in).
 - `sinkEntryEnableTo` / `hoistExitDisableTo` still stop at a call because the
   callee "may inherit DIT". Under the contract that is merely conservative
   (an enable a little earlier), not wrong; tightening it is a Phase C
