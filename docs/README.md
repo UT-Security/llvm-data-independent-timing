@@ -89,6 +89,15 @@ How the analysis is built, which bugs were found in it, and what is still open.
   (8.26x) for **-5.40% CoinSelection (25/25)** and **-8.52% signing (27/30)**. The
   predictor is switches-per-instrumented-function (5.9 vs 51.1), not the workload.
   Default stays OFF because LTO+ABI is still slower than non-LTO without it.
+- **[design/dit-callee-contract.md](design/dit-callee-contract.md)** and
+  **[results/dit-callee-contract-2026-09-04.md](results/dit-callee-contract-2026-09-04.md)** -
+  **`-taint-dit-contract=callee`: every function protects its own secrets.** A call
+  is never a Need, unseen callees are UNCOVERED obligations with a repair, seeding
+  is monotone. Measured opt-in: mbedTLS +6.17% renamed vs +3.50% inherit at 99.88%
+  vs 99.93%; libsodium's shipped seeds protect nothing until the report's 21 lines
+  are pasted. Two findings that outrank it: glibc's `memcpy` blinds the oracle (the
+  libsecp256k1 nonce derivation was never protected), and callee-saved restores
+  reload the caller's secrets.
 - **[results/returns-pointee-2026-09-04.md](results/returns-pointee-2026-09-04.md)** -
   **the `ReturnsPointeeTainted` summary bit and the seeded-callee return gate.**
   A callee returning a pointer INTO secret memory returned a public pointer

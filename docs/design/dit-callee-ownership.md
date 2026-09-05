@@ -1,5 +1,12 @@
 # DIT callee ownership: what shipped, and the deferred MRS design
 
+**Update 2026-09-04.** Mode 1's premise - a secret-passing call is a Need, so a
+function whose every call site passes a secret is entered with DIT on - is the
+`inherit` contract. Under `-taint-dit-contract=callee`
+(`docs/design/dit-callee-contract.md`) that term is gone, `AlwaysEnteredWithDIT`
+is off, and Mode 2's `MRS` is not needed at all: no function relies on its
+entry state, so the ownership question dissolves into a per-exit cost decision.
+
 **Status 2026-08-08.** Mode 1 (ownership rule for resolvable calls, plus an audit
 report for the rest) is **implemented and tested**. Mode 2 (the runtime `MRS`
 read, which is what fixes indirect and cross-TU calls) is **deferred** as out of

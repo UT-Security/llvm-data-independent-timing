@@ -122,6 +122,10 @@ produces a spurious audit line until the covered switch is extended. Actually
 the report is for audit.
 
 ### G3 (leak-adjacent) - **PARTIALLY ADDRESSED**: exceptional exits, unknown callees
+
+**2026-09-04:** the "Scenario B" rule below - a secret-passing call is a Need so the
+callee inherits DIT - is the `inherit` contract, and `-taint-dit-contract=callee`
+replaces it with an obligation record for the callee (`docs/design/dit-callee-contract.md`).
 Unwinds/`longjmp` out of an instrumented function leave DIT=1 in the unwinder and
 beyond - *safe* direction (over-protection), only a perf leak (still open,
 accepted). The **caller-side** hazard of external callees toggling DIT off is
