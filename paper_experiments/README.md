@@ -28,7 +28,7 @@ were run.
 | 07 | [annotation cost](07-annotation-cost/) | - | libsodium signing path | **seed DEPTH - measures DEVELOPER cost** | **complete, silicon** |
 | 08 | [seed ground truth](08-seed-ground-truth/) | - | libhydrogen signing, their exact source | **none - compares our taint set against an INDEPENDENT one** | **complete** |
 | 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon x2 (M5 + M4) + gem5 switch model; percentages corrected 4-15x, conclusions unchanged** |
-| 10 | [mbedTLS session ticket](10-mbedtls-session-ticket/) | ClientHello and record handling; the application behind the server | AES-GCM ticket decrypt, then the PARSE of the resumption secret in plain C (TLS 1.2 RSA premaster as the literature anchor) | resumption rate, records per connection | **MEASURED 2026-09-03, both gates passed. Annotating the ENTIRE crypto API surface still leaves the constant-time PSK binder compare running with DIT clear, 547 ops per resumption; the pass takes it to 0. But the pass is NOT sound here - it leaves 11,126 secret ops per resumption against blanket's 0, three quarters of them in uninstrumentable libc. The claim is narrow: among SELECTIVE placements the pass reaches glue no API annotation reaches** |
+| 10 | [mbedTLS session ticket](10-mbedtls-session-ticket/) | ClientHello and record handling; the application behind the server | AES-GCM ticket decrypt, then the PARSE of the resumption secret in plain C (TLS 1.2 RSA premaster as the literature anchor) | resumption rate, records per connection | **gates G0/G1 passed 2026-09-03; re-run 2026-09-05 on the compiler's new defaults (section 16): serialising +252% -> +40%, coverage 99.955%, renamed +11.3% of which all is instruction fetch on the duplicated code; blanket still wins** |
 
 ## Compiler changes and experiment validity
 
@@ -68,7 +68,8 @@ and not where they go through tables (the AEAD keeps 38 of 49). Status:
 |---|---|---|
 | **02** | libsodium signed lookup | **re-run 2026-09-05**: serialising -25 to -35% at every point, renamed within 1%, blanket unchanged, oracle frontier unchanged; the crossover against blanket moved from ~50% to between 45% and 81% secret |
 | 07, 09 | libsodium | **not re-run**; need the contract seed file, and 09's "blanket wins" verdict is where the twins change the least (everything is secret, so a twin's dwell is blanket's) |
-| 03, 06 | mbedTLS | **not re-run**; the 727-seed contract file exists (`tls_resume/`), the twins have not been measured on it |
+| **10** | mbedTLS session ticket | **re-run 2026-09-05** (section 16): serialising +252% -> +40% (switches -91%), coverage 99.877% -> 99.955%, renamed +6.2% -> +11.3% and the NOP control puts all of it in instruction fetch on the duplicated code; blanket still wins on this workload |
+| 03, 06 | mbedTLS | **not re-run**; the 727-seed contract file exists (`tls_resume/`); 10's re-run says what to expect on the same library |
 | 04 | libsecp256k1 | **not re-run**; the contract seed file exists (`secp_seed_contract.txt`) |
 | 01, 05, 08 | | **not re-run** |
 
