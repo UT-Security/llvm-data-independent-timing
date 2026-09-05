@@ -27,7 +27,7 @@ defense is out of scope. Operating instructions (build, flags, gotchas) live in
 | 4 | [results/quickjs.md](results/quickjs.md) | The first positive result, and the method rule that makes it trustworthy. |
 | 5 | [results/sqlcipher.md](results/sqlcipher.md) | The definitive negative, and the gem5 study that bounds the whole thesis at ~1.4%. |
 | 6 | [design/dit-placement.md](design/dit-placement.md) | Where switches go, which gaps remain, and the optimal-placement design. §5.7 is the intra-block default. |
-| 7 | [reference/harden-runbook.md](reference/harden-runbook.md) | **The current recipe.** What the 2026-09-05 defaults do, the seed loop, the control arms, the M4/M5 notes. |
+| 7 | [reference/harden-runbook.md](reference/harden-runbook.md) | **The run document.** Quick start, what the defaults do, how to run it, hardening a library, EVERY flag with its default, the reports, the control arms, the M4/M5 notes. |
 | 8 | [design/dit-callee-contract.md](design/dit-callee-contract.md) and [design/dit-cloning.md](design/dit-cloning.md) | The two mechanisms that own every switch today: the callee contract and the twins. |
 
 > **Which docs describe the design as it is (2026-09-05), and which are records.** The
