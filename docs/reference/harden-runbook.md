@@ -344,6 +344,7 @@ source with the same seeds so only the thing under test differs.
 | unhardened | `-O2` | the baseline; byte-identical to `-ftaint-harden=<empty seed file>` |
 | **NOP** | `... -mllvm -taint-dit-nop-switches` | same placement, same layout, every switch a `HINT #0`: the instruction-matched baseline. Not neutral: a NOP costs more than a renamed `MSR DIT` |
 | blanket | unhardened or NOP library + a constructor `msr DIT, #1` linked into the program (`gem5-DIT benchmarks/taint_convolve/dit_blanket.c`) | DIT everywhere, no analysis |
+| **Apple bracket** | unhardened library + `utils/dit_host_screening/cioparity/api_bracket.c` around each public entry point: read the previous state, `msr DIT, #1`, `sb` (`isb sy` on gem5, which lacks `sb`), the call, clear only if it was clear. gem5 rig: the linker's `--wrap` (`build_arms.sh` arms `api`, `apiisb`); silicon rig: a compile-time rename of the driver's prototypes, `taint_libsodium_sudo_run.sh` arm `B:baseline:api` | what a careful library author does by hand, and what Apple's `timingsafe_enable_if_supported` does; no analysis |
 | twins off | `... -mllvm -taint-dit-clone-seeded=0` | every callee toggles for itself |
 | old contract | `... -mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0` | the pre-2026-09-05 compiler |
 | whole-function | `... -mllvm -taint-dit-placement=function` | coarse placement |
