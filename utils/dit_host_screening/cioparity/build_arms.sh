@@ -220,7 +220,22 @@ for b in $BENCHES; do
       # Hand placement at the public API: the base library, the entry points
       # CIO's driver calls wrapped by the linker so each is bracketed by one
       # enable and one clear (api_bracket.c). Two mode writes per call.
-      api)     v=base; src2="$R/api_bracket.c"
+      # api: Apple's prologue/epilogue (mrs token, msr DIT #1, isb sy in place
+      # of sb, conditional restore). apidsb: Apple's no-SB fallback barrier
+      # (dsb nsh; isb sy). apibare: the pre-2026-09-05 bracket, no token read
+      # and no barrier, two unconditional writes.
+      # apiisb: the isb without the token read (msr DIT #1; isb; ...; msr DIT #0),
+      # which separates the barrier's cost from gem5's mrs DIT drain.
+      # apiisbnop: apiisb with HINT #0 in place of the isb, the layout control.
+      api|apidsb|apibare|apiisb|apiisbnop)
+               v=base; src2="$R/api_bracket.c"
+               case "$arm" in
+                 apidsb)    bar="-DAPI_BARRIER_DSBISB" ;;
+                 apibare)   bar="-DAPI_BARRIER_NONE -DAPI_NO_MRS" ;;
+                 apiisb)    bar="-DAPI_NO_MRS" ;;
+                 apiisbnop) bar="-DAPI_NO_MRS -DAPI_BARRIER_NOP" ;;
+                 *)       bar="" ;;
+               esac
                case "$b" in
                  ed25519)        extra="-DAPI_SIGN";   syms="crypto_sign_keypair crypto_sign crypto_sign_open" ;;
                  chacha20*)      extra="-DAPI_CHACHA"; syms="crypto_aead_chacha20poly1305_ietf_keygen crypto_aead_chacha20poly1305_ietf_encrypt crypto_aead_chacha20poly1305_ietf_decrypt" ;;
@@ -228,6 +243,7 @@ for b in $BENCHES; do
                  argon2id)       extra="-DAPI_PWHASH"; syms="crypto_pwhash" ;;
                  *) die "no API bracket table for $b" ;;
                esac
+               extra="$extra $bar"
                for sy in $syms; do wraps="$wraps -Wl,--wrap=$sy"; done ;;
       *)       v="$arm"; extra="" ;;
     esac
