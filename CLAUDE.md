@@ -161,7 +161,7 @@ left it. Coverage is untouched; a mover handed a secret is still an obligation. 
 (`docs/results/dit-external-preserves-2026-09-05.md`): libsodium 358 -> 214 sites at
 identical oracle coverage; ed25519 and both AES-GCM rows of experiment 09 down to the
 bracket's 2 switches per op (signing 800 -> 100 writes per 50 signatures, +2.20% ->
-+0.57% serialising), chacha 38 -> 32 (the rest are the implementation tables),
++0.72% serialising), chacha 38 -> 32 (the rest are the implementation tables),
 experiment 02 serialising +28.4% -> +23.4% at L=10; renamed within each binary's
 layout term. Test `clang/test/CodeGen/taint-dit-external-preserves.c`.
 
