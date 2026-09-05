@@ -1,5 +1,12 @@
 # 06 - switch-model generality
 
+> **Compiler note (audit 2026-09-05).** The numbers here were measured under the
+> defaults of their date: the inherit contract, no DIT twins, block placement. The
+> shipped defaults changed on 2026-09-05 (callee contract, twins, intra-block
+> placement; `docs/reference/harden-runbook.md`), and the pre-contract seed files
+> protect nothing under them. See the status table in `paper_experiments/README.md`
+> before re-running.
+
 **Status: complete on gem5.** Measured 2026-09-01, Neoverse-V2 FDP, experiments
 02 and 03's workloads under both `MSR DIT` implementations.
 

@@ -1,0 +1,60 @@
+--- /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_ed25519.c.orig	2026-09-05 01:03:20.499319560 -0500
++++ /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_ed25519.c	2026-09-05 01:03:20.504518320 -0500
+@@ -78,6 +78,9 @@
+ 
+   // main loop
+   for (int cur_iter = 0; cur_iter < num_iter + num_warmup; ++cur_iter) {
++    /* VARY_INPUT: a different message every iteration, outside the ROI. */
++    for (unsigned long long vi_ = 0; vi_ < msg_sz; ++vi_)
++      msg[vi_] = (unsigned char)(msg[vi_] * 31u + (unsigned)cur_iter * 17u + (unsigned)vi_ + 1u);
+     // generate private key
+     // generate public key
+     int _eval_unused = crypto_sign_keypair(/*public=*/ pubk, /*secret=*/ privk);
+--- /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_chacha20_poly1305_encrypt.c.orig	2026-09-05 01:03:20.517421240 -0500
++++ /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_chacha20_poly1305_encrypt.c	2026-09-05 01:03:20.522147760 -0500
+@@ -97,6 +97,9 @@
+ 
+   // main loop
+   for (int cur_iter = 0; cur_iter < num_iter + num_warmup; ++cur_iter) {
++    /* VARY_INPUT: a different message every iteration, outside the ROI. */
++    for (unsigned long long vi_ = 0; vi_ < msg_sz; ++vi_)
++      msg[vi_] = (unsigned char)(msg[vi_] * 31u + (unsigned)cur_iter * 17u + (unsigned)vi_ + 1u);
+     // generate private key
+     crypto_aead_chacha20poly1305_ietf_keygen(privk);
+ 
+--- /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_chacha20_poly1305_decrypt.c.orig	2026-09-05 01:03:20.536152040 -0500
++++ /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_chacha20_poly1305_decrypt.c	2026-09-05 01:03:20.540804520 -0500
+@@ -97,6 +97,9 @@
+ 
+   // main loop
+   for (int cur_iter = 0; cur_iter < num_iter + num_warmup; ++cur_iter) {
++    /* VARY_INPUT: a different message every iteration, outside the ROI. */
++    for (unsigned long long vi_ = 0; vi_ < msg_sz; ++vi_)
++      msg[vi_] = (unsigned char)(msg[vi_] * 31u + (unsigned)cur_iter * 17u + (unsigned)vi_ + 1u);
+     // generate private key
+     crypto_aead_chacha20poly1305_ietf_keygen(privk);
+ 
+--- /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_aesni256gcm_encrypt.c.orig	2026-09-05 01:03:20.554773760 -0500
++++ /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_aesni256gcm_encrypt.c	2026-09-05 01:03:20.558885520 -0500
+@@ -99,6 +99,9 @@
+ 
+   // main loop
+   for (int cur_iter = 0; cur_iter < num_iter + num_warmup; ++cur_iter) {
++    /* VARY_INPUT: a different message every iteration, outside the ROI. */
++    for (unsigned long long vi_ = 0; vi_ < msg_sz; ++vi_)
++      msg[vi_] = (unsigned char)(msg[vi_] * 31u + (unsigned)cur_iter * 17u + (unsigned)vi_ + 1u);
+     // generate key
+     // generate nonce
+     crypto_aead_aes256gcm_keygen(key);
+--- /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_aesni256gcm_decrypt.c.orig	2026-09-05 01:03:20.569939640 -0500
++++ /home/rgangar/Documents/libsodium-cioparity-vary/src/eval_aesni256gcm_decrypt.c	2026-09-05 01:03:20.574480560 -0500
+@@ -98,6 +98,9 @@
+ 
+   // main loop
+   for (int cur_iter = 0; cur_iter < num_iter + num_warmup; ++cur_iter) {
++    /* VARY_INPUT: a different message every iteration, outside the ROI. */
++    for (unsigned long long vi_ = 0; vi_ < msg_sz; ++vi_)
++      msg[vi_] = (unsigned char)(msg[vi_] * 31u + (unsigned)cur_iter * 17u + (unsigned)vi_ + 1u);
+     // generate key
+     // generate nonce
+     crypto_aead_aes256gcm_keygen(key);

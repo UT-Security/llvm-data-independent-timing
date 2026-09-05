@@ -4,7 +4,10 @@ How to build it, how to invoke it, what to expect in the output, and what a gem5
 run sees. The contract and the reasoning behind each decision are in
 [`docs/design/dit-abi.md`](../design/dit-abi.md); this file is operational only.
 
-**Status: opt-in, `-ftaint-dit-abi` defaults OFF.** Without it, codegen is what it
+**Status 2026-09-05: the ABI is NOT SHIPPING. Opt-in, `-ftaint-dit-abi` defaults OFF,
+and the shipped recipe is `harden-runbook.md` (callee contract, twins, intra-block
+placement). Keep this file only to reproduce `docs/results/dit-abi-measured.md`.**
+Originally: Without it, codegen is what it
 was before the ABI landed (verified: the non-LTO Bitcoin Core baseline is 95
 switches, exactly the pre-ABI figure).
 

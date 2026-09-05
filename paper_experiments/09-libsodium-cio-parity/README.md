@@ -363,6 +363,329 @@ Required two gem5 patches, both validated and unpushed: PMULL 64x64->128 (absent
 from gem5, so AES-GCM could not run at all) and `commit.ditCycles` (cycles with
 the mode set - the dwell axis the switch counters cannot provide).
 
+## The hand-placed API bracket, and the compiler's new defaults (gem5, 2026-09-05)
+
+What a careful library author does by hand, and what Apple's corecrypto scope
+guards do: set `PSTATE.DIT` once at the entry of each public crypto function
+and clear it once at the exit. Nothing inside is touched, nothing is analysed.
+It is the arm between blanket (the mode set for the whole process) and the
+pass (the mode placed inside the library by the analysis), and on a workload
+that is all crypto it is the placement a reviewer will name first.
+
+**The arm.** The unhardened `base` library, the public entry points CIO's
+drivers call wrapped by the linker (`-Wl,--wrap`) so `__wrap_f` brackets
+`__real_f` with one enable and one clear (`api_bracket.c`; `crypto_sign`,
+`crypto_sign_keypair`, `crypto_sign_open`; the AEAD `keygen`/`encrypt`/
+`decrypt` pairs; `crypto_pwhash`). Same driver, same library, same layout as
+`base`; exactly two committed mode writes per operation, which the runner
+gates on.
+
+**The pass arm** is the compiler's defaults since 2026-09-05: the callee
+contract and the DIT twins (`docs/design/dit-cloning.md`), the per-TU clang
+path, the contract's fixpoint seeds (188 lines,
+`benchmarks/crypto/libsodium_secret_contract.txt` in gem5-DIT from PR #101;
+the CIO seeds protect nothing under the contract) and the owned-symbols list
+`build_arms.sh` now derives from its own base build. 364 switch sites and 85
+twins in the library. `taintold` is the pre-flip compiler on the CIO seeds
+(inherit contract, no twins), the per-TU form of the `pass` arm above, for
+the record. Every arm has its NOP twin; `run_cio_gem5.py` gates all of them.
+Data: `data/gem5_api_bracket.csv`, `data/gem5_api_bracket_analysis.txt`.
+
+| benchmark | base cyc/op | blanket | API bracket, renamed / serialising | pass, renamed / serialising | pass switches/op | old compiler, renamed / serialising (switches) |
+|---|---|---|---|---|---|---|
+| ed25519 sign | 78,790 | +0.22% | +0.73% / +1.14% | -3.75% / -2.60% | 16 | -0.83% / -0.68% (3) |
+| chacha20-poly1305 encrypt | 2,186 | +1.31% | +3.19% / +3.28% | +2.37% / **+43.88%** | 38 | +2.44% / +56.72% (49) |
+| chacha20-poly1305 decrypt | 2,290 | +0.70% | +1.50% / +4.33% | +3.29% / **+42.42%** | 39 | +2.45% / +57.85% (51) |
+| aes256-gcm encrypt | 1,217 | +0.41% | +0.25% / +3.78% | +0.25% / +12.42% | 6 | -0.25% / +26.06% (12) |
+| aes256-gcm decrypt | 1,077 | +8.39% | +9.13% / +23.75% | +10.06% / +36.06% | 6 | +9.32% / +48.79% (13) |
+
+Each policy's own NOP twin, so the layout term is visible:
+
+| benchmark | pass NOP (layout) | pass, real minus NOP, renamed | old NOP | old, real minus NOP, renamed |
+|---|---|---|---|---|
+| ed25519 sign | -3.74% | -0.01 | -1.51% | +0.68 |
+| chacha20-poly1305 encrypt | +2.41% | -0.03 | +2.54% | -0.10 |
+| chacha20-poly1305 decrypt | +4.11% | -0.81 | +2.94% | -0.49 |
+| aes256-gcm encrypt | -0.03% | +0.28 | -0.46% | +0.21 |
+| aes256-gcm decrypt | +5.71% | +4.35 | +0.89% | +8.42 |
+
+Three readings.
+
+- **Renamed: blanket, the bracket and the pass cost the same thing, dwell,
+  and the rest is layout.** Every arm is within a few points of blanket, and
+  where the pass differs from the bracket its NOP twin differs by the same
+  amount: ed25519's -3.75% is a layout win (-3.74% with no switch executing)
+  and the two chacha rows are +2.4 and +4.1 of layout. The bracket's two
+  switches and the pass's 6 to 39 both execute for nothing on a renamed core.
+- **Serialising: the bracket pays two switches per call and the pass pays
+  its dispatch.** The bracket sits 1 to 4 points above blanket, and 15 above
+  on aes-gcm decrypt, where two serialising drains land on a 1,077-cycle
+  operation. The pass pays 38 to 39 switches per AEAD call, all of them
+  behind the Poly1305 and ChaCha20 implementation tables that no twin can
+  reach (an indirect call is never redirected), and 6 per AES-GCM call for
+  the same reason: +42 to +44 on chacha, +12 and +36 on AES-GCM. On ed25519,
+  where the calls are direct, the twins leave 16 switches on a 78,790-cycle
+  signature and the serialising term is +1.15 points, the bracket's +0.41.
+- **What the new defaults changed.** Against the old compiler on the same
+  path the pass executes a quarter to a half fewer switches (49 -> 38, 51 ->
+  39, 12 -> 6, 13 -> 6) and its serialising cost drops by 13 to 14 points on
+  every AEAD row. ed25519 goes the other way, 3 -> 16, because the old
+  contract held DIT across the whole signature from one forwarder and the
+  new one has each entry into the library toggle for itself; on a renamed
+  core that is free, on a serialising one it is +1.15 points.
+
+**The verdict for this experiment does not move: on a workload that is all
+crypto, blanket is the answer and the hand-placed bracket is within a few
+points of it.** The pass is a placement engine for flows with a public lane
+(experiment 02); here it can only match the bracket where the library's
+calls are direct, and libsodium's AEAD dispatch is not. The tables are
+also the bound: `api` is what the pass would cost if every indirect target
+had a twin, which is a property of the library, not of the compiler.
+
+**Coverage** of the pass arm on the signing path, the gem5 shadow-taint
+oracle (two signatures, the round-11 protocol): 294,164 secret operations
+protected, 0 uncovered, 54,010 wasted, identical to the round-11 library
+measured for `docs/design/dit-cloning.md`; the seeds are at their fixpoint
+on this path and the twins do not move protection.
+
+**argon2id** (landed later the same day: one measured operation per cell
+after one warm-up, 326M cycles each, no `taintold` arm; rows appended to
+`data/gem5_api_bracket.csv`, `data/gem5_api_bracket_argon2id_analysis.txt`):
+
+| benchmark | base cyc/op | blanket | API bracket, renamed / serialising | pass, renamed / serialising | pass switches/op | pass NOP (layout) | old compiler, renamed / serialising (switches) |
+|---|---|---|---|---|---|---|---|
+| argon2id | 326,450,006 | +0.51% | +2.06% / +2.04% | +2.37% / **+7.58%** | **395,758** | +1.33% | +2.04% / +1.97% (438) |
+
+**The new defaults turned argon2id's 438 executed switches per operation
+into 395,758, and its serialising cost from +1.97% into +7.58%.** They are
+all re-asserts in one function. `argon2_fill_segment_ref` is seeded at the
+fixpoint, so it runs as its twin (the `fill_segment` pointer in
+`argon2-core.c` is a static that only ever holds the reference
+implementation on aarch64, and the compiler devirtualised the four calls
+to `argon2_fill_segment_ref.dit`), and inside the twin every `fill_block`
+is three `copy_block`s that compile to glibc `memcpy`, each followed by
+`msr DIT, #1` because a callee this build does not define may clear the
+mode. Two passes over 65,536 blocks (the interactive limits) make that
+3 x 131,072 = 393,216 re-asserts per operation; the `memset`s of the
+address blocks and the blake2b twins are the remaining 2,500. The old
+compiler never entered these TUs: CIO's seeds name `crypto_pwhash` and stop
+at the argon2 context, and `argon2-core.o` and `argon2-fill-block-ref.o`
+carry no `msr DIT` under it (verified in the objects), so its 438 were the
+entry points and the fill loop, which is the operation, ran DIT-off. Under
+the new defaults the twin is DIT-on for 100% of the region and suppresses
+the same optimisations blanket does (88.4M against 87.9M), so the operation
+is covered as blanket covers it; it has not been oracle-verified. On the
+renamed model the re-asserts cost +1.04 points over the NOP twin, 8.6
+cycles each by the difference, on top of +1.33 of layout; blanket is
++0.51% and the bracket +2.06% for two switches, the gap being the wrapper's
+layout, since the bracket runs base's fill loop unchanged.
+
+The repair is not a placement change. glibc's `memcpy` and `memset` do not
+write PSTATE.DIT, so letting the pass treat the libc movers as
+DIT-preserving would remove all 393,216 re-asserts and leave the twin's
+dwell, which is what blanket pays. It is the same residual experiment 10
+found on mbedTLS (twins re-asserting after `calloc`, `free` and zeroize),
+and it is the next change to make; a hardened `memcpy` linked ahead of libc
+(the obligation report's own repair for a mover handed a secret) would
+make the callee owned and get the same effect through the owned list.
+
+**With the external-callee assumption** (`-taint-dit-external-preserves`,
+2026-09-05: a callee outside the build is assumed never to write PSTATE.DIT,
+so no re-assert after it; `docs/results/dit-external-preserves-2026-09-05.md`,
+`data/gem5_external_preserves.csv`, `data/gem5_external_preserves_analysis.txt`). Same
+libraries otherwise, same arms, all gates pass, signing oracle identical:
+
+| benchmark | blanket | API bracket (2 sw) | pass, shipped | pass + external assumption |
+|---|---|---|---|---|
+| ed25519 sign | +0.22% | +0.73% / +1.14% | -3.75% / -2.60% (16) | -1.78% / -3.50% (**2**) |
+| chacha20-poly1305 encrypt | +1.31% | +3.19% / +3.28% | +2.37% / +43.88% (38) | +4.13% / +36.37% (32) |
+| chacha20-poly1305 decrypt | +0.70% | +1.50% / +4.33% | +3.29% / +42.42% (39) | +6.64% / +35.89% (32) |
+| aes256-gcm encrypt | +0.41% | +0.25% / +3.78% | +0.25% / +12.42% (6) | -6.16% / +3.53% (**2**) |
+| aes256-gcm decrypt | +8.39% | +9.13% / +23.75% | +10.06% / +36.06% (6) | +9.32% / +23.80% (**2**) |
+| argon2id | +0.51% | +2.06% / +2.04% | +2.37% / +7.58% (395,758) | pending |
+
+Where the library's calls are direct the pass now executes the bracket's two
+switches per operation and pays the bracket's serialising cost; chacha keeps
+32 behind the implementation tables. The renamed column moves with each
+binary's layout term (aes256-gcm encrypt's -6.16% sits on a -5.94% NOP
+twin), not with the switches.
+
+**With intra-block placement, the default since later on 2026-09-05**
+(`-taint-dit-sub-block`; `=0` is the block placement every row above was
+measured with; `docs/results/dit-intra-block-default-2026-09-05.md`,
+`data/gem5_intra_block{,_ext}.csv`): executed switches identical on every
+row (16/38/39/6/6, and 2/32/32/2/2 with the external-callee assumption),
+oracle identical, and the cycles move by each arm's layout band (chacha
+serialising +44.8 / +45.6 against +43.9 / +42.4, aes-gcm decrypt +36.3
+against +36.1). The library's hot code runs in whole twins, which
+intra-block placement does not enter; four of its 113 instrumented
+functions changed.
+
+**With a different message every operation** (`build_arms.sh VARY_INPUT=1`:
+the staged drivers rewrite the message before each iteration's setup,
+outside the measured region; keys and nonces already vary per iteration in
+CIO's drivers, only the message and the empty additional data were fixed;
+the patch is `data/gem5_api_bracket_vary_driver_patch.diff`, so this lane is
+NOT byte-identical to CIO's drivers and the fixed-input lane above remains
+the parity measurement). Same libraries, same seven arms, all gates passing;
+`data/gem5_api_bracket_vary.csv`, `data/gem5_api_bracket_vary_analysis.txt`:
+
+| benchmark | blanket | API bracket, renamed / serialising | pass, renamed / serialising | pass switches/op |
+|---|---|---|---|---|
+| ed25519 sign | +1.13% | +0.58% / +0.74% | -6.53% / -1.75% | 16 |
+| chacha20-poly1305 encrypt | +3.81% | +1.99% / +1.72% | +1.72% / +37.94% | 38 |
+| chacha20-poly1305 decrypt | -0.91% | -2.53% / -0.14% | +0.29% / +36.38% | 39 |
+| aes256-gcm encrypt | +0.57% | +0.90% / +4.20% | +0.32% / +12.85% | 6 |
+| aes256-gcm decrypt | +8.09% | +10.77% / +25.10% | +9.02% / +35.18% | 6 |
+
+Nothing that matters moves. The serialising column is the same story to
+within a few points, and the renamed column shuffles inside the layout band
+(the patched drivers are different binaries, so every arm's layout term
+moved with them: ed25519's pass row is now -6.5% against a NOP twin at
+-2.7%). **The aes256-gcm decrypt row was the reason to run this, and it does
+not move: blanket +8.09% against +8.39%.** The value-predictable loads that
+DIT takes away on that row are not the message. With the message varying,
+base still makes 2,346 load-value predictions per 50 operations (3,368 with
+it fixed), 1,700 of them stride predictions (2,491), and blanket makes none;
+encrypt makes 916 and no stride predictions on either input. A stride
+prediction is a load whose value advances by a constant, which is what a
+counter mode's block counter does by construction, and the decrypt path's
+loop structure exposes it where encrypt's does not. That is a property of
+the kernel, not of the driver's input, and every placement that covers the
+kernel pays it.
+
+### What the value predictor is predicting on aes256-gcm decrypt, and whether it is secret
+
+The 8% every covering arm pays on that row is the load value predictor
+being switched off. The natural worry is that the predicted loads are
+public and the pass is over-approximating: if so, a placement that left
+them uncovered would beat blanket on this row. So the predictor was traced
+(gem5 `--debug-flags=LVP`; the EVES predictor prints each prediction and its
+validation with the PC, gem5-DIT-pmull branch `ditcycles`, commit
+`4fdc491e5b`; `lvp_pcs.py` aggregates the trace over the measured window).
+Two operations of the decrypt driver, base arm:
+
+| PC | correct predictions / 2 ops | kind | where |
+|---|---|---|---|
+| `0x40c704` | 41 | stride | `crypto_verify_16+0x1c`: `ldr x10, [sp, #0x10]`, the volatile pointer `y` |
+| `0x40c70c` | 33 | stride | `crypto_verify_16+0x24`: `ldrh w11, [sp, #0xc]`, the volatile accumulator `d` |
+| `0x40c6fc` | 27 | stride | `crypto_verify_16+0x14`: `ldr x9, [sp, #0x18]`, the volatile pointer `x` |
+| `_init`, `getrandom` | 15 | vtage | startup, outside the kernel |
+
+**None of them is in the AES-GCM kernel.** They are the three reloads in
+the 16-iteration loop of `crypto_verify_16`, libsodium's constant-time
+comparison of the computed tag against the received one
+(`crypto_verify/verify.c`: `volatile` pointers `x` and `y`, `volatile
+uint16_t d; for (i) d |= x[i] ^ y[i];`). `volatile` makes each iteration
+reload both pointers and the accumulator from the stack and store the
+accumulator back, so the loop is a store-to-load chain through `d` of about
+five cycles per iteration; the predictor breaks the chain (the pointers
+never change and `d` stays 0 while the tags agree) and the sixteen
+iterations overlap. With DIT set the chain serialises: roughly 80 cycles on
+a 1,077-cycle operation, which is the 8%. Encrypt never calls it, which is
+why its blanket cost is +0.4%. The pass arm predicts the same three loads in
+`crypto_verify_16.dit`, the twin the DIT-on decrypt path calls.
+
+**Two of the three loads are public and one is the secret that matters.**
+The pointer reloads carry addresses. The accumulator `d` carries the OR of
+every `x[i] ^ y[i]` so far: it is 0 exactly while the received tag has
+matched the computed one byte for byte, and a predictor that speculates on
+it makes the loop faster while the bytes match and squashes at the first
+mismatch. That is a timing that depends on how many bytes of a forged tag
+were right, the byte-by-byte MAC-comparison oracle that the constant-time
+compare exists to prevent, moved from the branch predictor to the value
+predictor. It is precisely the class of channel DIT closes on a core that
+ties value prediction to the mode, and the analysis agrees: `crypto_verify_16`
+is seeded on both arguments (fixpoint file, lines 129-130), the `d` loads,
+the byte loads and the XOR/OR are its 17 Needs, and the two pointer reloads
+are clean. No placement can keep the two public reloads predicted while
+covering the third: they are three instructions apart in a twelve-instruction
+loop body, and a toggle per iteration would cost two serialising switches
+sixteen times. **On this row the 8% is not over-approximation. It is the
+price of closing the tag-comparison channel, and every placement that
+protects the tag pays it, hand-placed or not.**
+
+**Is the hoisted enable what covers the two public reloads, and would not
+covering them buy the time back?** The first half is yes: region placement
+hoists the loop's enable to the preheader, and with the enable sunk into the
+body and the loads reordered, the two pointer reloads, `i++` and the bound
+could run DIT-off. So that was built by hand
+(`utils/dit_host_screening/cioparity/verify16_hand/`: the compare's own code
+from the pass binary, three ways, `-Wl,--wrap`ped ahead of the unhardened
+library so the compare is the only thing that runs with DIT set):
+
+| `crypto_verify_16` | DIT writes / op | renamed | serialising | load predictions / op |
+|---|---|---|---|---|
+| no switch (control) | 0 | 1,080.5 cycles | 1,080.5 | 64.5 |
+| hoisted, whole loop covered (what the pass emits) | 2 | **+7.73%** | +11.71% | 5.4 |
+| per iteration, only the 8 tainted instructions covered | 34 | **+8.19%** | +74.17% | 8.5 |
+
+The per-iteration cover costs the same on the renamed model and 62 points
+more on the serialising one, **but not for the reason a first reading
+suggests.** The trace of the per-iteration run shows the two pointer
+reloads, `i++` and `cmp`, the instructions placed DIT-off, suppressed by the
+predictor as `DIT=1` on 39 of their 42 lookups per two operations and
+predicted 3 times. In the renamed model a DIT write "resolves to 1 at rename
+in both directions: a DIT region is entered speculatively and left only
+architecturally" (gem5-DIT `src/arch/arm/insts/misc64.hh`, `MsrImmDitOp64`);
+the clear takes effect when it commits, so every younger instruction in the
+reorder-buffer shadow of a clear still reads the mode as set. Inside a
+twelve-instruction loop body that shadow covers the whole next iteration,
+and no toggle placement, however fine, can make the clean reloads
+predictable. The serialising model drains at each write instead, which is
+precise and is the +74%.
+
+So on the shipped model that experiment measures the visibility of the mode,
+not the value of the two public predictions. To measure the value, the model
+was given a counterfactual: `--publishing-dit-clear` (gem5-DIT-pmull
+`ditcycles`), under which `msr DIT, #0` resolves to 0 at rename and does not
+defer, so younger instructions leave the region at once. It is insecure by
+construction (a mispredicted path runs with the mode off, the section 9.8
+leak) and exists only to answer this question. Same three binaries:
+
+| `crypto_verify_16` | clear takes effect | renamed | correct load predictions / op | predictions suppressed by DIT / op |
+|---|---|---|---|---|
+| no switch (control) | | 1,080.5 cycles | 64.5 | 0 |
+| hoisted (the pass) | at commit | +7.73% | 5.4 | 460 |
+| hoisted (the pass) | at rename | +7.60% | 11.8 | 380 |
+| per iteration, tainted only | at commit | +8.19% | 8.5 | 395 |
+| per iteration, tainted only | at rename | **+8.09%** | **45.7** | 252 |
+
+With the clear visible at once, the per-iteration placement gets its two
+public reloads predicted on every iteration (the trace: 41 correct
+predictions each per two operations, against 3 before) and the loop costs
+the same +8.1%. **Predicting the public loads is worth nothing here.** The
+loop's critical path is the store-to-load chain through the tainted
+accumulator, and once that load is covered the pointer predictions have
+nothing to shorten. That is now measured rather than argued: the hoist is
+free on this loop under either clear semantics, and the 8% on the row is
+the cost of protecting the one load that must be protected.
+
+A side finding from the same reports, not on the benchmark's path. The
+one-shot `crypto_aead_aes256gcm_decrypt` builds the key schedule and the
+GHASH table into a local `st` and passes `&st` to
+`crypto_aead_aes256gcm_decrypt_detached_afternm`; that is the frame-address
+gap (`docs/design/frame-address-gap.md`), the callee sees its state as
+public, and the ORIGINAL `_afternm` has 9 Needs in 1,553 instructions (2.6%
+coverage). The benchmark never runs that original: the DIT-on chain from
+the seeded entry calls the twin, which is covered whole. A user of the
+precomputed-state API (`crypto_aead_aes256gcm_*_afternm` with their own
+state, entered DIT-off) would get the 2.6%, and the repair is one seed line
+on the state argument. The exposure is small on this hardware (`aese` and
+`pmull` are constant-time by construction) and the AES-GCM path has not
+been oracle-verified in this experiment; it is recorded here so it is not
+rediscovered.
+
+**argon2id** is running as this is written (one operation is 326M cycles;
+five arms, both models, about six hours) and will be appended to the data
+file; on silicon it is the null endpoint for every arm.
+
+A first sweep of these arms used the seed file the gem5 tree carried as
+`libsodium_secret_contract.txt`, which turned out to be the round-2 file (86
+seeds, `_r2` after PR #101), not the fixpoint; the pass arm then executed 19
+switches per signature and 177 sites. Those numbers are superseded by the
+table above.
+
 ## Second host, and a measurement correction
 
 **Apple M4 (Mac16,10), 4P+6E, macOS 15.7.3, root, kperf. 2026-09-02.** The whole
@@ -694,6 +1017,30 @@ prefix. Both are now pinned (drivers compile from a bare relative name;
 `argv[0]` lives under `/tmp/cio_<hash>/`), and two sweeps from two work dirs
 are byte-identical. The rig's own documented trap - a 0.84% shift from an
 argv[0] length change - was only half-closed until this.
+
+### Narrowing twins (2026-09-05, `data/gem5_twin_narrow{,0}.csv`)
+
+The pass arm and its NOP twin rebuilt with the twins narrowing
+(`-taint-dit-twin-narrow`; the `0` file adds `-taint-dit-twin-switch-cyc=0`,
+DIT off at the top of every twin whose entry holds no secret), everything else
+as `gem5_api_bracket.csv`; `docs/results/dit-twin-narrowing-2026-09-05.md`.
+Cycles per op vs base, renamed / serialising, switches per op, the arm's own
+NOP twin in brackets:
+
+| benchmark | blanket | shipped twins | narrowing, default cost | narrowing, cost 0 |
+|---|---|---|---|---|
+| ed25519 sign | +0.2% | -3.7 / -2.6 (16) [-3.7] | -3.6 / -3.5 (16) [-4.0] | -2.7 / -1.0 (56) [-3.3] |
+| chacha enc | +1.3% | +2.4 / +43.9 (38) [+2.4] | +2.1 / +43.0 (38) [+2.3] | +3.7 / +50.1 (45) [+5.1] |
+| chacha dec | +0.7% | +3.3 / +42.4 (39) [+4.1] | +2.9 / +44.7 (39) [+4.7] | +5.8 / +53.4 (50) [+6.1] |
+| aes-gcm enc | +0.4% | +0.2 / +12.4 (6) [-0.0] | -0.7 / +12.2 (6) [-0.7] | -0.1 / +49.3 (28) [-0.2] |
+| aes-gcm dec | +8.4% | +10.1 / +36.1 (6) [+5.7] | +9.7 / +48.9 (8) [+1.3] | +9.3 / +54.6 (13) [+1.0] |
+
+Narrowing at cost 0 raises every switch count and every serialising number and
+moves nothing on the renamed model beyond its NOP twin: the renamed cost here
+is dwell over the kernels (and the `crypto_verify_16` chain on decrypt), which
+any placement that protects them pays. argon2id was not run on the
+narrowing arms: its 395,758 switches are re-asserts after `memcpy` inside a
+twin (above), which narrowing does not touch.
 
 ## Known limits
 

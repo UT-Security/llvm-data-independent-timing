@@ -172,6 +172,23 @@ extern cl::opt<std::string> TaintOwnedSymbolsFile;
 /// cross-TU DIT cloning, which must agree on what "a callee we define" means.
 const StringSet<> *taintOwnedSymbols();
 
+/// Assume that a callee this module does not define never writes PSTATE.DIT
+/// (libc, the kernel behind a syscall wrapper, another library): a call to it
+/// from DIT-on code returns with the mode exactly as it went in, so no
+/// re-assert is emitted after it, and a function whose only calls are to
+/// such callees keeps its PreservesDIT bit. The one exception is a symbol the
+/// owned list names: that is our own function in another TU, compiled by this
+/// pass, and under the callee contract it clears at its exit. Indirect calls
+/// are unchanged (no callee to reason about). What the assumption gives up:
+/// an external function that calls back into our instrumented code returns
+/// with the mode wherever the callback left it. Says nothing about coverage -
+/// a mover handed a secret is still an obligation. Default off.
+extern cl::opt<bool> TaintDITExternalPreserves;
+
+/// True for a direct call the assumption above covers: the callee's symbol is
+/// not defined in this module and the owned list does not name it.
+bool taintExternalCallPreservesDIT(const MachineInstr &MI, const Module &M);
+
 /// A `<name>.dit` twin of a seeded function (`-taint-dit-clone-seeded`, or the
 /// older `-taint-dit-clone-list`): entered with PSTATE.DIT already set by
 /// construction - only a DIT-on call site is ever redirected to it - so it
@@ -667,8 +684,14 @@ public:
 
   /// A whole frame object became secret (a callee wrote it, or a stack
   /// argument arrived in it). Weak: nothing else in the object is cleared.
-  void taintFrameObject(int FI, uint64_t Sz) {
-    taintCell(MemCell{TaintObject::frame(FI), 0, Sz}, TaintVal::data());
+  /// V says which kind: a callee's write is data; an incoming stack argument
+  /// is seeded as BOTH, because the callee cannot tell a secret value from a
+  /// pointer to secret memory in an unnamed slot (a `tainted-pointee` pointer
+  /// at argument 8 used to be seeded as data, so the load through it came
+  /// back public and the multiply on the secret ran DIT-off; block placement
+  /// had hidden that by covering the whole block).
+  void taintFrameObject(int FI, uint64_t Sz, TaintVal V = TaintVal::data()) {
+    taintCell(MemCell{TaintObject::frame(FI), 0, Sz}, V);
   }
   bool frameObjectHoldsSecret(int FI) const {
     return objectHoldsSecret(TaintObject::frame(FI));

@@ -183,9 +183,11 @@ requires an exclusive machine.
 
 Rules for distributing a gem5 sweep:
 
-1. **Distribute the binaries, do not rebuild per machine.** The MIR round-trip
-   is a per-binary codegen lottery; two independently built "identical" binaries
-   are not identical. Ship `benchmarks/sqlcipher/bin/` and check `shasum` before
+1. **Distribute the binaries, do not rebuild per machine.** Two independently
+   built "identical" binaries are not identical (the MIR round-trip was a
+   per-binary codegen lottery until 2026-08-30; the clang path is now
+   deterministic and byte-identical to `-O2` at zero seeds, but a rebuilt
+   library still moves with paths and layout). Ship `benchmarks/sqlcipher/bin/` and check `shasum` before
    pooling anything.
 2. **Ship the database too**, and give every parallel run its own copy - SQLite
    opens read-write and concurrent runs will corrupt a shared file.

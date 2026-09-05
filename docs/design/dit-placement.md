@@ -1,5 +1,13 @@
 # DIT Barrier Placement: Current State, Gaps, and an Optimal-Placement Design
 
+> **STATUS 2026-09-05: two more changes on top of the 2026-08-24 retune.** Placement
+> is INTRA-BLOCK by default (`-taint-dit-sub-block`, §5.7; `=0` is block placement), and
+> who owns a switch changed with the callee contract and the twins
+> (`dit-callee-contract.md`, `dit-cloning.md`): a call is never a Need, every function
+> protects its own secrets, and a DIT-on caller calls a `.dit` twin that emits nothing.
+> The "B(d) EntryDIT summary" this file names as NEXT was overtaken by those two; the
+> `AlwaysEnteredWithDIT` ownership rule survives only under `-taint-dit-contract=inherit`.
+>
 > **STATUS 2026-08-24: the placement defaults changed.** `-taint-dit-loop-hoist` now
 > defaults to **1** and `-taint-dit-switch-cyc` to **30**, so the shipped policy is
 > loop-hoisted region placement with the admission test live. `-taint-region-merge-gap`
@@ -557,9 +565,9 @@ non-convergence (mitigate: VSETVLI worklist pattern); the Need-gate must match
 | B(a) ✅ done | region placement scaffold behind `-taint-dit-placement=region`; Need set + soundness verifier + graceful fallback | machinery; narrows trailing epilogue |
 | B(b) ✅ done | loop-aware `On(b)` placement: preamble excluded, enable hoisted to loop preheader / multi-entry pred edges; irreducible→fallback | the dwell win (convolve: 67-instr preamble now DIT-off, no per-iteration toggle) |
 | B(c) ✅ done | admission test (`admitOffCorridors`): merge an interior Off corridor between two On regions when the **emit-accurate net toggle saving** beats the dwell - `c_sw·(Σ removed boundary switches − Σ re-asserts/disable-before-return emit adds inside the merged corridor) ≥ dwell_per_instr·Σ freq(b)·\|b\|`, all MBFI block-frequency weighted; tunable `-taint-dit-dwell-per-instr` (default 1.0 ⇒ ~60-instr static crossover). Purely a perf optimization - merging only EXTENDS `OnBlocks`, so it CANNOT leak (verifier always passes). On a dwell≈0 core it coarsens toward function granularity; on DIT-sensitive cores it stays narrow. | cost-model-driven placement |
-| **B(d) ← NEXT** | `EntryDIT` summary (coupled greatest fixed point with placement), entry/exit toggle elision for internal tainted chains; fixes the deferred residual-only-callee `PreservesDIT` spurious re-assert | P1 interior-zero-toggle perf |
+| **B(d)** - SUPERSEDED 2026-09-04/05 by the callee contract and the twins (no entry-state coupling is needed when every function owns its switches and a DIT-on caller calls a twin) | `EntryDIT` summary (coupled greatest fixed point with placement), entry/exit toggle elision for internal tainted chains; fixes the deferred residual-only-callee `PreservesDIT` spurious re-assert | P1 interior-zero-toggle perf |
 
-**Update (2026-07-23): `-taint-dit-loop-hoist=0` (block-minimal) is now the DEFAULT** (finest placement - public loop scaffolding peeled off, per-iteration toggles; set `=1` for serializing-switch hardware). dit-region.mir REGION and dit-loop-hoist.mir HOIST run lines pinned to `-taint-dit-loop-hoist=1`.
+**Update (2026-07-23, REVERTED 2026-08-24 - the default is `loop-hoist=1`, see the banner): `-taint-dit-loop-hoist=0` (block-minimal) was made the DEFAULT** (finest placement - public loop scaffolding peeled off, per-iteration toggles; set `=1` for serializing-switch hardware). dit-region.mir REGION and dit-loop-hoist.mir HOIST run lines pinned to `-taint-dit-loop-hoist=1`.
 
 **Impl state as of 2026-07-21** (historical snapshot; the lit suite is 29 tests
 today): all of the above through B(c) are committed and pushed (on
@@ -598,14 +606,15 @@ intended behavior, not a hazard). Pairs naturally with `-taint-dit-switch-cyc=0`
 (per-iteration toggles are free), and the soundness verifier still gates every
 build. Measured on `firefox_convolve_int` at `-O2` (switch-cyc=0): `convolve_pixel_int`
 drops from 78% → **66%** of instructions covered (100 vs 67 DIT-off) as the in-loop
-non-need blocks flip off; 0 fallbacks; checksum unchanged vs unhardened. This is the
-current finest granularity (block-level); protecting only the Need *instructions*
-within a block would need a sub-block (instruction-level) emit, not yet built.
+non-need blocks flip off; 0 fallbacks; checksum unchanged vs unhardened. This was the
+finest granularity (block-level) until 2026-09-02; the sub-block (instruction-run)
+emit was built then and is the default since 2026-09-05 (§5.7).
 Test: `taint-analysis-dit-loop-hoist.mir` (`@loop_public` - hoist covers the public
 loop body, block-minimal leaves it DIT-off).
 
-*Switch cost defaults to 0 - finest grain first (2026-07-17).* `-taint-dit-switch-cyc`
-(cycles per `MSR DIT`) defaults to **0**, so toggles are free and the admission test
+*Switch cost defaults to 0 - finest grain first (2026-07-17; HISTORICAL, the default
+has been 30 since 2026-08-24).* `-taint-dit-switch-cyc`
+(cycles per `MSR DIT`) defaulted to **0**, so toggles were free and the admission test
 never merges (any positive `-taint-dit-dwell-per-instr` wins): region mode then emits
 the smallest DIT groups increment (b) can produce - each `On…Off…On` corridor stays
 split, DIT wrapping only the minimal Need regions. This is the deliberate starting
@@ -638,6 +647,43 @@ single merge/split answer; the block-frequency weighting makes the hot part domi
 correctly, but true per-sub-gap decisions would need to decompose the component.
 
 ---
+
+## 5.7 Intra-block placement is the default (2026-09-05)
+
+Everything above partitions BLOCKS: a block with any Need is On and covered
+whole, public instructions included, and §7 argues that the remaining waste
+at mixed joins is not worth an edge-splitting emitter. The sub-block emitter
+built on 2026-09-02 (`-taint-dit-sub-block`) works INSIDE a block without
+changing the block partition: the entry enable sinks to the block's first
+Need, a pre-return clear hoists up past the last, and a DIT-off hole is cut
+across any Need-free run of at least `-taint-dit-sub-block-min-run` (8)
+instructions. Block entry and exit states are what the corridor test and the
+verifier reason about, and they are unchanged, so both apply as before. It
+shipped default OFF after the mbedTLS resumption measurement (2% less
+over-protection per resumption for 0.06 points of oracle coverage, verdict
+unchanged); **the user made it the default on 2026-09-05**, and
+`-taint-dit-sub-block=0` is block placement, kept as the A/B.
+
+Two things it taught on the way in. The scheduler bounds it: on a one-block
+function with a public hash preamble and four secret multiplies, the enable
+sinks past three of four public rounds and stops at the key loads, which the
+scheduler had hoisted up into the preamble, since a load of secret data is
+itself a Need. And it exposed a seeding bug that whole-block cover had
+hidden: a `tainted-pointee` argument passed on the STACK (index >= 8) was
+seeded into its fixed frame object as a secret value, so the pointer loaded
+from the slot was data-tainted, the load through it came back public, and
+the multiply on the secret ran DIT-off once the clear could hoist above it
+(`taint-analysis-stack-seeded-arg.mir` fails on the pre-fix compiler under
+the new default). Incoming fixed frame objects are now seeded as both kinds,
+value and pointee, since the callee cannot tell which a slot holds.
+
+Tests whose expectations moved: `taint-analysis-stack-args.mir` (the
+caller's clear hoists above the call, which is not a Need under the callee
+contract), `taint-analysis-callee-memory.mir` (the enable sinks past the
+pointee-carrying call to the tainted reload), `taint-analysis-dit-precision.mir`
+(`mixed` is now precision 100, coverage 20; the block form is pinned as a
+second run line), `taint-dit-abi.c` (the entry read still precedes the
+enable, which now sits below the prologue).
 
 ## 6. Evaluation plan
 
@@ -748,7 +794,9 @@ Only the first two are results; the next two are the high-CoV benchmarks (6.2%,
 execute essentially no switches, so switch count cannot be their cause - they are
 codegen lottery between two builds.
 
-**Conclusion: keep `switch-cyc=0` as the default.** The cost model demonstrably
+**Conclusion (2026-08, SUPERSEDED 2026-08-24 when the default became 30 on the
+libsodium composite evidence in `docs/results/dit-switch-cyc-confirmation.md`): keep
+`switch-cyc=0` as the default.** The cost model demonstrably
 works (it moves the number the predicted way on exactly the benchmarks that
 execute switches), but 45 fewer switches buys ~0.5% where it can and nothing
 elsewhere. The scoreboard against always-on is unchanged, 5 wins / 4 either way.

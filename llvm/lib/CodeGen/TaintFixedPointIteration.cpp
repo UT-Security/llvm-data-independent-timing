@@ -273,6 +273,37 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           TSI.storeSummary(*Callee, CalleeSummary);
           Changed = true;
         }
+        // The callee's `.dit` twin has no callers while the fixed point runs
+        // (calls are redirected to it only at emission), so it would be
+        // analysed with none of the argument taint its original receives here
+        // - clean, a forwarder with nothing to protect. While a twin was
+        // covered whole that was invisible; a NARROWING twin
+        // (-taint-dit-twin-narrow) places by its Needs, and the gem5 oracle
+        // found fe25519_invert.dit, unseeded and reached, running its whole
+        // body DIT-off: 42,848 secret operations per two signatures. So the
+        // twin inherits everything its original is handed: the same
+        // argument-index sets, the same stack-argument bit. Monotone, like the
+        // original's own update, so the fixed point still converges.
+        if (Function *Twin =
+                M.getFunction((Callee->getName() + ".dit").str());
+            Twin && Twin->hasFnAttribute("taint-dit-clone") &&
+            !Twin->isDeclaration()) {
+          FunctionTaintSummary TwinSummary = TSI.getSummary(*Twin);
+          bool TwinChanged = false;
+          for (unsigned I : CalleeSummary.TaintedArgIndices)
+            TwinChanged |= TwinSummary.TaintedArgIndices.insert(I).second;
+          for (unsigned I : CalleeSummary.PointeeTaintedArgIndices)
+            TwinChanged |=
+                TwinSummary.PointeeTaintedArgIndices.insert(I).second;
+          if (CalleeSummary.StackArgTainted && !TwinSummary.StackArgTainted) {
+            TwinSummary.StackArgTainted = true;
+            TwinChanged = true;
+          }
+          if (TwinChanged) {
+            TSI.storeSummary(*Twin, TwinSummary);
+            Changed = true;
+          }
+        }
         return true;
       });
 
@@ -611,8 +642,9 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
   // Step 3b: Compute the PreservesDIT summary bit (greatest fixed point).
   // A function preserves PSTATE.DIT iff it will not be DIT-instrumented (no
   // tainted runs) and every call it makes is direct to a preserving in-TU
-  // callee. Tail calls count: the tail-callee runs inside the caller's frame
-  // from its own caller's perspective. Externals/indirect targets keep the
+  // callee, or to an external under -taint-dit-external-preserves. Tail calls
+  // count: the tail-callee runs inside the caller's frame from its own
+  // caller's perspective. Other externals and indirect targets keep the
   // conservative default (false). Used by insertTaintDITSwitches to elide
   // after-call DIT re-asserts; must run before instrumentation below.
   if (TaintInsertDIT) {
@@ -644,7 +676,8 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
                 if (!MI.isCall())
                   continue;
                 const Function *Callee = findCalledFunction(M, MI);
-                if (Callee && TSI.getSummary(*Callee).PreservesDIT)
+                if ((Callee && TSI.getSummary(*Callee).PreservesDIT) ||
+                    taintExternalCallPreservesDIT(MI, M))
                   continue;
                 S.PreservesDIT = false;
                 TSI.storeSummary(F, S);
@@ -753,7 +786,8 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
               if (!MI.isCall() || !MI.isReturn())
                 continue; // not a tail call
               const Function *TailCallee = findCalledFunction(M, MI);
-              if (!TailCallee || !TSI.getSummary(*TailCallee).PreservesDIT)
+              if (!(TailCallee && TSI.getSummary(*TailCallee).PreservesDIT) &&
+                  !taintExternalCallPreservesDIT(MI, M))
                 return; // cannot guarantee we return with DIT still set
             }
 

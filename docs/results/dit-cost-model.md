@@ -414,7 +414,7 @@ workload is DIT-insensitive"*, **not** *"DIT is free."*
   engineering choice on every workload measured so far. The LVP pointer-chase (4.00x)
   is the one confirmed sensitive pattern - a *real* application built around that
   access pattern is what to hunt for next.
-- **Retune the shipped defaults.** `-taint-dit-switch-cyc=0` encodes "toggles are
+- ~~**Retune the shipped defaults.**~~ DONE 2026-08-24 (`switch-cyc=30`, `loop-hoist=1`). As written: `-taint-dit-switch-cyc=0` encodes "toggles are
   free", which is false on M4 by ~30 cyc each, and measurably costs ~2x the overhead
   of the tuned setting. Either change the defaults to the serializing-hardware values
   or make the cost model derive them from a target hint.

@@ -1,5 +1,12 @@
 # 04 - libsecp256k1 soundness
 
+> **Compiler note (audit 2026-09-05).** The numbers here were measured under the
+> defaults of their date: the inherit contract, no DIT twins, block placement. The
+> shipped defaults changed on 2026-09-05 (callee contract, twins, intra-block
+> placement; `docs/reference/harden-runbook.md`), and the pre-contract seed files
+> protect nothing under them. See the status table in `paper_experiments/README.md`
+> before re-running.
+
 **Status: complete on gem5.** Re-measured 2026-09-01 against compiler
 `3ab5812f6207`, because the pass changed materially that day (meta-instruction
 fix, module-wide secret globals, record dedupe) and the earlier figures were

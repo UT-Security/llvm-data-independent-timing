@@ -1,35 +1,68 @@
-# Hardening a library with the shipped defaults, and running it on Apple silicon
+# The run document: how to run the pass, every flag, every default
 
-**As of 2026-09-05 the defaults are the callee contract and the DIT twins**
-(`docs/design/dit-callee-contract.md`, `docs/design/dit-cloning.md`). This is
-the end-to-end recipe: what to build, what to seed, how to know it worked,
-which control arms to build next to it, and what to expect on an M4 or M5.
-The gem5 rigs that produced the numbers in the design notes are named at the
-end; on silicon the same binaries run as they are.
+**This is the operating reference.** How to build the compiler, how to harden
+one file or a whole library, what every flag means and what it defaults to,
+which control arms to build next to a hardened build, what the reports say,
+and what to expect on an M4 or M5. `CLAUDE.md` at the repo root holds the
+gotchas; the design docs under `docs/design/` hold the reasoning. Defaults are
+as of **2026-09-05** and are read from the code (`cl::init` in
+`llvm/lib/CodeGen/TaintAnalysis.cpp`, `TaintFixedPointIteration.cpp`,
+`llvm/lib/Transforms/Instrumentation/TaintSourceAnnotator.cpp`,
+`llvm/lib/Target/AArch64/`); when this file and the code disagree, the code
+wins and this file is the bug.
 
-## 0. What the defaults do
+## 0. Quick start
 
+```
+ninja -C build                                                  # the compiler (see 1)
+build/bin/clang -O2 -ftaint-harden=seeds.txt -c foo.c -o foo.o   # harden one TU
+build/bin/llvm-objdump -d foo.o | grep -ciE '\bmsr\b.*\bdit\b'  # switch sites (-i matters)
+```
+
+`seeds.txt` names the parameters that carry secrets (section 3). Without
+`-ftaint-harden` codegen is byte-for-byte unchanged; with it and an empty
+seed file it is byte-identical to plain `-O2`.
+
+## 1. What the defaults do
+
+The one-line command above gives you all of this:
+
+- **Region placement, intra-block** (`-taint-dit-placement=region`,
+  `-taint-dit-sub-block=1`). Only the secret-dependent code runs under DIT:
+  a clean preamble stays off, a loop that touches a secret is covered whole
+  with one enable at its preheader (`-taint-dit-loop-hoist=1`), a short
+  public corridor between two secret regions is merged when two switches
+  would cost more than the dwell (`-taint-dit-switch-cyc=30`,
+  `-taint-dit-dwell-per-instr=1.0`), and inside a covered block the enable
+  sinks to the first secret instruction, the clear hoists past the last, and
+  a public run of 8 or more instructions is cut out
+  (`-taint-dit-sub-block-min-run=8`). A verifier checks every secret
+  instruction is reached DIT-on and falls the function back to
+  whole-function coverage if not; a second verifier runs on the final MIR.
 - **Every function protects its own secrets** (`-taint-dit-contract=callee`).
   A call is never covered by the caller; a secret reaching a callee this
   build cannot see is an obligation in the info-loss report, with the seed
   line that fills it. Seeding is monotone: adding a seed never removes
   protection elsewhere.
-- **A DIT-on caller calls a twin** (`-taint-dit-clone-seeded`). Every seeded
-  function, and everything it reaches by direct call in its TU, has a
-  `<name>.dit` copy that is entered with DIT already set and emits no switch;
-  a call made from DIT-on code goes to the twin, so the callee stops
+- **A DIT-on caller calls a twin** (`-taint-dit-clone-seeded=1`). Every
+  seeded function, and everything it reaches by direct call in its TU, has a
+  `<name>.dit` copy that is entered with DIT already set and emits no
+  switch; a call made from DIT-on code goes to the twin, so the callee stops
   toggling for itself and the caller stops re-asserting. Across TUs the twin
   is named on the strength of the seed file and the owned-symbols list.
-- **Tail calls are off** TU-wide under `-ftaint-harden` (a tail call has no
-  epilogue to clear DIT in). No extra flag is needed for that any more;
-  `-fno-optimize-sibling-calls` is harmless but redundant.
-- Region placement, `switch-cyc=30`, loop hoist, the call-site mod-set gate:
-  unchanged.
+- **Tail calls are off** TU-wide (`-taint-no-tail-calls=1`): a tail call has
+  no epilogue to clear DIT in, so one tail call would turn selective
+  placement into blanket coverage for the rest of the program.
+- **The call-site mod-set gate is on**: a callee's memory clobber applies
+  only at call sites that pass it a secret (`-taint-no-modset-gate=0`).
+- **A callee outside the build is assumed to clear DIT** unless you say
+  otherwise (`-taint-dit-external-preserves=0`): DIT-on code re-asserts after
+  every libc call. Section 4 says when to turn that off.
 
-The old behaviour is one flag away for an A/B: `-mllvm
--taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0`.
+The pre-2026-09-05 compiler is three flags away, for an A/B:
+`-mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-sub-block=0`.
 
-## 1. Build the compiler
+## 2. Build the compiler
 
 ```
 cmake -S llvm -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -37,28 +70,74 @@ cmake -S llvm -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
 ninja -C build            # NO target list: libLTO must not go stale
 ```
 
-On macOS, once per build directory, so `#include <stdio.h>` resolves:
+The taint analysis links into `clang`, `llc` and `libLTO`; a targeted build
+that names only `clang llc` leaves `libLTO` stale and an LTO link then runs
+the old analysis with no error. On macOS, once per build directory, so
+`#include <stdio.h>` resolves:
 
 ```
 printf -- '-isysroot %s\n' "$(xcrun --show-sdk-path)" > build/bin/clang.cfg
 ```
 
-## 2. Seed the entry points
+Tests: `build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate clang/test/CodeGen/taint-*.c` (58 tests).
 
-One file, one line per secret parameter, 0-based, `pointee` when the pointer
-is public and the memory behind it is secret; `#` comments; C++ needs mangled
-names. Start with the API entry points that receive the key:
+## 3. How to run it
+
+### The clang flag (the way to build anything you will measure)
+
+```
+build/bin/clang -O2 -ftaint-harden=<seed file> [-mllvm -taint-...] -c file.c -o file.o
+```
+
+`-ftaint-harden` runs the `taint-annotate` IR pass at the end of the
+optimiser (it stamps the seeded parameters), then adds `TaintInterprocPass`
+as a module pass right after PrologEpilogInserter, so every MachineFunction
+of the TU is analysed at once and the switches are inserted before the
+post-RA passes. Every backend flag below is passed as `-mllvm -<flag>`.
+Debug info (`-g`) is supported. **Not compatible with LTO for that TU**: the
+pass lowers to an object eagerly.
+
+### The taint-source (seed) file
+
+One line per secret parameter, 0-based, `#` comments, C++ needs mangled names:
+
+```
+function_name,arg_index            # the argument VALUE is secret
+function_name,arg_index,pointee    # the pointer is public, the memory behind it is secret
+```
+
+Start with the API entry points that receive the key:
 
 ```
 crypto_sign_ed25519_detached,4,pointee
 crypto_aead_chacha20poly1305_ietf_encrypt,8,pointee
 ```
 
-Seeds are TU-scoped parameter attributes. A function that is only DECLARED
-in a TU gets a stamp saying it is seeded elsewhere; nothing else crosses a TU
-boundary, which is why step 4 exists.
+An argument index past the function's arity is a fatal error since
+2026-09-03 (`-mllvm -taint-seed-report=F` plus `utils/taint_seed_check.py`
+finds seeds that applied nowhere). Seeds are TU-scoped parameter attributes;
+a function that is only DECLARED in a TU is stamped as seeded elsewhere, and
+nothing else crosses a TU boundary, which is why the seed loop in section 4
+exists.
 
-## 3. Build the library, twice
+### The wrapper and llc (debugging, the report files the clang flag does not write)
+
+```
+utils/taint_harden_c.sh --opt-level -O2 file.c        # seed file: file_secret.txt next to it
+```
+
+It runs `clang -emit-llvm`, `opt -passes=taint-annotate -taint-src=...`,
+`llc -stop-after=prologepilog`, a perl strip of `<mcsymbol >` (MIR CFI
+serialisation bug), `llc -enable-new-pm -run-taint-interproc -taint-insert-dit`
+with the report flags, then `llc -start-after=prologepilog -filetype=obj`.
+It still round-trips through MIR text, so its codegen differs from the clang
+path by a per-binary layout lottery (up to +2.65% measured); never time a
+wrapper build against a clang build. `-run-taint-interproc` is the `llc`
+entry point for the pass on a `.mir` file, which is how the lit tests run it.
+
+## 4. Hardening a library
+
+### Build it twice: once to learn what it defines, once with that list
 
 Every TU of the library must see the same flags; put them in `CFLAGS`. The
 info-loss report APPENDS, so remove it before each build.
@@ -90,7 +169,22 @@ call is only ever redirected to a twin when the callee is in the list**.
 Without the list the twins work inside each TU and a cross-TU call keeps the
 original, which protects itself. Nothing is lost but the optimisation.
 
-## 4. Close the seed loop
+Add the external-callee assumption on the second build too:
+
+```
+   -mllvm -taint-dit-external-preserves \
+```
+
+Every callee the build does not define is otherwise assumed to clear DIT, and
+DIT-on code re-asserts after each one: on libsodium that is three `msr DIT`
+per argon2 block after glibc's `memcpy`, 393,216 per hash. With the flag a
+callee outside the build is assumed never to write PSTATE.DIT and the
+re-assert after it goes; a symbol the owned list names is still yours and
+keeps it. The assumption is wrong only for an external function that calls
+back into hardened code (`qsort` with a hardened comparator, `pthread_once`),
+which returns with the mode wherever the callback left it.
+
+### Close the seed loop
 
 ```
 utils/taint_obligations.py loss.txt --owned owned.txt \
@@ -116,7 +210,8 @@ Two obligations no seed can fill, and the report says so: a libc mover
 linked ahead of libc (`gem5-DIT benchmarks/taint_oracle/dit_movers/`), and
 an allocator, whose repair is upstream.
 
-## 5. Check that it worked
+
+### Check that it worked
 
 ```
 build/bin/llvm-objdump -d src/.libs/libfoo.a | grep -ciE '\bmsr\b.*\bdit\b'   # switch sites
@@ -134,6 +229,110 @@ are not expected; each names a function and a reason.
 
 `-mllvm -taint-dit-precision-report=prec.txt` gives per-function
 need/underdit/collateral/switch counts, twins included as `<name>.dit`.
+
+
+## 5. Every flag
+
+Grouped by what it controls. "Default" is the code's `cl::init`. A flag
+marked **A/B** exists to build a control arm and should not be on in a build
+you ship; one marked **retired** still parses but should not be used.
+
+### Driver
+
+| flag | values | default | meaning |
+|---|---|---|---|
+| `-ftaint-harden=<file>` | seed file | off | Turns the whole pipeline on for this TU: `taint-annotate` at the end of the optimiser, `TaintInterprocPass` after PEI, `-taint-insert-dit`, and the TU-wide tail-call disable (stamped at codegen so tail-recursion elimination still runs). An empty file gives a byte-identical `-O2` object. |
+| `-ftaint-dit-abi` | | off, **not shipping** | The callee-saved PSTATE.DIT ABI (`docs/design/dit-abi.md`): `MRS` at entry, restore at every return, nothing at call sites. Measured and shelved (`docs/results/dit-abi-measured.md`); refuses `-taint-no-tail-calls=0`. |
+| `-mllvm -<flag>` | | | Passes any backend flag below through clang. |
+
+### Placement
+
+| flag | values | default | meaning |
+|---|---|---|---|
+| `-taint-insert-dit` | 0/1 | 0, implied 1 by `-ftaint-harden` | The master switch. With it off the analysis still runs and the report files are written, but no `MSR DIT` is emitted: the unprotected A/B twin of a build. `-mllvm -taint-insert-dit=0` next to `-ftaint-harden` wins. |
+| `-taint-dit-placement` | `region`, `function` | `region` | `region`: only secret-dependent code is covered (below). `function`: `MSR DIT, #1` at entry of any function with a secret, `#0` before each return, re-assert after each call that may clear. |
+| `-taint-dit-sub-block` | 0/1 | 1 (since 2026-09-05) | Intra-block placement: the entry enable sinks to the block's first secret instruction, a pre-return clear hoists past its last, a DIT-off hole is cut across a public run of at least `-taint-dit-sub-block-min-run`. Block entry/exit states are unchanged. `0` covers a block with any secret instruction whole. |
+| `-taint-dit-sub-block-min-run` | n | 8 | Shortest public run worth cutting a hole across. Independent of the switch cost on purpose: two switches cost two instructions of I-cache even when the mode write is free. |
+| `-taint-dit-loop-hoist` | 0/1 | 1 | A loop that contains a secret instruction is covered whole and its one enable is hoisted to the preheader. `0` covers only the blocks that contain one, toggling every iteration. |
+| `-taint-dit-switch-cyc` | cycles | 30 | What one `MSR DIT` costs, for the corridor admission test: a public corridor between two covered regions is merged unless its dwell (`instructions x dwell-per-instr`, block-frequency weighted) exceeds two switches. 30 is the measured serialising cost on the M5; at 30 against dwell 1.0 the static crossover is ~60 instructions. `0` asserts switches are free and was the default until 2026-08-24; nothing supports it. |
+| `-taint-dit-dwell-per-instr` | cycles | 1.0 | The other side of the admission test. |
+| `-taint-no-tail-calls` | 0/1 | 1 | Tail calls off TU-wide under `-ftaint-harden`. `0` restores them (**A/B**, worth +8.89 points at 9.4% secret on serialising hardware); refused under `-ftaint-dit-abi`. |
+
+### The contract and the twins
+
+| flag | values | default | meaning |
+|---|---|---|---|
+| `-taint-dit-contract` | `callee`, `inherit` | `callee` (since 2026-09-05) | `callee`: every function protects its own secrets; a call is never a Need; a secret reaching a callee the build cannot see is an obligation in the info-loss report; a callee-saved restore is a Need. `inherit`: a secret-passing call is a Need and the caller holds DIT across it; the `AlwaysEnteredWithDIT` ownership rule and the Scenario-B assertion exist only here. |
+| `-taint-dit-clone-seeded` | 0/1 | 1 (since 2026-09-05) | The DIT twins: every seeded function and everything it reaches by direct call in its TU gets a `<name>.dit` copy entered DIT-on that emits no enable or clear (it still re-asserts after a call of its own that may clear); a call made from DIT-on code is redirected to it. Every TU must be built with the same value. `0` for an **A/B**. |
+| `-taint-owned-symbols=<file>` | file, one symbol per line | none | The functions this build defines (`utils/taint_owned_symbols.sh` over the build's objects). Two effects: the obligation report files a callee outside it as `external-call` (out of scope, no seed proposed), and a cross-TU call is redirected to a twin ONLY when the callee is in the list. Without it: in-TU twins only, originals across TUs, nothing lost but the optimisation. |
+| `-taint-dit-external-preserves` | 0/1 | 0 | Assume a direct callee this module does not define, and the owned list does not name, never writes PSTATE.DIT: no re-assert after it, and a function whose only calls are external keeps `PreservesDIT`. Right for libc (removes every re-assert after `memcpy`: all 395,758 of argon2id's); wrong for an external that calls back into hardened code. Indirect calls unchanged. `docs/results/dit-external-preserves-2026-09-05.md`. |
+| `-taint-dit-twin-narrow` | 0/1 | 0 | Region placement inside a twin: a clear at its top over a public preamble, corridors, an enable before every return. Measured not to pay on libsodium (`docs/results/dit-twin-narrowing-2026-09-05.md`). |
+| `-taint-dit-twin-switch-cyc` | cycles, -1 | -1 | The switch cost inside a narrowing twin; -1 uses `-taint-dit-switch-cyc`, 0 is maximal narrowing. |
+| `-taint-dit-clone-list=<file>` | file | none | The older, explicit twin list (local linkage only); superseded by `-taint-dit-clone-seeded`. |
+| `-taint-dit-abi` | 0/1 | 0, **not shipping** | The backend half of `-ftaint-dit-abi`, for `llc` runs. |
+
+### Analysis precision
+
+| flag | values | default | meaning |
+|---|---|---|---|
+| `-taint-no-modset-gate` | 0/1 | 0 | Turns off the call-site mod-set gate: a callee's memory clobber then applies at every call site, not only where a secret is passed. Maximally conservative, much slower; the escape hatch for taint that does not travel by arguments. The strict source condition and return-call-site gating are unconditional with the gate. |
+| `-taint-arg-provenance` | 0/1 | 0 | B1: name the object an incoming pointer argument points at, so a callee's arg-pointee mod-set applies to that object rather than clobbering all caller memory. Measured to close no leak alone (`docs/design/frame-address-gap.md`). |
+| `-taint-arg-pointee-args` | 0/1 | 0 | B2: a call argument that points at a tainted arg pointee passes a secret. Needs B1. |
+| `-taint-libc-model` | 0/1 | 0 | Model `memcpy`/`memmove`'s memory effect instead of treating them as opaque clobbers of all caller memory. |
+| `-taint-unknown-load-tainted` | 0/1 | 0 | U1: a load whose object cannot be resolved is secret whenever any memory-resident secret exists. Byte-neutral on fully seeded mbedTLS (`docs/results/phase2-unknown-tainted-2026-09-04.md`). |
+| `-taint-no-mmo-load-tainted` | 0/1 | 0 | U2: a load with no memory operand at all is secret under the same condition. Byte-neutral likewise. |
+| `-taint-frame-addr-args` | 0/1 | 0, **retired** | Whole-frame version of B2; superseded by P1b's per-object rule, measured +44 points against the gate. Should have been deleted on 2026-08-24; still parses. Do not enable. |
+
+Not flags, always on: the product taint domain (a value is (Data, Pointee)),
+PHI look-through for loop-carried pointers, a global written with a secret
+being secret module-wide, `ReturnsPointeeTainted` and the seeded-return
+gate, register-tuple parts, a twin inheriting its original's argument taint,
+stack-passed arguments seeded as both kinds, the mod-set gate's strict
+source condition.
+
+### Reports (all `-mllvm`; a path argument each)
+
+| flag | writes | notes |
+|---|---|---|
+| `-taint-info-loss-report=F` | one numbered record per site where the analysis lost the secret: severity, what the pass did instead, what it cost, and the seed line that repairs it; obligations under the callee contract | **Appends** across clang invocations, so delete it before a build. Severe losses also warn on stderr with no flag. The seed loop's input (`utils/taint_obligations.py`). |
+| `-taint-seed-report=F` | one APPLIED/DECLARED/ABSENT record per seed line per TU | Appends. `utils/taint_seed_check.py` finds seeds that applied nowhere. |
+| `-taint-dit-precision-report=F` | per function: need, underdit, collateral, switches, precision, coverage, loop-weighted variants; twins as `<name>.dit` | The number a placement should be judged by; read the loop-weighted columns (`docs/design/dit-precision.md`). |
+| `-taint-callsite-report=F` | `ESCAPE` lines (secrets passed to callees the pass cannot instrument), `DITLEAK` lines (functions that exit with DIT set: `tailcall`, `return`, `tailcall-ungated`) | `DITLEAK return` is a placement bug and also warns on stderr. |
+| `-taint-uncovered-report=F` | tainted instructions PSTATE.DIT does not protect: divide/sqrt, secret-dependent addresses, secret branches | Gap G2: without it these are silent false assurance. |
+| `-taint-clobber-report=F` | call sites that make the caller treat memory as secret | Where a taint explosion originates. |
+| `-taint-dit-reassert-report=F` | every call site followed by a re-assert, with the reason (`indirect`, `external`, `clears-on-exit`, `propagates-unresolvable`) | The per-call switch cost, itemised. |
+| `-taint-dit-join-report=F` | Off-to-On boundaries, split by whether the join is mixed | The cost edge bundling would remove; measured small (`dit-placement.md` §7). |
+| `-taint-nonlocal-report=F` | sites where the mode is simply left set: `setjmp`, `musttail`, unwind, no scratch register | Dwell, never exposure. |
+| `-taint-frameref-report=F` | whether each SP/FP-relative address resolves to a frame object | The go/no-go measurement for P1b. |
+| `-taint-output=F`, `-taint-regions-output=F`, `-taint-source-regions-output=F` | the per-instruction taint dump (TSV), the coalesced regions, the same by source line | The regions feed these reports only; they do not drive placement (the merge gap is a constant 2). |
+| `-debug-only=taint-interproc` | the fixed-point trace on stderr | Needs an assertions build. |
+
+### Instrumentation and measurement controls
+
+| flag | default | meaning |
+|---|---|---|
+| `-taint-dit-nop-switches` | 0 | **A/B.** Every inserted `MSR DIT` is emitted as `HINT #0` at the asm-printer, so layout and instruction count match the real build exactly with no mode switch executing. The instruction-matched baseline every measurement uses. Not neutral: a NOP costs ~0.25% more than a renamed `MSR DIT`. |
+| `-taint-dit-oracle-hooks` | 0 | Staples a call to the gem5 oracle's re-arm trampoline to every switch. Instrumentation only; never time such a build. |
+| `-taint-dit-verify-warn-only` | 0 | The final-MIR DIT verifier (`AArch64DITVerifier`, runs last, fails the build on a secret instruction reached DIT-off) reports instead of failing. The object is unsound; for enumerating sites only. |
+
+### Tools
+
+| tool | what it does |
+|---|---|
+| `utils/taint_owned_symbols.sh <objects>` | the owned-symbols list from a build's objects |
+| `utils/taint_obligations.py <loss report> --owned F --next-round out --seeds in` | splits the info-loss report into OWNED / INDIRECT / EXTERNAL and writes the next round's seed file |
+| `utils/taint_seed_check.py` | seeds that applied nowhere, from `-taint-seed-report` |
+| `utils/taint_dit_precision.py`, `utils/taint_region_distance.py` | precision-report and region-spacing readers |
+| `utils/taint_harden_c.sh` | the wrapper flow (section 3) |
+
+### What stderr says
+
+One summary line per TU with obligations under the callee contract
+(`N secret-passing call site(s) reach M callee(s) this build does not cover`)
+and one for external callees when an owned list is given. A severe
+information loss (`DIT stays SET past this call`) warns with no flag.
+`falling back to whole-function coverage`, `DITLEAK` and `cannot carry` name
+a function and a reason and are not expected in a clean build.
 
 ## 6. The control arms
 
@@ -167,13 +366,20 @@ first `MSR DIT`, so hardened binaries run there only under gem5 or
 Nothing else is needed: the binary sets and clears PSTATE.DIT itself. What
 to know when reading the numbers:
 
-- **Apple's `MSR DIT` is the renamed kind.** The switches are close to free;
-  what the hardened arm pays is DIT dwell, the predictors it turns off while
-  set (the load value predictor above all). Expect the twins arm to land
-  near blanket where the secret lane dominates and well under it where a
-  public lane does, and expect the NOP arm to sit ABOVE the real arm. The
-  serialising column of the gem5 tables has no silicon counterpart on an M4
-  or M5.
+- **Apple's `MSR DIT` serialises; it is the gem5 SERIALISING column that
+  has a silicon counterpart, not the renamed one.** Measured on the M5: a
+  `MSR DIT` that changes the bit costs ~30 cycles and `MRS DIT` 1 cycle
+  (`docs/results/dit-cost-model.md`); an executed clear 34.45 cycles against
+  -0.01 for a skipped one, immediate and register forms alike
+  (`docs/design/dit-abi.md`, the `dit_exitform` harness); 40 to 45 cycles per
+  executed switch across three libsodium benchmarks and ~24 on the signed
+  lookup, by division (experiments 09 and 02). gem5's serialising model
+  charges 19 to 37. The renamed model is a counterfactual for hardware that
+  does not exist yet; nothing in this repository shows Apple renaming the
+  write. (An earlier version of this bullet said the opposite, without
+  evidence; do not cite it.) So on an M4 or M5 expect the switch count to
+  matter as the serialising column says it does, plus the dwell the
+  predictors cost while DIT is set.
 - **Layout matters at the percent level.** Measure several `argv[0]` lengths
   or binary paths and report the spread, as the experiments do
   (`paper_experiments/*/README.md`, "five stack offsets").
