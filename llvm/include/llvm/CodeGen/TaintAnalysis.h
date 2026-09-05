@@ -156,6 +156,16 @@ extern cl::opt<std::string> TaintCallsiteReportFile;
 /// about it, what that cost, and the annotation that would restore precision.
 extern cl::opt<std::string> TaintInfoLossReportFile;
 
+/// Ownership for the callee contract's obligation report: a file naming the
+/// functions THIS BUILD defines, one per line (utils/taint_owned_symbols.sh
+/// over the build's objects). An unseen callee not in it is external code the
+/// developer does not own - libc, another library - and is reported as an
+/// `external-call` record (Info: out of scope for the seed loop, the taint
+/// still propagates through the call) instead of an obligation with a seed
+/// line. Without the file every named callee is an obligation, as before.
+/// Only the report classification changes; codegen is identical.
+extern cl::opt<std::string> TaintOwnedSymbolsFile;
+
 /// Command-line option for the DIT-uncovered report (gap G2): tainted
 /// instructions PSTATE.DIT does not actually protect - divide/sqrt (not
 /// DIT-listed), secret-dependent memory addresses (cache/TLB timing), and
