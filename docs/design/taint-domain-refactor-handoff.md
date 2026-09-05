@@ -106,7 +106,7 @@ kill taint. That is why their overhead reaches 27.84x on argon2id. Our 1.5%
 depends on the precision we have. **Keep the precision, fix the factoring.**
 
 Do not touch placement (`insertTaintDITSwitches`, the region emitter, the
-sub-block code guarded by `-taint-dit-sub-block`, default OFF). Phase 1 is
+sub-block code guarded by `-taint-dit-sub-block`, default OFF then, ON since 2026-09-05). Phase 1 is
 the analysis domain only.
 
 Do not touch gem5-DIT. Phase 0 has uncommitted changes in
@@ -191,7 +191,7 @@ oracle runs going.
 
 `llvm/lib/CodeGen/TaintAnalysis.cpp` - the sub-block emitter
 (`cutSubBlockHoles`, `sinkEntryEnableTo`, `hoistExitDisableTo`, flags
-`-taint-dit-sub-block` default OFF and `-taint-dit-sub-block-min-run`), all in
+`-taint-dit-sub-block`, default OFF then and ON since 2026-09-05, and `-taint-dit-sub-block-min-run`), all in
 the EMISSION section around line 3800-4300. Phase 1 edits the STATE and
 PROPAGATION sections (header struct, `propagateTaintMI` ~1217-1720,
 `replayTaint`, `TaintFixedPointIteration.cpp`). Different hunks of the same

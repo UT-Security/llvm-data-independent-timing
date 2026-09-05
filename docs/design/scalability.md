@@ -146,8 +146,10 @@ equal its zero-initialised value and successors would never be pushed. That is
 the case the old `else if (InChanged)` push was covering.
 
 **Phase breakdown for `quickjs.c`** (sampled across the compile): the MIR
-print/parse round-trip costs about **90 s** - real but bounded, and *not* the
-ceiling. Everything past that is the taint analysis.
+print/parse round-trip cost about **90 s** - real but bounded, and *not* the
+ceiling; it is gone from the clang path since 2026-08-30 (the pass runs in the
+pipeline after PEI) and survives only in the `llc` wrapper. Everything past
+that is the taint analysis.
 
 ## Still open: taint spread, which is a different problem
 

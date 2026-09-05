@@ -23,11 +23,12 @@ When the flag is **absent**, codegen is byte-for-byte unchanged. The produced `.
 is a normal object linked by Firefox's normal link step. **Only the compile of
 chosen TUs changes; linking and everything else is untouched.**
 
-Internally the flag drives a legacy-PM → in-memory-MIR-round-trip → legacy-PM flow
-(equivalent to the old `llc -stop-after=prologepilog` / `-run-taint-interproc` /
-`-start-after=prologepilog` steps), because the interprocedural pass needs every
-MachineFunction of the TU resident at once. This is an implementation detail - the
-build only sees one `clang -c`.
+Internally (since 2026-08-30) the flag adds `TaintInterprocPass` as a module pass
+right after PrologEpilogInserter in the ordinary codegen pipeline, which gives it
+every MachineFunction of the TU at once with no serialisation; before that date it
+round-tripped through MIR text, which dropped C++ exception tables. This is an
+implementation detail - the build only sees one `clang -c`, and an empty-seed build
+is byte-identical to `-O2`.
 
 ---
 
@@ -86,7 +87,9 @@ _ZN7mozilla3gfx19FilterNodeSoftware18RenderConvolve...EPKhj,1,pointee
 mode, and the `-taint-barrier-mode` selector that chose between them, were removed
 2026-07-14 - do not look for that flag). Placement granularity defaults to
 **`region`** (fine-grain: only the secret-dependent regions run with DIT on, clean
-preambles and public loop scaffolding stay DIT-off). Add
+preambles and public loop scaffolding stay DIT-off; intra-block since 2026-09-05),
+under the callee contract with the DIT twins (every function protects its own
+secrets; `docs/reference/harden-runbook.md` is the current recipe). Add
 `-mllvm -taint-dit-placement=function` for the coarse whole-function policy
 (`MSR DIT, #1` at entry / `MSR DIT, #0` before each return of any function
 containing taint). Note the threat model (data-independent *timing*, not

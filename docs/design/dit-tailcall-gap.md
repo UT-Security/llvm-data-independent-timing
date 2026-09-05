@@ -149,8 +149,10 @@ existing post-call re-assert logic applies.
 That cannot be done where the bug lives. The taint pass runs **post-prologepilog**
  - by then the frame is gone and cannot be resurrected. `notail` has to be decided
 before instruction selection, which means a genuine two-pass compile: analyze,
-then re-codegen from IR with the annotation. The 3-phase `-ftaint-harden` pipeline
-cannot express this, because phase 3 resumes at `start-after=prologepilog`.
+then re-codegen from IR with the annotation. The `-ftaint-harden` pipeline
+cannot express this: the pass runs inside codegen after PEI (since 2026-08-30;
+before that, phase 3 of the round-trip resumed at `start-after=prologepilog`),
+and either way instruction selection has already happened.
 
 If this is ever attempted it should be flag-gated (`-taint-dit-tailcall=`) and
 justified by a measurement showing the leak actually costs cycles.

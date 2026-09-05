@@ -1,5 +1,12 @@
 # 07 - annotation cost
 
+> **Compiler note (audit 2026-09-05).** The numbers here were measured under the
+> defaults of their date: the inherit contract, no DIT twins, block placement. The
+> shipped defaults changed on 2026-09-05 (callee contract, twins, intra-block
+> placement; `docs/reference/harden-runbook.md`), and the pre-contract seed files
+> protect nothing under them. See the status table in `paper_experiments/README.md`
+> before re-running.
+
 **Status: complete on silicon.** Measured 2026-08-31/09-01, libsodium 1.0.21 on
 Apple M5, with SQLCipher as a second data point.
 

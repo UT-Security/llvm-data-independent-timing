@@ -1,6 +1,10 @@
 # Session handoff, 2026-08-26 .. 08-30: LTO, the EH fix, and where the LTO cost actually is
 
-**Read this first if resuming.** Everything below is measured unless marked otherwise.
+> **HISTORICAL (2026-08-30).** The current entry points are `CLAUDE.md` and
+> `docs/reference/harden-runbook.md`; the LTO/ABI work below was closed on
+> 2026-08-31/09-01 and is not shipping.
+
+**Read this first if resuming (as of 2026-08-30).** Everything below is measured unless marked otherwise.
 Nothing in this session is committed except the LLVM work (see §5).
 
 ---

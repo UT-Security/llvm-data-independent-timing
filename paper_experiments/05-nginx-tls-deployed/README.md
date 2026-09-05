@@ -1,5 +1,12 @@
 # 05 - nginx TLS 1.3, deployed
 
+> **Compiler note (audit 2026-09-05).** The numbers here were measured under the
+> defaults of their date: the inherit contract, no DIT twins, block placement. The
+> shipped defaults changed on 2026-09-05 (callee contract, twins, intra-block
+> placement; `docs/reference/harden-runbook.md`), and the pre-contract seed files
+> protect nothing under them. See the status table in `paper_experiments/README.md`
+> before re-running.
+
 **Status: complete on silicon.** Measured 2026-08-31 on Apple M5, nginx 1.28.0
 against OpenSSL 3.5.4.
 
