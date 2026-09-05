@@ -170,7 +170,14 @@ is byte identity. Each is a candidate for a separately measured follow-up.
    to a secret stored in a global and reloaded comes back as a public pointer;
    the deref through it is then protected only as a secret *address* if the
    pointer value itself was secret, or not at all. Lifting it is one line
-   (deposit the whole value) and a measurement.
+   (deposit the whole value) and a measurement. **LIFTED 2026-09-04**
+   (`docs/results/returns-pointee-2026-09-04.md`): the global store deposits
+   the whole value, and a global holding a pointer to secret memory is folded
+   module-wide (`TaintState::PointeeGlobals` ->
+   `FunctionMemEffects::WritesPointeeToGlobal` ->
+   `TaintSummaryInfo::ModulePointeeGlobals`), the pointee twin of the
+   secret-global set. Measured free on libsodium (byte-identical) and needed
+   for flowprobe C5.
 2. **`TaintState::empty()` gates instrumentation on the join of block exits.**
    `runTaintInterproc` calls `insertTaintDITSwitches` only when
    `TR.Merged.empty()` is false, and `Merged` is the join of every block's OUT
@@ -232,9 +239,9 @@ precision choice, and each is where CIO's `make_top = Taint` would differ.
 |---|---|---|---|---|
 | U1 | load, unresolved MMO (`CellInfo::Unknown`) | the object being read | clean unless the address is pointee-tainted, a located unknown store may alias (AA), or a TOP bit is set | AA's `isNoAlias` is trusted; CIO returns Taint here |
 | U2 | load, no MMO | everything | clean unless pointee/located store/TOP | same |
-| U3 | load through a `Global` cell | pointer-ness | never Pointee (S5.1) | |
+| U3 | load through a `Global` cell | pointer-ness | Pointee when the cell, the module pointee-global set, or a secret stored through a pointer loaded from it says so (S5.1 lifted 2026-09-04) | |
 | U4 | call to an external or indirect callee passing NO secret | the callee's memory effect | no clobber | the mod-set gate's premise: a callee cannot produce a secret from public arguments. flowprobe C1/C3/C4 (`docs/results/dit-flowprobe-undertaints.md`) are the known counterexamples |
-| U5 | call result | pointer-ness of the returned value | Data only, never Pointee (`taintCallResultDefs`) | flowprobe C1: a returned pointer into a secret buffer |
+| U5 | call result | pointer-ness of the returned value | `ReturnsPointeeTainted` summary bit (2026-09-04): Pointee when the callee returns a pointer to secret memory; every external callee handed a secret returns one | flowprobe C1/C5, closed; the flag `-taint-call-result-pointee` is gone |
 | U6 | call argument that is `sp + imm` into a secret frame object | whether the callee reads the secret | not passed unless `-taint-frame-addr-args` | the measured +44-point decision (S3) |
 | U7 | call argument whose provenance is `Arg(k)` with a tainted `Arg(k)` cell | same | not passed unless `-taint-arg-pointee-args` | B2 |
 | U8 | `PointerBases` absent at a P1b application | which caller object a callee wrote | falls back to `ExternalMemClobbered` (TOP) | conservative, not clean |

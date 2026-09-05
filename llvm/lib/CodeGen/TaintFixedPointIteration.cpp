@@ -291,6 +291,24 @@ static bool functionReturnsTainted(MachineFunction &MF, const TaintResult &TR,
   return ReturnsTainted;
 }
 
+// The same walk for the other fact: is the returned register a pointer to
+// secret memory at any return? (`RET implicit $x0` reads x0, so UsesPointee at
+// the return is exactly "x0 is pointee-tainted".)
+static bool functionReturnsPointeeTainted(MachineFunction &MF,
+                                          const TaintResult &TR,
+                                          TaintSummaryInfo &TSI, Module &M,
+                                          AAResults *AA) {
+  bool Returns = false;
+  replayTaint(MF, TR, &TSI, AA,
+              [&](MachineInstr &MI, const TaintFacts &F, const TaintState &) {
+                if (!MI.isReturn() || !F.UsesPointee)
+                  return true;
+                Returns = true;
+                return false;
+              });
+  return Returns;
+}
+
 /// Visit every function that has both a MachineFunction and a converged taint
 /// result - i.e. everything the post-convergence steps (DIT summaries, reports,
 /// barrier insertion) operate on.
@@ -480,6 +498,8 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
       // Check actual return instructions instead of hardcoding generated
       // physical-register enum values for W0/X0.
       bool ReturnsTainted = functionReturnsTainted(*MF, TR, TSI, M, AA);
+      bool ReturnsPointeeTainted =
+          functionReturnsPointeeTainted(*MF, TR, TSI, M, AA);
 
       // Memory-effects (mod-set): which caller-visible memory this function may
       // write a secret into. Recomputed each iteration; it reads callee mem
@@ -501,6 +521,7 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
       NewSummary.PointeeTaintedArgIndices =
           CurrentSummary.PointeeTaintedArgIndices;
       NewSummary.ReturnsTainted = ReturnsTainted;
+      NewSummary.ReturnsPointeeTainted = ReturnsPointeeTainted;
       NewSummary.MemEffects = MemEffects;
       NewSummary.StackArgTainted =
           CurrentSummary.StackArgTainted || OldSummary.StackArgTainted;
@@ -510,6 +531,13 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
       // rather than as a post-pass because it feeds back: marking a global
       // secret can taint a load in a sibling, which can taint a store into a
       // further global. The set only grows, so this cannot prevent convergence.
+      for (const GlobalVariable *GV : MemEffects.WritesPointeeToGlobal) {
+        if (TSI.addPointeeGlobal(GV)) {
+          Changed = true;
+          LLVM_DEBUG(dbgs() << "  module pointee-global: " << GV->getName()
+                            << " (by " << F.getName() << ")\n");
+        }
+      }
       for (const GlobalVariable *GV : MemEffects.WritesSecretToGlobal) {
         if (TSI.addSecretGlobal(GV)) {
           Changed = true;
@@ -525,7 +553,8 @@ void llvm::runTaintInterproc(Module &M, TaintMFContext Ctx) {
         TSI.storeSummary(F, NewSummary);
         Changed = true;
         LLVM_DEBUG(dbgs() << "  " << F.getName() << ": summary changed"
-                          << " (returns_tainted=" << ReturnsTainted << ")\n");
+                          << " (returns_tainted=" << ReturnsTainted
+                          << " returns_pointee=" << ReturnsPointeeTainted << ")\n");
         if (TraceOS)
           *TraceOS << "  ** summary changed: returns_tainted=" << ReturnsTainted
                    << " **\n";

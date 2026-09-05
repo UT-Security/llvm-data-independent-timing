@@ -53,6 +53,9 @@ binaries are the same bytes. The 8,610 residual is NOT from U1, U2 or U5.
 
 ## U5 is the wrong lever for flowprobe C1
 
+**Done 2026-09-04:** the summary bit landed, with the rules it needs and a
+return-gate fix that also closes C5 - `returns-pointee-2026-09-04.md`.
+
 The in-TU control, the real C1 shape:
 
 ```c
