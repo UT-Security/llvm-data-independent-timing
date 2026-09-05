@@ -170,6 +170,50 @@ binary path at a constant-length `/tmp` path, so another machine reproduces
 `data/` up to its simulator and compiler builds. Silicon (`run_crossover.py`,
 M5, root for kperf) has not been rerun on this lane.
 
+## The four arms (the headline, 2026-09-05)
+
+The same four arms as experiment 09, on the secret-fraction sweep: **base**
+(`-O2` with our compiler, no seeds), **blanket** (DIT set once for the whole
+process), the **Apple bracket** (the driver's AEAD entry points wrapped in
+Apple's prologue and epilogue: read the previous DIT state, `msr DIT, #1`,
+speculation barrier as `isb sy`, the call, clear only if it was clear; the
+same `api_bracket.c` as experiment 09, interposed with the linker's
+`--wrap`), and **ExpeDITe** at the shipped defaults (callee contract, twins,
+intra-block placement, the fixpoint seeds, the owned list). Blanket and the
+bracket under the serialising `MSR DIT`, which is what an M4 or M5 does;
+ExpeDITe under both. IPC overhead against base, median over five stack
+offsets, 300 runs, all gates pass except the known L=10 base-model wobble
+(0.3%, the DMP artifact noted in "Validity gates"). The bracket's
+instruction-matched NOP twin (every DIT instruction of the wrapper a NOP at
+the same address) is beside it, because it is needed to read that column.
+Data: `data/gem5_arms_four_arms.csv`.
+
+| L | f secret | base cycles/request | blanket | Apple bracket | bracket's NOP twin | bracket cost, cycles/request | ExpeDITe, serialising | ExpeDITe, renamed |
+|---|---|---|---|---|---|---|---|---|
+| 10 | 96.8% | 2,494 | +7.3% | -3.4% (2) | -2.2% | -30 | +31.6% (38) | -0.1% |
+| 50 | 81.2% | 3,174 | +12.6% | -2.8% (2) | -1.6% | -38 | +24.9% (38) | -0.6% |
+| 200 | 45.0% | 5,743 | +20.2% | -1.5% (2) | -0.7% | -44 | +13.5% (38) | +1.2% |
+| 1000 | 13.1% | 19,492 | +27.7% | -0.3% (2) | -0.5% | +42 | +3.8% (38) | +0.1% |
+| 5000 | 2.6% | 88,098 | +30.6% | +0.2% (2) | -0.4% | +461 | +0.8% (38) | +0.0% |
+| 20000 | 0.6% | 344,432 | +31.3% | -0.2% (2) | -0.4% | +358 | +0.5% (38) | +0.2% |
+
+**Reading the bracket column.** The bracket comes out FASTER than the
+unhardened build at every length, and so does its NOP twin: the wrapper's
+presence shifts the layout of everything linked after it, and on this
+pointer-chasing driver that is worth 2 to 3 points at the short lengths,
+more than the bracket's two serialising switches (~60 cycles, +2.4% of a
+2,494-cycle request at L=10). Within that pair the real bracket is faster
+than its NOP twin on both switch models, by 30 to 44 cycles per request at
+L <= 200, which no cost model of two serialising writes produces; the
+drains the sequence performs (`mrs DIT` and `isb`, both pipeline drains in
+gem5) change how the public lookup loop behaves in the simulator by more
+than the switches cost. So on this workload the rig cannot resolve the
+bracket's own cost; what it can say is that a per-call bracket around an
+AEAD that is 3% to 97% of the request is within the layout band of the
+unhardened build, where blanket is +7% to +31% and ExpeDITe serialising is
++32% to +0.5%, falling with the secret fraction because its 38 switches per
+request sit behind the Poly1305 and ChaCha20 implementation tables.
+
 ## Rerun 2026-09-05: the compiler's new defaults
 
 The taint clang's defaults changed to the callee contract and the DIT twins
