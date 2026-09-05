@@ -214,6 +214,55 @@ unhardened build, where blanket is +7% to +31% and ExpeDITe serialising is
 +32% to +0.5%, falling with the secret fraction because its 38 switches per
 request sit behind the Poly1305 and ChaCha20 implementation tables.
 
+### Finer interleaving: N secret pieces per request (2026-09-05)
+
+The request above is L public lookups then ONE secret AEAD call, so the
+sequence is already public, secret, public, secret; what the sweep does not
+vary is how many bracketed calls a request contains. A per-call placement
+pays per call: the Apple bracket two serialising switches, ExpeDITe its
+per-entry count. `--chunks N` splits each request into N pieces, L/N
+lookups then one AEAD call over a 100/N-byte slice under its own nonce, so
+the secret bytes are the same in N calls and the public work the same in N
+runs; N=1 is the request as it always was, bit for bit. The same five
+binaries, five stack offsets, 500 runs, all gates pass but the known
+base-model wobble. IPC overhead against base; switches per request in
+brackets; `data/gem5_arms_interleaving.csv`.
+L = 200
+| pieces per request | f secret | base cycles/request | blanket | Apple bracket (sw/req) | bracket NOP twin | bracket - twin, cycles/req | ExpeDITe, serialising (sw/req) | ExpeDITe, renamed |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 45.4% | 5,799 | +19.0% | +0.8% (2) | -0.2% | +58 | +12.4% (38) | -0.4% |
+| 2 | 56.2% | 6,637 | +17.5% | +2.3% (4) | +2.3% | -1 | +25.9% (76) | +0.5% |
+| 5 | 81.6% | 11,279 | +10.2% | +3.7% (10) | +2.7% | +106 | +37.3% (190) | +1.1% |
+| 10 | 90.3% | 18,692 | +7.9% | +4.9% (20) | +2.4% | +481 | +45.5% (380) | +1.6% |
+| 25 | 96.9% | 43,349 | +2.4% | +0.5% (50) | -1.4% | +839 | +44.8% (950) | -2.1% |
+
+**L = 1000**:
+
+| pieces per request | f secret | base cycles/request | blanket | Apple bracket (sw/req) | bracket NOP twin | bracket - twin, cycles/req | ExpeDITe, serialising (sw/req) | ExpeDITe, renamed |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 13.5% | 19,556 | +27.3% | -0.1% (2) | +0.0% | -9 | +3.2% (38) | -0.7% |
+| 2 | 18.7% | 20,426 | +26.5% | +0.4% (4) | +0.6% | -36 | +8.1% (76) | -0.2% |
+| 5 | 37.0% | 25,009 | +21.9% | +1.7% (10) | +0.8% | +221 | +16.7% (190) | +0.2% |
+| 10 | 55.6% | 32,549 | +17.6% | +2.0% (20) | +0.8% | +383 | +25.0% (380) | +0.2% |
+| 25 | 81.5% | 55,323 | +13.0% | +3.1% (50) | +2.9% | +104 | +37.2% (950) | +1.2% |
+
+**Reading.** Splitting the secret work into pieces raises the secret
+fraction (each AEAD call carries its fixed setup and tag cost, so 25 calls
+of 4 bytes are far more crypto than one of 100), which is why blanket's
+overhead FALLS with N: it is an overhead on the public lane, and the public
+lane shrinks. The bracket's cost rises with N as its two switches per piece
+say it should, from within noise at one piece to +3% to +5% at 10 and 25,
+and its NOP twin tracks it to within the layout band, so at 25 pieces per
+request a bracket around every 4-byte AEAD is still 2 to 4 points cheaper
+than blanket. ExpeDITe on the serialising model rises 19 times faster, +3%
+to +37% at L=1000 and +12% to +45% at L=200, because every AEAD call still
+pays its 38 switches behind the Poly1305 and ChaCha20 implementation tables
+(950 per request at 25 pieces, against the bracket's 50); on the renamed
+model it stays within 2% throughout. So on this workload the answer to
+"does interleaving hurt the bracket" is yes, by the per-call switch cost,
+and it hurts a per-entry-point placement with a higher switch count per
+call by the same mechanism, proportionally more.
+
 ## Rerun 2026-09-05: the compiler's new defaults
 
 The taint clang's defaults changed to the callee contract and the DIT twins
