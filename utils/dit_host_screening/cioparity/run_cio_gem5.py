@@ -65,7 +65,7 @@ CONFIGS = {
 # cross-policy comparison conflates placement with the per-binary codegen
 # lottery -- measured at 6.69% on aes256gcm_decrypt, enough to invert the
 # ranking. Pair every policy with its own nop before quoting a ranking.
-ARMS = ["base", "blanket", "api",
+ARMS = ["base", "blanket", "api", "apidsb", "apibare", "apiisb", "apiisbnop",
         "taint", "taintnop",
         "taintold", "taintoldnop",
         "taintfn", "taintfnnop",
@@ -76,7 +76,7 @@ NOP_OF = {"taint": "taintnop", "taintold": "taintoldnop", "taintfn": "taintfnnop
 INERT = ("base", "taintnop", "taintoldnop", "taintfnnop", "finenop", "nop")
 # Arms that must commit DIT writes inside the ROI: the pass arms, and the hand
 # placement at the public API (`api`: exactly one enable and one clear per call).
-MUST_TOGGLE = tuple(NOP_OF) + ("api",)
+MUST_TOGGLE = tuple(NOP_OF) + ("api", "apidsb", "apibare", "apiisb", "apiisbnop")
 
 # bench -> (iters, warmup, ad_size or None). A fixed 100-char message, not a
 # random one: identical input across all 70 cells.
