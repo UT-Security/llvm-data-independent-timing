@@ -23,10 +23,13 @@ seals the gathered record. The knob L, lookups per record, moves only the ratio.
 | **public** | `lookup_lane()` - L serial, value-dependent loads into a 4 KB table: hashed contents, next index from the high bits of a 64-bit state. On 3 iterations in 4 the record's header is read first: data-dependent address, constant value, the way every record's type field is the same. | a pointer chase whose critical path is 75% LVP-predictable loads |
 | **secret** | `crypto_aead_chacha20poly1305_ietf_encrypt()` of a 100-byte record carrying the digest - experiment 09's op and message size | ~2.2k cycles, 49 committed switches per op under the pass |
 
-Seeds are the callee contract's fixpoint for libsodium
-(`benchmarks/crypto/libsodium_secret_contract.txt`, the CIO-parity set plus
-the 123 lines the obligation loop added, with the chacha rename patch
-applied), and the build carries the owned-symbols list it generates from its
+Seeds are the callee contract's round-2 file for libsodium
+(`benchmarks/crypto/libsodium_secret_contract.txt` as the gem5 tree carried
+it on 2026-09-05: the CIO-parity set plus the first report's 21 lines, 86
+seeds; the round-11 fixpoint of 188 replaced it in gem5-DIT PR #101 and is
+`libsodium_secret_contract.txt` now, the round-2 file being `_r2`). The
+AEAD path is fully seeded by round 2, and the oracle frontier below confirms
+it at the floor, so the numbers stand. The build carries the owned-symbols list it generates from its
 own base objects, which is what lets a DIT-on caller name a twin in another
 TU. The pass arm is built with `-fno-optimize-sibling-calls` (redundant since
 the tail-call disable rides on `-ftaint-harden`, kept so the arm is the same

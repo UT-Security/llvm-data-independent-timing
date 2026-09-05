@@ -65,14 +65,18 @@ CONFIGS = {
 # cross-policy comparison conflates placement with the per-binary codegen
 # lottery -- measured at 6.69% on aes256gcm_decrypt, enough to invert the
 # ranking. Pair every policy with its own nop before quoting a ranking.
-ARMS = ["base", "blanket",
+ARMS = ["base", "blanket", "api",
         "taint", "taintnop",
+        "taintold", "taintoldnop",
         "taintfn", "taintfnnop",
         "fine", "finenop"]
-NOP_OF = {"taint": "taintnop", "taintfn": "taintfnnop", "fine": "finenop"}
+NOP_OF = {"taint": "taintnop", "taintold": "taintoldnop", "taintfn": "taintfnnop", "fine": "finenop"}
 # Arms in which no `msr DIT` ever executes: the switch model must not move them,
 # and dwell must be exactly zero.
-INERT = ("base", "taintnop", "taintfnnop", "finenop", "nop")
+INERT = ("base", "taintnop", "taintoldnop", "taintfnnop", "finenop", "nop")
+# Arms that must commit DIT writes inside the ROI: the pass arms, and the hand
+# placement at the public API (`api`: exactly one enable and one clear per call).
+MUST_TOGGLE = tuple(NOP_OF) + ("api",)
 
 # bench -> (iters, warmup, ad_size or None). A fixed 100-char message, not a
 # random one: identical input across all 70 cells.
@@ -261,7 +265,7 @@ def gates(results, arms, cfgs):
                 fails.append(f"{r['bench']}/blanket/{r['cfg']}: {r['dit_writes']} DIT writes "
                              "inside the ROI -- blanket must toggle nothing")
         # The pass arms must TOGGLE, or placement inserted nothing that executes.
-        if r["arm"] in NOP_OF:
+        if r["arm"] in MUST_TOGGLE:
             if not r["dit_writes"]:
                 fails.append(f"{r['bench']}/{r['arm']}/{r['cfg']}: 0 committed DIT writes -- "
                              "placement inserted nothing that executes")
