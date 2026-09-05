@@ -369,27 +369,28 @@ the mode set - the dwell axis the switch counters cannot provide).
 
 Everything below this table is the detail; this is the comparison the
 experiment exists for. Cycles per operation against the unhardened build
-(`-O2` with our compiler, no seeds), gem5 NeoverseV2 FDP, the serialising
-`MSR DIT` model only, since that is what an M4 or M5 does (executed switches
-per op in brackets; the renamed counterfactual is in the tables below and in
-the data files):
+(`-O2` with our compiler, no seeds), gem5 NeoverseV2 FDP. Blanket and the
+Apple bracket are given under the serialising `MSR DIT` only, since that is
+what an M4 or M5 does; FastDIT is given under both, because the renamed
+column is the one that says what the pass would cost on a core that renamed
+the write. Executed switches per op in brackets.
 
 - **blanket**: DIT set once for the whole process, no analysis;
 - **Apple bracket**: each public entry point wrapped in Apple's prologue and
   epilogue (read the previous state, `msr DIT, #1`, speculation barrier as
   `isb sy`, the call, clear only if it was clear), no analysis;
-- **the pass**: `-ftaint-harden` at the shipped defaults (callee contract,
+- **FastDIT**: `-ftaint-harden` at the shipped defaults (callee contract,
   twins, intra-block region placement) with the fixpoint seeds and the
   owned list.
 
-| benchmark | base cycles/op | blanket | Apple bracket | the pass, shipped defaults |
-|---|---|---|---|---|
-| ed25519 sign | 78,790 | +0.22% | +0.42% (2) | -1.04% (16) |
-| chacha20-poly1305 encrypt | 2,186 | +1.37% | +3.21% (2) | +44.79% (38) |
-| chacha20-poly1305 decrypt | 2,290 | +0.70% | +4.14% (2) | +45.63% (39) |
-| aes256-gcm encrypt | 1,217 | +0.41% | +6.08% (2) | +13.39% (6) |
-| aes256-gcm decrypt | 1,077 | +8.39% | +26.87% (2) | +36.34% (6) |
-| argon2id | 326,450,006 | +0.64% | running (old two-write bracket +2.04%) | +7.58% (395,758) |
+| benchmark | base cycles/op | blanket | Apple bracket | FastDIT, serialising | FastDIT, renamed |
+|---|---|---|---|---|---|
+| ed25519 sign | 78,790 | +0.22% | +0.42% (2) | -1.04% (16) | -1.44% |
+| chacha20-poly1305 encrypt | 2,186 | +1.37% | +3.21% (2) | +44.79% (38) | +2.37% |
+| chacha20-poly1305 decrypt | 2,290 | +0.70% | +4.14% (2) | +45.63% (39) | +3.43% |
+| aes256-gcm encrypt | 1,217 | +0.41% | +6.08% (2) | +13.39% (6) | +0.25% |
+| aes256-gcm decrypt | 1,077 | +8.39% | +26.87% (2) | +36.34% (6) | +9.87% |
+| argon2id | 326,450,006 | +0.64% | running (old two-write bracket +2.04%) | +7.58% (395,758) | +2.37% |
 
 argon2id's Apple-bracket cells are running; its old two-write bracket and
 the pass's row are the block-placement build, whose argon2 TUs the current
