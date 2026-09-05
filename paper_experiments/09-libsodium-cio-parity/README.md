@@ -961,9 +961,25 @@ a comparable set on another machine, build the arms and then:
 ```sh
 sudo -E env LLVM_BIN=<toolchain>/bin CIO_DIR=~/Documents/cio-eval \
   CIO_OPT=-O2 CHEAP_TIMER=1 OURS=ditprobe CIO_REPS=15 \
-  ARMS="A:baseline:0 C:baseline:1 P:hardened:0 F:func:0 X:fine:0 N:narrow:0 Z:nopsw:0" \
+  ARMS="A:baseline:0 C:baseline:1 B:baseline:api P:hardened:0 F:func:0 X:fine:0 N:narrow:0 Z:nopsw:0" \
   bash utils/taint_libsodium_sudo_run.sh
 ```
+
+**The Apple bracket on silicon (arm `B:baseline:api`, added 2026-09-05).**
+The same `api_bracket.c` the gem5 rig links, with the same prologue and
+epilogue: read the previous DIT state, `msr DIT, #1`, Apple's speculation
+barrier `sb` (every M-series has FEAT_SB; `B:baseline:apiisb` uses `isb sy`
+instead, which is what gem5 measured since it lacks `sb`), the call, and a
+clear only if the token was clear. ld64 has no `--wrap`, so the driver TU is
+compiled with `-Dcrypto_sign=expedite_api_crypto_sign` and so on for the
+entry points it calls (CIO's drivers declare them with `extern` prototypes,
+which the define renames consistently), and the bracket object defines
+`expedite_api_*` around the real function. Same wrapper frame as the gem5
+arm. The binary is `eval_<bench>.baseline-api`; the shim stays out (`SHIM_DIT=0`)
+and the exit gate expects `dit=0`, since the bracket restores. Part 1's
+drivers bracket their own region and skip the arm. Verified on Linux that the
+driver calls the wrapper and the wrapper disassembles to the sequence above;
+the macOS run itself is the user's, on the M4 and M5.
 
 Run it **twice**, once with `CHEAP_TIMER=1` and once without, so the host's own
 instrumentation offset is visible rather than assumed; then
