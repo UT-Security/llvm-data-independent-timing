@@ -1,0 +1,24 @@
+# Experiment 10, psk_dhe_ke, --resumptions 5, gem5 NeoverseV2 FDP (--eves --dmp --comp-simp), median over 5 argv[0] path lengths.
+# Compiler: dit-tainter 64831933bc88 (the 2026-09-05 defaults: callee contract + DIT twins) for the twins arms; the other arms are the
+# 2026-09-04 measurement on the same rig (docs/results/dit-callee-contract-2026-09-04.md section 5), same control, same seeds (seed_pass_r5.txt).
+# vs_control = against the round-trip (empty seed, zero switches) build. dit_writes = commit.ditWrites per run (committed).
+# NOP arms: every switch site a HINT #0, identical code otherwise (the instruction-matched baseline).
+arm,switch_model,median_cycles,spread_pct,ipc,vs_control_pct,dit_writes
+round-trip control,renamed,81225452,0.15,2.1354,0.00,0
+blanket,renamed,80090797,0.03,2.1656,-1.40,0
+r5 inherit,renamed,84065423,0.27,2.2708,3.50,12110336
+r5 callee,renamed,86241014,0.08,2.2115,6.17,11916847
+r5 callee + hardened movers,renamed,89423327,0.01,2.1519,10.09,13116695
+r5 inherit NOP,renamed,85158486,0.66,2.2416,4.84,0
+r5 callee NOP,renamed,87025432,0.08,2.1915,7.14,0
+r5 callee + twins (default),renamed,90407388,0.01,1.9895,11.30,1037782
+r5 callee + twins NOP,renamed,91451325,0.12,1.9668,12.59,0
+round-trip control,serialising,81249406,0.10,2.1347,0.00,0
+blanket,serialising,80240512,0.20,2.1616,-1.24,0
+r5 inherit,serialising,286498562,0.00,0.6663,252.62,12110336
+r5 callee,serialising,285612729,0.00,0.6678,251.53,11916847
+r5 callee + hardened movers,serialising,302709492,0.00,0.6357,272.57,13116695
+r5 inherit NOP,serialising,85158486,0.57,2.2416,4.81,0
+r5 callee NOP,serialising,87028222,0.10,2.1915,7.11,0
+r5 callee + twins (default),serialising,113969442,0.01,1.5782,40.27,1037782
+r5 callee + twins NOP,serialising,91406954,0.21,1.9678,12.50,0

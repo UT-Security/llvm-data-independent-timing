@@ -1,5 +1,10 @@
 # 10 - mbedTLS session ticket: the secret leaves the primitive
 
+**Re-run 2026-09-05 on the compiler's new defaults (callee contract + DIT
+twins): section 16. Serialising +251% -> +40%, coverage 99.877% -> 99.955%,
+renamed +6.2% -> +11.3% and that is instruction fetch on the duplicated code,
+not DIT. Blanket at -1.4% / -1.2% is still the answer on this workload.**
+
 **Status: gates G0 (static) and G1 (gem5 oracle) RUN and PASSED, 2026-09-03. The
 headline result is measured: annotating the entire crypto API surface still
 leaves the constant-time PSK binder compare running with `PSTATE.DIT` clear on
@@ -852,3 +857,73 @@ the ticket glue readable also removed the dominant secret. A seed set validated
 against one configuration says nothing about another, and only the dynamic
 oracle caught it - the static reports named no missing ECDH function, because
 nothing had ever told the analysis the scalar existed.
+
+## 16. The compiler's new defaults, 2026-09-05: the twins on a TLS stack
+
+`dit-tainter 64831933bc88`: `-taint-dit-contract=callee` and the DIT twins
+(`docs/design/dit-cloning.md`) are the defaults. Same rig, same r5 seeds
+(`seed_pass_r5.txt`, 759 lines), same five `argv[0]` lengths, the same
+round-trip control and the 2026-09-04 arms for comparison
+(`docs/results/dit-callee-contract-2026-09-04.md` section 5). The twins
+arm adds the owned-symbols list (`utils/taint_owned_symbols.sh` over the
+inherit build's objects, 1,575 symbols; `harden_mbedtls.sh` with
+`EXTRA="-mllvm -taint-owned-symbols=<list>"`), which the twins need to be
+named across TUs. Data: `data/timing_twins.csv`, `data/oracle_twins.csv`.
+
+**Static.** Switch sites 3,302 -> 2,426 in the library, 388 twins (204 of
+them switch-free), text of the linked driver 1,232,287 -> 1,384,223 bytes
+(+12.3%). The originals lose 1,482 sites, almost all re-asserts after
+calls now made to twins: `ecp_mul_restartable_internal` 90 -> 11,
+`mbedtls_mpi_inv_mod` 54 -> 2, `mbedtls_ecp_group_load` 54 -> 12,
+`mbedtls_mpi_div_mpi` 43 -> 7. The twins carry 517: re-asserts after the
+311 direct calls from a twin that no twin serves (`calloc` 74,
+`mbedtls_platform_zeroize` 68, `free` 47, `mbedtls_mpi_sub_int` 10, ...) and
+22 indirect calls. The obligation report has 153 records with the owned
+list against 424 without: the ownership split, not the twins.
+
+**Dynamic, per run of five resumptions:**
+
+| arm | renamed | serialising | DIT writes | coverage / res |
+|---|---|---|---|---|
+| round-trip control | 0 | 0 | 0 | |
+| blanket | -1.40% | -1.24% | 0 | |
+| r5, inherit | +3.50% | +252.62% | 12,110,336 | 99.932% (8,222 uncovered) |
+| r5, callee, no twins | +6.17% | +251.53% | 11,916,847 | 99.877% (14,803) |
+| **r5, callee + twins (default)** | **+11.30%** | **+40.27%** | **1,037,782** | **99.955% (5,484)** |
+| r5, callee, switches -> NOP | +7.14% | +7.11% | 0 | |
+| r5, callee + twins, switches -> NOP | +12.59% | +12.50% | 0 | |
+
+Three findings.
+
+- **Serialising: the twins remove 91% of the executed switches** (11.9M ->
+  1.04M per run, 2.40M -> 208k per resumption) and the cost goes from +252%
+  to +40%. What remains is the twins' own re-asserts after `calloc`, `free`
+  and `mbedtls_platform_zeroize`, none of which can clear DIT but none of
+  which the twin can see (libc, or another TU without a seed), plus the
+  entries into originals from DIT-off code and the 22 indirect calls. A
+  seed line for `mbedtls_platform_zeroize` (the report proposes it) and a
+  rule that a callee outside the owned list cannot write PSTATE.DIT would
+  take most of it; neither is done. Blanket is still 41 points better.
+- **Coverage is the best of any arm.** 99.955%: the limb-traffic losses in
+  `mbedtls_mpi_mul_mpi` (12,985 -> 38 uncovered ops), `mbedtls_mpi_add_mod`
+  (6,469 -> 0) and `ecp_double_add_mxz` (4,100 -> 0) close, because a twin
+  is covered whole where region placement had left holes in the original.
+  Wasted coverage rises 1% for the same reason.
+- **Renamed: +11.30%, and it is not DIT.** The NOP twin of this arm, with no
+  switch executing, costs +12.59%, so DIT itself is -1.29 points, as on
+  every other arm. The +5.4 points over the twin-less NOP arm are the front
+  end: `fetchStats0.icacheStallCycles` 29.73M -> 34.37M (+4.64M, the whole
+  cycle gap), `fetch.cacheLines` 29.57M -> 34.21M (+15.7%) for 5.7% fewer
+  committed instructions, with L1I misses flat at ~1,100 and branch
+  mispredicts +6.8%. The duplicated hot code is laid out apart from the
+  originals and both copies run (originals from DIT-off callers, twins from
+  DIT-on ones), and the fetch stage pays for it. This is the twins' cost on
+  a large code base, and on renamed hardware it exceeds what they save.
+
+**What it means for the experiment.** Section 14's conclusion stands in its
+sharpest form: on a resumption that is 65% secret by instruction count,
+blanket at -1.4% / -1.2% beats every placement on both switch models, and the
+twins move the serialising placement from hopeless to +40% without changing
+that. Where the twins pay is where experiment 02 lives: a public lane that
+must stay DIT-off, direct calls into a small hardened library.
+

@@ -137,7 +137,12 @@ gem5 against instruction-matched NOP baselines: signing on the serialising model
 cost (the 176,500-switch arm beats its own NOP baseline by 2.5%) and the twins tie
 blanket at +1.4%. AEAD keeps 38 of 58 switches per call behind the Poly1305/ChaCha20
 implementation tables, since an indirect call is never redirected, and stays +6.09%
-serialising. Test `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs).
+serialising. **On mbedTLS resumption (experiment 10) the twins cost time on renamed
+hardware:** serialising +252% -> +40% and coverage 99.955%, but renamed +6.17% -> +11.30%,
+and the NOP-twins arm (+12.59%) says it is all instruction fetch on the duplicated code
+(+4.6M `icacheStallCycles`, +15.7% cache lines fetched, L1I misses flat, text +12%). On a
+large code base the twins' size is a front-end cost that can exceed the switch savings;
+blanket still wins there. Test `clang/test/CodeGen/taint-dit-clone-seeded.c` (two TUs).
 
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function
