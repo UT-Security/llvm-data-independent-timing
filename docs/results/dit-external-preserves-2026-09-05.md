@@ -90,7 +90,7 @@ op; `data/gem5_external_preserves.csv`):
 | chacha20-poly1305 decrypt | +0.70% | +1.50% / +4.33% | +3.29% / +42.42% (39) | +6.64% / +35.89% (32) |
 | aes256-gcm encrypt | +0.41% | +0.25% / +3.78% | +0.25% / +12.42% (6) | -6.16% / +3.53% (**2**) |
 | aes256-gcm decrypt | +8.39% | +9.13% / +23.75% | +10.06% / +36.06% (6) | +9.32% / +23.80% (**2**) |
-| argon2id | +0.51% | +2.06% / +2.04% | +2.37% / +7.58% (395,758) | pending |
+| argon2id | +0.51% | +2.06% / +2.04% | +2.37% / +7.58% (395,758) | **+1.06% / +1.08% (3)** |
 
 **Experiment 02** (IPC overhead vs unhardened, switches per request;
 `data/gem5_arms_external_preserves.csv`):
@@ -119,7 +119,10 @@ op; `data/gem5_external_preserves.csv`):
   columns is matched by the arm's NOP twin (aes256-gcm encrypt's -6.16% is
   a -5.94% NOP twin). On renamed hardware the cost of the solution is dwell
   over secret work plus layout; on serialising hardware the assumption is
-  worth 5 to 12 points per AEAD call and the whole of argon2id's cost.
+  worth 5 to 12 points per AEAD call and the whole of argon2id's cost: measured
+  after the fact, argon2id goes from 395,758 switches per hash to 3 and from
+  +7.58% to +1.08% serialising (+1.06% renamed, NOP twin -0.04%), a point
+  above blanket and a point under the old bracket.
 - **Default or not.** Opt-in for now; the numbers say it should be on in
   every hardened build whose external callees are libc, and flipping the
   default is one line.
