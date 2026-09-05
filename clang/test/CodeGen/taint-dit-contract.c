@@ -1,3 +1,6 @@
+// Both contracts are pinned and the twins are off: the switch counts below are
+// per contract, not per twin. (Since 2026-09-05 callee and the twins are the
+// defaults.)
 // The callee contract (-taint-dit-contract=callee): every function protects its
 // own secrets, a call is never a Need for its arguments, and a secret reaching
 // a callee this build cannot see is an OBLIGATION in the info-loss report - not
@@ -14,7 +17,8 @@
 //
 // RUN: rm -f %t.inh.prec %t.inh.loss
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o /dev/null \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-precision-report=%t.inh.prec \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=inherit \
+// RUN:     -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-precision-report=%t.inh.prec \
 // RUN:     -mllvm -taint-info-loss-report=%t.inh.loss %s 2>/dev/null
 // RUN: FileCheck --check-prefix=INH --input-file=%t.inh.prec %s
 // RUN: FileCheck --check-prefix=INH-LOSS --input-file=%t.inh.loss %s
@@ -22,7 +26,7 @@
 // RUN: rm -f %t.cal.prec %t.cal.loss
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o /dev/null \
 // RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-contract=callee \
-// RUN:     -mllvm -taint-dit-precision-report=%t.cal.prec \
+// RUN:     -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-precision-report=%t.cal.prec \
 // RUN:     -mllvm -taint-info-loss-report=%t.cal.loss %s 2>%t.cal.err
 // RUN: FileCheck --check-prefix=CAL --input-file=%t.cal.prec %s
 // RUN: FileCheck --check-prefix=CAL-ABSENT --input-file=%t.cal.prec %s

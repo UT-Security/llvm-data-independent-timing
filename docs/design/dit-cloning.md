@@ -1,7 +1,13 @@
 # DIT twins: cloning the callees of DIT-on code
 
-**Status 2026-09-04.** Landed OPT-IN as `-mllvm -taint-dit-clone-seeded`
-(default byte-identical, verified on the full libsodium archive). Phase C
+**Status 2026-09-05: DEFAULT ON** (`-taint-dit-clone-seeded`, `=0` for an A/B
+arm), together with the callee contract; the recipe is
+`docs/reference/harden-runbook.md`. Landed 2026-09-04 as opt-in, where the
+no-flag build was verified byte-identical on the full libsodium archive.
+One rule changed at the flip: a cross-TU call is redirected to a twin ONLY
+when the owned-symbols list names the callee (§2.2), so a build without
+the list keeps the original across TUs instead of risking an undefined
+`<name>.dit` at link time. Phase C
 item 1 of the callee contract (`dit-callee-contract.md` §5). Measured on
 libsodium's signing path under the contract with the converged round-11 seed
 file: executed DIT writes per two signatures **10,400 -> 41** (inherit: 6)
@@ -91,10 +97,13 @@ A caller in TU A sees only a declaration of `f`. Three facts let it name
 2. this build clones seeded functions: the annotator sets the module flag
    `taint-dit-clone-seeded`, so the MIR pass knows the TU that defines `f`
    was compiled the same way;
-3. `f` is a function this build defines: the `-taint-owned-symbols` list,
-   when given, must contain it. Without the list every seeded declaration is
-   assumed cloned, and a seed naming a function the build does not define
-   breaks at link time as an undefined `f.dit` - loud, not silent.
+3. `f` is a function this build defines: the `-taint-owned-symbols` list
+   contains it. The list is REQUIRED for a cross-TU redirect (since the
+   default flip; the opt-in version assumed every seeded declaration cloned
+   and would have failed at link time on a seed naming a function the build
+   does not define, such as a hardened `memcpy` seed in a build linking
+   libc's). Without the list the cross-TU call keeps the original, which
+   protects itself: the optimisation is lost, never the coverage.
 
 Then `ditCloneFor` synthesizes the declaration `f.dit` in TU A with `f`'s
 type, attributes and visibility, marks it `taint-dit-clone`, and the call is

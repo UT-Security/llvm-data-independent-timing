@@ -1,10 +1,13 @@
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# The inherit contract is pinned: this test is about a call being a Need and
+# the caller holding DIT across it, which the default (callee, since
+# 2026-09-05) does not do.
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-contract=inherit \
 # RUN:     -taint-callsite-report=%t.region %s -o /dev/null
 # RUN: FileCheck --check-prefix=REPORT %s < %t.region
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-contract=inherit \
 # RUN:     -taint-dit-placement=function -taint-callsite-report=%t.func %s -o /dev/null
 # RUN: FileCheck --check-prefix=REPORT %s < %t.func
-# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit \
+# RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-insert-dit -taint-dit-contract=inherit \
 # RUN:     %s -o - | FileCheck %s
 
 # The exit-balance check: a function that enables PSTATE.DIT and LEAVES with it

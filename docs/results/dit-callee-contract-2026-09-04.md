@@ -294,6 +294,10 @@ The restore rule on its own is worth 372,635 uncovered ops per resumption
 - **Phase C item 1 is done and it is the whole switch cost.** Twins
   (section 4.1) take libsodium's contract from 10,400 executed DIT writes to
   41 against inherit's 6, at identical coverage and +21% text.
+- **Flipped 2026-09-05, with the twins** (section 4.1 and
+  `docs/design/dit-cloning.md` §5.1: the twins remove the switch cost that
+  was the reason not to). The bullet below is the verdict as it stood the
+  day before, kept as written.
 - **Do not flip the default yet.** The +2.59% is placement, not DIT (the NOP
   arms), which makes it Phase C's to reduce along with the limb-traffic loss;
   and the naive movers are not a shippable `memcpy`. The flag, the obligation report, and the movers are

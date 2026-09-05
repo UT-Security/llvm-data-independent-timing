@@ -68,13 +68,13 @@ static cl::opt<std::string> TaintDitCloneList(
 // from DIT-on code are redirected, which is why the eligibility rules of the
 // listed form (local linkage, address not taken) are not needed here.
 static cl::opt<bool> TaintDitCloneSeeded(
-    "taint-dit-clone-seeded", cl::Hidden, cl::init(false),
+    "taint-dit-clone-seeded", cl::Hidden, cl::init(true),
     cl::desc("Give every seeded function, and every function it reaches by "
              "direct call in its TU, a <name>.dit twin that is entered with "
              "PSTATE.DIT already set and emits no switch of its own; the MIR "
              "pass redirects calls made from DIT-on code to it, in this TU and "
              "across TUs for seeded callees the -taint-owned-symbols list "
-             "covers. Compile every TU of the build with it."));
+             "covers. Default on since 2026-09-05; =0 for an A/B arm."));
 
 static cl::opt<std::string> TaintSourcesFile("taint-src", cl::desc("A file specifying taint sources"), cl::value_desc("file"));
 

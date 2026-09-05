@@ -18,7 +18,7 @@
 // Default: the cross-TU records, and no severe warning on stderr.
 // RUN: rm -f %t.loss
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
-// RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt \
+// RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt -mllvm -taint-dit-contract=inherit \
 // RUN:     -mllvm -taint-info-loss-report=%t.loss %s -o /dev/null 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NOWARN --allow-empty
 // NOWARN-NOT: DIT stays SET past this call
@@ -30,7 +30,7 @@
 // Put the tail call back and the severe loss returns, warning on stderr with no
 // report flag needed - a silent degeneration to blanket coverage is not discoverable.
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
-// RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt \
+// RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt -mllvm -taint-dit-contract=inherit \
 // RUN:     -mllvm -taint-no-tail-calls=0 %s -o /dev/null 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=WARN
 // WARN: taint: fwd: DIT stays SET past this call
@@ -40,7 +40,7 @@
 // a re-run of this test would check a file with two builds' records in it.
 // RUN: rm -f %t.loss
 // RUN: %clang_cc1 -triple aarch64-apple-macosx -O2 -S \
-// RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt \
+// RUN:     -ftaint-harden=%S/Inputs/dit-infoloss-secret.txt -mllvm -taint-dit-contract=inherit \
 // RUN:     -mllvm -taint-no-tail-calls=0 \
 // RUN:     -mllvm -taint-info-loss-report=%t.loss %s -o /dev/null 2>&1
 // RUN: FileCheck %s --check-prefix=LOSS --input-file=%t.loss

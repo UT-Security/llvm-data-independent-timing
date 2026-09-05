@@ -4,8 +4,8 @@
 ; another TU can name an external one), address taken or not; a seeded
 ; DECLARATION gets no twin here (the TU that defines it makes one) and keeps its
 ; "taint-seeded-elsewhere" stamp; a function nothing seeded reaches gets none;
-; the module is flagged so the MIR pass knows this build clones. Without the
-; flag nothing is cloned.
+; the module is flagged so the MIR pass knows this build clones. Default on
+; since 2026-09-05; with =0 nothing is cloned.
 ;
 ; RUN: rm -f %t.src
 ; RUN: echo "f,0"         >  %t.src
@@ -14,7 +14,7 @@
 ; (r and u are not seeded: f reaches r, nothing reaches u.)
 ; RUN: opt -S -passes=taint-annotate -taint-src=%t.src -taint-dit-clone-seeded %s \
 ; RUN:   | FileCheck %s
-; RUN: opt -S -passes=taint-annotate -taint-src=%t.src %s \
+; RUN: opt -S -passes=taint-annotate -taint-src=%t.src -taint-dit-clone-seeded=0 %s \
 ; RUN:   | FileCheck --check-prefix=OFF %s
 
 ; Output order: the originals, the stamped declaration, then the twins.
