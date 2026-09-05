@@ -2,8 +2,11 @@
 
 > **New here? Read [`docs/README.md`](docs/README.md) first** - the documentation
 > index, with a reading order and an annotated map of every design doc, measured
-> result, and research note. This file holds the authoritative *operating*
-> instructions; `docs/` holds the reasoning behind them.
+> result, and research note. **To RUN the pass, read
+> [`docs/reference/harden-runbook.md`](docs/reference/harden-runbook.md)**: the run
+> document, with the quick start, every flag and its default, the seed loop, the
+> control arms and the M4/M5 notes. This file holds the gotchas and the history behind
+> them; `docs/` holds the reasoning.
 
 This is an **LLVM fork** (branch `dit-tainter`) implementing **interprocedural taint
 analysis + PSTATE.DIT hardening** for AArch64: secret data entry points are declared
