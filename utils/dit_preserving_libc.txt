@@ -24,6 +24,8 @@ mempcpy
 bcopy
 bzero
 explicit_bzero
+__explicit_bzero_chk
+__bzero
 __memcpy_chk
 __memmove_chk
 __memset_chk

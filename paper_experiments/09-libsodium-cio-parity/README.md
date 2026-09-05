@@ -489,6 +489,27 @@ and it is the next change to make; a hardened `memcpy` linked ahead of libc
 (the obligation report's own repair for a mover handed a secret) would
 make the callee owned and get the same effect through the owned list.
 
+**With the libc model** (`-taint-dit-preserving-symbols=utils/dit_preserving_libc.txt`,
+2026-09-05: external functions that never write PSTATE.DIT get no re-assert
+after them; `docs/results/dit-preserving-symbols-2026-09-05.md`,
+`data/gem5_preserving.csv`, `data/gem5_preserving_analysis.txt`). Same
+libraries otherwise, same arms, all gates pass, signing oracle identical:
+
+| benchmark | blanket | API bracket (2 sw) | pass, shipped | pass + libc model |
+|---|---|---|---|---|
+| ed25519 sign | +0.22% | +0.73% / +1.14% | -3.75% / -2.60% (16) | -1.78% / -3.50% (**2**) |
+| chacha20-poly1305 encrypt | +1.31% | +3.19% / +3.28% | +2.37% / +43.88% (38) | +4.13% / +36.37% (32) |
+| chacha20-poly1305 decrypt | +0.70% | +1.50% / +4.33% | +3.29% / +42.42% (39) | +6.64% / +35.89% (32) |
+| aes256-gcm encrypt | +0.41% | +0.25% / +3.78% | +0.25% / +12.42% (6) | -6.16% / +3.53% (**2**) |
+| aes256-gcm decrypt | +8.39% | +9.13% / +23.75% | +10.06% / +36.06% (6) | +9.32% / +23.80% (**2**) |
+| argon2id | +0.51% | +2.06% / +2.04% | +2.37% / +7.58% (395,758) | pending |
+
+Where the library's calls are direct the pass now executes the bracket's two
+switches per operation and pays the bracket's serialising cost; chacha keeps
+32 behind the implementation tables. The renamed column moves with each
+binary's layout term (aes256-gcm encrypt's -6.16% sits on a -5.94% NOP
+twin), not with the switches.
+
 **With a different message every operation** (`build_arms.sh VARY_INPUT=1`:
 the staged drivers rewrite the message before each iteration's setup,
 outside the measured region; keys and nonces already vary per iteration in
