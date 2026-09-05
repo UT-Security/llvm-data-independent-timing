@@ -230,6 +230,27 @@ arm's and the renamed differences are layout; at cost 0 seven more switches
 per request buy nothing on the renamed model and cost 2 to 5 points on the
 serialising one. The twins stay whole by default.
 
+### The libc model (2026-09-05, `data/gem5_arms_preserving.csv`)
+
+The pass arm rebuilt with `-taint-dit-preserving-symbols=utils/dit_preserving_libc.txt`
+(external functions that never write PSTATE.DIT get no re-assert after them;
+`docs/results/dit-preserving-symbols-2026-09-05.md`), everything else as
+`gem5_arms.csv`. IPC overhead vs unhardened, renamed / serialising, switches
+per request in brackets:
+
+| L | shipped twins | + libc model |
+|---|---|---|
+| 10 | -1.0 / +28.4 (38) | -2.4 / +23.4 (32) |
+| 50 | -0.5 / +22.1 (38) | -0.1 / +18.0 (32) |
+| 200 | -0.4 / +11.8 (38) | -1.0 / +9.9 (32) |
+| 1000 | +0.2 / +3.2 (38) | -0.7 / +2.4 (32) |
+| 5000 | +0.1 / +0.7 (38) | -0.1 / +1.0 (32) |
+| 20000 | +0.4 / -0.1 (38) | +0.2 / +0.7 (32) |
+
+Six of the 38 switches per request were re-asserts after glibc movers inside
+the AEAD twins; the 32 that remain are the Poly1305/ChaCha20 implementation
+table calls. Gates 210/210, coverage unchanged.
+
 ## Known limits
 
 - **Silicon is not re-measured.** The M5 crossover below is the retired lane's.

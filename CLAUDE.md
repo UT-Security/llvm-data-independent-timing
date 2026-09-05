@@ -157,7 +157,14 @@ syscall wrappers; nothing that takes a callback), a call to one needs no re-asse
 a function whose only calls are to them keeps `PreservesDIT`. Trusted only for a callee
 this module does not define and the owned list does not name, so a hardened `memcpy` of
 ours is never overridden. It removes re-asserts only; a mover handed a secret is still
-an obligation. Test `clang/test/CodeGen/taint-dit-preserving.c`.
+an obligation. The lookup is by the call's SYMBOL, since a `bl memcpy` lowered from an
+`llvm.memcpy` intrinsic has no Function in the module. **Measured**
+(`docs/results/dit-preserving-symbols-2026-09-05.md`): libsodium 358 -> 214 sites at
+identical oracle coverage; ed25519 and both AES-GCM rows of experiment 09 down to the
+bracket's 2 switches per op (signing 800 -> 100 writes per 50 signatures, +2.20% ->
++0.57% serialising), chacha 38 -> 32 (the rest are the implementation tables),
+experiment 02 serialising +28.4% -> +23.4% at L=10; renamed within each binary's
+layout term. Test `clang/test/CodeGen/taint-dit-preserving.c`.
 
 **`-taint-dit-placement=function`** is the opt-in coarse policy: `MSR DIT, #1` at entry
 of any function containing taint, `MSR DIT, #0` before each return. Whole-function
