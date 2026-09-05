@@ -273,6 +273,37 @@ static bool propagateArgTaintToCallees(MachineFunction &MF,
           TSI.storeSummary(*Callee, CalleeSummary);
           Changed = true;
         }
+        // The callee's `.dit` twin has no callers while the fixed point runs
+        // (calls are redirected to it only at emission), so it would be
+        // analysed with none of the argument taint its original receives here
+        // - clean, a forwarder with nothing to protect. While a twin was
+        // covered whole that was invisible; a NARROWING twin
+        // (-taint-dit-twin-narrow) places by its Needs, and the gem5 oracle
+        // found fe25519_invert.dit, unseeded and reached, running its whole
+        // body DIT-off: 42,848 secret operations per two signatures. So the
+        // twin inherits everything its original is handed: the same
+        // argument-index sets, the same stack-argument bit. Monotone, like the
+        // original's own update, so the fixed point still converges.
+        if (Function *Twin =
+                M.getFunction((Callee->getName() + ".dit").str());
+            Twin && Twin->hasFnAttribute("taint-dit-clone") &&
+            !Twin->isDeclaration()) {
+          FunctionTaintSummary TwinSummary = TSI.getSummary(*Twin);
+          bool TwinChanged = false;
+          for (unsigned I : CalleeSummary.TaintedArgIndices)
+            TwinChanged |= TwinSummary.TaintedArgIndices.insert(I).second;
+          for (unsigned I : CalleeSummary.PointeeTaintedArgIndices)
+            TwinChanged |=
+                TwinSummary.PointeeTaintedArgIndices.insert(I).second;
+          if (CalleeSummary.StackArgTainted && !TwinSummary.StackArgTainted) {
+            TwinSummary.StackArgTainted = true;
+            TwinChanged = true;
+          }
+          if (TwinChanged) {
+            TSI.storeSummary(*Twin, TwinSummary);
+            Changed = true;
+          }
+        }
         return true;
       });
 

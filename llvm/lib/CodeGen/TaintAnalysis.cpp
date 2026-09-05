@@ -4629,7 +4629,9 @@ static unsigned insertTaintDITRegions(MachineFunction &MF,
     // On from its entry, by a predecessor or a hoisted loop enable).
     MachineBasicBlock::iterator EnableAt = MBB.end();
     if (On(&MBB)) {
-      bool OnAtEntry = !MBB.pred_empty();
+      // The function entry arrives DIT-off for an owning function and DIT-ON
+      // for a twin, which therefore needs no enable at its entry block.
+      bool OnAtEntry = MBB.pred_empty() ? Twin : true;
       unsigned OnPreds = 0, OffPreds = 0;
       for (MachineBasicBlock *P : MBB.predecessors()) {
         OnAtEntry &= On(P);
