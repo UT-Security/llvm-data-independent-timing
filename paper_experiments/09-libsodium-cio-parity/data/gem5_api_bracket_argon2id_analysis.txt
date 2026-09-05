@@ -1,0 +1,50 @@
+====================================================================================================
+ARMS  cycles/op, and % against `base` (the MIR round-trip control)
+====================================================================================================
+benchmark                   arm            spec cyc/op     spec %   serdit cyc/op   serdit %  switches/op
+argon2id                    base           326,450,006     +0.00%     326,450,006     +0.00%          0.0
+argon2id                    blanket        328,122,742     +0.51%     328,525,041     +0.64%          0.0
+argon2id                    api            333,159,457     +2.06%     333,116,237     +2.04%          2.0
+argon2id                    taint          334,182,818     +2.37%     351,191,674     +7.58%     395758.0
+argon2id                    taintnop       330,780,658     +1.33%     330,780,658     +1.33%          0.0
+
+====================================================================================================
+DECOMPOSITION  percentage points of `base`, for the shipped `taint` arm
+====================================================================================================
+benchmark                        layout    renamed  serialising      total     sw/op   wr/Mcyc    floor
+argon2id                         +1.33     +1.04       +5.21     +7.58   395758.0      1212    0.00%
+
+
+====================================================================================================
+PER SWITCH  cycles, from a difference between binaries that differ only
+            in whether the switch executes -- not a ratio of one measurement
+====================================================================================================
+benchmark                        renamed   serialising     ratio
+argon2id                             8.6          51.6      6.0x
+
+  The transferable claim is the CONSISTENCY of these columns across
+  independent benchmarks, not any single row.
+
+  NOT a closure check. rate x cost reproduces the measured total
+  identically -- rate is switches/base-cycles and cost is
+  delta-cycles/switches, so the product is delta-cycles/base-cycles
+  by algebra, whatever the numbers. Printing it as agreement would
+  be the same self-reproducing ratio experiment 09 warns about.
+
+  Independent reference points for the serialising column:
+    34.3 cyc/write  experiment 06, gem5 Neoverse-V2, mbedTLS record MAC
+    76.3 cyc/write  experiment 06, same workload at a 53x lower rate
+    ~41 cyc/switch  experiment 09, Apple M5 silicon, this library
+    ~24 cyc/switch  experiment 02, Apple M5 silicon
+====================================================================================================
+PER-POLICY LAYOUT vs SWITCHES  each policy against ITS OWN nop arm
+====================================================================================================
+  layout  = (policyNOP - base)      code layout alone, no switch executes
+  renamed = (policy - policyNOP)    the switches executing, renamed
+  serial  = (policy@serdit - policy@spec)
+  A policy with a large NEGATIVE layout term is winning on the codegen
+  lottery, not on placement. That is not a ranking of placement quality.
+
+benchmark                 policy       layout  renamed   serial    total  sw/op   dwell
+argon2id                  taint        +1.33    +1.04    +5.21    +7.58 395758    100%
+

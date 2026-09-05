@@ -448,6 +448,47 @@ protected, 0 uncovered, 54,010 wasted, identical to the round-11 library
 measured for `docs/design/dit-cloning.md`; the seeds are at their fixpoint
 on this path and the twins do not move protection.
 
+**argon2id** (landed later the same day: one measured operation per cell
+after one warm-up, 326M cycles each, no `taintold` arm; rows appended to
+`data/gem5_api_bracket.csv`, `data/gem5_api_bracket_argon2id_analysis.txt`):
+
+| benchmark | base cyc/op | blanket | API bracket, renamed / serialising | pass, renamed / serialising | pass switches/op | pass NOP (layout) | old compiler, renamed / serialising (switches) |
+|---|---|---|---|---|---|---|---|
+| argon2id | 326,450,006 | +0.51% | +2.06% / +2.04% | +2.37% / **+7.58%** | **395,758** | +1.33% | +2.04% / +1.97% (438) |
+
+**The new defaults turned argon2id's 438 executed switches per operation
+into 395,758, and its serialising cost from +1.97% into +7.58%.** They are
+all re-asserts in one function. `argon2_fill_segment_ref` is seeded at the
+fixpoint, so it runs as its twin (the `fill_segment` pointer in
+`argon2-core.c` is a static that only ever holds the reference
+implementation on aarch64, and the compiler devirtualised the four calls
+to `argon2_fill_segment_ref.dit`), and inside the twin every `fill_block`
+is three `copy_block`s that compile to glibc `memcpy`, each followed by
+`msr DIT, #1` because a callee this build does not define may clear the
+mode. Two passes over 65,536 blocks (the interactive limits) make that
+3 x 131,072 = 393,216 re-asserts per operation; the `memset`s of the
+address blocks and the blake2b twins are the remaining 2,500. The old
+compiler never entered these TUs: CIO's seeds name `crypto_pwhash` and stop
+at the argon2 context, and `argon2-core.o` and `argon2-fill-block-ref.o`
+carry no `msr DIT` under it (verified in the objects), so its 438 were the
+entry points and the fill loop, which is the operation, ran DIT-off. Under
+the new defaults the twin is DIT-on for 100% of the region and suppresses
+the same optimisations blanket does (88.4M against 87.9M), so the operation
+is covered as blanket covers it; it has not been oracle-verified. On the
+renamed model the re-asserts cost +1.04 points over the NOP twin, 8.6
+cycles each by the difference, on top of +1.33 of layout; blanket is
++0.51% and the bracket +2.06% for two switches, the gap being the wrapper's
+layout, since the bracket runs base's fill loop unchanged.
+
+The repair is not a placement change. glibc's `memcpy` and `memset` do not
+write PSTATE.DIT, so letting the pass treat the libc movers as
+DIT-preserving would remove all 393,216 re-asserts and leave the twin's
+dwell, which is what blanket pays. It is the same residual experiment 10
+found on mbedTLS (twins re-asserting after `calloc`, `free` and zeroize),
+and it is the next change to make; a hardened `memcpy` linked ahead of libc
+(the obligation report's own repair for a mover handed a secret) would
+make the callee owned and get the same effect through the owned list.
+
 **With a different message every operation** (`build_arms.sh VARY_INPUT=1`:
 the staged drivers rewrite the message before each iteration's setup,
 outside the measured region; keys and nonces already vary per iteration in
@@ -965,7 +1006,9 @@ NOP twin in brackets:
 Narrowing at cost 0 raises every switch count and every serialising number and
 moves nothing on the renamed model beyond its NOP twin: the renamed cost here
 is dwell over the kernels (and the `crypto_verify_16` chain on decrypt), which
-any placement that protects them pays. argon2id pending, as above.
+any placement that protects them pays. argon2id was not run on the
+narrowing arms: its 395,758 switches are re-asserts after `memcpy` inside a
+twin (above), which narrowing does not touch.
 
 ## Known limits
 
