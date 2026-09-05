@@ -101,8 +101,7 @@ How the analysis is built, which bugs were found in it, and what is still open.
 - **[reference/harden-runbook.md](reference/harden-runbook.md)** - **how to harden a
   library with the shipped defaults (callee contract + twins, since 2026-09-05) and run
   it on an M4/M5**: the two-build recipe with the owned list, the seed loop to its
-  fixpoint, what to check in the objects, the six control arms, and what the renamed
-  `MSR DIT` on Apple silicon means for reading the numbers.
+  fixpoint, what to check in the objects, the six control arms, and what the M-series `MSR DIT`, which serialises like gem5's serialising model, means for reading the numbers.
 - **[design/dit-cloning.md](design/dit-cloning.md)** - **DIT twins**
   (`-taint-dit-clone-seeded`, default on since 2026-09-05): every seeded function and everything it
   reaches in its TU gets a `<name>.dit` copy that is entered DIT-on by construction

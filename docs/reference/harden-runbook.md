@@ -182,13 +182,20 @@ first `MSR DIT`, so hardened binaries run there only under gem5 or
 Nothing else is needed: the binary sets and clears PSTATE.DIT itself. What
 to know when reading the numbers:
 
-- **Apple's `MSR DIT` is the renamed kind.** The switches are close to free;
-  what the hardened arm pays is DIT dwell, the predictors it turns off while
-  set (the load value predictor above all). Expect the twins arm to land
-  near blanket where the secret lane dominates and well under it where a
-  public lane does, and expect the NOP arm to sit ABOVE the real arm. The
-  serialising column of the gem5 tables has no silicon counterpart on an M4
-  or M5.
+- **Apple's `MSR DIT` serialises; it is the gem5 SERIALISING column that
+  has a silicon counterpart, not the renamed one.** Measured on the M5: a
+  `MSR DIT` that changes the bit costs ~30 cycles and `MRS DIT` 1 cycle
+  (`docs/results/dit-cost-model.md`); an executed clear 34.45 cycles against
+  -0.01 for a skipped one, immediate and register forms alike
+  (`docs/design/dit-abi.md`, the `dit_exitform` harness); 40 to 45 cycles per
+  executed switch across three libsodium benchmarks and ~24 on the signed
+  lookup, by division (experiments 09 and 02). gem5's serialising model
+  charges 19 to 37. The renamed model is a counterfactual for hardware that
+  does not exist yet; nothing in this repository shows Apple renaming the
+  write. (An earlier version of this bullet said the opposite, without
+  evidence; do not cite it.) So on an M4 or M5 expect the switch count to
+  matter as the serialising column says it does, plus the dwell the
+  predictors cost while DIT is set.
 - **Layout matters at the percent level.** Measure several `argv[0]` lengths
   or binary paths and report the spread, as the experiments do
   (`paper_experiments/*/README.md`, "five stack offsets").
