@@ -365,6 +365,36 @@ the mode set - the dwell axis the switch counters cannot provide).
 
 ## The hand-placed API bracket, and the compiler's new defaults (gem5, 2026-09-05)
 
+### The four arms (the headline, 2026-09-05)
+
+Everything below this table is the detail; this is the comparison the
+experiment exists for. Cycles per operation against the unhardened build
+(`-O2` with our compiler, no seeds), gem5 NeoverseV2 FDP, renamed /
+serialising `MSR DIT` (the serialising column is what an M4 or M5 does;
+executed switches per op in brackets):
+
+- **blanket**: DIT set once for the whole process, no analysis;
+- **Apple bracket**: each public entry point wrapped in Apple's prologue and
+  epilogue (read the previous state, `msr DIT, #1`, speculation barrier as
+  `isb sy`, the call, clear only if it was clear), no analysis;
+- **the pass**: `-ftaint-harden` at the shipped defaults (callee contract,
+  twins, intra-block region placement) with the fixpoint seeds and the
+  owned list.
+
+| benchmark | base cycles/op | blanket | Apple bracket (mrs, msr, isb, conditional clear) | the pass, shipped defaults | 
+|---|---|---|---|---|
+| ed25519 sign | 78,790 | +0.22% / +0.22% | +0.49% / +0.42% (2) | -1.44% / -1.04% (16) |
+| chacha20-poly1305 encrypt | 2,186 | +1.31% / +1.37% | +1.83% / +3.21% (2) | +2.37% / +44.79% (38) |
+| chacha20-poly1305 decrypt | 2,290 | +0.70% / +0.70% | +2.50% / +4.14% (2) | +3.43% / +45.63% (39) |
+| aes256-gcm encrypt | 1,217 | +0.41% / +0.41% | +2.96% / +6.08% (2) | +0.25% / +13.39% (6) |
+| aes256-gcm decrypt | 1,077 | +8.39% / +8.39% | +23.43% / +26.87% (2) | +9.87% / +36.34% (6) |
+| argon2id | 326,450,006 | +0.51% / +0.64% | running (old two-write bracket: +2.06% / +2.04%) | +2.37% / +7.58% (395,758) |
+
+argon2id's Apple-bracket cells are running; its old two-write bracket and
+the pass's row are the block-placement build, whose argon2 TUs the current
+default compiles identically.
+
+
 What a careful library author does by hand, and what Apple's corecrypto scope
 guards do: set `PSTATE.DIT` once at the entry of each public crypto function
 and clear it once at the exit. Nothing inside is touched, nothing is analysed.
