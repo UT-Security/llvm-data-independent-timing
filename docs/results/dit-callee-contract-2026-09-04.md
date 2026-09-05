@@ -89,12 +89,44 @@ The shipped seed file protects the signing path entirely by inheritance: its
 seeds sit on forwarders (`crypto_sign` tail-calls `crypto_sign_ed25519` in
 another TU), so under the contract nothing is covered. The obligation report
 for that build has 20 records; pasting its 21 seed lines and rebuilding
-restores every protected op at the same wasted coverage. One round. The two
-indirect sites it lists (the Poly1305 implementation table) resolve to
-functions the shipped file already seeds. Six DIT writes under inherit
-against 44 under the filled contract is the whole difference between one
-enable in a forwarder that covers everything below it and each primitive
-covering itself.
+restores every protected op at the same wasted coverage. The two indirect
+sites it lists (the Poly1305 implementation table) resolve to functions the
+shipped file already seeds. Six DIT writes under inherit against 44 under
+the filled contract is the whole difference between one enable in a
+forwarder that covers everything below it and each primitive covering
+itself.
+
+**The loop to convergence, with ownership.** Each round's report, split by
+`utils/taint_obligations.py` against the 912 functions the library defines
+(`utils/taint_owned_symbols.sh`), feeds the next round's seed file; the pass
+runs with `-taint-owned-symbols` so the per-TU summary already separates
+owned obligations from external calls.
+
+| round | seeds | `msr DIT` sites | owned lines proposed | notes |
+|---|---|---|---|---|
+| 1 (shipped) | 65 | 107 | 21 | the signing entry `crypto_sign_ed25519` and the AEAD/pwhash entries |
+| 2 | 86 | 153 | 10 | SHA-512, the curve's `ge25519_p3_tobytes` / `sc25519_muladd`, `randombytes_buf` |
+| 3 | 96 | 191 | 6 | `sodium_bin2base64` |
+| 4 | 102 | 197 | 0 from callee records | oracle: 96 uncovered in `crypto_hash_sha512_final`, reached only by frame address, so never a callee record; the tool now harvests the frame-address (`UNSOUND memory`) records |
+| 5 to 8 | 120, 136, 151, 159 | 351, 402, 437, 452 | 38, 47, 46, then a stall | two report defects: a seed index for a register that maps to no parameter (a by-value struct spans two registers; fatal to the next build), and frame-address records re-proposed for already-seeded arguments |
+| 8, widened | 159 | 452 | 17 | the frame-address record now fires for calls that also pass a register secret (`ge25519_p3_tobytes(sig, &R)`), which is what had left `fe25519_invert` uncovered at 42,312 ops |
+| 9, 10 | 176, 186 | 447, 489 | 10, 2 | the field arithmetic |
+| **11** | **188** | **489** | **0** | **converged; signing oracle 294,164 protected, 0 uncovered, 51,134 wasted (inherit 53,996), 10,400 DIT writes per two signatures (inherit 6)** |
+
+What remains at the fixpoint: 8 indirect sites (the Poly1305, ChaCha20 and
+`randombytes` implementation tables, seeded by name) and 35 calls into 10
+libc functions (`memset`, `memcpy`, `memmove`, `__memcpy_chk`,
+`__explicit_bzero_chk`, `strlen`, ...), filed as `external-call` and never
+proposed.
+
+Two things this settles. The contract's fixpoint is reachable by the loop
+alone, with no knowledge of the library, and it protects exactly what
+inherit protected on this workload at fewer wasted ops. And it costs
+switches: 10,400 DIT writes per two signatures where inherit paid 6, because
+every primitive down to the field multiply toggles for itself. That is the
+number the serialising model prices; under the renamed model the NOP arms
+say the sites' placement dominates. Neither is measured here; experiment
+9's timing rig with the round-11 seed file is the measurement.
 
 ## 5. mbedTLS 3.6.2, TLS 1.3 resumption (`--resumptions 5 --kex dhe`)
 

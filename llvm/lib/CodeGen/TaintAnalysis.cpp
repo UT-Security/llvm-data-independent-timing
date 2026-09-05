@@ -92,6 +92,13 @@ cl::opt<std::string> llvm::TaintInfoLossReportFile(
              "APPENDS: a build is many clang invocations, so remove the file "
              "before building or records from earlier builds will mix in."));
 
+cl::opt<std::string> llvm::TaintOwnedSymbolsFile(
+    "taint-owned-symbols", cl::Hidden, cl::init(""),
+    cl::desc("File naming the functions this build defines, one per line. An "
+             "unseen callee not in it is external code (libc, another "
+             "library): reported as out of scope, not as a seed obligation. "
+             "Generate with utils/taint_owned_symbols.sh."));
+
 cl::opt<std::string> llvm::TaintCallsiteReportFile(
     "taint-callsite-report",
     cl::desc("Output file for call sites passing secret data to callees the "

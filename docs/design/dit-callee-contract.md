@@ -64,6 +64,36 @@ the state it was entered with:
   and the `.dit` clones remain: a clone is entered DIT-on by construction of
   who may call it, which is a placement fact, not a taint fact.
 
+## 1.1 Ownership: what is ours to seed
+
+An obligation is only a to-do item if the callee is ours. The pass cannot
+tell from inside one TU whether another TU of the same build defines a
+callee, so ownership is a build-wide fact supplied to it:
+
+- `utils/taint_owned_symbols.sh <objects|archives>` writes the functions the
+  build defines, one per line (every defined text symbol, statics included,
+  since a seed matches a static by name inside its TU).
+- `-taint-owned-symbols=<file>` makes the report classify at the source. An
+  unseen callee in the set stays an `uncovered-callee` obligation with its
+  seed line; one outside it becomes an `external-call` record, Info severity,
+  "out of scope for the seed loop", with its class named (mover, allocator,
+  other) and no repair, because a hardened mover or a hardened libc is the
+  developer's decision, not the compiler's demand. Indirect sites stay
+  obligations: their targets are found by name. The per-TU stderr line
+  splits the same way. Codegen is identical; taint still propagates through
+  an external call exactly as before.
+- `utils/taint_obligations.py <report> --owned <file> [--next-round out
+  --seeds in]` is the same split offline, and writes the next round's seed
+  file: the previous seeds plus the owned lines. Build, run it, rebuild,
+  oracle; the loop ends when OWNED is empty.
+
+On libsodium's round-two report (the shipped 65 seeds plus round one's 21):
+10 owned lines (`crypto_hash_sha512`, `_update`, `ge25519_p3_tobytes`,
+`sc25519_muladd`, `randombytes_buf`, `sodium_memzero`,
+`argon2_encode_string`), 7 indirect sites (the Poly1305 and ChaCha20
+implementation tables), and 12 external sites on 4 callees (`memset` x7,
+`memcpy` x3, `memmove`, `__explicit_bzero_chk`) that are no longer proposed.
+
 ## 2. Why
 
 Three properties, none of which the inherit contract has:
