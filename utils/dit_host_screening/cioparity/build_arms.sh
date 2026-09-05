@@ -28,6 +28,15 @@
 #   CIO=<dir>    CIO checkout       (their eval_*.c live here)
 #   WORK=<dir>   build root         (default ~/Documents/libsodium-cioparity)
 #   JOBS=<n>     make parallelism
+#   VARY_INPUT=1 patch the staged drivers so the message differs on every
+#                iteration (outside the measured region). CIO's drivers feed the
+#                same 100-byte message to every operation, and on a core with a
+#                PC-indexed load value predictor that makes the kernel's loads
+#                predictable at their ceiling, which is the whole of blanket's
+#                cost on aes256-gcm decrypt. Keys and nonces already vary per
+#                iteration (keygen and rand()); only the message is constant. The
+#                patch is recorded in $WORK/driver_patch.diff and the byte-identity
+#                check is replaced by that record.
 set -uo pipefail
 
 R="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -180,6 +189,23 @@ done
 ( cd "$STAGE" && sha256sum -c "$WORK/driver_sha256.txt" >/dev/null 2>&1 ) \
   && info "    drivers byte-identical to the CIO checkout" \
   || die "staged driver differs from CIO source"
+if [[ "${VARY_INPUT:-0}" == 1 ]]; then
+  # Rewrite the message before each iteration's setup, so every operation
+  # encrypts/signs different bytes. A fixed mix of the previous byte, the
+  # iteration and the index: deterministic, so every arm sees the same
+  # sequence. Argon2id's input is its password and a random salt; untouched.
+  : > "$WORK/driver_patch.diff"
+  for b in $BENCHES; do
+    f="$STAGE/eval_$b.c"; [[ -f "$f" ]] || continue
+    [[ "$b" == argon2id ]] && continue
+    cp "$f" "$f.orig"
+    perl -pi -e 's|^(\s*for \(int cur_iter = 0; cur_iter < num_iter \+ num_warmup; \+\+cur_iter\) \{)\s*$|$1\n    /* VARY_INPUT: a different message every iteration, outside the ROI. */\n    for (unsigned long long vi_ = 0; vi_ < msg_sz; ++vi_)\n      msg[vi_] = (unsigned char)(msg[vi_] * 31u + (unsigned)cur_iter * 17u + (unsigned)vi_ + 1u);\n|' "$f"
+    grep -q 'VARY_INPUT' "$f" || die "VARY_INPUT patch did not apply to eval_$b.c (loop header not found)"
+    diff -u "$f.orig" "$f" >> "$WORK/driver_patch.diff" || true
+    rm -f "$f.orig"
+  done
+  warn "VARY_INPUT=1: drivers patched, see $WORK/driver_patch.diff (NOT byte-identical to CIO)"
+fi
 
 info "link"
 for b in $BENCHES; do
