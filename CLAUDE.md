@@ -145,17 +145,37 @@ went **265 ops / 203 sites -> 5 / 5**, and libsecp256k1 and libsodium switch cou
 only loads of that object are affected. Test:
 `taint-analysis-global-sibling.mir`, verified to fail pre-fix.
 
-**The other three are NOT fixed.** flowprobe gained heap variants C5/C6/C7 the same day
-(gem5-DIT `a3ca11dc68`) - same mechanisms, bytes on the heap where the global rule
-cannot reach - and they fail identically to their global twins, so the three defects are
-storage-independent and still open:
+**C1 and C5 are FIXED (2026-09-04, `docs/results/returns-pointee-2026-09-04.md`).**
+Five pieces: a `ReturnsPointeeTainted` summary bit (x0 pointee-tainted at a return,
+applied like `ReturnsTainted`, and set for every external callee handed a secret); the
+address of a module-secret global is pointee-tainted when materialised; a secret stored
+through a pointer makes that pointer pointee-tainted; globals carry pointer-ness
+module-wide (`TaintState::PointeeGlobals` -> `WritesPointeeToGlobal` ->
+`TaintSummaryInfo::ModulePointeeGlobals`); and **the return gate honours seeds** - a
+seeded callee's return applies at EVERY call site, not only where the caller believes it
+passed a secret. That last one is what closed C5: flowprobe's `produce_all` has no
+parameters, so from its own view it passed nothing, and the summary bit was set and
+correct while the returned pointer still came back public. The same hole is deliberately
+KEPT in the mod-set gate (that is the U4 decision). Measured: flowprobe 389 -> 256
+under-taint ops; libsodium byte-identical (129/129 objects); libsecp256k1 +9 sites
+(`secp256k1_scalar_mul` now toggles for itself instead of inheriting) for identical
+oracle coverage; mbedTLS 727 seeds +15.8% sites but only +184 executed switches per
+resumption, 12 functions' under-taint closed to zero (the record layer's
+secret-dependent error codes, `mbedtls_ssl_read_record` 110 -> 0), per-resumption
+uncovered 8,610 -> 8,222, **+0.58% renamed / -0.08% serialising**. Test
+`clang/test/CodeGen/taint-returns-pointee.c`. The `-taint-call-result-pointee` U5 flag
+is gone; the bit subsumes it.
+
+**Two remain open,** and they are storage-independent: flowprobe gained heap twins
+C5/C6/C7 on 2026-08-31 (gem5-DIT `a3ca11dc68`) and each fails identically to its global
+twin.
 
 | channel | mechanism | status |
 |---|---|---|
-| C1 / C5 | returned pointer into a secret buffer (no `ReturnsPointeeTainted`) | 63 under-taint ops each |
-| C3 / C6 | inline asm store (`INLINEASM` isn't `isCall()`, carries no MMO) | 63 each |
+| C1 / C5 | returned pointer into a secret buffer | **fixed** 2026-09-04 |
+| C2 | global read by a sibling | **fixed** 2026-08-31 |
+| C3 / C6 | inline asm store (`INLINEASM` isn't `isCall()`, carries no MMO) | 63 under-taint ops each |
 | C4 / C7 | NEON register tuple (`isSinglePhysReg` rejects `$q0_q1`) | 63 each |
-| C2 | global read by a sibling | **fixed** |
 
 **Two traps when reading that probe.** `consume_all` used to accumulate every consumer's
 secret-derived return into one local, so once ONE channel started working the first call

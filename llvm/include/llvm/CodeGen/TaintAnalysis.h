@@ -375,6 +375,11 @@ struct TaintState {
   /// own - empty() deliberately ignores it, and computeFunctionMemEffects
   /// re-exports it as a set.
   DenseSet<const GlobalVariable *> TaintedWholeGlobals{};
+  /// Globals that hold a POINTER TO SECRET MEMORY as of this point: a
+  /// pointee-tainted value was stored into them, or a secret was stored
+  /// through a pointer loaded from them. Taint (unions on join); exported as
+  /// FunctionMemEffects::WritesPointeeToGlobal and folded module-wide.
+  DenseSet<const GlobalVariable *> PointeeGlobals{};
 
   /// A call may have written a secret into memory the analysis cannot pin down
   /// (through a pointer argument, to the heap, or via an unknown callee). Once
@@ -405,7 +410,8 @@ public:
     return TaintedRegs.empty() && PointeeTaintedRegs.empty() &&
            !OutgoingArgSecret && !NonArgSourcedTaint && Cells.empty() &&
            UnknownMemValues.empty() && !UnknownMemTainted &&
-           TaintedWholeGlobals.empty() && !ExternalMemClobbered;
+           TaintedWholeGlobals.empty() && PointeeGlobals.empty() &&
+           !ExternalMemClobbered;
   }
 
   bool operator==(const TaintState &O) const {
@@ -417,6 +423,7 @@ public:
            UnknownMemValues == O.UnknownMemValues &&
            UnknownMemTainted == O.UnknownMemTainted &&
            TaintedWholeGlobals == O.TaintedWholeGlobals &&
+           PointeeGlobals == O.PointeeGlobals &&
            ExternalMemClobbered == O.ExternalMemClobbered;
   }
 
@@ -466,6 +473,11 @@ public:
                                   O.TaintedWholeGlobals.size());
       for (const GlobalVariable *GV : O.TaintedWholeGlobals)
         TaintedWholeGlobals.insert(GV);
+    }
+    if (!O.PointeeGlobals.empty()) {
+      PointeeGlobals.reserve(PointeeGlobals.size() + O.PointeeGlobals.size());
+      for (const GlobalVariable *GV : O.PointeeGlobals)
+        PointeeGlobals.insert(GV);
     }
     ExternalMemClobbered |= O.ExternalMemClobbered;
   }
@@ -646,6 +658,16 @@ public:
   /// it survives more than one call level.
   const DenseSet<const GlobalVariable *> &wholeTaintedGlobals() const {
     return TaintedWholeGlobals;
+  }
+  void setPointeeGlobal(const GlobalVariable *GV) {
+    if (GV)
+      PointeeGlobals.insert(GV);
+  }
+  bool isPointeeGlobal(const GlobalVariable *GV) const {
+    return GV && PointeeGlobals.contains(GV);
+  }
+  const DenseSet<const GlobalVariable *> &pointeeGlobals() const {
+    return PointeeGlobals;
   }
   void setExternalMemClobbered() { ExternalMemClobbered = true; }
   bool isExternalMemClobbered() const { return ExternalMemClobbered; }
