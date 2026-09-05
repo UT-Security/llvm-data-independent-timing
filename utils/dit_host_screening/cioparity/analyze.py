@@ -33,7 +33,7 @@ Reads results.jsonl and prints, per benchmark:
 """
 import json, statistics, sys, pathlib, argparse
 
-ORDER = ["base", "blanket", "api", "taint", "taintnop", "taintold", "taintoldnop",
+ORDER = ["base", "blanket", "api", "apidsb", "apibare", "apiisb", "apiisbnop", "taint", "taintnop", "taintold", "taintoldnop",
          "taintfn", "taintfnnop", "fine", "finenop"]
 NOP_OF = {"taint": "taintnop", "taintold": "taintoldnop", "taintfn": "taintfnnop", "fine": "finenop"}
 

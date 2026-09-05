@@ -365,6 +365,38 @@ the mode set - the dwell axis the switch counters cannot provide).
 
 ## The hand-placed API bracket, and the compiler's new defaults (gem5, 2026-09-05)
 
+### The four arms (the headline, 2026-09-05)
+
+Everything below this table is the detail; this is the comparison the
+experiment exists for. Cycles per operation against the unhardened build
+(`-O2` with our compiler, no seeds), gem5 NeoverseV2 FDP. Blanket and the
+Apple bracket are given under the serialising `MSR DIT` only, since that is
+what an M4 or M5 does; ExpeDITe is given under both, because the renamed
+column is the one that says what the pass would cost on a core that renamed
+the write. Executed switches per op in brackets.
+
+- **blanket**: DIT set once for the whole process, no analysis;
+- **Apple bracket**: each public entry point wrapped in Apple's prologue and
+  epilogue (read the previous state, `msr DIT, #1`, speculation barrier as
+  `isb sy`, the call, clear only if it was clear), no analysis;
+- **ExpeDITe**: `-ftaint-harden` at the shipped defaults (callee contract,
+  twins, intra-block region placement) with the fixpoint seeds and the
+  owned list.
+
+| benchmark | base cycles/op | blanket | Apple bracket | ExpeDITe, serialising | ExpeDITe, renamed |
+|---|---|---|---|---|---|
+| ed25519 sign | 78,790 | +0.22% | +0.42% (2) | -1.04% (16) | -1.44% |
+| chacha20-poly1305 encrypt | 2,186 | +1.37% | +3.21% (2) | +44.79% (38) | +2.37% |
+| chacha20-poly1305 decrypt | 2,290 | +0.70% | +4.14% (2) | +45.63% (39) | +3.43% |
+| aes256-gcm encrypt | 1,217 | +0.41% | +6.08% (2) | +13.39% (6) | +0.25% |
+| aes256-gcm decrypt | 1,077 | +8.39% | +26.87% (2) | +36.34% (6) | +9.87% |
+| argon2id | 326,450,006 | +0.64% | running (old two-write bracket +2.04%) | +7.58% (395,758) | +2.37% |
+
+argon2id's Apple-bracket cells are running; its old two-write bracket and
+the pass's row are the block-placement build, whose argon2 TUs the current
+default compiles identically.
+
+
 What a careful library author does by hand, and what Apple's corecrypto scope
 guards do: set `PSTATE.DIT` once at the entry of each public crypto function
 and clear it once at the exit. Nothing inside is touched, nothing is analysed.
@@ -374,7 +406,10 @@ that is all crypto it is the placement a reviewer will name first.
 
 **The arm.** The unhardened `base` library, the public entry points CIO's
 drivers call wrapped by the linker (`-Wl,--wrap`) so `__wrap_f` brackets
-`__real_f` with one enable and one clear (`api_bracket.c`; `crypto_sign`,
+`__real_f` with one enable and one clear (`api_bracket.c`, which since later
+on 2026-09-05 is Apple's exact prologue and epilogue with a speculation
+barrier, see "The bracket per Apple's recipe" below; the tables in this
+subsection are the earlier two-write form, kept as the `apibare` arm; `crypto_sign`,
 `crypto_sign_keypair`, `crypto_sign_open`; the AEAD `keygen`/`encrypt`/
 `decrypt` pairs; `crypto_pwhash`). Same driver, same library, same layout as
 `base`; exactly two committed mode writes per operation, which the runner
@@ -502,7 +537,7 @@ libraries otherwise, same arms, all gates pass, signing oracle identical:
 | chacha20-poly1305 decrypt | +0.70% | +1.50% / +4.33% | +3.29% / +42.42% (39) | +6.64% / +35.89% (32) |
 | aes256-gcm encrypt | +0.41% | +0.25% / +3.78% | +0.25% / +12.42% (6) | -6.16% / +3.53% (**2**) |
 | aes256-gcm decrypt | +8.39% | +9.13% / +23.75% | +10.06% / +36.06% (6) | +9.32% / +23.80% (**2**) |
-| argon2id | +0.51% | +2.06% / +2.04% | +2.37% / +7.58% (395,758) | pending |
+| argon2id | +0.51% | +2.06% / +2.04% | +2.37% / +7.58% (395,758) | **+1.06% / +1.08% (3)** |
 
 Where the library's calls are direct the pass now executes the bracket's two
 switches per operation and pays the bracket's serialising cost; chacha keeps
@@ -553,6 +588,67 @@ counter mode's block counter does by construction, and the decrypt path's
 loop structure exposes it where encrypt's does not. That is a property of
 the kernel, not of the driver's input, and every placement that covers the
 kernel pays it.
+
+### The bracket per Apple's recipe: the speculation barrier is the cost of the API
+
+The `api` arm above set and cleared the mode with two bare writes. Apple's
+guide ("Writing ARM64 code for Apple platforms", Enable DIT for
+constant-time cryptographic operations), which is what
+`timingsafe_enable_if_supported` / `_restore_if_supported` do, is more than
+that: read the previous state as a token (`mrs DIT`, bit 24), `msr DIT, #1`,
+then **a speculation barrier, "to ensure that subsequent instruction timing
+reflects the updated DIT processor state"** (`sb`; on a device without
+FEAT_SB, `dsb nsh; isb sy`), the operation, and a restore that clears only
+if the token was clear. `api_bracket.c` is now that sequence, with `isb sy`
+in place of `sb`, which gem5 does not implement (`apidsb` uses Apple's
+fallback pair). Two more arms isolate the barrier: `apiisb` drops the token
+read (gem5 decodes `mrs DIT` as `Mrs64`, `IsSerializeBefore`, a pipeline
+drain, where the M5 reads it in 1 cycle), and `apiisbnop` puts a `HINT #0`
+at the isb's address, the rig's layout control. `apibare` is the old bracket.
+Data: `data/gem5_api_bracket_apple.csv`. Cycles per op vs base, renamed /
+serialising; every bracket arm commits exactly two writes per op:
+
+| benchmark | base cyc/op | blanket | old bracket (2 writes) | isb NOP control | msr, isb, msr | **isb cost, cycles per op** (ren / ser) | Apple: mrs, msr, isb, cond. clear | Apple, dsb nsh + isb |
+|---|---|---|---|---|---|---|---|---|
+| ed25519 sign | 78,790 | +0.22% | +0.73 / +1.14 | +0.01 / +0.40 | +0.69 / +0.75 | +536 / +275 | +0.49 / +0.42 | +5.48 / +5.51 |
+| chacha20-poly1305 encrypt | 2,186 | +1.31% | +3.19 / +3.28 | +7.27 / +4.63 | +8.41 / +10.35 | +25 / +125 | +1.83 / +3.21 | +3.24 / +5.91 |
+| chacha20-poly1305 decrypt | 2,290 | +0.70% | +1.50 / +4.33 | +4.80 / +6.52 | +5.90 / +7.69 | +25 / +27 | +2.50 / +4.14 | +4.96 / +6.48 |
+| aes256-gcm encrypt | 1,217 | +0.41% | +0.25 / +3.78 | +0.58 / +3.70 | +2.05 / +5.26 | +18 / +19 | +2.96 / +6.08 | +4.11 / +7.23 |
+| aes256-gcm decrypt | 1,077 | +8.39% | +9.13 / +23.75 | +9.50 / +24.19 | +22.13 / +26.04 | +136 / +20 | +23.43 / +26.87 | +26.40 / +29.84 |
+
+Three readings.
+
+- **The barrier costs about 20 cycles per call where the rows agree**, an
+  `IsSquashAfter` refetch: 18 to 27 cycles on aes-gcm encrypt, chacha decrypt
+  and (serialising) aes-gcm decrypt, both models. That is on top of the two
+  writes, which the serialising model already charges ~30 each; on the
+  renamed model it is the only thing in the bracket that is not free. Two
+  renamed cells are far larger (aes-gcm decrypt +136, ed25519 +536 per op)
+  and one serialising (chacha encrypt +125), with the layout control unable
+  to explain them; they are recorded, not interpreted, and want a second
+  layout before being quoted.
+- **The token read is not free in gem5 and is free on the M5.** Apple's full
+  sequence sits 1 to 2 points above `apiisb` on the short operations for the
+  `mrs` drain that the simulator charges and the hardware does not
+  (`docs/results/dit-cost-model.md`: `MRS DIT` 1.00 cycle on the M5). Read
+  the `apiisb` column as the bracket's cost on Apple silicon, the `api`
+  column as gem5's overcharge of it.
+- **The layout band is as wide as the effects.** The `HINT #0` control alone
+  moves chacha encrypt from +3.19% to +7.27% renamed: one instruction in the
+  wrapper shifts the kernel's alignment. Every difference between bracket
+  arms smaller than that band is not a result. Apple's `dsb nsh` fallback
+  adds 1 to 3 points on the short operations and 5% on ed25519, which is
+  gem5's DSB model and not calibrated against silicon.
+
+**What this does to the comparison.** On the serialising model, which is
+what predicts an M4 or M5, a per-call bracket done Apple's way costs two
+serialising writes plus a ~20-cycle barrier: +0.4% on a 78k-cycle signature,
++3 to +4% on a 2,200-cycle AEAD call, +6% and +27% on the two 1,100-cycle
+AES-GCM calls. The pass with the external-callee assumption executes the
+same two writes on ed25519 and AES-GCM and no barrier, and lands at -1.5%,
++3.4% and +24.4% on those rows; on chacha it still pays 32 switches behind
+the implementation tables. Blanket pays none of it. argon2id's bracket cells
+are running; the old bracket was +2.06% there.
 
 ### What the value predictor is predicting on aes256-gcm decrypt, and whether it is secret
 
@@ -1038,7 +1134,14 @@ NOP twin in brackets:
 Narrowing at cost 0 raises every switch count and every serialising number and
 moves nothing on the renamed model beyond its NOP twin: the renamed cost here
 is dwell over the kernels (and the `crypto_verify_16` chain on decrypt), which
-any placement that protects them pays. argon2id was not run on the
+any placement that protects them pays.
+
+argon2id under the assumption (landed 13:1x, one measured op per cell, all
+gates pass): **395,758 switches per hash -> 3** (the public entry's enable and
+clear, and one more), serialising **+7.58% -> +1.08%**, renamed +2.37% ->
++1.06% with a NOP twin at -0.04%, against blanket's +0.51% / +0.64% and the
+bracket's +2.06%. The whole of the pass's cost on this hash was the re-assert
+after `memcpy`. argon2id was not run on the
 narrowing arms: its 395,758 switches are re-asserts after `memcpy` inside a
 twin (above), which narrowing does not touch.
 

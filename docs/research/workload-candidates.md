@@ -132,7 +132,7 @@ Gates, non-negotiable (`dit-measurement-traps`):
 Output: a ranked table of always-on DIT cost. **That table is a publishable
 result on its own** - "we screened N real applications for DIT sensitivity, here
 is the distribution" is the characterization framing that
-`fastdit-thesis-status` says survives review, and it does not depend on the
+`expedite-thesis-status` says survives review, and it does not depend on the
 fine-grained claim landing.
 
 **Step 2 - instrument only the winner**, with libsecp256k1 signing as payload.
