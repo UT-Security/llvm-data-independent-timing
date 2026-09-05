@@ -122,6 +122,11 @@ How the analysis is built, which bugs were found in it, and what is still open.
   switch sites at identical coverage; ed25519 and AES-GCM down to the
   hand-placed bracket's two switches per call; argon2id's 395,758 re-asserts
   after `memcpy` gone. Renamed-model cost unchanged: it was never the switches.
+- **[results/dit-intra-block-default-2026-09-05.md](results/dit-intra-block-default-2026-09-05.md)** -
+  intra-block placement as the default, measured on libsodium: switch counts
+  and oracle identical (the hot code is whole twins), timing inside the layout
+  band; the substantive result is the stack-passed pointee seeding bug the
+  flip exposed and fixed.
 - **[results/returns-pointee-2026-09-04.md](results/returns-pointee-2026-09-04.md)** -
   **the `ReturnsPointeeTainted` summary bit and the seeded-callee return gate.**
   A callee returning a pointer INTO secret memory returned a public pointer

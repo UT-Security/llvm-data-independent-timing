@@ -84,7 +84,11 @@ hoisted into a public preamble pins the enable there), and it exposed a real see
 bug the whole-block cover had hidden: a `tainted-pointee` argument passed on the
 stack was seeded as a secret VALUE, so the load through it came back public
 (`taint-analysis-stack-seeded-arg.mir`; incoming fixed frame objects are now seeded
-as both kinds). Region placement covers only the secret-dependent regions - clean
+as both kinds). Measured on libsodium (`docs/results/dit-intra-block-default-2026-09-05.md`):
+executed switches and oracle identical to block placement (the hot code is whole
+twins), 4 of 113 instrumented functions change, timing inside the layout band; it acts
+where secret work sits in an original behind a public preamble (mbedTLS). Region
+placement covers only the secret-dependent regions - clean
 preambles and public loop scaffolding (coordinate/index math) stay DIT-off - tuned by
 `-taint-dit-switch-cyc` (**default 30** = the measured serializing switch cost),
 `-taint-dit-dwell-per-instr` (default 1.0), and `-taint-dit-loop-hoist` (**default 1**:

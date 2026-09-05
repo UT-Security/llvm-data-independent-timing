@@ -251,6 +251,26 @@ Six of the 38 switches per request were re-asserts after glibc movers inside
 the AEAD twins; the 32 that remain are the Poly1305/ChaCha20 implementation
 table calls. Gates 210/210, coverage unchanged.
 
+### Intra-block placement, the default since later on 2026-09-05 (`data/gem5_arms_intra_block{,_ext}.csv`)
+
+Same rig, the pass arm with `-taint-dit-sub-block` (now the default; `=0`
+is the block placement of every table above), without and with the
+external-callee assumption. IPC overhead vs unhardened, renamed /
+serialising, switches per request:
+
+| L | block | block + ext | intra-block | intra-block + ext |
+|---|---|---|---|---|
+| 10 | -1.0 / +28.4 (38) | -2.1 / +23.8 (32) | +0.1 / +32.0 (38) | -1.7 / +24.8 (32) |
+| 50 | -0.5 / +22.1 (38) | -0.1 / +18.0 (32) | -0.6 / +24.9 (38) | -0.1 / +19.2 (32) |
+| 200 | -0.4 / +11.8 (38) | -1.0 / +9.9 (32) | +1.2 / +13.5 (38) | -1.1 / +10.0 (32) |
+| 1000 | +0.2 / +3.2 (38) | -0.7 / +2.4 (32) | +0.1 / +3.8 (38) | -0.1 / +2.1 (32) |
+| 5000 | +0.1 / +0.7 (38) | -0.1 / +1.0 (32) | +0.0 / +0.8 (38) | +0.0 / +0.1 (32) |
+| 20000 | +0.4 / -0.1 (38) | +0.2 / +0.7 (32) | +0.2 / +0.5 (38) | +0.2 / +0.0 (32) |
+
+Identical switch counts, gates 210/210 in both, coverage unchanged; the
+differences are the layout band of a library that changed in four
+functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
+
 ## Known limits
 
 - **Silicon is not re-measured.** The M5 crossover below is the retired lane's.
