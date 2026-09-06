@@ -20,27 +20,31 @@ machine executes the work -- rather than a ratio against a baseline that itself 
 The arms retire near-identical instruction counts (blanket to within 0.2%), so this is the
 same information as a cycle table, stated as throughput.
 
-                                              ---- IPC ----      ---- IPC change ----
-request                          crossings    A     C     B    Bn    blanket    bracket
-GET /         (suite's request)        110  2.89  2.82  2.89  2.89     -2.4%      +0.0%
-GET / logged in                        128  2.91  2.84  2.92  2.93     -2.4%      -0.3%
-POST /wp-login.php  2^13 shipped     8,226  3.02  2.96  2.99  3.02     -2.0%      -1.0%
-GET /wp-json/... ?context=edit 2^13  8,230  2.89  2.83  2.86  2.89     -2.1%      -1.0%
-POST /wp-login.php  2^16            65,600  3.17  3.10  2.94  3.19     -2.2%      -7.8%
-GET /wp-json/... ?context=edit 2^16 65,600  3.01  2.94  2.78  3.02     -2.3%      -7.9%
+                                          -------- IPC --------   ---- IPC change ----
+request                          crossings  baseline  blanket  bracket   blanket    bracket
+GET /         (suite's request)        110      2.89     2.82     2.89     -2.4%      +0.0%
+GET / logged in                        128      2.91     2.84     2.92     -2.4%      -0.3%
+POST /wp-login.php  2^13 shipped     8,226      3.02     2.96     2.99     -2.0%      -1.0%
+GET /wp-json/... ?context=edit 2^13  8,230      2.89     2.83     2.86     -2.1%      -1.0%
+POST /wp-login.php  2^16            65,600      3.17     3.10     2.94     -2.2%      -7.8%
+GET /wp-json/... ?context=edit 2^16 65,600      3.01     2.94     2.78     -2.3%      -7.9%
 
-  A   unhardened baseline
-  C   BLANKET: PSTATE.DIT set before main, never cleared        blanket = C/A - 1
-  B   THE DEVELOPER'S BRACKET: Apple's recipe written by hand
-      at the entry of the seven PHP crypto builtins             bracket = B/Bn - 1
-  Bn  B's NOP twin: hint #0 wherever B has a switch
+  baseline IPC   arm A, unhardened -O2
+  blanket        PSTATE.DIT set before main and never cleared, against the baseline
+  bracket        Apple's recipe written by hand at the entry of the seven PHP crypto
+                 builtins, against ITS INSTRUCTION-MATCHED NOP TWIN -- not the baseline
 
-  THE BRACKET IS MEASURED AGAINST ITS TWIN, NOT AGAINST THE BASELINE, and that is not a
-  detail. Bn is the same code at the same addresses with `hint #0` in place of every
-  `msr DIT`, so B/Bn isolates the cost of EXECUTING the switches from the cost of having
-  emitted them. At 2^16 the bracket reads 2.94 against a baseline of 3.17, but against its
-  own twin's 3.19 -- relinking alone moved layout 3.9% in the pilot, which is larger than
-  most of the effects here.
+  THE TWO COLUMNS HAVE DIFFERENT DENOMINATORS, ON PURPOSE. Blanket is the same binary as the
+  baseline with a mode bit set, so the baseline is the right comparison. The bracket is a
+  DIFFERENT binary: emitting the switches moves code, and relinking alone moved layout 3.9%
+  in the pilot -- larger than most effects in this table. It is therefore compared against a
+  twin built identically with `hint #0` in place of every `msr DIT`, which isolates the cost
+  of EXECUTING the switches from the cost of having emitted them.
+
+  So the bracket column cannot be rederived from the baseline column. On the last row the
+  bracket arm's own IPC is 2.94, which against the baseline's 3.17 would read -7.3%; against
+  its twin's 3.19 it reads -7.8%. Per-arm IPC for all six arms, including both twins, is in
+  the raw files beside this one.
 
   "crossings" counts calls to the seven bracketed builtins, measured with a counting build
   (-DDIT_BRACKET_COUNT=1, crypto_call_counts.txt), not estimated. Since the bracket wraps
