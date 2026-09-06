@@ -10,6 +10,7 @@ Everything routes through one script:
 ./reproduce.sh            # picks the rig from the host
 ./reproduce.sh silicon    # force Apple silicon (M4/M5)
 ./reproduce.sh gem5       # force gem5
+./reproduce.sh blanket    # blanket DIT only -- no toolchain, no seeds, no arms
 ./reproduce.sh --help
 ```
 
@@ -231,6 +232,60 @@ with `OUT=results/<machine> python3 utils/taint_libsodium_sudo_report.py`.
 Add a machine by dropping its run directory in beside it. Do NOT overwrite
 `results/m4/` with a rerun unless the rerun is at least as clean: check the
 gates first, and in particular that `pinned` is a core and drops are 0.
+
+## Blanket only
+
+```sh
+sudo -E ./reproduce.sh blanket
+```
+
+`README.md` says to **read `blanket` first**, and this rig answers only that.
+Blanket DIT is `msr dit, #1` before `main` and never cleared, so it is a MODE
+and not codegen: the two arms are **one binary run twice**, with `BLANKET_DIT=0`
+and `=1`. No LLVM build, no seed file, no owned list, no arms table, and no NOP
+twin -- the twin separates switch cost from code placement, and identical code
+at identical addresses has no placement delta.
+
+**Why it is separate from the placement rig.** `cio_arm_shim.h` reads counters
+at every region boundary so it can attribute cost to individual switches. Rooted
+that read is kperf: ~3,400 cycles against a ~275-cycle AES-GCM operation, which
+compresses every percentage by an offset it cannot subtract. Blanket needs no
+per-region attribution, so this rig reads the counters **twice per rep** instead
+of twice per op and lets the iteration count amortise them -- under 0.01% of the
+measured total at the default `ITERS`. That is the whole reason it exists, and
+it is asserted as a gate rather than assumed.
+
+Estimator: `median(cycles_C) / median(cycles_A) - 1`, per primitive. Ratios need
+no clock and no offset correction; the absolute cycles/op column is NOT a number
+to quote. Arms alternate within each rep (A,C,A,C,...) rather than running
+blocked, so drift lands on both arms instead of on the mode.
+
+| knob | effect |
+|---|---|
+| `REPS=<n>` | paired reps, default 21 |
+| `ITERS=<n>` | ops per rep, default 200000 |
+| `PRIMS="..."` | default `control` + the five fast primitives; `argon2id` needs `ITERS=200` |
+| `WORK=<dir>` | libsodium tree, default `~/Documents/libsodium-arms-silicon/base` |
+| `NO root` | still runs, reports ns/op, and **gate 3 cannot fire** |
+
+Five gates, and a row that fails one prints the failure *instead of* the
+estimate -- a percentage printed beside the reason it is wrong gets quoted
+without the reason:
+
+1. **Instrument** - the counter pair is < 0.01% of the measured total
+2. **Same work** - instructions/op match between arms within 0.05%. One binary,
+   one input: a real difference means something other than the mode changed
+3. **Clock** - implied GHz (cycles/ns) agrees between arms within 1%. This is
+   the gate root is actually for; see the CNTVCT warning further down
+4. **DIT was on** - `control` is a data-dependent pointer chase, exactly what
+   DIT is specified to make constant-time, so it MUST slow. Measured ~+158% on
+   the M5, which is load-value prediction being turned off. Without this gate a
+   flat result cannot be told apart from DIT never having been set
+5. **Resolvable** - separation clears 3x the worse arm's MAD, or the answer is
+   "below this rig's floor" rather than the point estimate
+
+Sources: `utils/dit_blanket/{blanket_bench.c,run_blanket.sh,blanket_report.py}`,
+per the tree's rule that rigs live with the harness, not in `paper_experiments/`.
 
 ## gem5
 
