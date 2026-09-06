@@ -8,17 +8,18 @@
 // RUN: echo "work,0,pointee" > %t.seed
 // RUN: printf 'work\nours_ext\n' > %t.owned
 //
-// Control, no flag: a re-assert follows every external call in DIT-on code.
+// Control, the assumption off (=0): a re-assert follows every external call
+// in DIT-on code. This was the default until 2026-09-05.
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o - \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-placement=function %s \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-placement=function \
+// RUN:     -mllvm -taint-dit-external-preserves=0 %s \
 // RUN:   | FileCheck --check-prefix=NOFLAG %s
 //
-// With the flag and no owned list: every external call is trusted, including
+// The default (no flag) and no owned list: every external call is trusted, including
 // memcpy, whose `bl` lowers an llvm.memcpy intrinsic and has no Function in
 // the module (the test is by symbol).
 // RUN: %clang_cc1 -triple aarch64-unknown-linux-gnu -O2 -S -o - \
-// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-placement=function \
-// RUN:     -mllvm -taint-dit-external-preserves %s \
+// RUN:     -ftaint-harden=%t.seed -mllvm -taint-dit-placement=function %s \
 // RUN:   | FileCheck --check-prefix=EXT %s
 //
 // With the flag AND an owned list naming ours_ext: ours_ext is ours, its

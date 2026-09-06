@@ -146,10 +146,13 @@ const StringSet<> *llvm::taintOwnedSymbols() {
 }
 
 cl::opt<bool> llvm::TaintDITExternalPreserves(
-    "taint-dit-external-preserves", cl::Hidden, cl::init(false),
+    "taint-dit-external-preserves", cl::Hidden, cl::init(true),
     cl::desc("Assume a callee this module does not define (and the owned "
              "list does not name) never writes PSTATE.DIT: no re-assert after "
-             "a call to it from DIT-on code. Indirect calls unchanged."));
+             "a call to it from DIT-on code. Indirect calls unchanged. The "
+             "default since 2026-09-05; =0 re-asserts after every external "
+             "call, which is right only when an external callee calls back "
+             "into hardened code."));
 
 bool llvm::taintExternalCallPreservesDIT(const MachineInstr &MI,
                                          const Module &M) {

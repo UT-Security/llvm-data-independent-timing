@@ -1,0 +1,52 @@
+SHIM exit dit=0 cycles=kperf timer=kperf tot_cyc=375354502 tot_ins=1164856161 map_stall=176455988 flush=143736 reg_cyc=130356409 reg_ins=528218829 reg_n=35875
+cycle source: kperf
+
+  pass   payload       median  med-payload        MHz  cluster
+     1         0         2511         2511       4607        P
+     1       128         2631         2503       4607        P
+     1       256         2789         2533       4607        P
+     1       512         2996         2484       4607        P
+     1      1024         3498         2474       4594        P
+     1      2048         4534         2486       4594        P
+     1      4096         6597         2501       4608        P
+  -> pass 1: slope 0.9968 (exp 1.0000) intercept 2502 cycles  [full clock]
+
+     2         0         2489         2489       4558        P
+     2       128         2613         2485       4523        P
+     2       256         2730         2474       4609        P
+     2       512         2978         2466       4594        P
+     2      1024         3479         2455       4607        P
+     2      2048         4495         2447       4595        P
+     2      4096         6537         2441       4608        P
+  -> pass 2: slope 0.9891 (exp 1.0000) intercept 2478 cycles  [full clock]
+
+     3         0         2478         2478       4608        P
+     3       128         2581         2453       4608        P
+     3       256         2706         2450       4545        P
+     3       512         2956         2444       4608        P
+     3      1024         3501         2477       4593        P
+     3      2048         4524         2476       4608        P
+     3      4096         6563         2467       4608        P
+  -> pass 3: slope 1.0029 (exp 1.0000) intercept 2460 cycles  [full clock]
+
+     4         0         2525         2525       4608        P
+     4       128         2559         2431       4607        P
+     4       256         2691         2435       4595        P
+     4       512         2957         2445       4594        P
+     4      1024         3466         2442       4594        P
+     4      2048         4500         2452       4594        P
+     4      4096         6546         2450       4608        P
+  -> pass 4: slope 0.9964 (exp 1.0000) intercept 2458 cycles  [full clock]
+
+     5         0         2469         2469       4609        P
+     5       128         2575         2447       4607        P
+     5       256         2778         2522       4594        P
+     5       512         2982         2470       4608        P
+     5      1024         3493         2469       4593        P
+     5      2048         4546         2498       4607        P
+     5      4096         6579         2483       4609        P
+  -> pass 5: slope 1.0032 (exp 1.0000) intercept 2476 cycles  [full clock]
+
+================================================================
+valid full-clock passes: 5 of 5
+INSTRUMENTATION OFFSET  median 2476 cycles   (range 2458 - 2502)
