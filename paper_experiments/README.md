@@ -48,7 +48,7 @@ scope. Checked:
 | 08 | libhydrogen | **AFFECTED, already re-measured** - this is the experiment the fix came out of. Oracle 97.61% -> 80.85% unprotected on the natural seed, and the info-loss report's own repair line went from doing nothing to reaching 0.03% |
 | **03** | mbedTLS | **AFFECTED, re-measured 2026-09-03.** 41 -> 49 switches, in exactly the path it measures. **Headline intact** - region still beats function everywhere, -13.6% at 16 KB. **The blanket crossover moved** from 1,024 B to between 1,024 and 4,096 B, the small-region regime being where switch count is the cost |
 | **06** | mbedTLS | **AFFECTED, not re-run** - reuses 03's binaries, and its gem5 arms need rebuilding on the current compiler |
-| 01 | Bitcoin Core | **gem5 half re-measured 2026-09-03 on the current compiler; silicon half pending** - see below |
+| 01 | Bitcoin Core | **gem5 half re-measured 2026-09-03; the four arms on the flow 2026-09-05** (blanket +7.0% -> +0.45% with K, the Apple bracket inside the layout band at every K, ExpeDITe within +0.7% of base under either model); silicon half pending |
 | 05 | nginx + OpenSSL | **not settled** - the hardened objects are no longer on disk, so there is nothing to compare against; needs an OpenSSL rebuild |
 
 **2026-09-05, the default flip** (`-taint-dit-contract=callee` and the DIT

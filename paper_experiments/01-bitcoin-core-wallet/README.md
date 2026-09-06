@@ -136,6 +136,89 @@ python3 utils/dit_host_screening/btc/btc_gem5.py --bench coinsel \
   --configs spec,serdit --iter 1 --warmup 1 --targets 1 --tag coinsel_repro
 ```
 
+## The four arms on the flow (gem5, 2026-09-05)
+
+The same four arms as experiments 09 and 02, on the wallet flow (coin
+selection, then one `CKey::Sign` per input, K inputs, one ROI): **base**
+(libsecp256k1 through the pass with an empty seed, coin selection plain C++,
+as before), **blanket** (DIT set once before main), the **Apple bracket**
+(base with the two entry points `CKey::Sign` hands the private key,
+`secp256k1_ecdsa_sign` and `secp256k1_ec_pubkey_create`, wrapped in Apple's
+prologue and epilogue: read the previous DIT state, `msr DIT, #1`,
+speculation barrier as `isb sy`, the call, clear only if it was clear; the
+same `api_bracket.c` as the libsodium rigs, the linker's `--wrap`), and
+**ExpeDITe** at the shipped defaults (callee contract, twins, intra-block
+placement) with `seed_flow_contract.txt`, which is `seed9.txt` plus the
+nonce-derivation hops the contract needs, and the owned list. Blanket and
+the bracket under the serialising `MSR DIT`, which is what an M4 or M5 does;
+ExpeDITe under both. Cycles per flow against base, median over five
+`argv[0]` offsets, 450 runs, every gate passing (one checksum per K and
+offset across all five arms and both models; base and the bracket's NOP
+twin identical across models). Data: `data/gem5/flow_four_runs.csv`,
+`flow_four_derived.csv`.
+
+| K (inputs signed) | f secret | base cycles/flow | blanket | Apple bracket (switches/flow) | ExpeDITe, serialising (switches/flow) | ExpeDITe, renamed |
+|---|---|---|---|---|---|---|
+| 0 | 0.0% | 29,883,476 | +7.04% | +0.32% (0) | +0.27% (0) | +0.14% |
+| 1 | 1.4% | 30,304,427 | +6.44% | -0.34% (4) | -0.41% (156) | -0.44% |
+| 4 | 3.8% | 31,056,157 | +6.53% | -0.08% (16) | -0.21% (630) | -0.24% |
+| 10 | 10.4% | 33,347,933 | +5.93% | -0.37% (52) | -0.19% (1816) | -0.29% |
+| 25 | 22.4% | 38,526,136 | +5.14% | -0.55% (134) | +0.21% (4599) | -0.23% |
+| 50 | 37.0% | 47,466,535 | +3.93% | -1.13% (274) | +0.30% (9289) | -0.22% |
+| 100 | 54.2% | 65,188,312 | +2.68% | -1.38% (554) | +0.65% (18645) | -0.17% |
+| 200 | 70.5% | 101,394,298 | +1.19% | -2.00% (1122) | +0.41% (37545) | -0.53% |
+| 400 | 83.0% | 176,013,120 | +0.45% | -2.29% (2316) | +0.74% (76534) | -0.46% |
+
+**Reading.**
+
+- **Blanket's cost is the public lane's prize, diluted.** +7.0% at K = 0,
+  where the flow is coin selection alone, falling to +0.45% at K = 400 as
+  signing takes over the flow. Same shape as the 2026-09-03 re-take.
+- **The bracket is never above the layout band and is negative from K = 1.**
+  Two serialising switches per bracketed call (4 per input, since
+  `CKey::Sign` brackets the signature and the pubkey check; 2,316 per flow at
+  K = 400) never show as a cost, because DIT on across a libsecp256k1
+  signature is FASTER in gem5 than DIT off: the bracket beats its own NOP
+  twin by 25k to 2.7M cycles per flow, about 2,400 cycles per bracketed
+  call, and blanket shows the same thing from the other side (its K = 400
+  cost is 1.3M cycles less than the public-lane prize alone). That is the
+  value predictor mispredicting on the constant-time bignum code when it is
+  allowed to run, a gem5 property already recorded for the signing lane
+  ("no prize, and a switch cost that one bench cannot resolve"); on the M5
+  the same lane is the one where DIT costs the safegcd inversion 23%
+  (`utils/dit_inv_bench_README.md`), so this column does not transfer to
+  silicon as a win. What does transfer: a bracket around the secret entry
+  points touches nothing in the public lane, so it pays none of blanket's
+  prize at any K.
+- **ExpeDITe lands within +0.7% of base at every K under either model**,
+  below blanket through K = 100 (f = 54%) on the serialising model and at
+  every K on the renamed one. Its serialising cost is its switch count:
+  156 per flow at one input rising to 76,534 at 400, about 190 per input,
+  which at ~30 cycles each is the +0.7%. Those are re-asserts inside the
+  library's twins after `memcpy`/`memset` and the calls the tables reach;
+  `-taint-dit-external-preserves` would remove most of them and is not in
+  this table, since it is opt-in.
+
+The bracket against its NOP twin, for the record:
+
+| K | Apple bracket, serialising | its NOP twin | bracket minus twin, cycles per flow |
+|---|---|---|---|
+| 0 | +0.32% (0) | +0.32% | +0 |
+| 1 | -0.34% (4) | -0.25% | -24,944 |
+| 4 | -0.08% (16) | -0.07% | -3,128 |
+| 10 | -0.37% (52) | -0.21% | -54,751 |
+| 25 | -0.55% (134) | -0.15% | -153,008 |
+| 50 | -1.13% (274) | -0.49% | -301,830 |
+| 100 | -1.38% (554) | -0.43% | -619,207 |
+| 200 | -2.00% (1122) | -0.70% | -1,315,077 |
+| 400 | -2.29% (2316) | -0.73% | -2,743,476 |
+
+**Provenance.** LLVM `dit-tainter` at the 2026-09-05 defaults (code of
+`9d596a3c2858`); Bitcoin Core `15a7a4ed7`; gem5-DIT from the rig worktree
+(before master's early-clear change, #106), the same generation as every
+other table taken that day; host beckham, arms built natively. The pass
+library has 114 `msr DIT` sites, the bracket binary four.
+
 ## Re-measurement on the current compiler, 2026-09-03: the gem5 half
 
 **Why.** The 2026-08-31 arms came from a compiler of 2026-08-18 and a seed
