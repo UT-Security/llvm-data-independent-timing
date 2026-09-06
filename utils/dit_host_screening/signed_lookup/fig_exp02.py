@@ -74,7 +74,8 @@ ax.axhline(0, color=BASE, lw=0.9, zorder=2)
 xaxis_secret_fraction(ax, f, Ls)
 ax.set_ylabel("IPC overhead vs unhardened")
 ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}%"))
-ax.set_title("DIT overhead vs secret fraction", loc="left", fontsize=10, fontweight="bold", color=INK, pad=10)
+# No title on the figure: the caption carries it in the paper, and a title baked
+# into the image duplicates the caption and cannot be edited with the text.
 handles = [Line2D([], [], color=c, lw=2, ls=ls, marker="o", ms=6, mfc=mfc, mec=c, mew=1.6, label=n) for n, _, c, ls, _, mfc in series]
 ax.legend(handles=handles, frameon=False, fontsize=7.4, loc="upper right", bbox_to_anchor=(0.72, 1.0))
 fig.tight_layout(); fig.savefig(FIG / "overhead-vs-secret-fraction.png", dpi=300, facecolor=SURF); fig.savefig(FIG / "overhead-vs-secret-fraction.pdf", facecolor=SURF)
@@ -93,7 +94,6 @@ ax.set_yticks([0, 100, 1000, 10000]); ax.yaxis.set_major_formatter(FuncFormatter
 ax.set_ylim(-8, 40000)
 xaxis_secret_fraction(ax, f, Ls)
 ax.set_ylabel("Load-value predictions per request")
-ax.set_title("Load-value predictions per request", loc="left", fontsize=10, fontweight="bold", color=INK, pad=10)
 handles = [Line2D([], [], color=BASE, lw=2, marker="o", ms=6, mfc=BASE, mec=BASE, label="unhardened"),
            Line2D([], [], color=ORANGE, lw=2, ls=(0, (4, 2)), marker="o", ms=6, mfc=SURF, mec=ORANGE, label="ExpeDITe"),
            Line2D([], [], color=BLUE, lw=2, marker="o", ms=6, mfc=BLUE, mec=BLUE, label="coarse")]
