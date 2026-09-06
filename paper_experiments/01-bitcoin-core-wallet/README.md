@@ -199,6 +199,40 @@ twin identical across models). Data: `data/gem5/flow_four_runs.csv`,
   `-taint-dit-external-preserves` would remove most of them and is not in
   this table, since it is opt-in.
 
+**With `-taint-dit-external-preserves`** (the `taintx` arm, its library
+`obj/taintx`, 90 more cells, gates pass):
+
+| K | f secret | blanket | Apple bracket (sw/flow) | ExpeDITe, serialising (sw/flow) | ExpeDITe, renamed | + external-callee flag, serialising (sw/flow) | + flag, renamed |
+|---|---|---|---|---|---|---|---|
+| 0 | 0.0% | +7.04% | +0.32% (0) | +0.27% (0) | +0.14% | +0.33% (0) | +0.15% |
+| 1 | 1.4% | +6.44% | -0.34% (4) | -0.41% (156) | -0.44% | -0.51% (144) | -0.46% |
+| 4 | 3.8% | +6.53% | -0.08% (16) | -0.21% (630) | -0.24% | -0.21% (582) | -0.29% |
+| 10 | 10.4% | +5.93% | -0.37% (52) | -0.19% (1,816) | -0.29% | -0.15% (1,624) | -0.40% |
+| 25 | 22.4% | +5.14% | -0.55% (134) | +0.21% (4,599) | -0.23% | +0.08% (4,095) | -0.27% |
+| 50 | 37.0% | +3.93% | -1.13% (274) | +0.30% (9,289) | -0.22% | -0.06% (8,245) | -0.48% |
+| 100 | 54.2% | +2.68% | -1.38% (554) | +0.65% (18,645) | -0.17% | +0.16% (16,521) | -0.60% |
+| 200 | 70.5% | +1.19% | -2.00% (1,122) | +0.41% (37,545) | -0.53% | -0.10% (33,213) | -0.95% |
+| 400 | 83.0% | +0.45% | -2.29% (2,316) | +0.74% (76,534) | -0.46% | +0.20% (67,438) | -0.84% |
+
+The flag removes 12% of the pass's executed switches here (76,534 -> 67,438
+per flow at K = 400) and takes the serialising column from +0.74% to +0.20%;
+the per-switch cost by subtraction stays 24 to 30 cycles. It is not the
+lever it was on libsodium, and the library's re-assert report
+(`data/gem5/flow_secp_reassert_report.txt`) says why: of its 56 re-assert
+sites, 49 follow an INDIRECT call (the nonce function is a function pointer,
+`noncefp`, and so are the context's callbacks; an indirect call is never
+redirected to a twin), 2 follow `memcpy` (in `secp256k1_sha256_write`, the
+two sites the flag removed, executed once per hash block) and 5 follow in-TU
+callees. The rest of the ~170 switches per input are the entry and exit
+toggles of instrumented originals that the PUBLIC verify path calls from
+DIT-off code: `secp256k1_gej_add_ge_var` (11 sites),
+`secp256k1_ge_set_all_gej_var` (4), the rfc6979 and sha256 helpers, which
+the analysis instruments because they handle a secret somewhere in the TU
+and then toggles wherever they are called, `secp256k1_ecdsa_verify`
+included, which never sees one. That is the context-insensitivity cost the
+design docs already name as the dominant one; the levers here are a twin
+for the nonce callback and a per-call-site answer for the `_var` helpers.
+
 The bracket against its NOP twin, for the record:
 
 | K | Apple bracket, serialising | its NOP twin | bracket minus twin, cycles per flow |
