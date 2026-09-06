@@ -23,12 +23,12 @@
 # silicon at the compiler configuration the gem5 rig uses:
 #   A base       unhardened                       -- the denominator
 #   C blanket    unhardened + DIT on for the process
-#   S bracket    Apple's prologue/epilogue with sb -- the sequence that ships,
-#                and the only barrier form measured here
-#   T bracket    the instruction-matched NOP twin  -- layout control for S
+#   B bracket    Apple's prologue/epilogue with sb -- the sequence that ships,
+#                and the only barrier form in the default set
+#   T bracket    the instruction-matched NOP twin  -- layout control for B
 #   P ExpeDITe   -ftaint-harden at the shipped defaults (callee contract, DIT
 #                twins, intra-block placement, round-11 seeds, owned list)
-#   Q ExpeDITe   its NOP twin                      -- layout control for P
+#   Z ExpeDITe   its NOP twin                      -- layout control for P
 # Archives for these come from utils/taint_libsodium_arms.sh, NOT from
 # taint_libsodium_eval.sh, which cannot express the shipped defaults.
 #
@@ -134,7 +134,7 @@ CIOB="${CIOB:-ed25519 chacha20_poly1305_encrypt chacha20_poly1305_decrypt argon2
 PRESET="${PRESET:-gem5parity}"
 case "$PRESET" in
   gem5parity)
-    ARMS="${ARMS:-A:base:0 C:base:1 S:base:api T:base:apinop P:taint:0 Q:taintnop:0}"
+    ARMS="${ARMS:-A:base:0 C:base:1 B:base:api T:base:apinop P:taint:0 Z:taintnop:0}"
     CIO_OPT="${CIO_OPT:--O2}"; CHEAP_TIMER="${CHEAP_TIMER:-1}" ;;
   legacy)
     ARMS="${ARMS:-A:baseline:0 C:baseline:1 B:baseline:api P:hardened:0 F:func:0 X:fine:0 N:narrow:0}"
@@ -216,7 +216,7 @@ fi
     if clang -O0 -o "$_cfb" "$_cf" 2>/dev/null; then "$_cfb"; else printf unknown; fi
     rm -f "$_cf" "$_cfb"
   ) Hz  (tbfrequency $(sysctl -n hw.tbfrequency 2>/dev/null || echo ?) Hz)"
-  echo "seed: $(grep -c '^[a-z]' "$WORK/secret_m4_pointee.txt" 2>/dev/null) lines from CIO libsodium.uarch_checker.config"
+  echo "seed: $(grep -c '^[A-Za-z_]' "$WORK/secret_m4_pointee.txt" 2>/dev/null) lines, $(sed -n '1p' "$WORK/secret_m4_pointee.txt" 2>/dev/null | cut -c1-110)"
   for a in $ARMS; do r=${a#*:}; arch=${r%:*}
     n=$("$LLVM_BIN/llvm-objdump" -d "$WORK/libsodium-$arch.a" 2>/dev/null | grep -cE 'msr[[:space:]]+DIT')
     echo "  ${a%%:*} $arch  msr_DIT=$n"; done

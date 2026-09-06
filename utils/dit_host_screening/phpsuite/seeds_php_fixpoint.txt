@@ -1,0 +1,38 @@
+# Experiment 11, the pass's seeds: the same builtins the developer's bracket wraps,
+# seeded at their C entry points' secret parameters. The analysis cannot see which
+# userland call carries a password, so every call of these builtins is treated as
+# secret-bearing; that is the policy, stated in the design.
+#
+# ext/hash: hash_hmac()'s key, and the SHA-256 core reached through the ops table
+php_hash_do_hash_hmac,4,pointee
+php_hash_hmac_prep_key,3,pointee
+php_hash_hmac_round,3,pointee
+PHP_SHA256Update,0,pointee
+PHP_SHA256Update,1,pointee
+PHP_SHA256Final,1,pointee
+# ext/standard: md5()'s input (phpass hashes the password 8,192 times through it)
+PHP_MD5Update,0,pointee
+PHP_MD5Update,1,pointee
+PHP_MD5Final,1,pointee
+# ext/standard: crypt()/password_verify()/password_hash(): the password
+php_crypt,0,pointee
+php_crypt_blowfish_rn,0,pointee
+php_password_verify,0,pointee
+# --- next round: 6 owned obligation(s) from phpf_infoloss.txt ---
+BF_crypt,1,pointee
+BF_set_key,1,pointee
+BF_set_key,2,pointee
+_crypt_extended_r,0,pointee
+php_sha256_crypt_r,0,pointee
+php_sha512_crypt_r,0,pointee
+# --- next round: 10 owned obligation(s) from phpf_infoloss.txt ---
+__php_stpncpy,0,pointee
+des_setkey,0,pointee
+sha256_finish_ctx,0,pointee
+sha256_finish_ctx,1,pointee
+sha256_process_bytes,0,pointee
+sha256_process_bytes,2,pointee
+sha512_finish_ctx,0,pointee
+sha512_finish_ctx,1,pointee
+sha512_process_bytes,0,pointee
+sha512_process_bytes,2,pointee

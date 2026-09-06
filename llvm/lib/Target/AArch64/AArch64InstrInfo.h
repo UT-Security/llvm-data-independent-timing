@@ -449,6 +449,7 @@ public:
   void insertTimingModeSwitch(MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator MI, const DebugLoc &DL,
                               bool Enable) const override;
+  bool isTimingModeSwitchBarrier(const MachineInstr &MI) const override;
 
   void pinToTimingMode(MachineInstr &MI) const override;
   bool definesTimingMode(const MachineInstr &MI) const override;

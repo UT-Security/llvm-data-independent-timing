@@ -107,7 +107,7 @@ plus `sed -i '' 's/nomerge //'`. See `~/Documents/firefox/build_taint.sh` (now `
 | `-taint-dit-contract={callee\|inherit}` | **default `callee` (since 2026-09-05)**: every function protects its own secrets; a call is never a Need; a secret reaching a callee this build cannot see is an obligation in `-taint-info-loss-report`. `inherit` is the pre-2026-09-05 behaviour. `docs/design/dit-callee-contract.md`. |
 | `-taint-dit-clone-seeded={0\|1}` | **default 1 (since 2026-09-05)**: the DIT twins - every seeded function and everything it reaches by direct call in its TU gets a `<name>.dit` copy entered DIT-on; calls from DIT-on code are redirected to it, across TUs when `-taint-owned-symbols` names the callee. `docs/design/dit-cloning.md`. |
 | `-taint-owned-symbols=F` | the functions this build defines (`utils/taint_owned_symbols.sh`); files an unseen callee outside it as external in the obligation report, and is what allows a cross-TU twin redirect. |
-| `-taint-dit-external-preserves` | **default off**: assume a callee this module does not define (and the owned list does not name) never writes PSTATE.DIT, so no re-assert after it. Removes all of argon2id's 395,758 re-asserts after `memcpy`. `docs/results/dit-external-preserves-2026-09-05.md`. |
+| `-taint-dit-external-preserves={0\|1}` | **default 1 (since later on 2026-09-05)**: assume a callee this module does not define (and the owned list does not name) never writes PSTATE.DIT, so no re-assert after it. Removes all of argon2id's 395,758 re-asserts after `memcpy`. `docs/results/dit-external-preserves-2026-09-05.md`. |
 | `-taint-dit-twin-narrow`, `-taint-dit-twin-switch-cyc` | **default off**: region placement inside a twin (clear at its top, enable before its returns). Measured not to pay on libsodium; `docs/results/dit-twin-narrowing-2026-09-05.md`. |
 | `-taint-info-loss-report=F` | one record per site where the analysis lost the secret, with what it cost and the seed line that repairs it; APPENDS across invocations. The seed loop's input; `utils/taint_obligations.py` splits it by ownership. |
 | `-taint-seed-report=F` | per-seed validation (an out-of-range argument index is fatal since 2026-09-03); `utils/taint_seed_check.py`. |
@@ -538,10 +538,12 @@ is clean. The **false-positive** direction is where the work is: see §9.6.
   - tail calls off TU-wide under `-ftaint-harden` (`-taint-no-tail-calls`, 2026-09-01);
   - the call-site mod-set gate with the strict source condition and return-call-site gating
     (2026-08-24); `-taint-no-modset-gate` is the way out.
-- **Opt-in, measured, not default:** `-taint-dit-external-preserves` (a callee outside the
-  build never writes DIT; removes every re-assert after libc, the whole of argon2id's cost),
-  `-taint-dit-twin-narrow` (does not pay on libsodium), `-ftaint-dit-abi` (the callee-saved
-  ABI, not shipping), the Phase 2 "unknown means tainted" flags (byte-neutral on mbedTLS).
+  - **the external-callee assumption** (`-taint-dit-external-preserves`, default since later
+    on 2026-09-05): a callee this build does not define is assumed never to write PSTATE.DIT,
+    so DIT-on code does not re-assert after it. `=0` restores the re-assert.
+- **Opt-in, measured, not default:** `-taint-dit-twin-narrow` (does not pay on libsodium),
+  `-ftaint-dit-abi` (the callee-saved ABI, not shipping), the Phase 2 "unknown means
+  tainted" flags (byte-neutral on mbedTLS).
 - **The analysis domain** is the product lattice of `docs/design/taint-domain.md` (a value is
   (Data, Pointee), one cell map for memory); since then: a global written with a secret is
   secret module-wide (2026-08-31), `ReturnsPointeeTainted` and the seeded-return gate

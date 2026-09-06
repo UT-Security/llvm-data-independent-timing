@@ -7033,6 +7033,21 @@ static cl::opt<bool> TaintDitOracleHooks(
              "region boundaries. Instrumentation only: NEVER time such a "
              "build."));
 
+// Apple's corecrypto recipe is `msr DIT, #1; sb`: the barrier keeps the core
+// from speculating the protected code under the previous mode. Off by default
+// so every existing measurement stays reproducible; `sb` is what an M-series
+// core runs, `isb` is the stand-in gem5 can execute.
+static cl::opt<std::string> TaintDitEnableBarrier(
+    "taint-dit-enable-barrier", cl::Hidden, cl::init("none"),
+    cl::desc("Speculation barrier to emit after every `MSR DIT, #1` the pass "
+             "places: none (default), sb, or isb. The NOP control replaces it "
+             "with the switch."));
+
+bool AArch64InstrInfo::isTimingModeSwitchBarrier(const MachineInstr &MI) const {
+  return (MI.getOpcode() == AArch64::SB || MI.getOpcode() == AArch64::ISB) &&
+         MI.readsRegister(AArch64::DIT, /*TRI=*/nullptr);
+}
+
 bool AArch64InstrInfo::definesTimingMode(const MachineInstr &MI) const {
   return MI.definesRegister(AArch64::DIT, /*TRI=*/nullptr);
 }
@@ -7450,6 +7465,26 @@ void AArch64InstrInfo::insertTimingModeSwitch(MachineBasicBlock &MBB,
       .addImm(DIT->Encoding)
       .addImm(Enable ? 1 : 0)
       .addDef(AArch64::DIT, RegState::Implicit);
+
+  // Apple's recipe follows every `msr DIT, #1` with a speculation barrier, so
+  // that code after the write cannot be speculated with the old mode (see
+  // utils/dit_host_screening/cioparity/api_bracket.c). -taint-dit-enable-barrier
+  // emits the same thing after every enable this pass places: `sb` (FEAT_SB,
+  // every Apple M-series) or `isb sy` (gem5 lacks `sb`). The implicit $dit use
+  // pins the barrier after the write it belongs to, and it is what the NOP
+  // control (-taint-dit-nop-switches) keys on to replace the barrier too, so the
+  // control keeps the same instruction count and addresses.
+  if (Enable && TaintDitEnableBarrier != "none") {
+    if (TaintDitEnableBarrier == "sb")
+      BuildMI(MBB, MI, DL, get(AArch64::SB))
+          .addUse(AArch64::DIT, RegState::Implicit);
+    else if (TaintDitEnableBarrier == "isb")
+      BuildMI(MBB, MI, DL, get(AArch64::ISB))
+          .addImm(0xf)
+          .addUse(AArch64::DIT, RegState::Implicit);
+    else
+      report_fatal_error("-taint-dit-enable-barrier: expected none, sb or isb");
+  }
 
   if (!TaintDitOracleHooks)
     return;

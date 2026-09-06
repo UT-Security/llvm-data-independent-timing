@@ -1,0 +1,5 @@
+== measured 2026-09-06 (results files 2026-09-05 22:51 .. 2026-09-05 23:10)  host Mac16,10 Apple M4  macOS 15.7.3
+compiler: ef71e700b826f08254872adc9f9dd64ee59b020e (dit-tainter) +uncommitted at run time: -taint-dit-external-preserves=1 (passed explicitly; the default flip landed upstream as 7c330a5e4bf2), new -taint-dit-enable-barrier=sb (committed as the commit before this experiment)
+php: 8.4.25 from 5cde1da976b728fa...  wordpress: ef263da (php/benchmarking-wordpress-6.2)  symfony-demo: b482c3e (php/benchmarking-symfony-demo-2.2.3)  wp-cli 2.7.1 (in the repo)
+mariadb: 12.3.3 (Homebrew), port 3307  warmup/measured: 50/100 (Zend row: 50 measured)
+switch counts: php-cgi: msr DIT sites 14, sb 7, twins 0;php-cgi: msr DIT sites 0, sb 0, twins 0;php-cgi: msr DIT sites 65, sb 44, twins 15;php-cgi: msr DIT sites 90, sb 55, twins 26;php-cgi: msr DIT sites 97, sb 57, twins 27;php-cgi: msr DIT sites 0, sb 0, twins 27;

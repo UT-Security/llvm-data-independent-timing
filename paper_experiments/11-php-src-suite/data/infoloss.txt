@@ -1,0 +1,440 @@
+[1] taint-stop external-call  in=PHP_SHA256Update src=hash_sha.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop external-call  in=PHP_SHA256Final src=hash_sha.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop memory  in=SHA256Transform src=hash_sha.c callee=php_explicit_bzero
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_explicit_bzero,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[1] taint-stop external-call  in=php_crypt src=crypt.c callee=php_md5_crypt_r
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[2] taint-stop external-call  in=php_crypt src=crypt.c callee=strlen
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop external-call  in=php_crypt src=crypt.c callee=_emalloc
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[4] taint-stop external-call  in=php_crypt src=crypt.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[5] taint-stop memory  in=php_crypt src=crypt.c callee=strlen
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `strlen,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[6] taint-stop memory  in=php_crypt src=crypt.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[7] taint-stop memory  in=php_crypt src=crypt.c callee=php_explicit_bzero
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_explicit_bzero,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[1] taint-stop external-call  in=PHP_SHA256Update src=hash_sha.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop external-call  in=PHP_SHA256Final src=hash_sha.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop memory  in=SHA256Transform src=hash_sha.c callee=php_explicit_bzero
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_explicit_bzero,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[1] taint-stop uncovered-indirect  in=php_hash_do_hash_hmac src=hash.c callee=<indirect>
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[2] taint-stop memory  in=php_hash_do_hash_hmac src=hash.c callee=_php_stream_read
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `_php_stream_read,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[3] taint-stop memory  in=php_hash_do_hash_hmac src=hash.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[4] taint-stop external-call  in=php_hash_do_hash_hmac src=hash.c callee=_efree
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[5] taint-stop external-call  in=php_hash_do_hash_hmac src=hash.c callee=free
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      an allocator's control flow depends on the size or pointer it is handed, which DIT does not cover; the fix is upstream
+[6] taint-stop memory  in=php_hash_do_hash_hmac src=hash.c callee=php_hash_hmac_round
+      severity  UNSOUND
+      action    a frame address is passed as argument 5 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_hash_hmac_round,5,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[7] taint-stop external-call  in=php_hash_do_hash_hmac src=hash.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[8] taint-stop external-call  in=php_hash_do_hash_hmac src=hash.c callee=_safe_emalloc
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[9] taint-stop uncovered-indirect  in=php_hash_hmac_prep_key src=hash.c callee=<indirect>
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[10] taint-stop external-call  in=php_hash_hmac_prep_key src=hash.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[11] taint-stop uncovered-indirect  in=php_hash_hmac_round src=hash.c callee=<indirect>
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[1] taint-stop external-call  in=php_crypt src=crypt.c callee=php_md5_crypt_r
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[2] taint-stop external-call  in=php_crypt src=crypt.c callee=strlen
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop external-call  in=php_crypt src=crypt.c callee=_emalloc
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[4] taint-stop external-call  in=php_crypt src=crypt.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[5] taint-stop memory  in=php_crypt src=crypt.c callee=strlen
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `strlen,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[6] taint-stop memory  in=php_crypt src=crypt.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[7] taint-stop memory  in=php_crypt src=crypt.c callee=php_explicit_bzero
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_explicit_bzero,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[1] taint-stop external-call  in=PHP_MD5Update src=md5.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop external-call  in=PHP_MD5Final src=md5.c callee=bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop external-call  in=PHP_MD5Final src=md5.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[1] taint-stop uncovered-indirect  in=php_hash_do_hash_hmac src=hash.c callee=<indirect>
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[2] taint-stop memory  in=php_hash_do_hash_hmac src=hash.c callee=_php_stream_read
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `_php_stream_read,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[3] taint-stop memory  in=php_hash_do_hash_hmac src=hash.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[4] taint-stop external-call  in=php_hash_do_hash_hmac src=hash.c callee=_efree
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[5] taint-stop external-call  in=php_hash_do_hash_hmac src=hash.c callee=free
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      an allocator's control flow depends on the size or pointer it is handed, which DIT does not cover; the fix is upstream
+[6] taint-stop memory  in=php_hash_do_hash_hmac src=hash.c callee=php_hash_hmac_round
+      severity  UNSOUND
+      action    a frame address is passed as argument 5 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_hash_hmac_round,5,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[7] taint-stop external-call  in=php_hash_do_hash_hmac src=hash.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[8] taint-stop external-call  in=php_hash_do_hash_hmac src=hash.c callee=_safe_emalloc
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[9] taint-stop uncovered-indirect  in=php_hash_hmac_prep_key src=hash.c callee=<indirect>
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[10] taint-stop external-call  in=php_hash_hmac_prep_key src=hash.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[11] taint-stop uncovered-indirect  in=php_hash_hmac_round src=hash.c callee=<indirect>
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[1] taint-stop memory  in=php_crypt_blowfish_rn src=crypt_blowfish.c callee=memcmp
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `memcmp,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[2] taint-stop memory  in=php_crypt_blowfish_rn src=crypt_blowfish.c callee=memcmp
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `memcmp,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[3] taint-stop memory  in=BF_crypt src=crypt_blowfish.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[1] taint-stop external-call  in=__php_stpncpy src=crypt_sha256.c callee=strncpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[2] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=strlen
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=_emalloc
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[4] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[5] taint-stop memory  in=php_sha256_crypt_r src=crypt_sha256.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[6] taint-stop memory  in=php_sha256_crypt_r src=crypt_sha256.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[7] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=ap_php_snprintf
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[8] taint-stop memory  in=php_sha256_crypt_r src=crypt_sha256.c callee=php_explicit_bzero
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_explicit_bzero,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[9] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[10] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=_efree
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[11] taint-stop external-call  in=sha256_process_bytes src=crypt_sha256.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[12] taint-stop external-call  in=sha256_finish_ctx src=crypt_sha256.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=strlen
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[2] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=_emalloc
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[4] taint-stop memory  in=php_sha512_crypt_r src=crypt_sha512.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[5] taint-stop memory  in=php_sha512_crypt_r src=crypt_sha512.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[6] taint-stop memory  in=php_sha512_crypt_r src=crypt_sha512.c callee=php_explicit_bzero
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_explicit_bzero,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[7] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[8] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=_efree
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[9] taint-stop memory  in=php_sha512_crypt_r src=crypt_sha512.c callee=_efree
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `_efree,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[10] taint-stop external-call  in=sha512_process_bytes src=crypt_sha512.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[11] taint-stop external-call  in=sha512_finish_ctx src=crypt_sha512.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=PHP_MD5Update src=md5.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop external-call  in=PHP_MD5Final src=md5.c callee=bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop external-call  in=PHP_MD5Final src=md5.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[1] taint-stop memory  in=php_crypt_blowfish_rn src=crypt_blowfish.c callee=memcmp
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `memcmp,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[2] taint-stop memory  in=php_crypt_blowfish_rn src=crypt_blowfish.c callee=memcmp
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `memcmp,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[3] taint-stop memory  in=BF_crypt src=crypt_blowfish.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[1] taint-stop external-call  in=__php_stpncpy src=crypt_sha256.c callee=strncpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[2] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=strlen
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=_emalloc
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[4] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[5] taint-stop memory  in=php_sha256_crypt_r src=crypt_sha256.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[6] taint-stop memory  in=php_sha256_crypt_r src=crypt_sha256.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[7] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=ap_php_snprintf
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[8] taint-stop memory  in=php_sha256_crypt_r src=crypt_sha256.c callee=php_explicit_bzero
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_explicit_bzero,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[9] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[10] taint-stop external-call  in=php_sha256_crypt_r src=crypt_sha256.c callee=_efree
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[11] taint-stop external-call  in=sha256_process_bytes src=crypt_sha256.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[12] taint-stop external-call  in=sha256_finish_ctx src=crypt_sha256.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=strlen
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[2] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=_emalloc
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[3] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[4] taint-stop memory  in=php_sha512_crypt_r src=crypt_sha512.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[5] taint-stop memory  in=php_sha512_crypt_r src=crypt_sha512.c callee=<indirect>
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[6] taint-stop memory  in=php_sha512_crypt_r src=crypt_sha512.c callee=php_explicit_bzero
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `php_explicit_bzero,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[7] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=php_explicit_bzero
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[8] taint-stop external-call  in=php_sha512_crypt_r src=crypt_sha512.c callee=_efree
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[9] taint-stop memory  in=php_sha512_crypt_r src=crypt_sha512.c callee=_efree
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `_efree,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[10] taint-stop external-call  in=sha512_process_bytes src=crypt_sha512.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[11] taint-stop external-call  in=sha512_finish_ctx src=crypt_sha512.c callee=memcpy
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
