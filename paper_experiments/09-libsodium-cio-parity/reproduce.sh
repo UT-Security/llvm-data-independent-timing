@@ -4,6 +4,7 @@
 #   ./reproduce.sh                 pick the rig from the host and run it
 #   ./reproduce.sh silicon         force the Apple-silicon rig (M4/M5)
 #   ./reproduce.sh gem5            force the gem5 rig
+#   ./reproduce.sh silicon counters   run just these stages (--list shows them)
 #   ./reproduce.sh --help          what each one needs
 #
 # The two rigs answer different questions and BOTH are the experiment:
@@ -50,6 +51,7 @@ EOF
 esac
 
 RIG="${1:-}"
+[[ $# -gt 0 ]] && shift        # anything after the rig is passed through as stages
 if [[ -z "$RIG" ]]; then
   if [[ "$(uname -s)" == Darwin && "$(uname -m)" == arm64 ]]; then RIG=silicon
   elif [[ "$(uname -s)" == Linux ]]; then RIG=gem5
@@ -59,9 +61,9 @@ fi
 
 case "$RIG" in
   silicon)
-    exec bash "$R/utils/taint_libsodium_silicon_reproduce.sh" ;;
+    exec bash "$R/utils/taint_libsodium_silicon_reproduce.sh" "$@" ;;
   gem5)
     [[ -n "${CIO:-}" ]] || die "set CIO to a counter-optimization/cio checkout (the drivers live there)"
-    exec bash "$R/utils/dit_host_screening/cioparity/reproduce.sh" ;;
+    exec bash "$R/utils/dit_host_screening/cioparity/reproduce.sh" "$@" ;;
   *) die "unknown rig '$RIG' (silicon | gem5)" ;;
 esac
