@@ -76,12 +76,30 @@ simulation, and `apiisb` is what sizes that overcharge. `apiisb` minus
 
 ## Reading these numbers
 
-**Subtract each arm's own NOP twin before quoting anything.** `taintnop` is
-identical placement, identical instruction count, same addresses, with no mode
-switch executing, and it is large and **signed**: -6.33 on aes-gcm encrypt and
--2.34 on ed25519, where the hardened build is genuinely faster with the mode
-inert, against +6.10 on chacha decrypt. `taint`'s -6.16% on aes-gcm encrypt is
-layout, not a DIT win.
+**`base` is not the denominator for the pass arms.** `-taint-no-tail-calls`
+rides on `-ftaint-harden`, so `taint` and `taintnop` pay a TU-wide tail-call
+disable that plain `-O2` does not - 44 tail calls become `bl`+`ret`, +0.89%
+library text, worth -0.91% to +3.49% runtime. `blanket` and `api` link the
+unhardened library and keep their tail calls, so `base` is right for them. The
+pass arms belong on `rt` (`-ftaint-harden` with an empty seed file, zero
+switches), which this CSV does not contain; the rebased figures are in
+`../../rerun-2026-09-06.md`.
+
+**Do not subtract a single NOP twin and call the remainder DIT's cost.** That
+was this run's original method and it is not sound at this scale.
+`taintnop` swings from -6.33 on aes-gcm encrypt to +6.10 on chacha decrypt, but
+`utils/dit_host_screening/cioparity/relink_null.sh` reproduces the whole of that
+range on the **unhardened** library: link it K bytes later in `.text` behind
+unreachable padding, identical instruction stream and identical committed
+instruction count, and the same benchmarks move 0.50 to 7.04 points. Six
+unreachable NOPs move chacha decrypt +6.18%. Over 12 link offsets, aes-gcm
+encrypt's -6.33% becomes -0.15% median-to-median.
+
+So a difference smaller than that row's relink spread is not a result. The
+spreads are 5.40 (ed25519), 4.53 (chacha enc), 7.04 (chacha dec), 0.50 (aes enc)
+and 1.94 (aes dec) points. The serialising column clears them comfortably; the
+renamed column does not on three rows of five. Working:
+`docs/results/dit-layout-lottery-2026-09-06.md`.
 
 `analysis.txt` prints a per-switch table. Only the chacha rows carry enough
 switches to resolve it (~23 cycles serialising, ~0 renamed). Its ed25519 figure
