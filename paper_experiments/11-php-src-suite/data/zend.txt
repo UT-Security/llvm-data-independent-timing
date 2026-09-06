@@ -1,0 +1,11 @@
+zend: 6 arms, 50 warm-up + 100 measured requests per row, arms rotate per request
+
+== zend: Zend/bench.php, opcache on, JIT off   (50 measured requests/arm, MAD(A) 1.53%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A        237.42   +0.00%   -9.73%
+C        263.01  +10.78%   +0.00%
+B        234.90   -1.06%  -10.69%
+Bn       235.07   -0.99%  -10.62%
+P        238.01   +0.25%   -9.51%
+Z        235.53   -0.79%  -10.45%
+  executed-switch terms: B-Bn -0.07 pts   P-Z +1.05 pts   (relative to A: B-Bn -0.07, P-Z +1.04)
