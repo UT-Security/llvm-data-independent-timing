@@ -261,7 +261,7 @@ if want gate; then
   for arm in $ARMS; do
     g="$WORK/bin/gate_${b}.${arm}"; [[ -x "$g" ]] || continue
     d="$WORK/gate_$arm"; mkdir -p "$d"
-    "$G5/build/ARM/gem5.opt" --outdir="$d" \
+    "${GEM5_BIN:-$G5/build/ARM/gem5.fast}" --outdir="$d" \
         "$G5/configs/example/arm/fdp_neoverse_v2_binary.py" \
         --binary "$g" --arguments "2 1 abc cc.txt" --eves --dmp --comp-simp \
         > "$d/run.log" 2>&1 || true
