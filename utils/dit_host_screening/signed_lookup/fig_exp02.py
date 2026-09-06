@@ -72,8 +72,10 @@ for name, ys, col, ls, mk, mfc in series:
     ax.plot(xs, ys, color=col, lw=2, ls=ls, marker=mk, ms=6, mfc=mfc, mec=col, mew=1.6, zorder=3)
 ax.axhline(0, color=BASE, lw=0.9, zorder=2)
 xaxis_secret_fraction(ax, f, Ls)
-ax.set_ylabel("IPC overhead vs unhardened")
-ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}%"))
+ax.set_ylabel("IPC overhead (%)")
+# The unit is in the label, so the ticks are bare numbers - a "%" on every tick
+# as well is the same word six times.
+ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
 # No title on the figure: the caption carries it in the paper, and a title baked
 # into the image duplicates the caption and cannot be edited with the text.
 handles = [Line2D([], [], color=c, lw=2, ls=ls, marker="o", ms=6, mfc=mfc, mec=c, mew=1.6, label=n) for n, _, c, ls, _, mfc in series]
