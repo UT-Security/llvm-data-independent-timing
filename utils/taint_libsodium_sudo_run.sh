@@ -142,6 +142,22 @@ case "$PRESET" in
   *) die "unknown PRESET '$PRESET' (gem5parity | legacy)" ;;
 esac
 CHEAP=""; [[ "$CHEAP_TIMER" == 1 ]] && CHEAP="-DCIO_SHIM_CHEAP_TIMER"
+# PMC=1 reads Apple's fixed counters (PMC0 cycles, PMC1 instructions) straight
+# from EL0, which a kernel patched with PMCR0_USEREN_EN allows
+# (github.com/jprx/PacmanPatcher). It replaces a ~3400-cycle / ~17,700-instruction
+# kperf call per region boundary with one `mrs`: measured on this M4, 1 cycle and
+# 0 instructions. That matters because the kperf pair is 12x a 291-cycle AES-GCM
+# op, so absolute IPC off those counters is the INSTRUMENT's IPC (5.06 where the
+# truth is 4.10) and every percentage is compressed. With PMC the region counters
+# need no offset correction, and it needs no root.
+#
+# OFF by default for two reasons: an unpatched kernel does not have it (the shim
+# probes SIGILL-safely and falls back, so this is safe to leave on), and the PMCs
+# are PER-CORE where kperf's are per-thread, so a migration mid-region gives a
+# delta spanning two cores. The shim drops absurd deltas and reports the count as
+# reg_drop; check it is 0 before trusting a PMC run.
+PMC="${PMC:-0}"
+PMCFLAG=""; [[ "$PMC" == 1 ]] && PMCFLAG="-DCIO_SHIM_PMC"
 # The unhardened arm's archive: `baseline` under the legacy preset, `base` under
 # the parity one. Both loops below use it as the "did this benchmark build at
 # all?" probe, so it must follow the arm set -- hardcoding `baseline` made the
@@ -173,8 +189,15 @@ if [[ "$(id -u)" -eq 0 ]]; then
   [[ -n "${SUDO_USER:-}" ]] || warn "SUDO_USER unset -- output files will stay root-owned"
   [[ "$HOME" == /var/root* ]] && warn "HOME=$HOME -- you did not pass -E; perf.c will write counters under /var/root"
 else
-  warn "NOT root: kperf unavailable, falling back to cntvct_el0 (ratios still valid)."
-  warn "Re-run as:  sudo -E bash utils/taint_libsodium_sudo_run.sh"
+  if [[ "$PMC" == 1 ]]; then
+    # Root was only ever needed for kperf. A kernel that exposes the PMCs to EL0
+    # gives exact cycles and instructions without it, so this is not a fallback.
+    info "    NOT root, and it does not matter: PMC=1 reads the counters from EL0"
+  else
+    warn "NOT root: kperf unavailable, falling back to cntvct_el0 (ratios still valid)."
+    warn "Re-run as:  sudo -E bash utils/taint_libsodium_sudo_run.sh"
+    warn "Or enable EL0 PMC access (see utils/cio_pmc_check.c) and pass PMC=1."
+  fi
 fi
 mkdir -p "$OUT"
 info "    output -> $OUT"
@@ -234,7 +257,7 @@ for b in $OURS; do
   for a in $ARMS; do
     lab=${a%%:*}; r=${a#*:}; arch=${r%:*}; dit=${r#*:}
     case "$dit" in api*) continue ;; esac   # our drivers bracket their own region
-    clang -Wall -O2 -include "$SHIM" -I"$BENCH_DIR" -I"$INC" \
+    clang -Wall -O2 $PMCFLAG -include "$SHIM" -I"$BENCH_DIR" -I"$INC" \
           -o "$OUT/$b.$arch" "$src" "$WORK/libsodium-$arch.a" -lm 2>/dev/null \
       || { warn "build failed $b/$lab"; continue; }
   done
@@ -293,7 +316,7 @@ for b in $CIOB; do
         suffix="-$dit" ;;
     esac
     # shellcheck disable=SC2086
-    clang -fomit-frame-pointer $CIO_OPT -std=c18 -DCIO_SHIM_KPERF $CHEAP $renames \
+    clang -fomit-frame-pointer $CIO_OPT -std=c18 -DCIO_SHIM_KPERF $CHEAP $PMCFLAG $renames \
           -I"$BENCH_DIR" -include "$SHIM" -I"$INC" \
           -o "$OUT/eval_$b.$arch$suffix" "$src" $wrapobj "$WORK/libsodium-$arch.a" -lm 2>/dev/null \
       || warn "build failed eval_$b/$arch$suffix"
