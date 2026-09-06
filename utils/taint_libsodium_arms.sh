@@ -259,6 +259,28 @@ if want install; then
     cp -f "$src" "$WORK/libsodium-$v.a" || die "install failed for $v"
     printf '    %-14s %s\n' "$v" "$(du -h "$WORK/libsodium-$v.a" | cut -f1)"
   done
+  # Record the exact CFLAGS each archive was built with, NEXT TO the archives,
+  # so the record travels with the thing it describes. sudo_run.sh folds this
+  # into provenance.txt. Without it a result names its arms but not the compiler
+  # configuration that produced them, which is precisely what left experiment 01
+  # unreproducible (see paper_experiments/README.md, "the general lesson").
+  { echo "# libsodium arm CFLAGS -- written by taint_libsodium_arms.sh"
+    echo "date: $(date -u +%FT%TZ)"
+    echo "clang: $LLVM_BIN"
+    "$LLVM_BIN/clang" --version 2>/dev/null | sed -n '1,2p' | sed 's/^/  /'
+    echo "march: $MARCH"
+    echo "SEEDS: $SEEDS"
+    echo "SEEDS_OLD: $SEEDS_OLD"
+    echo "OWNED: $OWNED"
+    # Empty is the shipped configuration and is worth stating explicitly: a blank
+    # line here means no extra -mllvm reached the pass, not that nobody looked.
+    echo "TAINT_EXTRA: ${TAINT_EXTRA:-<unset>}"
+    for v in $VARIANTS; do
+      [[ -f "$WORK/libsodium-$v.a" ]] || continue
+      echo "  $v: $(lib_cflags "$v")"
+    done
+  } > "$WORK/arm_flags.txt"
+  info "flags recorded -> $WORK/arm_flags.txt"
 fi
 
 # ---------------------------------------------------------------- verify

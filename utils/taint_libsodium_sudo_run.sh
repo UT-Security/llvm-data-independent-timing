@@ -243,6 +243,18 @@ fi
   for a in $ARMS; do r=${a#*:}; arch=${r%:*}
     n=$("$LLVM_BIN/llvm-objdump" -d "$WORK/libsodium-$arch.a" 2>/dev/null | grep -cE 'msr[[:space:]]+DIT')
     echo "  ${a%%:*} $arch  msr_DIT=$n"; done
+  # The CFLAGS the archives were built with. This rig CONSUMES prebuilt archives
+  # and so cannot know them first-hand; taint_libsodium_arms.sh leaves the record
+  # beside them. Say so loudly when it is missing rather than printing nothing:
+  # a switch count identifies a configuration only if you already know them all.
+  echo "build flags:"
+  if [[ -f "$WORK/arm_flags.txt" ]]; then
+    sed 's/^/  /' "$WORK/arm_flags.txt"
+  else
+    echo "  UNRECORDED -- $WORK/arm_flags.txt absent. The archives predate the"
+    echo "  record, or were built by hand. Rebuild via taint_libsodium_arms.sh"
+    echo "  before quoting these numbers anywhere they must be reproducible."
+  fi
 } > "$OUT/provenance.txt"
 cat "$OUT/provenance.txt"
 

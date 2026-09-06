@@ -10,6 +10,7 @@ Everything routes through one script:
 ./reproduce.sh            # picks the rig from the host
 ./reproduce.sh silicon    # force Apple silicon (M4/M5)
 ./reproduce.sh gem5       # force gem5
+./reproduce.sh blanket    # blanket DIT only -- no toolchain, no seeds, no arms
 ./reproduce.sh --help
 ```
 
@@ -232,6 +233,69 @@ Add a machine by dropping its run directory in beside it. Do NOT overwrite
 `results/m4/` with a rerun unless the rerun is at least as clean: check the
 gates first, and in particular that `pinned` is a core and drops are 0.
 
+`results/m5/` is NOT m4-grade and its README says so up front. That machine's
+kernel does not expose the PMCs to EL0, so the parity rig fell back to kperf and
+its per-op table is empty; what is quotable there is the blanket number from
+`./reproduce.sh blanket`, cross-checked against m4 to within about a point on
+every primitive. Its `cio.csv` also predates the `pinned` column. Do not read
+its per-region percentages against m4's PMC table: `reg_cyc` charges a kperf
+pair per region, so base aes256-gcm encrypt reads 2,866 cyc/op there against the
+M4's 255, which divides every percentage by roughly an order of magnitude.
+
+## Blanket only
+
+```sh
+sudo -E ./reproduce.sh blanket
+```
+
+`README.md` says to **read `blanket` first**, and this rig answers only that.
+Blanket DIT is `msr dit, #1` before `main` and never cleared, so it is a MODE
+and not codegen: the two arms are **one binary run twice**, with `BLANKET_DIT=0`
+and `=1`. No LLVM build, no seed file, no owned list, no arms table, and no NOP
+twin -- the twin separates switch cost from code placement, and identical code
+at identical addresses has no placement delta.
+
+**Why it is separate from the placement rig.** `cio_arm_shim.h` reads counters
+at every region boundary so it can attribute cost to individual switches. Rooted
+that read is kperf: ~3,400 cycles against a ~275-cycle AES-GCM operation, which
+compresses every percentage by an offset it cannot subtract. Blanket needs no
+per-region attribution, so this rig reads the counters **twice per rep** instead
+of twice per op and lets the iteration count amortise them -- under 0.01% of the
+measured total at the default `ITERS`. That is the whole reason it exists, and
+it is asserted as a gate rather than assumed.
+
+Estimator: `median(cycles_C) / median(cycles_A) - 1`, per primitive. Ratios need
+no clock and no offset correction; the absolute cycles/op column is NOT a number
+to quote. Arms alternate within each rep (A,C,A,C,...) rather than running
+blocked, so drift lands on both arms instead of on the mode.
+
+| knob | effect |
+|---|---|
+| `REPS=<n>` | paired reps, default 21 |
+| `ITERS=<n>` | ops per rep, default 200000 |
+| `PRIMS="..."` | default `control` + the five fast primitives; `argon2id` needs `ITERS=200` |
+| `WORK=<dir>` | libsodium tree, default `~/Documents/libsodium-arms-silicon/base` |
+| `NO root` | still runs, reports ns/op, and **gate 3 cannot fire** |
+
+Five gates, and a row that fails one prints the failure *instead of* the
+estimate -- a percentage printed beside the reason it is wrong gets quoted
+without the reason:
+
+1. **Instrument** - the counter pair is < 0.01% of the measured total
+2. **Same work** - instructions/op match between arms within 0.05%. One binary,
+   one input: a real difference means something other than the mode changed
+3. **Clock** - implied GHz (cycles/ns) agrees between arms within 1%. This is
+   the gate root is actually for; see the CNTVCT warning further down
+4. **DIT was on** - `control` is a data-dependent pointer chase, exactly what
+   DIT is specified to make constant-time, so it MUST slow. Measured ~+158% on
+   the M5, which is load-value prediction being turned off. Without this gate a
+   flat result cannot be told apart from DIT never having been set
+5. **Resolvable** - separation clears 3x the worse arm's MAD, or the answer is
+   "below this rig's floor" rather than the point estimate
+
+Sources: `utils/dit_blanket/{blanket_bench.c,run_blanket.sh,blanket_report.py}`,
+per the tree's rule that rigs live with the harness, not in `paper_experiments/`.
+
 ## gem5
 
 ```sh
@@ -291,6 +355,25 @@ happened.
 **Never edit a rig script while a run is in flight.** bash reads scripts
 incrementally; an in-place rewrite shifts byte offsets under the running shell.
 Use an atomic replace (write a temp file, `os.replace`) or wait.
+
+**A cycle ratio on a short AEAD op depends on HOW LONG THE RIG HAS BEEN
+RUNNING.** Measured on the M5, seven rooted runs: aes256-gcm decrypt blanket
+reads **+3.8%** in runs lasting minutes and **-0.9%** in runs lasting seconds.
+Arm A (DIT off) carries the whole 4.5% swing; arm C barely moves. Two candidate
+mechanisms were tested and both are WRONG -- it is not inherited predictor state
+(a 200,000-iteration chase inside the measured process changes nothing) and it is
+not the core clock (a 400-rep run spanning 4.607 to 4.391 GHz held arm A flat at
+809-810, r = -0.169). Something saturates within the first minutes of sustained
+load; do not guess which.
+
+The blanket rig mitigates this with `SOAK` (default 180 s), a fixed load run
+before the first measurement so every run starts from the steady state. **A
+soaked number and an unsoaked one are not comparable.** This reaches
+`results/m4/` too: it is a long run, so it sits in the same regime as the M5's
+long runs, which is why its +4.82% and the M5's +3.81% agree.
+
+**Gate 3 does not catch this and cannot**: it compares arms within a run, and
+they always match. The variance is between runs.
 
 **Do not change `PRESET=legacy` or the wllvm archives.** They back the published
 M5/M4 numbers in `README.md` and must stay reproducible.

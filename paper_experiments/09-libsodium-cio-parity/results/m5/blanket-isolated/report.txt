@@ -1,0 +1,17 @@
+
+========================================================================================================
+BLANKET PSTATE.DIT -- cycles/op, C (DIT on) vs A (DIT off), same binary
+========================================================================================================
+primitive          A cycles/op   C cycles/op   overhead   MAD A   MAD C   A GHz   C GHz   gates
+--------------------------------------------------------------------------------------------------------
+aes_dec                  847.6         840.2     -0.88%   0.43%   0.29%    4.60    4.61   G5 below noise floor
+--------------------------------------------------------------------------------------------------------
+NO CONTROL ROW. Run the `control` primitive or GATE 4 is unverified: a flat
+result cannot be told apart from DIT never having been set.
+
+READING IT
+  The ratio is the result; the absolute column is not. It carries the loop's
+  own overhead and one counter pair, neither of which is subtracted.
+  Overhead near 0 means blanket DIT is FREE on that primitive -- which is a
+  property of the workload, and the thing selective placement would have to
+  beat to be worth its switches.
