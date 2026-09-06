@@ -26,7 +26,7 @@
 # ceiling IS the L1 latency -- 4 on M5, 3 on M4 -- and a fixed threshold is
 # unsatisfiable on the shorter one.
 #
-# STAGES   toolchain source cio arms run report
+# STAGES   toolchain source cio arms counters run report
 #
 # ENV
 #   LLVM_BIN=<dir>    prebuilt taint toolchain; skips the toolchain stage
@@ -35,10 +35,17 @@
 #   CIO_REPS=<n>      reps per benchmark       (default 15, the paper's protocol)
 #   SKIP_ARGON=1      drop argon2id: ~60 of the run's ~70 minutes, and the row
 #                     least likely to resolve (it is free in every arm)
-#   NO_SUDO=1         run unrooted. Ratios stay valid -- the parity preset times
-#                     with CNTVCT either way -- but you lose the kperf cycle and
-#                     instruction columns, so per-switch costs come from a
-#                     frequency conversion instead of a counter.
+#   NO_SUDO=1         force the unrooted path even without PMC. Ratios stay
+#                     valid -- the parity preset times with CNTVCT either way --
+#                     but you lose the cycle and instruction columns entirely.
+#
+# COUNTERS ARE CHOSEN BY TESTING, not by you. The `counters` stage runs
+# utils/cio_pmc_check.c: if this kernel exposes Apple's PMCs to EL0
+# (PMCR0_USEREN_EN, via github.com/jprx/PacmanPatcher) the run uses them --
+# exact counts, ~39 cycles per ordered read, and NO SUDO PROMPT AT ALL, since
+# root was only ever needed for kperf. Otherwise it falls back to kperf and asks
+# for sudo, and you should remember that path's ~3,400-cycle per-region offset
+# before quoting an absolute IPC off it.
 #
 set -uo pipefail
 
@@ -65,7 +72,7 @@ info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
 die()  { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
-ALL_STAGES="toolchain source cio arms run report"
+ALL_STAGES="toolchain source cio arms counters run report"
 [[ "${1:-}" == "--list" ]] && { echo "$ALL_STAGES"; exit 0; }
 STAGES="${*:-$ALL_STAGES}"
 want() { [[ " $STAGES " == *" $1 "* ]]; }
@@ -142,10 +149,44 @@ if want arms; then
     bash "$REPO_ROOT/utils/taint_libsodium_arms.sh" || die "arm build failed"
 fi
 
+# ---------------------------------------------------------------- counters
+# Pick the counter source by testing for it, rather than making the caller know
+# which kind of machine they are on.
+#
+#   PMC     Apple's fixed counters read straight from EL0, one `mrs`. Needs a
+#           kernel patched with PMCR0_USEREN_EN (github.com/jprx/PacmanPatcher).
+#           Costs 1 cycle bare, ~39 isb-ordered, against kperf's ~3,400 -- and
+#           needs NO ROOT, so it skips the sudo prompt entirely.
+#   kperf   the fallback everywhere else. Needs root, and carries a ~3,400-cycle
+#           / ~17,700-instruction offset per region that has to be corrected for
+#           before absolute IPC means anything.
+#
+# utils/cio_pmc_check.c is the gate and exits non-zero for each way this can go
+# wrong: registers trap, registers read but do not count, or nops do not retire
+# (which would make every NOP layout control unsound). Run it standalone any
+# time with:  clang -O1 -o /tmp/pmc_check utils/cio_pmc_check.c && /tmp/pmc_check
+PMC=0
+if want run || want counters; then
+  info "counter source"
+  PMC_BIN="${TMPDIR:-/tmp}/cio_pmc_check.$$"
+  if clang -O1 -o "$PMC_BIN" "$REPO_ROOT/utils/cio_pmc_check.c" 2>/dev/null \
+     && "$PMC_BIN" 2>&1 | sed 's/^/    /'; then
+    PMC=1
+    info "    -> PMC available: exact counters, no root needed"
+  else
+    warn "-> PMC unavailable; using kperf (root) and its ~3400-cycle region offset"
+    warn "   enable with github.com/jprx/PacmanPatcher to drop the correction"
+  fi
+  rm -f "$PMC_BIN"
+fi
+
 # ---------------------------------------------------------------- run
 if want run; then
-  CIOB="ed25519 chacha20_poly1305_encrypt chacha20_poly1305_decrypt aesni256gcm_encrypt aesni256gcm_decrypt"
-  [[ "${SKIP_ARGON:-0}" == 1 ]] || CIOB="$CIOB argon2id"
+  # A caller's CIOB wins, so a single benchmark can be re-run without editing.
+  if [[ -z "${CIOB:-}" ]]; then
+    CIOB="ed25519 chacha20_poly1305_encrypt chacha20_poly1305_decrypt aesni256gcm_encrypt aesni256gcm_decrypt"
+    [[ "${SKIP_ARGON:-0}" == 1 ]] || CIOB="$CIOB argon2id"
+  fi
   info "run: $CIO_REPS reps, $(echo $CIOB | wc -w | tr -d ' ') benchmarks -> $OUT"
   [[ "${SKIP_ARGON:-0}" == 1 ]] && warn "SKIP_ARGON=1: argon2id omitted"
 
@@ -153,9 +194,12 @@ if want run; then
   # rig is a different experiment and is not part of 09.
   env_args=(LLVM_BIN="$LLVM_BIN" WORK="$LIBWORK" CIO_DIR="$CIO_DIR"
             BENCH_DIR="$BENCH_DIR" OUT="$OUT" CIO_REPS="$CIO_REPS" REPS=5
-            OURS=ditprobe CIOB="$CIOB")
-  if [[ "${NO_SUDO:-0}" == 1 || "$(id -u)" -eq 0 ]]; then
-    [[ "${NO_SUDO:-0}" == 1 ]] && warn "NO_SUDO=1: no kperf counters; ratios still valid"
+            OURS=ditprobe CIOB="$CIOB" PMC="$PMC")
+  # With PMC there is nothing left for root to provide: the counters are already
+  # readable, exactly, from EL0. Only the kperf fallback needs the prompt.
+  if [[ "$PMC" == 1 || "${NO_SUDO:-0}" == 1 || "$(id -u)" -eq 0 ]]; then
+    [[ "${NO_SUDO:-0}" == 1 && "$PMC" != 1 ]] && \
+      warn "NO_SUDO=1 without PMC: no cycle counters; ratios still valid"
     env "${env_args[@]}" bash "$REPO_ROOT/utils/taint_libsodium_sudo_run.sh" \
       || die "run failed"
   else
