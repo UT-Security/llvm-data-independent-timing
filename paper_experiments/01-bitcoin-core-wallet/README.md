@@ -147,8 +147,11 @@ as before), **blanket** (DIT set once before main), the **Apple bracket**
 prologue and epilogue: read the previous DIT state, `msr DIT, #1`,
 speculation barrier as `isb sy`, the call, clear only if it was clear; the
 same `api_bracket.c` as the libsodium rigs, the linker's `--wrap`), and
-**ExpeDITe** at the shipped defaults (callee contract, twins, intra-block
-placement) with `seed_flow_contract.txt`, which is `seed9.txt` plus the
+**ExpeDITe** at the defaults of the measurement (callee contract, twins,
+intra-block placement; the external-callee assumption became the default
+later the same day, so this column is `-taint-dit-external-preserves=0` in
+today's terms and the flagged column below is a default build) with
+`seed_flow_contract.txt`, which is `seed9.txt` plus the
 nonce-derivation hops the contract needs, and the owned list. Blanket and
 the bracket under the serialising `MSR DIT`, which is what an M4 or M5 does;
 ExpeDITe under both. Cycles per flow against base, median over five
@@ -196,8 +199,8 @@ twin identical across models). Data: `data/gem5/flow_four_runs.csv`,
   156 per flow at one input rising to 76,534 at 400, about 190 per input,
   which at ~30 cycles each is the +0.7%. Those are re-asserts inside the
   library's twins after `memcpy`/`memset` and the calls the tables reach;
-  `-taint-dit-external-preserves` would remove most of them and is not in
-  this table, since it is opt-in.
+  `-taint-dit-external-preserves` removes some of them, and is the default
+  since later on 2026-09-05; its column is below.
 
 **With `-taint-dit-external-preserves`** (the `taintx` arm, its library
 `obj/taintx`, 90 more cells, gates pass):
