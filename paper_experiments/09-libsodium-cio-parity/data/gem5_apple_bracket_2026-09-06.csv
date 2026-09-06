@@ -1,0 +1,79 @@
+# Experiment 09 on gem5, 2026-09-06: Apple's bracket vs ExpeDITe, both switch models.
+# gem5 = the WORKTREE SUBMODULE gem5-DIT at master ce05d32089, built from those sources (NOT ~/Documents/gem5-DIT-pmull, which is 51 commits behind the pin and older in rename.cc/commit.hh -- the DIT switch machinery itself).
+# Compiler dit-tainter 00f86ba06b5e (callee contract, DIT twins, intra-block placement, external-preserves; all defaults). Per-TU clang path (build_arms.sh), CIO's drivers byte-identical, -O2, 188-seed contract file + owned list.
+# arms: base = unhardened; blanket = base + DIT set before main; api = Apple's prologue/epilogue (mrs DIT token; msr DIT,#1; isb sy in place of sb, which gem5 lacks; call; msr DIT,#0 only if the token was 0);
+#   apiisb = the same without the token read (msr DIT,#1; isb; call; msr DIT,#0), which bounds gem5's mrs-DIT drain artifact; apiisbnop = apiisb with HINT #0 at the isb's address, the layout control;
+#   taint = -ftaint-harden at the shipped defaults; taintnop = taint with every switch a HINT #0. apidsb was dropped: every M-series has FEAT_SB, so Apple's dsb-nsh fallback is a path no Apple device takes.
+# cfg: spec = renamed MSR DIT, serdit = serialising (--no-speculative-dit). No clear-shadow flag is passed; --dit-clear-publish stays at its default `frontier`, which is the same policy the pin already ran (983bbe2966), so nothing experimental is active.
+# cycles_per_op over the measured window (warmup dumps dropped); dit_* are committed counts over the window. All gates passed.
+bench,arm,cfg,roi_n,cycles_per_op,insts_per_op,dit_writes,dit_set,dit_clear,dit_read,dit_suppressed,dit_cycles,dit_exit,wall_s
+aesni256gcm_decrypt,api,serdit,50,1366.0,1482.0,100.0,50.0,50.0,50.0,0.0,66250.0,,32.0
+aesni256gcm_decrypt,api,spec,50,1329.0,1482.0,100.0,50.0,50.0,50.0,0.0,65250.0,,28.6
+aesni256gcm_decrypt,apiisb,serdit,50,1357.1,1480.0,100.0,50.0,50.0,0.0,0.0,66250.0,,34.6
+aesni256gcm_decrypt,apiisb,spec,50,1315.3,1480.0,100.0,50.0,50.0,0.0,0.0,65314.0,,27.5
+aesni256gcm_decrypt,apiisbnop,serdit,50,1337.1,1480.0,100.0,50.0,50.0,0.0,0.0,65250.0,,34.7
+aesni256gcm_decrypt,apiisbnop,spec,50,1179.0,1480.0,100.0,50.0,50.0,0.0,0.0,58501.0,,26.7
+aesni256gcm_decrypt,base,serdit,50,1076.7,1473.0,0.0,0.0,0.0,0.0,0.0,0.0,,30.9
+aesni256gcm_decrypt,base,spec,50,1076.7,1473.0,0.0,0.0,0.0,0.0,0.0,0.0,,32.0
+aesni256gcm_decrypt,blanket,serdit,50,1167.0,1473.0,0.0,0.0,0.0,0.0,0.0,58350.0,,31.7
+aesni256gcm_decrypt,blanket,spec,50,1167.0,1473.0,0.0,0.0,0.0,0.0,0.0,58350.0,,30.3
+aesni256gcm_decrypt,taint,serdit,50,1339.0,1479.0,100.0,50.0,50.0,0.0,0.0,64900.0,,27.4
+aesni256gcm_decrypt,taint,spec,50,1177.0,1479.0,100.0,50.0,50.0,0.0,0.0,58250.0,,35.1
+aesni256gcm_decrypt,taintnop,serdit,50,1088.7,1479.0,0.0,0.0,0.0,0.0,0.0,0.0,,26.9
+aesni256gcm_decrypt,taintnop,spec,50,1088.7,1479.0,0.0,0.0,0.0,0.0,0.0,0.0,,33.7
+aesni256gcm_encrypt,api,serdit,50,1291.0,1238.0,100.0,50.0,50.0,50.0,0.0,62500.0,,27.4
+aesni256gcm_encrypt,api,spec,50,1253.0,1238.0,100.0,50.0,50.0,50.0,0.0,61500.0,,32.1
+aesni256gcm_encrypt,apiisb,serdit,50,1281.0,1236.0,100.0,50.0,50.0,0.0,0.0,62500.0,,32.5
+aesni256gcm_encrypt,apiisb,spec,50,1242.0,1236.0,100.0,50.0,50.0,0.0,0.0,61650.0,,33.7
+aesni256gcm_encrypt,apiisbnop,serdit,50,1262.0,1236.0,100.0,50.0,50.0,0.0,0.0,61550.0,,28.0
+aesni256gcm_encrypt,apiisbnop,spec,50,1224.0,1236.0,100.0,50.0,50.0,0.0,0.0,60750.0,,30.4
+aesni256gcm_encrypt,base,serdit,50,1217.0,1229.0,0.0,0.0,0.0,0.0,0.0,0.0,,32.5
+aesni256gcm_encrypt,base,spec,50,1217.0,1229.0,0.0,0.0,0.0,0.0,0.0,0.0,,31.6
+aesni256gcm_encrypt,blanket,serdit,50,1222.0,1229.0,0.0,0.0,0.0,0.0,0.0,61100.0,,37.8
+aesni256gcm_encrypt,blanket,spec,50,1222.0,1229.0,0.0,0.0,0.0,0.0,0.0,61100.0,,34.3
+aesni256gcm_encrypt,taint,serdit,50,1258.4,1235.0,100.0,50.0,50.0,0.0,0.0,60969.0,,33.2
+aesni256gcm_encrypt,taint,spec,50,1142.0,1235.0,100.0,50.0,50.0,0.0,0.0,56200.0,,31.1
+aesni256gcm_encrypt,taintnop,serdit,50,1140.0,1235.0,0.0,0.0,0.0,0.0,0.0,0.0,,27.3
+aesni256gcm_encrypt,taintnop,spec,50,1140.0,1235.0,0.0,0.0,0.0,0.0,0.0,0.0,,26.9
+chacha20_poly1305_decrypt,api,serdit,50,2384.6,5070.0,100.0,50.0,50.0,50.0,13750.0,117148.0,,34.0
+chacha20_poly1305_decrypt,api,spec,50,2347.8,5070.0,100.0,50.0,50.0,50.0,13750.0,116041.0,,34.7
+chacha20_poly1305_decrypt,apiisb,serdit,50,2466.0,5068.0,100.0,50.0,50.0,0.0,13150.0,121750.0,,28.2
+chacha20_poly1305_decrypt,apiisb,spec,50,2425.0,5068.0,100.0,50.0,50.0,0.0,13150.0,120701.0,,34.7
+chacha20_poly1305_decrypt,apiisbnop,serdit,50,2439.0,5068.0,100.0,50.0,50.0,0.0,12850.0,120400.0,,28.2
+chacha20_poly1305_decrypt,apiisbnop,spec,50,2400.0,5068.0,100.0,50.0,50.0,0.0,13150.0,119450.0,,29.2
+chacha20_poly1305_decrypt,base,serdit,50,2289.8,5057.0,0.0,0.0,0.0,0.0,0.0,0.0,,40.3
+chacha20_poly1305_decrypt,base,spec,50,2289.8,5057.0,0.0,0.0,0.0,0.0,0.0,0.0,,30.0
+chacha20_poly1305_decrypt,blanket,serdit,50,2305.9,5057.0,0.0,0.0,0.0,0.0,13150.0,115297.0,,35.2
+chacha20_poly1305_decrypt,blanket,spec,50,2305.9,5057.0,0.0,0.0,0.0,0.0,13150.0,115297.0,,28.2
+chacha20_poly1305_decrypt,taint,serdit,50,3160.7,5154.0,1600.0,1050.0,550.0,0.0,12900.0,147386.0,,37.9
+chacha20_poly1305_decrypt,taint,spec,50,2442.6,5154.0,1600.0,1050.0,550.0,0.0,12979.0,121185.0,,33.3
+chacha20_poly1305_decrypt,taintnop,serdit,50,2429.5,5154.0,0.0,0.0,0.0,0.0,0.0,0.0,,29.8
+chacha20_poly1305_decrypt,taintnop,spec,50,2429.5,5154.0,0.0,0.0,0.0,0.0,0.0,0.0,,29.9
+chacha20_poly1305_encrypt,api,serdit,50,2256.0,4823.0,100.0,50.0,50.0,50.0,12995.0,110750.0,,28.7
+chacha20_poly1305_encrypt,api,spec,50,2231.7,4823.0,100.0,50.0,50.0,50.0,12900.0,110300.0,,29.2
+chacha20_poly1305_encrypt,apiisb,serdit,50,2412.2,4821.0,100.0,50.0,50.0,0.0,13652.0,119062.0,,27.8
+chacha20_poly1305_encrypt,apiisb,spec,50,2371.6,4821.0,100.0,50.0,50.0,0.0,13677.0,118031.0,,32.0
+chacha20_poly1305_encrypt,apiisbnop,serdit,50,2287.0,4821.0,100.0,50.0,50.0,0.0,13100.0,112800.0,,32.0
+chacha20_poly1305_encrypt,apiisbnop,spec,50,2346.8,4821.0,100.0,50.0,50.0,0.0,13572.0,116792.0,,30.1
+chacha20_poly1305_encrypt,base,serdit,50,2185.9,4810.0,0.0,0.0,0.0,0.0,0.0,0.0,,39.2
+chacha20_poly1305_encrypt,base,spec,50,2185.9,4810.0,0.0,0.0,0.0,0.0,0.0,0.0,,30.1
+chacha20_poly1305_encrypt,blanket,serdit,50,2215.9,4810.0,0.0,0.0,0.0,0.0,13001.0,110796.0,,32.0
+chacha20_poly1305_encrypt,blanket,spec,50,2214.6,4810.0,0.0,0.0,0.0,0.0,13032.0,110729.0,,29.4
+chacha20_poly1305_encrypt,taint,serdit,50,3045.1,4903.0,1600.0,1050.0,550.0,0.0,12900.0,141502.0,,39.1
+chacha20_poly1305_encrypt,taint,spec,50,2269.9,4903.0,1600.0,1050.0,550.0,0.0,12966.0,112448.0,,35.1
+chacha20_poly1305_encrypt,taintnop,serdit,50,2289.0,4903.0,0.0,0.0,0.0,0.0,0.0,0.0,,29.6
+chacha20_poly1305_encrypt,taintnop,spec,50,2289.0,4903.0,0.0,0.0,0.0,0.0,0.0,0.0,,34.9
+ed25519,api,serdit,20,79119.6,171762.0,40.0,20.0,20.0,20.0,1297320.0,1581591.0,,288.4
+ed25519,api,spec,20,79167.9,171762.0,40.0,20.0,20.0,20.0,1294144.0,1582868.0,,214.6
+ed25519,apiisb,serdit,20,79379.8,171760.0,40.0,20.0,20.0,0.0,1293775.0,1586975.0,,206.0
+ed25519,apiisb,spec,20,79333.1,171760.0,40.0,20.0,20.0,0.0,1294300.0,1586502.0,,234.5
+ed25519,apiisbnop,serdit,20,79104.6,171760.0,40.0,20.0,20.0,0.0,1291280.0,1581471.0,,200.9
+ed25519,apiisbnop,spec,20,78798.0,171760.0,40.0,20.0,20.0,0.0,1292353.0,1575799.0,,236.0
+ed25519,base,serdit,20,78789.9,171769.0,0.0,0.0,0.0,0.0,0.0,0.0,,172.2
+ed25519,base,spec,20,78789.9,171769.0,0.0,0.0,0.0,0.0,0.0,0.0,,216.6
+ed25519,blanket,serdit,20,78962.7,171769.0,0.0,0.0,0.0,0.0,1287849.0,1579254.0,,165.0
+ed25519,blanket,spec,20,78962.7,171769.0,0.0,0.0,0.0,0.0,1287849.0,1579254.0,,159.4
+ed25519,taint,serdit,20,77611.9,171813.0,40.0,20.0,20.0,0.0,1272787.0,1551517.0,,244.0
+ed25519,taint,spec,20,77193.4,171813.0,40.0,20.0,20.0,0.0,1271447.0,1543609.0,,244.3
+ed25519,taintnop,serdit,20,76946.0,171813.0,0.0,0.0,0.0,0.0,0.0,0.0,,235.9
+ed25519,taintnop,spec,20,76946.0,171813.0,0.0,0.0,0.0,0.0,0.0,0.0,,246.7
