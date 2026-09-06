@@ -17,12 +17,13 @@ say(){ echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG/master.log"; }
 
 say "waiting for the gem5 build"
 while pgrep -f 'scons' >/dev/null 2>&1; do sleep 60; done
-[ -x "$G/build/ARM/gem5.opt" ] || { say "!! no gem5.opt"; exit 1; }
-say "built: $(date -r $G/build/ARM/gem5.opt '+%b %d %H:%M')  branch=$(git -C $G branch --show-current)"
+GEM5_BIN="${GEM5_BIN:-$G/build/ARM/gem5.fast}"   # .opt only for --debug-flags/asserts
+[ -x "$GEM5_BIN" ] || { say "!! no gem5 binary at $GEM5_BIN"; exit 1; }
+say "built: $(date -r "$GEM5_BIN" '+%b %d %H:%M')  branch=$(git -C $G branch --show-current)"
 
 say "smoke test"
 D=/tmp/master_smoke; rm -rf $D; mkdir -p $D
-"$G/build/ARM/gem5.opt" -d $D "$G/configs/example/arm/fdp_neoverse_v2_binary.py" \
+"$GEM5_BIN" -d $D "$G/configs/example/arm/fdp_neoverse_v2_binary.py" \
    --eves --dmp --comp-simp --binary $O/build/gem5/xover_nodit \
    --arguments "0 800 2 1 40 0" > $D/run.log 2>&1
 if ! grep -q 'WORK sqlite' $D/run.log; then say "!! smoke test failed"; tail -5 $D/run.log; exit 1; fi

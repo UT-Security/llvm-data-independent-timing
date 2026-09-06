@@ -50,11 +50,15 @@ gem5 number and the gem5 change it depends on land in the same PR.
   `gem5-DIT/build/` and are gitignored. Pointing `G5` at a prebuilt tree elsewhere
   still works, but then check its revision against the pin
   (`git -C gem5-DIT rev-parse HEAD`) yourself - nothing else will.
-- **Build `gem5.opt`, not just `gem5.fast`.** 39 of the 48 references across the rigs
-  invoke `build/ARM/gem5.opt` (btc, cioparity, xover, modset, sqlc, and the gem5-side
-  bitcoin scripts); only `signed_lookup` - experiment 02 - uses `gem5.fast`. A tree
-  with just one of them fails late and unevenly: cioparity's preflight dies naming
-  `gem5.opt`, while experiment 02 runs fine.
+- **`gem5.fast` is the measurement binary; build only that** (2026-09-06). The variants
+  differ at `gem5-DIT/src/SConscript:680-682`: `fast` is `NDEBUG` + `TRACING_ON=0`,
+  `opt` is `-g` + `TRACING_ON=1`. So `--debug-flags` is compiled OUT of `.fast`, and
+  `.opt` is only for a debug run or for re-running one suspicious cell to let the
+  asserts fire. Every rig defaults to `.fast` and takes `GEM5_BIN` to point elsewhere;
+  nothing in this repo needs `.opt` (the one file mentioning `--debug-flags`,
+  `cioparity/lvp_pcs.py`, just parses a trace produced elsewhere). The tradeoff to
+  keep: `NDEBUG` means a misconfigured run yields plausible numbers instead of
+  tripping an assert - so re-run under `.opt` before believing a surprising result.
 - **A submodule's `.git` is a FILE**, not a directory - it points into the parent's
   `.git/modules`. Any `[[ -d "$G5/.git" ]]` test is therefore FALSE for the submodule
   and true for a plain clone, which is how experiment 01 silently stopped recording
@@ -90,8 +94,7 @@ compiler and the simulator it just built and never another checkout's.
 
 ```
 git submodule update --init gem5-DIT            # sources only; NO --recursive
-(cd gem5-DIT && scons build/ARM/gem5.opt -j<n>)   # 39 of 48 rig references invoke this
-(cd gem5-DIT && scons build/ARM/gem5.fast -j<n>)  # signed_lookup (exp 02) invokes this
+(cd gem5-DIT && scons build/ARM/gem5.fast -j<n>)  # the measurement binary; build only this
 cmake -G Ninja -S llvm -B build \
   -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
   -DLLVM_TARGETS_TO_BUILD=AArch64 -DLLVM_ENABLE_PROJECTS='clang;lld' \

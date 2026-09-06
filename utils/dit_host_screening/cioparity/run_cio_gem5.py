@@ -352,7 +352,7 @@ def main():
     ap.add_argument("--arms", default=",".join(ARMS))
     ap.add_argument("--configs", default="spec,serdit")
     ap.add_argument("--jobs", type=int, default=100)
-    ap.add_argument("--gem5", default="gem5.opt")
+    ap.add_argument("--gem5", default=os.environ.get("GEM5_BIN", "gem5.fast"))
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--out", default=str(WORK / "out"))
     a = ap.parse_args()
