@@ -106,6 +106,42 @@ the same offset. With PMC the numbers need no correction at all.
   mid-region yields a delta spanning two cores. The shim drops absurd deltas and
   counts them — **check `reg_drop` is 0 before trusting a PMC run.**
 
+### Sampled PMC accumulation
+
+The `isb` that makes a PMC read correct is a pipeline drain: ~39 cycles
+back-to-back, but 73-250 in a real region, because it waits for what is in
+flight. Paid per operation on a 264-cycle AES-GCM encrypt that is 40% more work,
+landing between the driver's iterations where it disturbs the very predictor and
+cache state being measured -- and it need not disturb every arm equally.
+
+So the PMC counters come from **1 region in `CIO_PMC_SAMPLE`** (default 64),
+after skipping `CIO_PMC_SKIP` (default 64) warmup regions. The other 63 in 64
+run untouched. Columns: `samp_cyc`, `samp_ins`, `samp_n`, `samp_every`,
+`pmc_off`, `reg_drop`. The cheap per-op series (`reg_*`) is unchanged.
+
+**Skipping warmup is not optional.** 1-in-64 over a 1025-iteration driver is
+only ~16 samples, so one cold sample dominates the mean -- and region 0 is the
+coldest call there is. Measured with no skip, aes256gcm-encrypt reported 2,584
+instructions per op against a true 1,275, because sample 0 carried ~20,000
+one-time instructions spread over 16 samples.
+
+**Which column to use for what:**
+
+| want | use | why |
+|---|---|---|
+| overhead ratios | `mean_ticks` (CNTVCT) | ratio of two tick counts, frequency-free, ~21-cycle offset |
+| instruction counts | `samp_ins/samp_n` | exact; the drain retires no new instructions |
+| IPC | `samp_ins`/`samp_cyc` | same window, which IPC requires |
+| switch counts per arm | denser sampling | ~16 samples cannot resolve a 6-instruction delta |
+
+Do NOT divide `samp_ins` by CNTVCT cycles. Those are different windows, and
+mixing them is the bug the shim's own comment describes -- it once produced an
+"IPC" of 12-14 on an 8-wide core.
+
+`pmc_off` is the null-region floor measured in that process. It is reported,
+never applied: it is a floor, and the real drain lengthens with what is in
+flight, so subtracting it under-corrects a busy region.
+
 NOPs do retire on this core (exactly +K per K nops) while costing ~1 cycle per
 16, so the NOP layout controls are sound: same retired count, no work. The check
 verifies this and fails if it ever stops being true.
