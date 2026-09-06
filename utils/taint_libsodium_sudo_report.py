@@ -348,7 +348,7 @@ if _c and _FULL:
             dc = f"{(cyc/base[0]-1)*100:+.2f}%" if base else "-"
             di = f"{(ins/base[1]-1)*100:+.2f}%" if base else "-"
             print(f"{b if a==ORDER[0] else '':<28}{a:<5}{ins:>15,.0f}{cyc:>15,.0f}"
-                  f"{cyc/ins if ins else 0:>8.3f}{di:>10}{dc:>10}")
+                  f"{ins/cyc if cyc else 0:>8.3f}{di:>10}{dc:>10}")
         print()
     print("""HOW TO READ THE COUNTERS
   A vs C instructions ~ 0%   the arms run the same work; blanket adds one MSR.
