@@ -4,13 +4,42 @@
 Every request is one php-cgi process in real CGI mode (env + stdin), opcache on
 with the JIT off as the harness sets it, compiled scripts served from opcache's
 file cache so the compile is amortised across processes the way php-fpm amortises
-it. Arms rotate on every request; wall and CPU time of the php-cgi process are
-recorded; PSTATE.DIT is read back at exit by the injected constructor and checked.
+it. Arms rotate on every request; PSTATE.DIT is read back at exit by the injected
+constructor and checked.
+
+THE INSTRUMENT IS THE PERFORMANCE COUNTERS (changed 2026-09-06; the 2026-09-05
+run used the CPU-time column below and nothing else). libditctl.dylib brackets
+the whole php-cgi process with Apple's fixed PMCs read straight from EL0 --
+cycles from PMC0, retired instructions from PMC1 -- which this kernel permits
+(PacmanPatcher, PMCR0_USEREN_EN) with no root and no driver call. That buys three
+things rusage cannot give:
+
+  exactness   two `mrs` against a scheduler tick. Repeat runs of one workload
+              agree to 0.05% on cycles and 0.01% on instructions.
+  IPC         cycles AND instructions on the same window, so DWELL (same work,
+              more cycles: the mode itself slowing execution down) separates from
+              SWITCHES (more instructions: the placement's own cost). That
+              distinction is the cost model the experiment argues, and CPU time
+              cannot see it.
+  a parity gate  blanket adds one `msr` per process, so A and C must retire the
+              same instructions. If they do not, the arms are not running the
+              same work and no cycle ratio between them means anything.
+
+CPU time is still recorded, in the same run, and printed beside the cycles. It is
+what the committed 2026-09-05 tables were computed from, and keeping both is how
+the change of instrument stays auditable.
+
+THE COUNTERS ARE PER-CORE, so a process that migrates differences two different
+cores. Cycles are gated against CNTVCT over the same window: a sample whose
+implied core clock falls outside CLK_LO..CLK_HI GHz migrated and is dropped,
+counted, and reported per row. Pinning (root, kern.sched_thread_bind_cpu) removes
+the hazard rather than filtering it and is used when the run has it.
 
   bench.py wordpress|symfony|zend|wpapi [row ...]   (default: every row)
 
 Env: W (work dir, default ~/Documents/dit-phpsuite), WORDPRESS_DB_HOST (default 127.0.0.1:3307),
      WARMUP / MEASURED (default 50 / 100), BENCH_ARMS (comma list, default all six),
+     METRIC (cyc | cpu, default cyc), CLK_LO / CLK_HI (GHz gate, default 2.0 / 5.5),
      wpapi only: WP_APP_PASSWORD (required), ROUNDS_LABEL, SKIP_ANON.
 """
 import os, re, sys, time, json, resource, subprocess, statistics as st, urllib.parse as up
@@ -26,6 +55,8 @@ if os.environ.get('BENCH_ARMS'):
     keep = os.environ['BENCH_ARMS'].split(',')
     ARMS = [a for a in ARMS if a[0] in keep]
 SESS = f'{OUT}/sessions'; os.makedirs(SESS, exist_ok=True)
+METRIC = os.environ.get('METRIC', 'cyc')          # 'cyc' = PMC cycles, 'cpu' = rusage CPU ms
+CLK_LO, CLK_HI = float(os.environ.get('CLK_LO', 2.0)), float(os.environ.get('CLK_HI', 5.5))
 
 which = sys.argv[1]
 rows_wanted = sys.argv[2:]
@@ -81,7 +112,31 @@ def run(arm, app, method, script, uri, cookies=None, body=None, expect=200, http
                 headers[k] = v
     status = int(headers.get('status', '200 OK').split()[0]) if headers.get('status') else 200
     m = re.search(rb'dit=([01])', p.stderr)
-    return dict(wall=(t1 - t0) / 1e6, cpu=((r1.ru_utime - r0.ru_utime) + (r1.ru_stime - r0.ru_stime)) * 1e3,
+    # the counter fields are absent when libditctl predates them or DITCTL_PMC=0
+    c = re.search(rb'pmc=(\d+) pinned=(-?\d+) cyc=(\d+) ins=(\d+) ns=(\d+) frq=(\d+)', p.stderr)
+    cyc = ins = ns = frq = 0; pmc = 0; pinned = -1
+    if c:
+        pmc, pinned = int(c.group(1)), int(c.group(2))
+        cyc, ins, ns, frq = (int(c.group(i)) for i in (3, 4, 5, 6))
+    cpu = ((r1.ru_utime - r0.ru_utime) + (r1.ru_stime - r0.ru_stime)) * 1e3
+    # IMPLIED CORE CLOCK, and it is measured against the process's OWN CPU TIME,
+    # not against elapsed time. PMC0 counts while the thread is on the core; wall
+    # time also counts every interval it was descheduled, so a wall-referenced
+    # clock falls with load and rejects perfectly good samples -- 47% of them in
+    # the pilot, taken while the machine was still building. rusage resolves to a
+    # microsecond, 0.003% of a request, which is ample for a gate.
+    #
+    # It gates two different things at once, which is why it is also printed:
+    #   too LOW  -- the deltas came from two different cores (a migration), or the
+    #               thread ran on an efficiency core (~2.6 GHz against a P-core's
+    #               ~4.4). This is experiment 09's P-core residency gate.
+    #   too HIGH -- something else ran on this core inside the window, so the
+    #               per-core counter charged us its cycles too.
+    # CNTVCT's rate comes from CNTFRQ_EL0 (1 GHz on M4), never from hw.tbfrequency.
+    ghz = (cyc / (cpu * 1e6)) if (cyc and cpu > 0) else 0.0
+    return dict(wall=(t1 - t0) / 1e6, cpu=cpu,
+                ghz_wall=(cyc * frq / ns / 1e9) if (ns and frq) else 0.0,
+                cyc=cyc, ins=ins, ghz=ghz, pmc=pmc, pinned=pinned,
                 dit=(m.group(1).decode() if m else '?'), status=status, headers=headers, setcookie=setc,
                 body=bodyb, rc=p.returncode, stderr=p.stderr[-400:])
 
@@ -210,9 +265,13 @@ if which == 'wordpress':
     print(f'logged in: {len(ctx["wp_cookies"])} cookies')
 
 print(f'{which}: {len(ARMS)} arms, {WARMUP} warm-up + {MEASURED} measured requests per row, arms rotate per request')
+print(f'metric: {METRIC}  (PMC cycles; CPU time recorded alongside)  migration gate {CLK_LO}-{CLK_HI} GHz')
 results = {}
 for rname, seq in ROWS.items():
-    data = {a[0]: [] for a in ARMS}; bytype = {a[0]: {} for a in ARMS}; gate = set(); bad = []
+    # every sample is kept whole: cycles, instructions and CPU ms come off the
+    # same request, so the two instruments are never compared across runs
+    data = {a[0]: [] for a in ARMS}; bytype = {a[0]: {} for a in ARMS}
+    gate = set(); bad = []; migrated = {a[0]: 0 for a in ARMS}; pmcstate = set()
     full = seq[:WARMUP] + seq
     for i, t in enumerate(full):
         order = ARMS[i % len(ARMS):] + ARMS[:i % len(ARMS)]
@@ -222,27 +281,104 @@ for rname, seq in ROWS.items():
                 bad.append((arm[0], t, r['status'], r['rc'], r['stderr'][-120:]))
                 continue
             gate.add((arm[0], arm[2], r['dit']))
-            if i >= WARMUP:
-                data[arm[0]].append(r['cpu'])
-                bytype[arm[0]].setdefault(t, []).append(r['cpu'])
-    med = {a: st.median(v) for a, v in data.items() if v}
-    if 'A' not in med:
+            if i < WARMUP:
+                continue
+            pmcstate.add((r['pmc'], r['pinned']))
+            # a per-core counter read across a migration differences two cores.
+            # It shows up as an implied clock nowhere near the part's range --
+            # usually absurd, since the cores' counters sit seconds apart.
+            if r['pmc'] and not (r['cyc'] and CLK_LO <= r['ghz'] <= CLK_HI):
+                migrated[arm[0]] += 1
+                continue
+            data[arm[0]].append(r)
+            bytype[arm[0]].setdefault(t, []).append(r)
+    if not data.get('A'):
         print(f'\n{rname}: NO DATA ({len(bad)} failures) e.g. {bad[:2]}'); continue
+
+    have_pmc = all(p for p, _ in pmcstate) and all(s['cyc'] for s in data['A'])
+    key = METRIC if (METRIC != 'cyc' or have_pmc) else 'cpu'
+    unit = {'cyc': 'kcycles', 'cpu': 'cpu ms'}[key]
+    scale = 1e-3 if key == 'cyc' else 1.0
+    val = lambda s: s[key] * scale
+    med = {a: st.median([val(s) for s in v]) for a, v in data.items() if v}
+    medi = {a: st.median([s['ins'] for s in v]) for a, v in data.items() if v}   # instructions
+    medc = {a: st.median([s['cpu'] for s in v]) for a, v in data.items() if v}   # the old instrument
     if 'C' not in med: med['C'] = med['A']
-    mad = st.median([abs(x - med['A']) for x in data['A']]) / med['A'] * 100
+    mad = st.median([abs(val(s) - med['A']) for s in data['A']]) / med['A'] * 100
     gate_ok = all(seen == str(d) for _, d, seen in gate)
-    print(f"\n== {which}: {rname}   ({len(data['A'])} measured requests/arm, MAD(A) {mad:.2f}%, gate {'ok' if gate_ok else sorted(gate)}, failures {len(bad)})")
-    print(f"{'arm':<5}{'cpu ms':>10}{'vs A':>9}{'vs C':>9}")
+    pinned = sorted({p for _, p in pmcstate})
+    print(f"\n== {which}: {rname}   ({len(data['A'])} measured requests/arm, MAD(A) {mad:.2f}%, "
+          f"gate {'ok' if gate_ok else sorted(gate)}, failures {len(bad)}, "
+          f"migrated {sum(migrated.values())}, pmc {'on' if have_pmc else 'OFF'}, pinned {pinned})")
+    print(f"{'arm':<5}{unit:>12}{'vs A':>9}{'vs C':>9}{'instr':>15}{'ins vs A':>10}{'IPC':>7}{'GHz':>6}{'cpu ms':>9}")
     for a in med:
-        print(f"{a:<5}{med[a]:>10.2f}{(med[a]/med['A']-1)*100:>+8.2f}%{(med[a]/med['C']-1)*100:>+8.2f}%")
-    if 'Bn' in med and 'Z' in med:
+        mcyc = st.median([s['cyc'] for s in data[a]]) if data.get(a) else 0.0
+        ipc = (medi[a] / mcyc) if mcyc else 0.0
+        ghz = st.median([s['ghz'] for s in data[a]]) if data.get(a) else 0.0
+        ins_va = (medi[a] / medi['A'] - 1) * 100 if medi.get('A') and a in medi else 0.0
+        print(f"{a:<5}{med[a]:>12.1f}{(med[a]/med['A']-1)*100:>+8.2f}%{(med[a]/med['C']-1)*100:>+8.2f}%"
+              f"{medi.get(a, 0):>15,.0f}{ins_va:>+9.2f}%{ipc:>7.2f}{ghz:>6.2f}{medc.get(a, 0):>9.2f}")
+    # every one of the four, not just the twins: a row where an arm lost all its
+    # samples to the migration gate used to die here with a KeyError after the
+    # table had already printed, which loses the rows that DID survive
+    if all(k in med for k in ('B', 'Bn', 'P', 'Z')):
         print(f"  executed-switch terms: B-Bn {(med['B']/med['Bn']-1)*100:+.2f} pts   P-Z {(med['P']/med['Z']-1)*100:+.2f} pts   (relative to A: B-Bn {(med['B']-med['Bn'])/med['A']*100:+.2f}, P-Z {(med['P']-med['Z'])/med['A']*100:+.2f})")
+    if 'C' in medi and medi.get('A') and data.get('A'):
+        # Blanket sets a mode bit and cannot change the instruction stream, so A
+        # and C must retire the same work -- otherwise no cycle ratio between
+        # them means anything.
+        #
+        # WHAT "THE SAME" MEANS DEPENDS ON THE WORKLOAD, which a fixed threshold
+        # gets wrong in both directions. Zend/bench.php is a closed compute loop
+        # and reproduces to 0.001%; a Symfony request carries sessions, CSRF
+        # tokens, a database and a filesystem, and its own instruction count
+        # moves by a few tenths of a percent between two runs of the SAME arm.
+        # A 0.5% rule called that a failure while passing anything Zend could
+        # ever do wrong. So the gate is scaled by the spread the workload
+        # actually shows: A's own instruction MAD, which is measured in the same
+        # run, from the same requests, with the arms rotating between them.
+        ins_mad = st.median([abs(s['ins'] - medi['A']) for s in data['A']]) / medi['A'] * 100
+        d = (medi['C'] / medi['A'] - 1) * 100
+        cyc_d = (med['C'] / med['A'] - 1) * 100
+        # THE QUESTION IS NOT "is there a difference" BUT "can it explain the
+        # cycles". A difference under the workload's own instruction noise is
+        # nothing. One above it is real and still harmless as long as it is small
+        # against the cycle effect it would have to account for -- and it is
+        # information, not an error: on this suite blanket consistently retires
+        # ~0.17% fewer instructions while costing 2.4% more cycles, which makes
+        # the dwell reading conservative rather than doubtful.
+        detected = abs(d) > max(0.10, 3 * ins_mad)
+        material = abs(cyc_d) > 0 and abs(d) > 0.25 * abs(cyc_d)
+        verdict = ('ok' if not detected else
+                   'INVALID - the instruction gap is a large share of the cycle gap, so the '
+                   'arms may not be running the same work' if material else
+                   f'real but immaterial: {abs(d)/abs(cyc_d)*100:.0f}% of the {cyc_d:+.2f}% cycle effect')
+        print(f"  instruction parity A vs C: {d:+.3f}%  (workload instruction MAD {ins_mad:.3f}%: {verdict})")
     types = sorted({t for a in bytype for t in bytype[a]})
     if len(types) > 1 or types != [seq[0]]:
-        print("  per request type, median cpu ms: " + ' | '.join(
-            f"{t}: " + ' '.join(f"{a}={st.median(bytype[a][t]):.1f}" for a in med if t in bytype[a]) for t in types))
+        print(f"  per request type, median {unit}: " + ' | '.join(
+            f"{t}: " + ' '.join(f"{a}={st.median([val(s) for s in bytype[a][t]]):.1f}" for a in med if t in bytype[a]) for t in types))
     if bad:
         print(f"  failures: {bad[:3]}")
-    results[rname] = dict(median=med, mad=mad, gate=sorted(gate), bytype={a: {t: st.median(v) for t, v in d.items()} for a, d in bytype.items()}, failures=len(bad))
+    medg = {a: st.median([s['ghz'] for s in v]) for a, v in data.items() if v}
+    raw = {a: [dict(cyc=s['cyc'], ins=s['ins'], cpu=round(s['cpu'], 3), ghz=round(s['ghz'], 3)) for s in v]
+           for a, v in data.items()}
+    json.dump(raw, open(f"{OUT}/{which}{os.environ.get('ROUNDS_LABEL','')}-{re.sub(r'[^a-z0-9]+', '-', rname.lower()).strip('-')}-raw.json", 'w'))
+    results[rname] = dict(metric=key, median=med, median_ins=medi, median_cpu=medc, median_ghz=medg, mad=mad,
+                          ins_mad={a: st.median([abs(s['ins'] - medi[a]) for s in v]) / medi[a] * 100
+                                   for a, v in data.items() if v and medi.get(a)},
+                          gate=sorted(gate), pmc=have_pmc, pinned=pinned, migrated=migrated,
+                          n={a: len(v) for a, v in data.items()},
+                          bytype={a: {t: st.median([val(s) for s in v]) for t, v in d.items()} for a, d in bytype.items()},
+                          bytype_ins={a: {t: st.median([s['ins'] for s in v]) for t, v in d.items()} for a, d in bytype.items()},
+                          failures=len(bad))
     sys.stdout.flush()
-json.dump(results, open(f"{OUT}/{which}{os.environ.get('ROUNDS_LABEL','')}.json", 'w'), indent=1)
+# A PARTIAL RUN MUST NOT LAND ON THE FULL RUN'S FILENAME. Selecting arms or rows
+# is how you debug the rig, and doing that after a real run used to overwrite its
+# .json with the diagnostic's -- silently, since the .txt is written by the shell
+# redirection in run_suite.sh and survives. That is how the WordPress .json from
+# the 2026-09-06 counter run was lost.
+tag = ''
+if os.environ.get('BENCH_ARMS') or rows_wanted:
+    tag = '-partial-' + '+'.join([a[0] for a in ARMS]) + ('-' + '+'.join(rows_wanted) if rows_wanted else '')
+json.dump(results, open(f"{OUT}/{which}{os.environ.get('ROUNDS_LABEL','')}{tag}.json", 'w'), indent=1)

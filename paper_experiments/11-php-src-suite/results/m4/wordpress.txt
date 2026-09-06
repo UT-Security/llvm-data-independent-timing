@@ -1,0 +1,72 @@
+logged in: 3 cookies
+wordpress: 6 arms, 50 warm-up + 100 measured requests per row, arms rotate per request
+metric: cyc  (PMC cycles; CPU time recorded alongside)  migration gate 2.0-5.5 GHz
+
+== wordpress: anon (the suite's request)   (100 measured requests/arm, MAD(A) 0.80%, gate ok, failures 0, migrated 7, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        151052.5   +0.00%   -2.34%    436,496,708    +0.00%   2.89  3.96    38.14
+C        154665.4   +2.39%   +0.00%    435,765,427    -0.17%   2.82  3.96    38.98
+B        151240.0   +0.12%   -2.21%    437,107,340    +0.14%   2.89  3.96    38.23
+Bn       151241.8   +0.13%   -2.21%    437,351,646    +0.20%   2.89  3.96    38.14
+P        151618.6   +0.37%   -1.97%    437,660,464    +0.27%   2.89  3.96    38.26
+Z        150979.7   -0.05%   -2.38%    437,975,743    +0.34%   2.90  3.95    38.13
+  executed-switch terms: B-Bn -0.00 pts   P-Z +0.42 pts   (relative to A: B-Bn -0.00, P-Z +0.42)
+  instruction parity A vs C: -0.168%  (workload instruction MAD 0.041%, limit 0.122%: FAIL - the arms are not running the same work)
+
+== wordpress: logged-in pages   (100 measured requests/arm, MAD(A) 0.83%, gate ok, failures 0, migrated 8, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        157722.0   +0.00%   -2.29%    459,691,198    +0.00%   2.91  3.94    39.96
+C        161416.4   +2.34%   +0.00%    458,962,408    -0.16%   2.84  3.94    40.89
+B        157656.6   -0.04%   -2.33%    460,252,152    +0.12%   2.92  3.94    39.97
+Bn       157429.5   -0.19%   -2.47%    460,540,821    +0.18%   2.93  3.94    39.95
+P        157528.7   -0.12%   -2.41%    461,022,268    +0.29%   2.93  3.94    39.94
+Z        158098.3   +0.24%   -2.06%    461,389,722    +0.37%   2.92  3.94    40.04
+  executed-switch terms: B-Bn +0.14 pts   P-Z -0.36 pts   (relative to A: B-Bn +0.14, P-Z -0.36)
+  instruction parity A vs C: -0.159%  (workload instruction MAD 0.037%, limit 0.111%: FAIL - the arms are not running the same work)
+
+== wordpress: login 1 in 100   (99 measured requests/arm, MAD(A) 2.14%, gate ok, failures 0, migrated 8, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        154601.0   +0.00%   -2.55%    459,327,138    +0.00%   2.97  3.90    39.78
+C        158650.6   +2.62%   +0.00%    436,372,707    -5.00%   2.75  3.90    40.65
+B        154835.6   +0.15%   -2.40%    460,055,886    +0.16%   2.97  3.90    39.76
+Bn       154844.5   +0.16%   -2.40%    437,969,758    -4.65%   2.83  3.90    39.76
+P        155655.4   +0.68%   -1.89%    460,816,837    +0.32%   2.96  3.90    39.84
+Z        155319.6   +0.46%   -2.10%    438,474,500    -4.54%   2.82  3.91    39.90
+  executed-switch terms: B-Bn -0.01 pts   P-Z +0.22 pts   (relative to A: B-Bn -0.01, P-Z +0.22)
+  instruction parity A vs C: -4.997%  (workload instruction MAD 0.222%, limit 0.665%: FAIL - the arms are not running the same work)
+  per request type, median kcycles: wp_anon: A=151242.3 C=154293.5 B=150788.8 Bn=150551.1 P=150870.9 Z=150750.6 | wp_loggedin: A=157829.5 C=161504.2 B=157820.5 Bn=157505.4 P=157816.5 Z=157811.9 | wp_login: A=138359.9 C=140926.8 B=138417.3 Bn=135220.8 P=138222.9 Z=135795.8
+
+== wordpress: login 1 in 20   (99 measured requests/arm, MAD(A) 2.21%, gate ok, failures 0, migrated 8, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        155094.5   +0.00%   -2.47%    437,166,100    +0.00%   2.82  3.89    39.79
+C        159022.3   +2.53%   +0.00%    458,897,398    +4.97%   2.89  3.88    40.85
+B        155059.2   -0.02%   -2.49%    460,167,263    +5.26%   2.97  3.88    39.98
+Bn       154900.1   -0.13%   -2.59%    437,995,575    +0.19%   2.83  3.88    39.95
+P        155402.2   +0.20%   -2.28%    460,979,492    +5.45%   2.97  3.88    40.06
+Z        155308.6   +0.14%   -2.34%    449,892,942    +2.91%   2.90  3.88    39.90
+  executed-switch terms: B-Bn +0.10 pts   P-Z +0.06 pts   (relative to A: B-Bn +0.10, P-Z +0.06)
+  instruction parity A vs C: +4.971%  (workload instruction MAD 2.788%, limit 8.363%: ok)
+  per request type, median kcycles: wp_anon: A=151061.8 C=154568.2 B=150805.7 Bn=150596.5 P=150905.8 Z=151074.2 | wp_loggedin: A=157806.4 C=161289.8 B=157944.1 Bn=157516.6 P=157661.9 Z=157354.2 | wp_login: A=136982.4 C=139738.7 B=138990.1 Bn=136471.0 P=139997.6 Z=137243.8
+
+== wordpress: login 1 in 5   (99 measured requests/arm, MAD(A) 2.80%, gate ok, failures 0, migrated 8, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        152178.5   +0.00%   -2.01%    436,756,300    +0.00%   2.87  3.87    39.35
+C        155294.5   +2.05%   +0.00%    435,876,262    -0.20%   2.81  3.87    40.17
+B        151744.3   -0.29%   -2.29%    437,241,838    +0.11%   2.88  3.87    39.34
+Bn       152106.9   -0.05%   -2.05%    437,764,088    +0.23%   2.88  3.87    39.33
+P        151850.2   -0.22%   -2.22%    437,882,549    +0.26%   2.88  3.87    39.19
+Z        151954.6   -0.15%   -2.15%    438,259,086    +0.34%   2.88  3.87    39.31
+  executed-switch terms: B-Bn -0.24 pts   P-Z -0.07 pts   (relative to A: B-Bn -0.24, P-Z -0.07)
+  instruction parity A vs C: -0.201%  (workload instruction MAD 1.807%, limit 5.422%: ok)
+  per request type, median kcycles: wp_anon: A=151305.4 C=154155.7 B=150707.4 Bn=150907.7 P=150974.9 Z=151126.0 | wp_loggedin: A=157499.7 C=162100.1 B=157371.9 Bn=157424.5 P=157884.4 Z=157656.1 | wp_login: A=138355.3 C=141086.4 B=139865.0 Bn=138046.6 P=140277.0 Z=138913.8
+
+== wordpress: logins only   (99 measured requests/arm, MAD(A) 0.92%, gate ok, failures 0, migrated 7, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        142960.7   +0.00%   -2.18%    449,778,845    +0.00%   3.15  3.84    37.21
+C        146151.1   +2.23%   +0.00%    448,889,837    -0.20%   3.07  3.84    38.02
+B        144889.0   +1.35%   -0.86%    450,093,321    +0.07%   3.11  3.84    37.73
+Bn       142956.0   -0.00%   -2.19%    450,659,404    +0.20%   3.15  3.84    37.31
+P        145779.7   +1.97%   -0.25%    450,623,085    +0.19%   3.09  3.85    37.86
+Z        143029.4   +0.05%   -2.14%    450,944,987    +0.26%   3.15  3.84    37.26
+  executed-switch terms: B-Bn +1.35 pts   P-Z +1.92 pts   (relative to A: B-Bn +1.35, P-Z +1.92)
+  instruction parity A vs C: -0.198%  (workload instruction MAD 0.815%, limit 2.444%: ok)

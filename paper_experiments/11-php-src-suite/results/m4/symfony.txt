@@ -1,0 +1,71 @@
+symfony: 6 arms, 50 warm-up + 100 measured requests per row, arms rotate per request
+metric: cyc  (PMC cycles; CPU time recorded alongside)  migration gate 2.0-5.5 GHz
+
+== symfony: suite request (/)   (99 measured requests/arm, MAD(A) 0.51%, gate ok, failures 0, migrated 4, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A         84513.8   +0.00%   +0.39%    260,978,535    +0.00%   3.09  3.61    23.45
+C         84186.3   -0.39%   +0.00%    259,821,993    -0.44%   3.09  3.59    23.47
+B         84703.1   +0.22%   +0.61%    262,067,363    +0.42%   3.09  3.60    23.51
+Bn        84476.7   -0.04%   +0.34%    261,232,612    +0.10%   3.09  3.60    23.42
+P         84371.7   -0.17%   +0.22%    261,298,011    +0.12%   3.10  3.60    23.43
+Z         84324.8   -0.22%   +0.16%    261,333,860    +0.14%   3.10  3.61    23.40
+  executed-switch terms: B-Bn +0.27 pts   P-Z +0.06 pts   (relative to A: B-Bn +0.27, P-Z +0.06)
+  instruction parity A vs C: -0.443%  (ok)
+
+== symfony: blog index (/en/blog/)   (98 measured requests/arm, MAD(A) 0.38%, gate ok, failures 0, migrated 7, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        157794.6   +0.00%   -0.52%    483,671,094    +0.00%   3.07  3.84    41.19
+C        158624.3   +0.53%   +0.00%    479,514,626    -0.86%   3.02  3.83    41.57
+B        158344.5   +0.35%   -0.18%    486,014,378    +0.48%   3.07  3.84    41.32
+Bn       157891.8   +0.06%   -0.46%    485,252,115    +0.33%   3.07  3.83    41.22
+P        157810.3   +0.01%   -0.51%    485,950,247    +0.47%   3.08  3.83    41.18
+Z        157824.1   +0.02%   -0.50%    484,829,578    +0.24%   3.07  3.83    41.18
+  executed-switch terms: B-Bn +0.29 pts   P-Z -0.01 pts   (relative to A: B-Bn +0.29, P-Z -0.01)
+  instruction parity A vs C: -0.859%  (FAIL - the arms differ in work, no cycle ratio between them is meaningful)
+
+== symfony: login 1 in 100   (98 measured requests/arm, MAD(A) 0.42%, gate ok, failures 0, migrated 8, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        158094.2   +0.00%   -0.45%    483,738,833    +0.00%   3.06  3.83    41.35
+C        158816.4   +0.46%   +0.00%    479,517,209    -0.87%   3.02  3.82    41.72
+B        158311.9   +0.14%   -0.32%    487,340,641    +0.74%   3.08  3.82    41.42
+Bn       157951.3   -0.09%   -0.54%    485,252,250    +0.31%   3.07  3.82    41.30
+P        158243.6   +0.09%   -0.36%    485,953,638    +0.46%   3.07  3.83    41.41
+Z        157921.8   -0.11%   -0.56%    485,194,431    +0.30%   3.07  3.83    41.31
+  executed-switch terms: B-Bn +0.23 pts   P-Z +0.20 pts   (relative to A: B-Bn +0.23, P-Z +0.20)
+  instruction parity A vs C: -0.873%  (FAIL - the arms differ in work, no cycle ratio between them is meaningful)
+  per request type, median kcycles: sf_anon: A=158087.7 C=158799.9 B=158305.4 Bn=157948.7 P=158241.3 Z=157916.3 | sf_login: A=1623556.0 C=1624772.3 B=1622809.2 Bn=1623503.8 P=1625280.6 Z=1625728.4
+
+== symfony: login 1 in 20   (97 measured requests/arm, MAD(A) 0.43%, gate ok, failures 0, migrated 12, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        158015.4   +0.00%   -0.52%    483,656,735    +0.00%   3.06  3.83    41.29
+C        158836.1   +0.52%   +0.00%    479,480,523    -0.86%   3.02  3.82    41.65
+B        158329.2   +0.20%   -0.32%    487,308,234    +0.75%   3.08  3.83    41.37
+Bn       158036.8   +0.01%   -0.50%    485,289,107    +0.34%   3.07  3.83    41.31
+P        158118.1   +0.07%   -0.45%    485,943,336    +0.47%   3.07  3.83    41.33
+Z        158009.4   -0.00%   -0.52%    485,545,714    +0.39%   3.07  3.82    41.31
+  executed-switch terms: B-Bn +0.19 pts   P-Z +0.07 pts   (relative to A: B-Bn +0.19, P-Z +0.07)
+  instruction parity A vs C: -0.863%  (FAIL - the arms differ in work, no cycle ratio between them is meaningful)
+  per request type, median kcycles: sf_anon: A=158004.6 C=158671.3 B=158309.0 Bn=157989.2 P=158054.5 Z=157981.5 | sf_login: A=1623136.0 C=1624803.9 B=1622988.1 Bn=1623360.6 P=1622806.2 Z=1623541.4
+
+== symfony: login 1 in 5   (95 measured requests/arm, MAD(A) 0.66%, gate ok, failures 0, migrated 23, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        158615.3   +0.00%   -0.93%    484,411,710    +0.00%   3.05  3.83    41.46
+C        160110.2   +0.94%   +0.00%    479,625,512    -0.99%   3.00  3.83    42.00
+B        159134.2   +0.33%   -0.61%    487,571,966    +0.65%   3.06  3.83    41.64
+Bn       158925.7   +0.20%   -0.74%    485,539,541    +0.23%   3.06  3.84    41.66
+P        158583.9   -0.02%   -0.95%    486,193,154    +0.37%   3.07  3.83    41.44
+Z        158710.6   +0.06%   -0.87%    486,050,570    +0.34%   3.06  3.84    41.55
+  executed-switch terms: B-Bn +0.13 pts   P-Z -0.08 pts   (relative to A: B-Bn +0.13, P-Z -0.08)
+  instruction parity A vs C: -0.988%  (FAIL - the arms differ in work, no cycle ratio between them is meaningful)
+  per request type, median kcycles: sf_anon: A=158389.5 C=158959.5 B=158718.1 Bn=158324.1 P=158159.1 Z=158337.9 | sf_login: A=1624256.2 C=1626059.1 B=1624742.3 Bn=1625504.7 P=1623966.3 Z=1624799.7
+
+== symfony: logins only   (89 measured requests/arm, MAD(A) 0.05%, gate ok, failures 0, migrated 81, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A       1623845.7   +0.00%   -0.09%  2,721,740,196    +0.00%   1.68  4.36   372.78
+C       1625378.5   +0.09%   +0.00%  2,720,949,688    -0.03%   1.67  4.36   373.17
+B       1623808.0   -0.00%   -0.10%  2,722,322,340    +0.02%   1.68  4.36   372.69
+Bn      1624120.2   +0.02%   -0.08%  2,722,105,332    +0.01%   1.68  4.36   372.73
+P       1623927.3   +0.01%   -0.09%  2,722,370,376    +0.02%   1.68  4.36   372.81
+Z       1623749.0   -0.01%   -0.10%  2,721,696,701    -0.00%   1.68  4.36   372.72
+  executed-switch terms: B-Bn -0.02 pts   P-Z +0.01 pts   (relative to A: B-Bn -0.02, P-Z +0.01)
+  instruction parity A vs C: -0.029%  (ok)

@@ -1,0 +1,36 @@
+auth check: with credential 200, without 401 (must be 401)
+wpapi: 6 arms, 50 warm-up + 100 measured requests per row, arms rotate per request
+metric: cyc  (PMC cycles; CPU time recorded alongside)  migration gate 2.0-5.5 GHz
+
+== wpapi: REST anonymous, /wp-json/wp/v2/posts (0 md5 calls)   (99 measured requests/arm, MAD(A) 0.88%, gate ok, failures 0, migrated 6, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        128211.0   +0.00%   -1.80%    371,122,500    +0.00%   2.89  3.81    33.55
+C        130565.2   +1.84%   +0.00%    370,271,183    -0.23%   2.84  3.81    34.27
+B        128417.4   +0.16%   -1.65%    371,633,128    +0.14%   2.89  3.81    33.67
+Bn       128168.1   -0.03%   -1.84%    371,347,992    +0.06%   2.90  3.81    33.63
+P        128694.5   +0.38%   -1.43%    372,734,526    +0.43%   2.90  3.81    33.74
+Z        128823.8   +0.48%   -1.33%    372,440,747    +0.36%   2.89  3.81    33.74
+  executed-switch terms: B-Bn +0.19 pts   P-Z -0.10 pts   (relative to A: B-Bn +0.19, P-Z -0.10)
+  instruction parity A vs C: -0.229%  (ok)
+
+== wpapi: REST authenticated by application password, phpass 2^13 rounds   (100 measured requests/arm, MAD(A) 0.83%, gate ok, failures 0, migrated 7, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        133562.1   +0.00%   -1.86%    386,209,710    +0.00%   2.89  3.82    34.91
+C        136086.8   +1.89%   +0.00%    385,412,890    -0.21%   2.83  3.82    35.67
+B        135273.9   +1.28%   -0.60%    386,814,055    +0.16%   2.86  3.83    35.31
+Bn       133897.6   +0.25%   -1.61%    386,497,201    +0.07%   2.89  3.82    35.03
+P        136651.5   +2.31%   +0.41%    387,981,392    +0.46%   2.84  3.83    35.66
+Z        133887.0   +0.24%   -1.62%    387,728,927    +0.39%   2.90  3.82    35.01
+  executed-switch terms: B-Bn +1.03 pts   P-Z +2.06 pts   (relative to A: B-Bn +1.03, P-Z +2.07)
+  instruction parity A vs C: -0.206%  (ok)
+
+== wpapi: logins only, phpass 2^13 rounds   (99 measured requests/arm, MAD(A) 0.97%, gate ok, failures 0, migrated 7, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        132373.9   +0.00%   -1.86%    399,701,371    +0.00%   3.02  3.80    34.83
+C        134875.9   +1.89%   +0.00%    399,048,016    -0.16%   2.96  3.80    35.42
+B        134160.1   +1.35%   -0.53%    400,539,839    +0.21%   2.99  3.81    35.19
+Bn       132360.5   -0.01%   -1.86%    400,102,709    +0.10%   3.02  3.80    34.82
+P        135550.5   +2.40%   +0.50%    401,595,399    +0.47%   2.96  3.81    35.58
+Z        132614.0   +0.18%   -1.68%    401,500,666    +0.45%   3.03  3.80    34.89
+  executed-switch terms: B-Bn +1.36 pts   P-Z +2.21 pts   (relative to A: B-Bn +1.36, P-Z +2.22)
+  instruction parity A vs C: -0.163%  (ok)

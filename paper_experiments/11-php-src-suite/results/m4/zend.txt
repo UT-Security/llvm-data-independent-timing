@@ -1,0 +1,13 @@
+zend: 6 arms, 50 warm-up + 100 measured requests per row, arms rotate per request
+metric: cyc  (PMC cycles; CPU time recorded alongside)  migration gate 2.0-5.5 GHz
+
+== zend: Zend/bench.php, opcache on, JIT off   (48 measured requests/arm, MAD(A) 1.01%, gate ok, failures 0, migrated 25, pmc on, pinned [9])
+arm       kcycles     vs A     vs C          instr  ins vs A    IPC   GHz   cpu ms
+A        961428.6   +0.00%   -8.84%  3,316,759,520    +0.00%   3.45  4.13   232.75
+C       1054622.1   +9.69%   +0.00%  3,316,777,010    +0.00%   3.14  4.15   253.89
+B        944822.4   -1.73%  -10.41%  3,316,753,818    -0.00%   3.51  4.13   228.93
+Bn       952149.1   -0.97%   -9.72%  3,316,755,140    -0.00%   3.48  4.13   230.03
+P        955303.7   -0.64%   -9.42%  3,365,560,815    +1.47%   3.52  4.12   231.24
+Z        952747.7   -0.90%   -9.66%  3,365,538,150    +1.47%   3.53  4.12   231.07
+  executed-switch terms: B-Bn -0.77 pts   P-Z +0.27 pts   (relative to A: B-Bn -0.76, P-Z +0.27)
+  instruction parity A vs C: +0.001%  (ok)

@@ -41,6 +41,11 @@ for p in sqlite zlib oniguruma; do brew --prefix "$p" >/dev/null 2>&1 || die "br
 command -v pkg-config >/dev/null || die "brew install pkgconf"
 what="${1:-all}"
 mkdir -p "$W/src" "$W/rpt"
+# Five PHP trees appearing at once wakes Spotlight, and mds indexing them
+# saturates every core -- which the counter-based metric cannot survive (see
+# run_suite.sh). The marker keeps the next build out of the index; it does not
+# stop an indexing pass already under way.
+touch "$W/.metadata_never_index"
 BASE="$W/phpf-base"
 OWNED="$W/owned_php.txt"
 SEEDS="${SEEDS:-$W/seeds_php.txt}"

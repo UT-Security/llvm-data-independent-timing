@@ -1,0 +1,45 @@
+Calls to the seven bracket-wrapped crypto builtins, per request, measured 2026-09-06
+on bellingham with phpf-count (base tree + -DDIT_BRACKET=1 -DDIT_BRACKET_COUNT=1: the
+bracket macro increments a per-builtin counter instead of switching DIT, and each of
+the four TUs dumps its table at exit). opcache file cache warm, one request per row,
+WordPress at shipped phpass 2^13.
+
+This is the x-axis of the crossover argument, measured rather than assumed. The
+bracket wraps exactly these seven functions, so counting its entries counts the
+crypto boundary crossings by construction.
+
+request                                   md5    hash  hash_hmac  hash_equals   crypt  pw_verify  pw_hash    TOTAL
+WordPress  GET / (the suite's request)     106       0          4            0       0          0        0      110
+WordPress  GET / logged in                 117       1          9            1       0          0        0      128
+WordPress  POST /wp-login.php             8217       1          8            0       0          0        0     8226
+WordPress  GET /wp-json/wp/v2/posts         34       0          4            0       0          0        0       38
+Symfony    GET / (the suite's request)       0       5          0            0       0          0        0        5
+Symfony    GET /en/blog/                     3      40          0            0       0          0        0       43
+Symfony    GET /en/login (the form)           1      12          0            0       0          0        0       13
+Symfony    POST /en/login (bcrypt verify)     0       1          0            1       0          1        0        3
+
+Which of these touch a secret:
+
+  Symfony's suite request: NONE. Five hash() calls, no key, no HMAC, no crypt, no
+  password function. Symfony hashes cache keys and class-map digests -- public data.
+
+  WordPress's suite request: 4, all hash_hmac keyed with the site's salts.
+  wp_hash($data,$scheme) is hash_hmac('md5',$data,wp_salt($scheme)) (pluggable.php),
+  and wpdb::placeholder_escape() computes hash_hmac('sha256', uniqid(AUTH_SALT,true),
+  AUTH_SALT) once per request (class-wpdb.php). These are long-lived SITE secrets,
+  not a user credential. The other 106 calls are md5 over cache keys, transient names
+  and gravatar hashes: public.
+
+  Logged-in adds +5 hash_hmac and +1 hash_equals over anonymous -- the two cookie
+  validations. The login POST adds ~8,100 md5 -- phpass at 2^13 rounds.
+
+The Symfony login POST is the shape that matters most: THREE crossings (password_verify,
+hash_equals, hash) for 1.62 billion cycles of key derivation, because bcrypt's whole
+iteration loop lives inside one C call. WordPress's login is 8,193 crossings for 3.3 million
+cycles of md5, because phpass's loop is PHP bytecode. Same security function, six orders of
+magnitude apart in secret work per crossing -- and that, not the round count, is why one
+costs nothing and the other costs 1.36 points.
+
+Against a measured crossover of ~12,000 calls per request (bracket) and ~7,000 (pass),
+the suite's own requests sit two to three orders of magnitude below the point where
+blanket becomes the cheaper option.
