@@ -18,10 +18,12 @@ try:
             _opt = _l.split(":", 1)[1].strip() or _opt
 except OSError:
     pass
-ORDER = ["A", "C", "P", "F", "X", "N", "Z"]
-NAME = {"A": "unhardened", "C": "blanket DIT", "P": "pass (shipped)",
-        "F": "whole-function", "X": "pass (old defaults)", "N": "pass (resolved)",
-        "Z": "pass, switches NOPed (control for P)"}
+ORDER = ["A", "C", "B", "I", "P", "Z", "O", "Y", "F", "X", "N"]
+NAME = {"A": "unhardened", "C": "blanket DIT",
+        "B": "Apple bracket (sb)", "I": "Apple bracket (isb, as gem5)",
+        "P": "pass (shipped)", "Z": "pass, switches NOPed (control for P)",
+        "O": "old compiler (inherit, no twins, CIO seeds)", "Y": "old, switches NOPed (control for O)",
+        "F": "whole-function", "X": "pass (old defaults)", "N": "pass (resolved)"}
 
 
 def load(path, keyfn, valfn):

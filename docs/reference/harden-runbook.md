@@ -314,6 +314,7 @@ source condition.
 | flag | default | meaning |
 |---|---|---|
 | `-taint-dit-nop-switches` | 0 | **A/B.** Every inserted `MSR DIT` is emitted as `HINT #0` at the asm-printer, so layout and instruction count match the real build exactly with no mode switch executing. The instruction-matched baseline every measurement uses. Not neutral: a NOP costs ~0.25% more than a renamed `MSR DIT`. |
+| `-taint-dit-enable-barrier` | `none` | `sb` or `isb`: a speculation barrier after every `MSR DIT, #1` the pass places. Apple's recipe on Apple silicon requires `sb` (the core speculates through the mode write); gem5's serialising model uses `isb`. The barrier is part of the switch: `-taint-dit-nop-switches` replaces it with `HINT #0` too, and the whole-function fallback removes it with the switches. Experiments 09 and 11 measure with `sb`; each executed barrier costs its pipeline drain. |
 | `-taint-dit-oracle-hooks` | 0 | Staples a call to the gem5 oracle's re-arm trampoline to every switch. Instrumentation only; never time such a build. |
 | `-taint-dit-verify-warn-only` | 0 | The final-MIR DIT verifier (`AArch64DITVerifier`, runs last, fails the build on a secret instruction reached DIT-off) reports instead of failing. The object is unsound; for enumerating sites only. |
 

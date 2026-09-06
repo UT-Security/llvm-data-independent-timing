@@ -3116,6 +3116,14 @@ void AArch64AsmPrinter::emitInstruction(const MachineInstr *MI) {
     EmitToStreamer(*OutStreamer, MCInstBuilder(AArch64::HINT).addImm(0));
     return;
   }
+  // The speculation barrier -taint-dit-enable-barrier placed after an enable is
+  // part of the switch for the control's purposes: it carries an implicit $dit
+  // use that no other SB/ISB has, and it becomes a NOP with the switch it follows.
+  if (TaintDitNopSwitches &&
+      STI->getInstrInfo()->isTimingModeSwitchBarrier(*MI)) {
+    EmitToStreamer(*OutStreamer, MCInstBuilder(AArch64::HINT).addImm(0));
+    return;
+  }
 
 #ifndef NDEBUG
   InstsEmitted = 0;
