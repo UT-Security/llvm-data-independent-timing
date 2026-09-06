@@ -97,8 +97,31 @@ clang -O2 -Wall -I"$INC" -I"$BENCH" -o "$OUT/blanket_bench" \
   echo "libsodium: $LIB"
   echo "clang: $(clang --version | sed -n 1p)"
   echo "reps: $REPS  iters: $ITERS"
+  echo "soak: ${SOAK:-180}s"
 } > "$OUT/provenance.txt"
 cat "$OUT/provenance.txt"
+
+# ---------------------------------------------------------------- soak
+# Drive the machine to its sustained-load steady state BEFORE measuring, so
+# every run reports from the same place. This is not thermal superstition and it
+# is not a cache flush: measured on the M5, arm A of aes_dec reads ~810 cyc/op in
+# any run lasting minutes and 834-848 in one lasting seconds, a 4.5% difference
+# that lands entirely on the unhardened arm and silently sets the answer. It is
+# NOT the core clock -- a 400-rep run spanning 4.607 to 4.391 GHz held arm A flat
+# at 809-810 the whole way (r = -0.169 against the ratio). Whatever saturates, it
+# saturates within a few minutes of load, so the fix is to get there first rather
+# than to explain it.
+#
+# SOAK=0 skips it, which is what you want when comparing against a run that had
+# no soak -- an unsoaked number and a soaked one are not comparable.
+SOAK="${SOAK:-180}"
+if [[ "$SOAK" != 0 ]]; then
+  info "soak ${SOAK}s (steady state before the first measurement)"
+  soak_end=$(( $(date +%s) + SOAK ))
+  while [[ $(date +%s) -lt $soak_end ]]; do
+    BLANKET_DIT=0 "$OUT/blanket_bench" aes_enc 400000 0 >/dev/null 2>&1
+  done
+fi
 
 echo "primitive,arm,iters,cycles,instructions,ticks,dit_exit" > "$OUT/blanket.csv"
 for p in $PRIMS; do
