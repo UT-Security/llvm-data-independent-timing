@@ -172,6 +172,47 @@ static void cio_shim_pmc_probe(void) {
 }
 #endif
 
+/* SAMPLED PMC ACCUMULATION.
+ *
+ * The isb that makes a PMC read correct is a pipeline drain, and per-op it is
+ * not cheap: measured 73 cycles on a synthetic op and 150-250 on the AEADs,
+ * against the ~21 cycles CNTVCT costs. Two separate problems come out of that,
+ * and only one of them is about the numbers:
+ *
+ *   the RUN is perturbed. Every operation pays the drain, which on a 264-cycle
+ *   AES-GCM encrypt is 40% more work, and it lands between the driver's
+ *   iterations where it disturbs exactly the predictor and cache state the
+ *   experiment is trying to measure. Worse, it need not disturb every arm
+ *   equally.
+ *
+ *   the SAMPLE is biased. Cycles counted between two isb-ordered reads include
+ *   the drain; instructions do not (measured: -0.0 instructions, the drain
+ *   retires the op's own tail and nothing new). So IPC off per-op PMC reads is
+ *   understated by ~22%.
+ *
+ * Sampling fixes the first, which is the one that can silently corrupt an arm
+ * comparison: 1 region in CIO_PMC_SAMPLE (default 64) is instrumented, and the
+ * other 63 run untouched. The second is handled by measuring rather than
+ * guessing -- cio_shim_pmc_offset() times a null region at startup and the
+ * value is reported as pmc_off, so a consumer can subtract a number that was
+ * measured in this process rather than inferred from another machine.
+ *
+ * Instruction counts need neither correction and are exact either way. */
+static unsigned long long cio_shim_samp_cyc = 0, cio_shim_samp_ins = 0;
+static unsigned long long cio_shim_samp_n = 0, cio_shim_samp_seq = 0;
+static unsigned long long cio_shim_samp_every = 64;
+/* Skip the first regions outright. Sampling 1 in 64 gives only ~16 samples over
+ * a 1025-iteration driver, so ONE cold sample dominates the mean -- and region 0
+ * is the coldest call there is: lazy initialisation, first-call resolution, an
+ * empty cache. Measured with no skip, aes256gcm-encrypt reported 2,584
+ * instructions per op against a true 1,275, because sample 0 carried ~20,000
+ * one-time instructions spread over 16 samples. CIO's drivers warm up 25
+ * iterations; a full sampling period covers that with room to spare. */
+static unsigned long long cio_shim_samp_skip = 64;
+static unsigned long long cio_shim_pmc_off = 0;
+static int cio_shim_samp_live = 0;   /* is THIS region a sampled one? */
+static unsigned long long cio_shim_s0_cyc = 0, cio_shim_s0_ins = 0;
+
 static unsigned long cio_shim_dit_get(void) {
     unsigned long d;
     __asm__ volatile("mrs %0, DIT" : "=r"(d));
@@ -182,6 +223,23 @@ __attribute__((constructor)) static void cio_shim_start(void) {
     pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
 #ifdef CIO_SHIM_PMC
     cio_shim_pmc_probe();   /* before kperf: a patched kernel makes kperf redundant */
+    if (cio_shim_pmc_ok) {
+        const char *sv = getenv("CIO_PMC_SAMPLE");
+        if (sv) { unsigned long long v = strtoull(sv, NULL, 10); if (v) cio_shim_samp_every = v; }
+        const char *kv = getenv("CIO_PMC_SKIP");
+        if (kv) cio_shim_samp_skip = strtoull(kv, NULL, 10);
+        /* What a null region costs, measured HERE rather than carried over from
+         * another machine: the floor of an empty begin/end pair. It is a floor,
+         * not the whole story -- the drain lengthens with what is in flight --
+         * so it under-corrects a busy region and is reported, never applied. */
+        unsigned long long best = ~0ULL;
+        for (int k = 0; k < 200; k++) {
+            unsigned long long a = cio_shim_pmc0();
+            unsigned long long b = cio_shim_pmc0();
+            if (b - a < best) best = b - a;
+        }
+        cio_shim_pmc_off = best;
+    }
 #endif
 #ifdef CIO_SHIM_KPERF
     /* needs root; failure is not an error, it selects the CNTVCT fallback */
@@ -206,10 +264,13 @@ __attribute__((constructor)) static void cio_shim_start(void) {
 
 static unsigned long long cio_shim_reg_drop = 0;
 
+
+/* NOTE: no PMC path here on purpose. This runs on EVERY region boundary, and an
+ * isb-ordered PMC read costs a pipeline drain (73-250 cycles); paying it per op
+ * is exactly what the sampled accumulator exists to avoid. PMC counters come
+ * from samp_cyc/samp_ins instead, on 1 region in CIO_PMC_SAMPLE. reg_* stays
+ * the cheap per-op series: kperf when rooted, CNTVCT otherwise. */
 static inline void cio_shim_read2(unsigned long long *cyc, unsigned long long *ins) {
-#ifdef CIO_SHIM_PMC
-    if (cio_shim_pmc_ok) { *cyc = cio_shim_pmc0(); *ins = cio_shim_pmc1(); return; }
-#endif
 #ifdef CIO_SHIM_KPERF
     if (cio_shim_kperf_ok) {
         u64 buf[KPC_MAX_COUNTERS] = { 0 };
@@ -272,6 +333,19 @@ static inline uint64_t cio_shim_cntvct(void) {
  * must either be converted at the measured core clock or relabelled. The exit
  * line reports timer= so the choice is recorded with the results. */
 static inline void cio_shim_region_begin(void) {
+#ifdef CIO_SHIM_PMC
+    /* Decide first, then read: the read must not happen on an unsampled region,
+     * or the drain is back on every iteration and sampling bought nothing. */
+    if (cio_shim_pmc_ok) {
+        unsigned long long q = cio_shim_samp_seq++;
+        cio_shim_samp_live = (q >= cio_shim_samp_skip)
+                          && ((q - cio_shim_samp_skip) % cio_shim_samp_every) == 0;
+        if (cio_shim_samp_live) {
+            cio_shim_s0_cyc = cio_shim_pmc0();
+            cio_shim_s0_ins = cio_shim_pmc1();
+        }
+    }
+#endif
 #ifdef CIO_SHIM_CHEAP_TIMER
     cio_shim_read2(&cio_shim_t0_cyc, &cio_shim_t0_ins);   /* expensive: first */
     cio_shim_t0_timer = cio_shim_cntvct();                /* cheap: last */
@@ -290,6 +364,22 @@ static inline uint64_t cio_shim_region_end(void) {
 #ifndef CIO_SHIM_CHEAP_TIMER
     cio_shim_read2(&c, &i);
     uint64_t t1 = c;
+#endif
+#ifdef CIO_SHIM_PMC
+    if (cio_shim_pmc_ok && cio_shim_samp_live) {
+        unsigned long long s1c = cio_shim_pmc0(), s1i = cio_shim_pmc1();
+        if (s1c > cio_shim_s0_cyc && s1i >= cio_shim_s0_ins) {
+            unsigned long long dc = s1c - cio_shim_s0_cyc;
+            if (dc < 1000000000ULL) {          /* migration guard, as below */
+                cio_shim_samp_cyc += dc;
+                cio_shim_samp_ins += s1i - cio_shim_s0_ins;
+                cio_shim_samp_n++;
+            } else {
+                cio_shim_reg_drop++;
+            }
+        }
+        cio_shim_samp_live = 0;
+    }
 #endif
     if (cio_shim_t0_cyc && c > cio_shim_t0_cyc && i >= cio_shim_t0_ins) {
         unsigned long long dc = c - cio_shim_t0_cyc;
@@ -349,9 +439,13 @@ __attribute__((destructor)) static void cio_shim_end(void) {
     const char *timer = src;   /* the driver differenced the counter reads */
 #endif
     fprintf(stderr, "SHIM exit dit=%lu cycles=%s timer=%s tot_cyc=%llu tot_ins=%llu "
-                    "map_stall=%llu flush=%llu reg_cyc=%llu reg_ins=%llu reg_n=%llu\n",
+                    "map_stall=%llu flush=%llu reg_cyc=%llu reg_ins=%llu reg_n=%llu "
+                    "samp_cyc=%llu samp_ins=%llu samp_n=%llu samp_every=%llu "
+                    "pmc_off=%llu reg_drop=%llu\n",
             cio_shim_dit_get(), src, timer, cyc, ins, stall, flush,
-            cio_shim_reg_cyc, cio_shim_reg_ins, cio_shim_reg_n);
+            cio_shim_reg_cyc, cio_shim_reg_ins, cio_shim_reg_n,
+            cio_shim_samp_cyc, cio_shim_samp_ins, cio_shim_samp_n,
+            cio_shim_samp_every, cio_shim_pmc_off, cio_shim_reg_drop);
 }
 
 #endif /* CIO_ARM_SHIM_H */

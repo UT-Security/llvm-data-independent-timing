@@ -289,7 +289,7 @@ done
 # ---------------------------------------------------------------- part 2
 info "PART 2: CIO's 6 benchmarks, their parameters (drivers at $CIO_OPT)"
 MSG="$(LC_ALL=C tr -dc '[:alnum:]' </dev/urandom | head -c 100)"; echo "$MSG" > "$OUT/msg.txt"
-: > "$OUT/cio.csv"; echo "benchmark,arm,archive,rep,mean_ticks,n,dit_exit,cycle_src,timer_src,tot_cyc,tot_ins,map_stall,flush,reg_cyc,reg_ins,reg_n" >> "$OUT/cio.csv"
+: > "$OUT/cio.csv"; echo "benchmark,arm,archive,rep,mean_ticks,n,dit_exit,cycle_src,timer_src,tot_cyc,tot_ins,map_stall,flush,reg_cyc,reg_ins,reg_n,samp_cyc,samp_ins,samp_n,samp_every,pmc_off,reg_drop" >> "$OUT/cio.csv"
 for b in $CIOB; do
   src="$CIO_DIR/eval_$b.c"; [[ -f "$src" ]] || { warn "skip $b (no source)"; continue; }
   for a in $ARMS; do
@@ -347,13 +347,25 @@ for b in $CIOB; do
       rc2=$(sed -n 's/.*reg_cyc=\([0-9]*\).*/\1/p' "$err" | tail -1)
       ri=$(sed -n 's/.*reg_ins=\([0-9]*\).*/\1/p' "$err" | tail -1)
       rn=$(sed -n 's/.*reg_n=\([0-9]*\).*/\1/p' "$err" | tail -1)
+      # The sampled PMC series: exact cycles AND instructions from 1 region in
+      # samp_every, so the isb drain perturbs 1/64th of the run instead of all
+      # of it. pmc_off is the null-region floor measured in that same process;
+      # rd counts samples dropped by the migration guard and MUST be 0.
+      sc=$(sed -n 's/.*samp_cyc=\([0-9]*\).*/\1/p' "$err" | tail -1)
+      si=$(sed -n 's/.*samp_ins=\([0-9]*\).*/\1/p' "$err" | tail -1)
+      sn=$(sed -n 's/.*samp_n=\([0-9]*\).*/\1/p' "$err" | tail -1)
+      se=$(sed -n 's/.*samp_every=\([0-9]*\).*/\1/p' "$err" | tail -1)
+      po=$(sed -n 's/.*pmc_off=\([0-9]*\).*/\1/p' "$err" | tail -1)
+      rd=$(sed -n 's/.*reg_drop=\([0-9]*\).*/\1/p' "$err" | tail -1)
       python3 - "$cc" "$b" "$lab" "$arch" "$rep" "${de:-?}" "${cs:-?}" "${tm:-?}" \
                "${tc:-0}" "${ti:-0}" "${ms:-0}" "${fl:-0}" \
-               "${rc2:-0}" "${ri:-0}" "${rn:-0}" >> "$OUT/cio.csv" <<'PY'
+               "${rc2:-0}" "${ri:-0}" "${rn:-0}" \
+               "${sc:-0}" "${si:-0}" "${sn:-0}" "${se:-0}" "${po:-0}" "${rd:-0}" \
+               >> "$OUT/cio.csv" <<'PY'
 import sys
-p,b,lab,arch,rep,de,cs,tm,tc,ti,ms,fl,rc,ri,rn = sys.argv[1:16]
+p,b,lab,arch,rep,de,cs,tm,tc,ti,ms,fl,rc,ri,rn,sc,si,sn,se,po,rd = sys.argv[1:22]
 v=[float(x) for x in open(p).read().split('\n')[1:] if x.strip().isdigit()]
-if v: print(f"{b},{lab},{arch},{rep},{sum(v)/len(v):.3f},{len(v)},{de},{cs},{tm},{tc},{ti},{ms},{fl},{rc},{ri},{rn}")
+if v: print(f"{b},{lab},{arch},{rep},{sum(v)/len(v):.3f},{len(v)},{de},{cs},{tm},{tc},{ti},{ms},{fl},{rc},{ri},{rn},{sc},{si},{sn},{se},{po},{rd}")
 PY
     done
   done
