@@ -7,22 +7,38 @@ Spotlight off, page cache purged. 100 measured requests per arm after 50 warm-up
 rotating per request. Percent over arm A. See provenance.txt.
 
 
-TABLE 1 -- results, ordered by crypto boundary crossings per request
-====================================================================
-"crossings" counts calls to the seven bracket-wrapped crypto builtins, measured with the
-counting build (crypto_call_counts.txt), not estimated. Blanket is flat; fine-grained is
-zero to 128 crossings, visible at 8,000, and loses at 65,000.
+TABLE 1 -- WordPress 6.2, ordered by crypto boundary crossings per request
+=========================================================================
+One application, six request types, spanning 110 to 65,600 crossings. Holding the
+application constant is what makes this a controlled sweep: the code, the database, the
+bootstrap and the response are the same, and the only variable that moves is how often the
+request crosses into a crypto builtin.
 
-workload / request                          crossings  A (Mcyc)  blanket  bracket    pass   MAD
-Zend/bench.php (the micro-benchmark)                0     961.4    +9.69    -0.77   +0.27  1.01
-Symfony  login, bcrypt cost 13                      3    1623.8    +0.09    -0.02   +0.01  0.05
-Symfony  GET /            (suite's request)         5      84.5    -0.39    +0.27   +0.06  0.51
-WP       GET /            (suite's request)       110     151.1    +2.39    -0.00   +0.42  0.80
-WP       GET / logged in                          128     157.7    +2.34    +0.14   -0.36  0.83
-WP       login, phpass 2^13       (shipped)      8,226     132.4    +1.89    +1.36   +2.21  0.97
-WP       REST auth, phpass 2^13   (shipped)      8,230     133.6    +1.89    +1.03   +2.06  0.83
-WP       login, phpass 2^16                     65,600     159.4    +2.12    +8.31  +13.03  0.85
-WP       REST auth, phpass 2^16                 65,600     156.2    +2.41    +8.80  +13.47  0.73
+"crossings" counts calls to the seven bracket-wrapped crypto builtins, measured with the
+counting build (crypto_call_counts.txt), not estimated.
+
+request                                     crossings  A (Mcyc)  blanket  bracket    pass   MAD
+GET /                    (suite's request)        110     151.1    +2.39    -0.00   +0.42  0.80
+GET / logged in                                   128     157.7    +2.34    +0.14   -0.36  0.83
+POST /wp-login.php       phpass 2^13 shipped    8,226     132.4    +1.89    +1.36   +2.21  0.97
+GET /wp-json/... ?context=edit    2^13 shipped  8,230     133.6    +1.89    +1.03   +2.06  0.83
+POST /wp-login.php       phpass 2^16           65,600     159.4    +2.12    +8.31  +13.03  0.85
+GET /wp-json/... ?context=edit    2^16         65,600     156.2    +2.41    +8.80  +13.47  0.73
+
+  Blanket is flat at ~2% across a 600-fold change in crossings -- its cost is set by how much
+  code runs, not by how much crypto is in it. Fine-grained is zero at 110 and 128, costs
+  1.0-1.4 points at 8,000, and 8.3-8.8 at 65,600. Only the last pair is worse than blanket.
+
+  Two shipped-configuration rows sit at 8,226 and 8,230, and fine-grained wins both. Nothing
+  WordPress does at its default settings reaches the crossover (~12,000-14,000 crossings for
+  the bracket, ~6,700-7,400 for the pass); reaching it takes one supported hardening change,
+  raising phpass from 2^13 to 2^16 rounds.
+
+  The two 8,2xx rows are different mechanisms arriving at the same place. The login POST
+  verifies a password once per login. The REST row verifies an APPLICATION PASSWORD on every
+  single request, because HTTP Basic carries no session -- that is how integrations, mobile
+  apps and headless WordPress authenticate, and it is the most crypto-dense pattern WordPress
+  supports at shipped settings.
 
   "bracket" is B - Bn and "pass" is P - Z, in points of A: each selective arm differenced
   against its own instruction-matched NOP twin, which isolates executing the switches from
@@ -31,19 +47,71 @@ WP       REST auth, phpass 2^16                 65,600     156.2    +2.41    +8.
   MAD is the median absolute deviation of A's samples as a percent of its median. A value
   under it is zero.
 
-  Cut from the 18 measured rows, all of them present in the raw files beside this one:
+  Available but not shown, all present in the raw files beside this one:
 
-    the six login-mix rows (1 in 100 / 20 / 5, both applications) -- the noisiest in the run
+    GET /wp-json/wp/v2/posts, anonymous (38 crossings, blanket +1.84, bracket +0.19,
+      pass -0.10). Now that the table is one application, this is the natural low anchor:
+      it is the SAME endpoint as the authenticated REST row with the credential removed, so
+      the three REST rows would read 38 -> 8,230 -> 65,600 on identical code. Worth
+      reinstating if a seventh row is affordable; otherwise cite it in prose.
+    the three WordPress login-mix rows (1 in 100 / 20 / 5) -- the noisiest in the run
       (MAD 2.1-2.8%), median over three request types so their instruction parity is
-      uninterpretable, and they only illustrate dilution arithmetic that a sentence states
-      better: a login's cost divided by its share of traffic.
-    Symfony GET /en/blog/ -- the suite's own request already covers an anonymous Symfony page.
-    WP REST anonymous (38 crossings, blanket +1.84, bracket +0.19, pass -0.10) -- this one is
-      a real loss and belongs in the prose. It is the SAME endpoint as the REST-authenticated
-      row with the credential removed, so the pair is the cleanest single-variable comparison
-      in the experiment: 38 crossings against 8,230, bracket +0.19 against +1.03, with the
-      application, the code, the query and the response identical. Cite it when explaining
-      that cost tracks crossings rather than the request.
+      uninterpretable, and they only illustrate dilution arithmetic.
+    Zend/bench.php (0 crossings, blanket +9.69) and Symfony (3 to 43 crossings, blanket
+      -0.39 to +0.53). Dropped from this table as a different application, but they carry
+      two claims this table cannot make on its own -- see below.
+
+
+TABLE 1b -- the same rows in IPC
+===============================
+Instructions per cycle, per arm, and the change each mitigation causes. Since the arms retire
+near-identical instruction counts, this is the same information as Table 1 expressed as a
+physical quantity rather than a ratio against a baseline that itself moves: how much slower
+the machine executes the SAME work.
+
+request                       crossings     A     C     B    Bn     P     Z   blanket  bracket   pass
+GET /        (suite's request)      110  2.89  2.82  2.89  2.89  2.89  2.90    -2.4%    +0.0%  -0.3%
+GET / logged in                     128  2.91  2.84  2.92  2.93  2.93  2.92    -2.4%    -0.3%  +0.3%
+POST /wp-login.php   2^13 shipped 8,226  3.02  2.96  2.99  3.02  2.96  3.03    -2.0%    -1.0%  -2.3%
+REST auth ?context=edit   2^13    8,230  2.89  2.83  2.86  2.89  2.84  2.90    -2.1%    -1.0%  -2.1%
+POST /wp-login.php   2^16        65,600  3.17  3.10  2.94  3.19  2.82  3.18    -2.2%    -7.8% -11.3%
+REST auth ?context=edit   2^16   65,600  3.01  2.94  2.78  3.02  2.66  3.02    -2.3%    -7.9% -11.9%
+
+  The last three columns are C/A - 1, B/Bn - 1 and P/Z - 1: each mitigation against the arm
+  that differs from it only in whether the switches execute.
+
+  BLANKET'S IPC PENALTY IS INVARIANT -- -2.0% to -2.4% across a 600-fold change in crossings.
+  It does not care what the request does. Fine-grained's goes 0.0 -> -0.3 -> -1.0 -> -7.9,
+  tracking the crossings column directly.
+
+  That is the two cost models in one quantity. Blanket buys its protection by making
+  EVERYTHING run about 2% slower, whether or not a secret is present. Fine-grained makes
+  NOTHING slower until the request crosses the boundary often enough, then charges per
+  crossing. Which is cheaper is therefore a property of the workload, not of the mitigation.
+
+  The twin comparison is what makes these legitimate. At 2^16 the bracket arm reads 2.94 and
+  its NOP twin reads 3.19: the same code at the same addresses, differing only in whether the
+  msr DIT executes. Without the twin, 2.94 against the baseline's 3.17 would confound the
+  switches with the layout change that emitting them causes.
+
+  Caveat on reading IPC against cycles: they are near-reciprocal here only because the arms
+  retire near-identical instructions. That holds to 0.2% for blanket, but the pass adds about
+  0.5% instructions of its own (its switches), so its IPC and cycle figures differ slightly
+  more than a reciprocal would predict. Table 1 remains the number to quote for cost.
+
+
+WHAT THIS TABLE CANNOT SAY, AND WHERE THOSE CLAIMS LIVE
+=======================================================
+A WordPress-only table is a clean sweep but it gives up two results that need a second
+workload. Both are measured and in the raw files; they belong in prose or a second table.
+
+  The micro-benchmark contrast. Zend/bench.php contains no cryptography at all (grep for any
+  crypto builtin returns zero hits) and pays blanket's LARGEST penalty in the whole run:
+  +9.69%, against WordPress's +2.39% on the same binary. The micro-benchmark overstates the
+  prize four-fold. Without this row the paper cannot say that, and it is one of the four
+  evaluation questions.
+
+  The mechanism. See below -- it needs Symfony's bcrypt login as the contrast case.
 
 
 THE MECHANISM -- two rows, same security function, opposite shape

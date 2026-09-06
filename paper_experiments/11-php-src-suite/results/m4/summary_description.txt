@@ -1,0 +1,235 @@
+WHAT THIS IS
+============
+The measurement behind the paper's "fine-grained DIT cost on real silicon" section.
+summary.txt has the tables; this file says what they are, what they rest on, and what a
+reader has to be told for them to mean anything. The raw driver output is beside both.
+
+The question is narrow and worth stating first, because the answer is easy to over-claim:
+
+    On an application that people actually deploy, what does it cost to turn PSTATE.DIT on
+    only around the code that touches a secret, instead of leaving it on for the whole
+    process -- and when does that stop being the cheaper choice?
+
+
+THE WORKLOAD, AND WHY IT IS NOT OURS
+====================================
+We evaluate on php-src's OWN benchmark suite: the harness PHP's maintainers use on PHP's CI
+to decide whether a change to the interpreter is a regression. It lives in benchmark/ in the
+PHP source tree. We did not design it, did not select it after seeing results, and did not
+modify what it measures.
+
+The suite ships a driver and clones two applications at pinned commits:
+
+    Zend/bench.php          ships in the php-src tree; 18 interpreter micro-benchmarks
+    WordPress 6.2           cloned from github.com/php/benchmarking-wordpress-6.2  (ef263da)
+    Symfony Demo 2.2.3      cloned from github.com/php/benchmarking-symfony-demo-2.2.3 (b482c3e)
+
+It reports six numbers: those three workloads under valgrind/callgrind, JIT off and on.
+
+BOTH APPLICATION CHECKOUTS ARE UNMODIFIED. `git status` is clean in each: no file added,
+changed or removed. WordPress differs in database configuration only -- pretty permalinks,
+and MariaDB in place of MySQL, because Homebrew's MySQL authenticates with caching_sha2 and
+mysqlnd cannot do that in an OpenSSL-free build. Every line of PHP that executes during a
+measured request is upstream application code.
+
+The one PHP file we ever add is a 13-line must-use plugin, present for two rows and deleted
+afterwards, which changes a single constructor argument to WordPress's OWN PasswordHash
+class to raise phpass from 2^13 to 2^16 rounds. The 65,537 md5 calls it produces are
+produced by upstream phpass code doing what a hardening guide tells an administrator to do.
+
+WHAT WE MODIFY IS PHP, NOT THE APPLICATIONS. To give the hand-written baseline somewhere to
+live, four files in ext/hash and ext/standard are rewritten so each of the seven crypto
+builtins becomes a three-line wrapper -- enter macro, body, leave macro -- around a static
+function holding its former body. That is a 195-line diff (../../data/bracket.diff), and one
+patched tree builds all five binaries; in every arm but the bracket the macros expand to
+nothing and the wrapper is inlined away.
+
+
+WHY WE ADD REQUEST TYPES
+========================
+The suite as shipped is a host screen for blanket mitigation, not a test of selective
+placement, because its requests barely touch cryptography. We measured that rather than
+assuming it, by rebuilding the bracket to increment a counter instead of switching the mode
+(-DDIT_BRACKET_COUNT=1). Since the bracket wraps exactly the seven crypto builtins, counting
+its entries counts crypto boundary crossings by construction:
+
+    Zend/bench.php   0 crossings    grep for any crypto builtin returns zero hits
+    Symfony GET /    5 crossings    unkeyed hash() over cache keys and class-map digests
+    WordPress GET /  110 crossings  106 unkeyed md5; 4 hash_hmac keyed with the site salt
+
+So the shipped suite can answer one of our questions completely and the other not at all:
+
+    "What does blanket DIT cost on shipping silicon?"  -- answered entirely by the suite's
+    own requests, unmodified. Nothing of ours is involved in that number.
+
+    "What does fine-grained placement cost?"  -- unanswerable on the shipped requests. At 5
+    and 110 crossings there is nothing for selective placement to cost, and indeed it
+    measures zero there.
+
+We therefore add request types that exercise the paths on which these applications compute
+on USER secrets, using nothing but the applications' own endpoints and code: an
+authenticated page request, a login, and REST requests authenticated by a WordPress
+application password. Our additions are entirely client-side -- a driver that constructs CGI
+environment variables and form bodies exactly as a web server would. The PHP that runs is
+wp-login.php, wp_authenticate, wp_check_password and PasswordHash::CheckPassword, all
+upstream.
+
+Note which direction this cuts. Every row where fine-grained placement costs anything is a
+row we added. Stopping at the shipped suite would have made it look free everywhere.
+
+A precision the committed README originally got wrong: WordPress's anonymous front page is
+not strictly secret-free. Four of its 110 calls are hash_hmac keyed with the site's salts --
+wp_hash() for nonces, and wpdb::placeholder_escape() deriving a query placeholder from
+AUTH_SALT. Those are long-lived SITE secrets, not a user credential. Symfony's request
+touches no secret at all.
+
+
+THE ARMS
+========
+Six binaries from one patched PHP tree, rotating on every request so drift cannot
+masquerade as an effect:
+
+    A    unhardened -O2                                              the baseline
+    C    A with the mode set before main and never cleared           BLANKET
+    B    the developer's bracket: Apple's recipe written by hand at
+         the entry of the seven crypto builtins, msr DIT,#1; sb ...
+         msr DIT,#0                                                  FINE-GRAINED, by hand
+    Bn   B's NOP twin: hint #0 in each place                         layout control for B
+    P    our pass: -ftaint-harden on the crypto TUs, 97 msr DIT
+         sites placed from taint                                     FINE-GRAINED, analysed
+    Z    P's NOP twin, the 27 twins kept                             layout control for P
+
+The reported fine-grained costs are B - Bn and P - Z, never B - A or P - A. Differencing each
+selective arm against its own instruction-matched twin isolates the cost of EXECUTING a
+switch from the cost of having moved the code: relinking alone moved layout 3.9% in the
+pilot, which is larger than most of the effects being measured.
+
+
+THE INSTRUMENT
+==============
+Each request is one php-cgi process, so the process IS the measured region. It is bracketed
+by two register reads of Apple's fixed performance counters from user mode -- PMC0 for
+cycles, PMC1 for retired instructions -- giving both for the whole request at a cost of two
+instructions. This is possible because the host runs a kernel with PMCR0_USEREN_EN set.
+
+Reading instructions as well as cycles is what makes the central claim checkable rather than
+asserted, in two ways:
+
+    it decomposes the cost. Blanket retires the same instructions as the baseline and takes
+    more cycles: its cost is DWELL, the machine executing identical work more slowly, with
+    no instruction component. That is what "the mode suppresses data-dependent
+    optimisations" means, measured instead of inferred. CPU time cannot see it.
+
+    it gates validity. Blanket sets a mode bit and cannot change the instruction stream, so
+    A and C must retire the same work. If they did not, the two binaries would not be
+    running the same program and no cycle ratio between them would mean anything.
+
+Gates, all armed on every row:
+
+    PSTATE.DIT is read back at every process exit -- 1 for the blanket arm, 0 for every
+      other, on every request. An arm exiting with the bit set leaked the mode past an
+      unbalanced exit and is blanket in disguise. This is not hypothetical: it is the
+      tail-call bug, which went unnoticed for months in experiment 09.
+    the achieved clock is reported per arm, 3.6-4.4 GHz throughout. M4 efficiency cores top
+      out near 2.6 GHz, so this doubles as a P-core residency check.
+    samples whose implied clock is impossible -- the thread migrated, or something else ran
+      on the pinned core -- are discarded and counted. 1.2% on this run.
+    instruction parity between A and C, judged against the workload's own instruction MAD
+      and against the size of the cycle effect it would have to explain.
+
+The counters are PER-CORE, not per-thread, which is why the thread is pinned and why the
+machine has to be idle: anything else scheduled on the pinned core is charged to the
+request. Measured while Spotlight was indexing: 47% of samples discarded. Quiet: 1.2%.
+
+
+DEVIATIONS FROM THE HARNESS, STATED IN FULL
+===========================================
+    process model   we run one php-cgi process per request, not one serving fifty. This is
+                    what permits per-request arm rotation and the mode-readback gate.
+    bytecode cache  opcache's file cache per arm, standing in for shared memory.
+    instrument      cycles and retired instructions from the CPU's counters, not instruction
+                    counts under callgrind, which does not run on Apple silicon -- and
+                    PSTATE.DIT exists only there.
+    JIT             disabled. One of the harness's two configurations.
+    counts          100 measured requests per arm after 50 warm-up, not 50 after 50.
+    root            this run needs it, for pinning and for stopping Spotlight. The
+                    2026-09-05 CPU-time run in ../../data/ did not. Root removes CAUSES of
+                    discarded samples; it does not change what is measured, and every row
+                    prints its pinned state so a run without it is never silently different.
+
+
+HOW TO READ THE TABLES
+======================
+summary.txt Table 1 is WordPress only, ordered by crypto boundary crossings per request. One
+application means the code, the database, the bootstrap and the response are constant and
+the only variable that moves is how often the request enters a crypto builtin. That is what
+makes it a controlled sweep rather than a comparison of applications.
+
+Percentages are over arm A, in points. A value under the row's MAD is zero.
+
+The shape to look for: blanket flat at ~2% across a 600-fold change in crossings, because
+its cost is set by how much code runs; fine-grained zero at the low end, rising with
+crossings, and overtaking blanket only at the top. The crossover is at ~12,000-14,000
+crossings for the bracket and ~6,700-7,400 for the pass, and NO SHIPPED CONFIGURATION
+REACHES IT -- including application-password REST authentication, which re-verifies with
+phpass on every request because HTTP Basic carries no session, and which is the most
+crypto-dense pattern WordPress supports at stock settings.
+
+Two claims a WordPress-only table cannot make, both measured and in the raw files:
+
+    the micro-benchmark contrast. Zend/bench.php contains no cryptography and pays blanket's
+    LARGEST penalty in the run, +9.69% against WordPress's +2.39% on the same binary -- a
+    four-fold overstatement of the prize by the benchmark PHP's maintainers actually watch.
+
+    the mechanism. Symfony's bcrypt login hides 1.62 billion cycles of key derivation behind
+    THREE crossings and pays nothing; WordPress's phpass login exposes 3.3 million cycles
+    behind 8,193 and pays 1.36 points. A key derivation written in C is one crossing whatever
+    its cost parameter; one written in interpreted code is one crossing per iteration.
+    Fine-grained cost tracks the second and is blind to the first. This is not a fact about
+    WordPress -- it is a fact about KDFs in interpreted languages, and it is the reason the
+    crossover can be reached by a configuration change that security guidance recommends.
+
+
+ONE UNEXPLAINED RESULT
+======================
+Blanket retires 0.17% FEWER instructions than the baseline on both pure WordPress page rows
+(-0.168% and -0.159%), against a workload instruction MAD of 0.041% measured over the same
+100 samples. That is four times the noise floor, the same sign and size in two independent
+runs, and present on Symfony's page rows too. We do not have an explanation. The likeliest
+is that PMC1 counts micro-ops rather than architectural instructions, so an optimisation DIT
+suppresses shifts the count slightly; that is a guess and it has not been tested.
+
+It does not threaten the result. It is an eighth of the cycle difference it would have to
+explain, and it points the wrong way -- C retires LESS work and takes MORE cycles -- which
+makes the dwell reading conservative rather than doubtful. It is recorded here rather than
+smoothed over because a reader checking the arithmetic will find it.
+
+
+IF A REVIEWER PUSHES
+====================
+    "You built a benchmark that flatters your result."
+        It is PHP's, run on PHP's CI, and the blanket number comes from the request the
+        suite itself defines. Our added rows are the only ones where fine-grained placement
+        costs anything at all.
+
+    "You modified the applications."
+        git status is clean at pinned upstream commits. We modified PHP.
+
+    "Your added requests are synthetic."
+        They are the applications' own login form and REST endpoint, driven exactly as a web
+        server drives them. The crossing counts are in crypto_call_counts.txt.
+
+    "Why not the suite's own metric?"
+        callgrind does not run on Apple silicon, and PSTATE.DIT exists only there. We state
+        the constraint and report both cycles and instructions.
+
+    "Why does the micro-benchmark disagree with the applications?"
+        It contains no cryptography at all, so its +9.69% is pure dwell on interpreter work
+        with nothing to protect. That gap is one of the findings, not an anomaly.
+
+    "Is 2^16 phpass a real deployment?"
+        It is a supported configuration reachable through WordPress's own pluggable hashing
+        function, and the order of magnitude other CMSes have shipped. It is also the second
+        point that makes the per-call cost identifiable at all: with one round count there is
+        a measurement, with two there is a cost model. Present it as both, and note that the
+        conclusion at shipped settings does not depend on it.
