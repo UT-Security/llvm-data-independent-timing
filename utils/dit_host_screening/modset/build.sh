@@ -7,7 +7,9 @@
 # switch counts are directly comparable to the +51% ConnectBlockAllEcdsa result.
 set -euo pipefail
 SW="$(cd "$(dirname "$0")/.." && pwd)"
-CL="${CL:-$HOME/Documents/llvm-project/build-gfix/bin/clang}"
+REPO="$(cd "$SW/../.." && pwd)"
+CL="${CL:-$REPO/build/bin/clang}"
+[[ -x "$CL" ]] || { echo "no clang at $CL - build it (ninja -C <repo>/build clang) or set CL" >&2; exit 1; }
 BTC=$HOME/Documents/bitcoin
 SEED=$SW/btc/seed9.txt
 NAME=$1; shift
@@ -19,4 +21,4 @@ $CL $DEFS -I$BTC/build-hoist/src -I$BTC/src \
   -ftaint-harden=$SEED "$@" \
   -O2 -std=c90 -arch arm64 -fPIC -fvisibility=hidden -w \
   -c $BTC/src/secp256k1/src/secp256k1.c -o $SW/modset/$NAME.o
-echo "$NAME: $($HOME/Documents/llvm-project/build-gfix/bin/llvm-objdump -d $SW/modset/$NAME.o | grep -ci 'msr.*dit') MSR DIT"
+echo "$NAME: $("$(dirname "$CL")/llvm-objdump" -d $SW/modset/$NAME.o | grep -ci 'msr.*dit') MSR DIT"

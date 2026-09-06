@@ -21,7 +21,7 @@ CC_NATIVE=${CC_NATIVE:-clang}
 # On an aarch64 Linux host the fork's clang emits static ELF directly - no
 # cross sysroot needed (util/cross/taint-cross-cc exists for the macOS box,
 # where everything native is Mach-O). armv8.4-a is required for FEAT_DIT.
-CC_GEM5=${CC_GEM5:-$HOME/Documents/llvm-data-independent-timing/build/bin/clang}
+CC_GEM5=${CC_GEM5:-$(cd "$X/../../.." && pwd)/build/bin/clang}
 GEM5_FLAGS=${GEM5_FLAGS:--static -march=armv8.4-a}
 
 SQL_DEFS="-DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_TEMP_STORE=2"

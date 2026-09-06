@@ -30,8 +30,7 @@
 #
 # ---------------------------------------------------------------- PREREQUISITES
 #
-# 1. A gem5 with TWO PATCHES THAT ARE NOT UPSTREAM. Both were written for this
-#    experiment and live on branches in a gem5-DIT worktree:
+# 1. A gem5 carrying two capabilities this experiment needs:
 #
 #      PMULL at size=3 (64x64 -> 128).  gem5 implements PMULL only for size==0,
 #      so libsodium's GHASH hits Unknown64 and the simulator PANICS. Without this
@@ -42,8 +41,15 @@
 #      counters price the SWITCH; nothing priced the mode being ON. Without it
 #      the dwell column is absent and two gates cannot run.
 #
-#    Point G5 at that build. The script refuses to start otherwise, because a
-#    stock gem5 would silently produce a 4-benchmark result that looks complete.
+#    Both were written for this experiment on branches in a gem5-DIT worktree and
+#    are now upstream: this repo's gem5-DIT submodule carries them at the pinned
+#    commit, so the default G5 is that submodule and needs only a build. The two
+#    checks below stay, because they are capability tests rather than a version
+#    test - a gem5 without them would silently produce a 4-benchmark result that
+#    looks complete. Build with:
+#
+#      git submodule update --init gem5-DIT
+#      (cd gem5-DIT && scons build/ARM/gem5.opt -j<jobs>)
 #
 # 2. An aarch64 Linux host. This is NOT cross-compilation: the taint clang emits
 #    native static ELF here. The host does not need FEAT_DIT - nothing executes
@@ -54,8 +60,8 @@
 #    eval_util.h is replaced.
 #
 # ENV
-#   LLVM=<dir>   taint LLVM build   (default ~/Documents/llvm-data-independent-timing/build)
-#   G5=<dir>     PATCHED gem5-DIT   (default ~/Documents/gem5-DIT-pmull)
+#   LLVM=<dir>   taint LLVM build   (default: this repo's build/)
+#   G5=<dir>     gem5-DIT tree      (default: this repo's gem5-DIT submodule)
 #   BC=<dir>     whole-library bitcode tree (default ~/Documents/libsodium-wllvm-1.0.21)
 #   CIO=<dir>    counter-optimization/cio checkout   (REQUIRED)
 #   OUT=<dir>    scratch root       (default ~/Documents/libsodium-cioparity-repro)
@@ -67,8 +73,8 @@ set -uo pipefail
 R="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$R/../../.." && pwd)"
 DATA="$REPO/paper_experiments/09-libsodium-cio-parity/data"
-LLVM="${LLVM:-$HOME/Documents/llvm-data-independent-timing/build}"
-G5="${G5:-$HOME/Documents/gem5-DIT-pmull}"
+LLVM="${LLVM:-$REPO/build}"
+G5="${G5:-$REPO/gem5-DIT}"
 BC="${BC:-$HOME/Documents/libsodium-wllvm-1.0.21}"
 OUT="${OUT:-$HOME/Documents/libsodium-cioparity-repro}"
 JOBS="${JOBS:-40}"
@@ -82,7 +88,8 @@ info "preflight"
 [[ -n "${CIO:-}" && -d "${CIO:-}" ]] || die "set CIO to a counter-optimization/cio checkout"
 [[ -x "$LLVM/bin/llc" ]] || die "no llc at $LLVM/bin (set LLVM)"
 [[ -f "$BC/libsodium-whole.bc" ]] || die "no whole-library bitcode at $BC/libsodium-whole.bc (set BC)"
-[[ -x "$G5/build/ARM/gem5.opt" ]] || die "no gem5.opt at $G5/build/ARM (set G5)"
+[[ -d "$G5/src" ]] || die "no gem5 sources at $G5 - run: git submodule update --init gem5-DIT (or set G5)"
+[[ -x "$G5/build/ARM/gem5.opt" ]] || die "no gem5.opt at $G5/build/ARM - build it there with scons build/ARM/gem5.opt (or set G5)"
 
 # The two patches, checked by capability rather than by branch name: a branch can
 # be renamed, and a stock gem5 would otherwise run and quietly drop AES-GCM.

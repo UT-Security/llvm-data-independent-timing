@@ -7,7 +7,9 @@ only the per-function breakdown separates them.
 """
 import re, subprocess, sys, collections
 
-OBJDUMP = "/Users/rohan/Documents/llvm-project/build-gfix/bin/llvm-objdump"
+import os, pathlib
+OBJDUMP = str(pathlib.Path(os.environ.get("LLVM_BUILD",
+    pathlib.Path(__file__).resolve().parents[3] / "build")) / "bin/llvm-objdump")
 
 def counts(path):
     out = subprocess.run([OBJDUMP, "-d", path], capture_output=True, text=True).stdout

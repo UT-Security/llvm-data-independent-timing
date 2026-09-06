@@ -31,7 +31,9 @@ Exit status is 1 if any function has BOTH a DIT write and a tail call out.
 import re, subprocess, sys, os, collections
 
 OBJDUMP = os.environ.get("OBJDUMP",
-    os.path.expanduser("~/Documents/llvm-data-independent-timing/build/bin/llvm-objdump"))
+    os.path.join(os.environ.get("LLVM_BUILD",
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))))), "build")), "bin", "llvm-objdump"))
 
 SYM = re.compile(r'^[0-9a-f]+\s+<(?P<name>[^>]+)>:\s*$')
 INSN = re.compile(r'^\s*([0-9a-f]+):\s+([0-9a-f]{8})\s+(?P<mn>\S+)\s*(?P<ops>.*)$')

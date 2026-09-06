@@ -16,7 +16,8 @@ W=${W:-$HOME/Documents/libsodium-wllvm-1.0.21}
 SOD=${SOD:-$HOME/Documents/dit-crossover/build/sodium}
 LUA=${LUA:-$HOME/Documents/lua-5.4.7}
 SQLITE_C=${SQLITE_C:-$HOME/Documents/sqlite-amalgamation-3530400/sqlite3.c}
-CC=${CC:-$HOME/Documents/llvm-data-independent-timing/build/bin/clang}
+CC=${CC:-$(cd "$X/../../.." && pwd)/build/bin/clang}
+[[ -x "$CC" ]] || { echo "no clang at $CC - build it (ninja -C <repo>/build clang) or set CC" >&2; exit 1; }
 OUT=${OUT:-$HOME/Documents/dit-crossover/build/sodium_gem5}
 FLAGS=${FLAGS:--static -march=armv8.4-a}
 

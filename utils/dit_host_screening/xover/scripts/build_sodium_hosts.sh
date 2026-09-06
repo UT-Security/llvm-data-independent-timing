@@ -12,7 +12,8 @@ OUT=${OUT:-$HOME/Documents/dit-crossover}
 SOD=$OUT/build/sodium
 LUA=${LUA:-$HOME/Documents/lua-5.4.7}
 SQLITE_C=${SQLITE_C:-$HOME/Documents/sqlcipher-4.6.1/sqlite3.c}
-CC=${CC:-$HOME/Documents/llvm-project/build-gfix/bin/clang}
+CC=${CC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/build/bin/clang}
+[[ -x "$CC" ]] || { echo "no clang at $CC - build it (ninja -C <repo>/build clang) or set CC" >&2; exit 1; }
 
 B=$OUT/build/sodium_native
 S=$B/_shared

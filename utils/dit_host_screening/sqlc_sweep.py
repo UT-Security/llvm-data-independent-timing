@@ -25,7 +25,7 @@ every function's address and is worth a few percent on its own):
 """
 import argparse, json, os, pathlib, re, subprocess, sys, time
 
-BIN = pathlib.Path.home() / "Documents/gem5-DIT/benchmarks/native/bin"
+BIN = pathlib.Path(os.environ.get("G5", pathlib.Path(__file__).resolve().parents[2] / "gem5-DIT")) / "benchmarks/native/bin"
 ARMS = {"plain": "q_native", "blanket": "q_native_dit",
         "nodit": "q_native_nodit", "hoist": "q_native_hoist"}
 ROI_RE = re.compile(r"ROI_NS (\d+) DIT (\d)")

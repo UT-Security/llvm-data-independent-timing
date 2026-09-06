@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Map UNDERTAINT pcs in a gem5 .err to functions via llvm-nm (robust to symbolizer quirks).
 usage: symfn.py <binary> <err file> [top]"""
-import bisect, re, subprocess, sys
+import bisect, os, pathlib, re, subprocess, sys
 from collections import defaultdict
+NM = str(pathlib.Path(os.environ.get("LLVM_BUILD",
+    pathlib.Path(__file__).resolve().parents[3] / "build")) / "bin/llvm-nm")
 binp, errp = sys.argv[1], sys.argv[2]; top = int(sys.argv[3]) if len(sys.argv) > 3 else 25
-nm = subprocess.run(['/home/rgangar/Documents/llvm-data-independent-timing/build/bin/llvm-nm', '-n', '--defined-only', binp], capture_output=True, text=True).stdout
+nm = subprocess.run([NM, '-n', '--defined-only', binp], capture_output=True, text=True).stdout
 syms = []
 for line in nm.splitlines():
     p = line.split()

@@ -3,7 +3,8 @@
 # run concurrently; only NATIVE silicon runs need an exclusive machine.
 set -euo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
-G5=$HOME/Documents/gem5-DIT
+REPO="$(cd "$D/../../../.." && pwd)"
+G5="${G5:-$REPO/gem5-DIT}"
 BIN=$1; MODE=$2; N=$3; WL=$4; TAG=$5; shift 5
 $G5/build/ARM/gem5.opt -d $D/out/$TAG \
   $G5/configs/example/arm/fdp_neoverse_v2_binary.py --eves --dmp --comp-simp \

@@ -30,7 +30,7 @@ one binary in two runtime modes and was never affected. See dit-gem5-rig-traps
 import argparse, hashlib, json, os, pathlib, re, shutil, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
-G = pathlib.Path.home() / "Documents/gem5-DIT"
+G = pathlib.Path(os.environ.get("G5", pathlib.Path(__file__).resolve().parents[3] / "gem5-DIT"))
 CONFIG = G / "configs/example/arm/fdp_neoverse_v2_binary.py"
 BIN = pathlib.Path.home() / "Documents/dit-crossover/build/sodium_gem5"
 
