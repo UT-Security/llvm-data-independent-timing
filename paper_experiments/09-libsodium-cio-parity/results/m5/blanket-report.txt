@@ -1,0 +1,22 @@
+
+========================================================================================================
+BLANKET PSTATE.DIT -- cycles/op, C (DIT on) vs A (DIT off), same binary
+========================================================================================================
+primitive          A cycles/op   C cycles/op   overhead   MAD A   MAD C   A GHz   C GHz   gates
+--------------------------------------------------------------------------------------------------------
+control                  288.6         838.6   +190.55%   0.06%   0.02%    4.61    4.61   ok
+ed25519_sign          42,872.2      43,119.6     +0.58%   0.02%   0.01%    4.57    4.57   ok
+ed25519_open          89,174.4      89,546.5     +0.42%   0.02%   0.01%    4.45    4.46   ok
+chacha_enc             5,907.0       5,905.0     -0.03%   0.06%   0.08%    4.55    4.55   G5 below noise floor
+chacha_dec             5,938.6       6,036.8     +1.65%   0.09%   0.08%    4.55    4.56   ok
+aes_enc                  774.6         783.4     +1.13%   0.69%   0.29%    4.48    4.47   G5 below noise floor
+aes_dec                  814.1         845.1     +3.81%   0.28%   0.24%    4.46    4.46   ok
+--------------------------------------------------------------------------------------------------------
+GATE 4 ok: control slowed +190.55%, so the mode was demonstrably on.
+
+READING IT
+  The ratio is the result; the absolute column is not. It carries the loop's
+  own overhead and one counter pair, neither of which is subtracted.
+  Overhead near 0 means blanket DIT is FREE on that primitive -- which is a
+  property of the workload, and the thing selective placement would have to
+  beat to be worth its switches.
