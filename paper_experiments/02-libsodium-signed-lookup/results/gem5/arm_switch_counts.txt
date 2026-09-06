@@ -1,0 +1,22 @@
+# Static PSTATE.DIT sites per arm, this run (llvm-objdump -d | grep -ic 'msr dit').
+# Only two libsodium archives are built: blanket, api and apinop all link the BASE
+# library and differ from it only by the object that brackets the work (a ctor for
+# blanket, the Apple sequence for api, the same sequence NOPed for apinop), which is
+# why they have no archive of their own.
+
+binary        sites
+base          0
+blanket       1   (the ctor: set once, never cleared)
+api           6   (the hand-placed bracket)
+apinop        0   (bracket NOPed: api's layout control)
+taint         161 (ExpeDITe)
+
+archive       sites
+libsodium base  0
+libsodium taint 224
+
+.dit twins in the pass library: 85
+
+EXECUTED writes per request come from the runs, not from here: 32 for the pass arm,
+2 for the bracket, 0 for base and blanket (blanket sets the mode once at startup).
+See the dit_writes column in gem5_arms_off5.csv.

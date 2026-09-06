@@ -1,0 +1,43 @@
+WORK=/home/rgangar/Documents/signed_lookup-gem5-20260906  build JOBS=48
+  api      msrDIT=6
+  apinop   msrDIT=0
+switches in the AEAD path (pass library; a .dit twin is the copy DIT-on callers use):
+  crypto_aead_chacha20poly1305_ietf_encrypt_detached switches=3
+  crypto_aead_chacha20poly1305_ietf_encrypt switches=3
+  crypto_aead_chacha20poly1305_ietf_encrypt_detached.dit switches=0
+  crypto_aead_chacha20poly1305_ietf_encrypt.dit switches=1
+  crypto_onetimeauth_poly1305 switches=0
+  crypto_onetimeauth_poly1305_verify switches=0
+  crypto_onetimeauth_poly1305_init switches=0
+  crypto_onetimeauth_poly1305_update switches=0
+  crypto_onetimeauth_poly1305_final switches=0
+  crypto_onetimeauth_poly1305.dit switches=1
+  crypto_onetimeauth_poly1305_verify.dit switches=1
+  crypto_onetimeauth_poly1305_init.dit switches=1
+  crypto_onetimeauth_poly1305_update.dit switches=1
+  crypto_onetimeauth_poly1305_final.dit switches=1
+  crypto_onetimeauth_poly1305_donna switches=2
+  crypto_onetimeauth_poly1305_donna_init switches=2
+  crypto_onetimeauth_poly1305_donna_update switches=2
+  poly1305_finish switches=2
+  poly1305_blocks switches=2
+  crypto_onetimeauth_poly1305_donna.dit switches=0
+  crypto_onetimeauth_poly1305_donna_verify.dit switches=0
+  crypto_onetimeauth_poly1305_donna_init.dit switches=0
+  crypto_onetimeauth_poly1305_donna_update.dit switches=0
+  crypto_onetimeauth_poly1305_donna_final.dit switches=0
+  poly1305_finish.dit switches=0
+  poly1305_blocks.dit switches=0
+  stream_ietf_ext_ref switches=2
+  stream_ietf_ext_ref_xor_ic switches=2
+  chacha20_encrypt_bytes_ref switches=3
+  stream_ietf_ext_ref.dit switches=0
+  stream_ietf_ext_ref_xor_ic.dit switches=0
+  chacha20_encrypt_bytes_ref.dit switches=0
+twins in the pass library: 85
+obligations the report still lists (should be external calls and tables only):
+9
+BUILD OK
+[1m==> done: build[0m
+
+[exited with code 0]
