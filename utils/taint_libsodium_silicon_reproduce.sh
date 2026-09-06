@@ -92,31 +92,70 @@ info "host: $(sysctl -n hw.model) / $(sysctl -n machdep.cpu.brand_string), FEAT_
 # under the name `taint`: a wrong number that looks like a right one.
 has_new_pass() { [[ -x "${1:-}/llc" ]] && "$1/llc" --help-hidden 2>/dev/null | grep -q -- '-taint-owned-symbols'; }
 
-if [[ -n "${LLVM_BIN:-}" ]]; then
-  has_new_pass "$LLVM_BIN" || die "LLVM_BIN=$LLVM_BIN has no -taint-owned-symbols (pre-2026-09-05 compiler)"
-elif has_new_pass "$BUILD/bin"; then
-  LLVM_BIN="$BUILD/bin"; info "toolchain: $LLVM_BIN (already current)"
-elif want toolchain; then
-  info "building the toolchain -- this is the long pole"
-  if [[ ! -f "$BUILD/CMakeCache.txt" ]]; then
-    warn "no build dir: configuring from scratch. Expect a couple of hours."
-    command -v cmake >/dev/null || die "cmake not found (brew install cmake ninja)"
-    command -v ninja >/dev/null || die "ninja not found (brew install ninja)"
-    cmake -G Ninja -S "$REPO_ROOT/llvm" -B "$BUILD" \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DLLVM_ENABLE_PROJECTS='clang;lld' \
-      -DLLVM_TARGETS_TO_BUILD='AArch64;X86' \
-      -DLLVM_ENABLE_ASSERTIONS=OFF > "$BUILD.cmake.log" 2>&1 \
-      || { tail -20 "$BUILD.cmake.log" >&2; die "cmake configure failed"; }
-  else
-    warn "existing build dir is stale; rebuilding incrementally"
-  fi
+# Look for a usable toolchain before deciding to build one. A checkout without
+# its own build/ is the normal case -- a git worktree, a fresh clone, a second
+# tree for a branch -- and the toolchain is not per-checkout: any build of this
+# branch compiles the same arms. Spending two hours because the caller cd'd into
+# the wrong tree is a bad trade, and it is what this script used to do.
+toolchain_candidates() {
+  [[ -n "${LLVM_BIN:-}" ]] && echo "$LLVM_BIN"
+  echo "$BUILD/bin"
+  echo "$REPO_ROOT/build/bin"
+  # sibling checkouts and worktrees of this repo, including the one a worktree
+  # was created from; then anything already on PATH.
+  local base; base="$(basename "$REPO_ROOT")"
+  for d in "$HOME/Documents/$base" "$HOME/$base" "$REPO_ROOT"/../*/"$base"; do
+    [[ -d "$d" ]] && echo "$d/build/bin"
+  done
+  command -v llc >/dev/null && dirname "$(command -v llc)"
+}
+
+FOUND=""
+while read -r cand; do
+  [[ -n "$cand" ]] || continue
+  if has_new_pass "$cand"; then FOUND="$cand"; break; fi
+done < <(toolchain_candidates)
+
+if [[ -n "$FOUND" ]]; then
+  [[ -n "${LLVM_BIN:-}" && "$FOUND" != "$LLVM_BIN" ]] && warn "LLVM_BIN had no usable pass; using $FOUND"
+  LLVM_BIN="$FOUND"
+  info "toolchain: $LLVM_BIN"
+elif [[ -n "${LLVM_BIN:-}" ]]; then
+  die "LLVM_BIN=$LLVM_BIN has no -taint-owned-symbols (pre-2026-09-05 compiler)"
+elif want toolchain && [[ -f "$BUILD/CMakeCache.txt" ]]; then
+  # An existing build dir means an incremental build: minutes, not hours.
+  info "toolchain: rebuilding $BUILD incrementally"
   ninja -C "$BUILD" clang llc opt llvm-nm llvm-ar llvm-objdump llvm-link llvm-dis \
     || die "toolchain build failed"
   LLVM_BIN="$BUILD/bin"
   has_new_pass "$LLVM_BIN" || die "built toolchain still lacks -taint-owned-symbols -- wrong branch?"
 else
-  die "no usable toolchain: set LLVM_BIN, or run the 'toolchain' stage"
+  # A build FROM SCRATCH is hours, so it never starts implicitly. It is almost
+  # always the wrong answer: the usual cause is running from a checkout that has
+  # no build/ while a perfectly good toolchain sits in another one.
+  die "no usable toolchain found. Searched:
+$(toolchain_candidates | sed 's/^/       /')
+
+     If you have one, point at it:
+       LLVM_BIN=<dir>/build/bin $0
+
+     To build one here from scratch (hours):
+       BUILD_TOOLCHAIN=1 $0"
+fi
+
+if [[ "${BUILD_TOOLCHAIN:-0}" == 1 && -z "$FOUND" ]]; then
+  warn "BUILD_TOOLCHAIN=1: configuring $BUILD from scratch. Expect a couple of hours."
+  command -v cmake >/dev/null || die "cmake not found (brew install cmake ninja)"
+  command -v ninja >/dev/null || die "ninja not found (brew install ninja)"
+  cmake -G Ninja -S "$REPO_ROOT/llvm" -B "$BUILD" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_ENABLE_PROJECTS='clang;lld' \
+    -DLLVM_TARGETS_TO_BUILD='AArch64;X86' \
+    -DLLVM_ENABLE_ASSERTIONS=OFF > "$BUILD.cmake.log" 2>&1 \
+    || { tail -20 "$BUILD.cmake.log" >&2; die "cmake configure failed"; }
+  ninja -C "$BUILD" clang llc opt llvm-nm llvm-ar llvm-objdump llvm-link llvm-dis \
+    || die "toolchain build failed"
+  LLVM_BIN="$BUILD/bin"
 fi
 export LLVM_BIN
 
