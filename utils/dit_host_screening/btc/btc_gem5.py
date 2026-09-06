@@ -47,7 +47,7 @@ import argparse, csv, hashlib, json, os, pathlib, re, shutil, statistics as st
 import subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
-G = pathlib.Path.home() / "Documents/gem5-DIT"
+G = pathlib.Path(os.environ.get("G5", str(pathlib.Path.home() / "Documents/gem5-DIT")))
 GEM5 = G / "build/ARM/gem5.opt"
 CONFIG = G / "configs/example/arm/fdp_neoverse_v2_binary.py"
 BIN = G / "benchmarks/bitcoin/bin"
