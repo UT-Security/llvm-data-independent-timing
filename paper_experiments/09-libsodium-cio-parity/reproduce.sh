@@ -4,6 +4,7 @@
 #   ./reproduce.sh                 pick the rig from the host and run it
 #   ./reproduce.sh silicon         force the Apple-silicon rig (M4/M5)
 #   ./reproduce.sh gem5            force the gem5 rig
+#   ./reproduce.sh blanket         measure ONLY blanket DIT (no toolchain)
 #   ./reproduce.sh silicon counters   run just these stages (--list shows them)
 #   ./reproduce.sh --help          what each one needs
 #
@@ -17,7 +18,16 @@
 #            reason experiment 09 has a simulator arm at all.
 #
 # Same arms, same seeds, same drivers, same compiler configuration on both, so
-# a number that differs between them differs because of the machine. See
+# a number that differs between them differs because of the machine.
+#
+# `blanket` is NOT a third instrument. It is the silicon question narrowed to
+# the one arm that needs no compiler pass at all: blanket DIT is `msr dit, #1`
+# before main, so the two arms are ONE binary run twice and the taint toolchain
+# drops out entirely. It exists because the placement rigs read counters once
+# per REGION -- ~3,400 kperf cycles against a ~275-cycle AES-GCM op, which
+# compresses every percentage. Blanket needs no per-region attribution, so it
+# reads them once around a long loop and lets the iteration count amortise
+# them. Use it when you want the blanket number and nothing else. See
 # CLAUDE.md in this directory before changing anything here.
 set -uo pipefail
 E="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,6 +50,13 @@ SILICON (M4/M5, or any FEAT_DIT arm64 Mac)
   LLVM_BIN=<dir>/bin to reuse one. Prompts for sudo (kperf counters).
   Knobs: SKIP_ARGON=1 drops ~60 of the ~70 minutes; NO_SUDO=1 runs unrooted;
          CIO_REPS=<n> (default 15, the paper's protocol).
+
+BLANKET ONLY (any FEAT_DIT arm64 Mac -- no LLVM build, no seeds, no arms)
+  sudo -E ./reproduce.sh blanket
+  Needs: a configured libsodium tree (WORK=<dir>, default
+  ~/Documents/libsodium-arms-silicon/base) and perf.c (BENCH=<dir>). Root is
+  only for kperf -- unrooted it reports ns/op and the clock gate cannot fire.
+  Knobs: REPS=<n> (21), ITERS=<n> (200000), PRIMS="control aes_enc ...".
 
 GEM5 (aarch64 Linux, a gem5-DIT build with the PMULL and ditCycles patches)
   CIO=<counter-optimization/cio checkout> ./reproduce.sh gem5
@@ -65,5 +82,7 @@ case "$RIG" in
   gem5)
     [[ -n "${CIO:-}" ]] || die "set CIO to a counter-optimization/cio checkout (the drivers live there)"
     exec bash "$R/utils/dit_host_screening/cioparity/reproduce.sh" "$@" ;;
-  *) die "unknown rig '$RIG' (silicon | gem5)" ;;
+  blanket)
+    exec bash "$R/utils/dit_blanket/run_blanket.sh" "$@" ;;
+  *) die "unknown rig '$RIG' (silicon | gem5 | blanket)" ;;
 esac
