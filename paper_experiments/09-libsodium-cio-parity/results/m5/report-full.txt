@@ -1,0 +1,139 @@
+
+ARMS: A=unhardened | C=blanket DIT | B=Apple bracket (sb -- the shipped sequence) | T=Apple bracket NOPed (control for B/I) | P=pass (shipped) | Z=pass, switches NOPed (control for P)
+
+================================================================================================
+INSTRUMENT GATES (ditprobe, interleaved with every other benchmark)
+================================================================================================
+  1. DIT visible          Const 1.00 -> 2.99 cyc/hop (3.005x, Perm 2.99) PASS
+       predicted <2 cyc/hop with DIT off, and DIT on must reach Perm
+  2. negative control     Perm  1.0015x PASS (flat)
+  3. P-core residency     CoreMHz 4589-4604 PASS
+  4. mode readback        DitBit A=0.0 C=1.0 PASS
+
+================================================================================================
+PART 1 - our 13 primitives (-O2 drivers)
+================================================================================================
+benchmark / metric                          A          C          P          Z     gate
+---------------------------------------------------------------------------------------
+ditprobe/Const                            217        652        217        218     ok
+  vs unhardened                        +0.00%   +200.46%     +0.00%     +0.46%
+  vs blanket                          -66.72%     +0.00%    -66.72%    -66.56%
+  MAD within / range between             0.5%     200.5%
+ditprobe/Perm                             652        653        652        653     ok
+  vs unhardened                        +0.00%     +0.15%     +0.00%     +0.15%
+  vs blanket                           -0.15%     +0.00%     -0.15%     +0.00%
+  MAD within / range between             0.0%       0.2%
+ditprobe/CoreMHz                         4590       4604       4589       4590     unresolvable
+  vs unhardened                        +0.00%     +0.31%     -0.02%     +0.00%
+  vs blanket                           -0.30%     +0.00%     -0.33%     -0.30%
+  MAD within / range between             0.2%       0.3%
+ditprobe/DitBit                             0          1          0          0     ok
+  vs unhardened                             -          -          -          -
+  vs blanket                         -100.00%     +0.00%   -100.00%   -100.00%
+  MAD within / range between             0.0%       0.0%
+
+units: cntvct_el0 ticks/op (~1 ns), or ps/hop for ditprobe. TIME, not cycles.
+
+================================================================================================
+PART 2 - CIO's benchmarks, their parameters (-O2 drivers, mean of per-iteration counts)
+================================================================================================
+benchmark / metric                          A          C          B          T          P          Z     gate
+-------------------------------------------------------------------------------------------------------------
+ed25519                                  7548       7568       7651       7538       7600       7554     ok
+  vs unhardened                        +0.00%     +0.26%     +1.36%     -0.13%     +0.68%     +0.08%
+  vs blanket                           -0.26%     +0.00%     +1.09%     -0.40%     +0.42%     -0.18%
+  MAD within / range between             0.2%       1.5%
+chacha20_poly1305_encrypt                 231        234        274        233        574        234     ok
+  vs unhardened                        +0.00%     +0.91%    +18.33%     +0.88%   +147.99%     +0.96%
+  vs blanket                           -0.90%     +0.00%    +17.27%     -0.03%   +145.76%     +0.05%
+  MAD within / range between             0.3%     148.0%
+chacha20_poly1305_decrypt                 247        261        293        247        609        246     ok
+  vs unhardened                        +0.00%     +5.70%    +18.89%     +0.17%   +147.10%     -0.30%
+  vs blanket                           -5.40%     +0.00%    +12.47%     -5.23%   +133.77%     -5.68%
+  MAD within / range between             0.3%     147.8%
+aesni256gcm_encrypt                        57         56        102         56         95         55     ok
+  vs unhardened                        +0.00%     -1.70%    +76.92%     -1.95%    +65.57%     -3.45%
+  vs blanket                           +1.73%     +0.00%    +79.98%     -0.25%    +68.44%     -1.77%
+  MAD within / range between             2.3%      83.2%
+aesni256gcm_decrypt                        74         75        135         76        129         74     ok
+  vs unhardened                        +0.00%     +1.33%    +83.25%     +2.54%    +74.78%     -0.15%
+  vs blanket                           -1.31%     +0.00%    +80.85%     +1.20%    +72.50%     -1.46%
+  MAD within / range between             1.3%      83.5%
+argon2id                             43142504   43044799   43038158   43129908   42952004   43198910     unresolvable
+  vs unhardened                        +0.00%     -0.23%     -0.24%     -0.03%     -0.44%     +0.13%
+  vs blanket                           +0.23%     +0.00%     -0.02%     +0.20%     -0.22%     +0.36%
+  MAD within / range between             0.6%       0.6%
+
+units: cntvct_el0 TICKS, not cycles -- see cntfrq_el0 in provenance.txt (1 ns/tick on M4; NOT hw.tbfrequency, which is the 24 MHz Mach timebase and disagrees). Region offset ~21 cycles, so the percentages are sound; the absolute column is TIME, not cycles, mean over their iteration count (CIO's own statistic)
+
+================================================================================================
+COUNTERS - whole-process totals per arm (kperf)
+================================================================================================
+benchmark                   arm     instructions         cycles     IPC  ins vs A  cyc vs A
+-------------------------------------------------------------------------------------------
+ed25519                     A        750,177,526    172,311,215   4.354    +0.00%    +0.00%
+                            C        750,153,332    172,072,573   4.360    -0.00%    -0.14%
+                            B        750,149,137    172,501,490   4.349    -0.00%    +0.11%
+                            T        750,217,198    171,966,534   4.363    +0.01%    -0.20%
+                            P        754,201,210    352,600,564   2.139    +0.54%  +104.63%
+                            Z        754,142,238    172,584,803   4.370    +0.53%    +0.16%
+
+chacha20_poly1305_encrypt   A         47,397,257     12,132,158   3.907    +0.00%    +0.00%
+                            C         47,344,331     11,583,023   4.087    -0.11%    -4.53%
+                            B         47,378,409     11,934,174   3.970    -0.04%    -1.63%
+                            T         47,440,293     12,116,697   3.915    +0.09%    -0.13%
+                            P         47,548,718     15,369,497   3.094    +0.32%   +26.68%
+                            Z         47,538,766     12,117,259   3.923    +0.30%    -0.12%
+
+chacha20_poly1305_decrypt   A         47,391,825     12,071,890   3.926    +0.00%    +0.00%
+                            C         47,337,254     11,496,065   4.118    -0.12%    -4.77%
+                            B         47,382,400     11,972,692   3.958    -0.02%    -0.82%
+                            T         47,449,227     12,106,009   3.919    +0.12%    +0.28%
+                            P         47,549,503     15,382,107   3.091    +0.33%   +27.42%
+                            Z         47,558,345     12,130,487   3.921    +0.35%    +0.49%
+
+aesni256gcm_encrypt         A         45,168,514     13,460,541   3.356    +0.00%    +0.00%
+                            C         45,047,059     12,271,314   3.671    -0.27%    -8.83%
+                            B         45,149,492     13,337,259   3.385    -0.04%    -0.92%
+                            T         45,195,043     13,451,195   3.360    +0.06%    -0.07%
+                            P         45,161,576     13,775,127   3.278    -0.02%    +2.34%
+                            Z         45,171,280     13,445,431   3.360    +0.01%    -0.11%
+
+aesni256gcm_decrypt         A         45,157,026     13,427,890   3.363    +0.00%    +0.00%
+                            C         45,053,975     12,277,422   3.670    -0.23%    -8.57%
+                            B         45,164,486     13,316,439   3.392    +0.02%    -0.83%
+                            T         45,202,759     13,485,819   3.352    +0.10%    +0.43%
+                            P         45,177,064     13,734,880   3.289    +0.04%    +2.29%
+                            Z         45,173,649     13,456,648   3.357    +0.04%    +0.21%
+
+argon2id                    A     81,763,525,795 23,892,929,509   3.422    +0.00%    +0.00%
+                            C     81,760,034,365 23,823,669,196   3.432    -0.00%    -0.29%
+                            B     81,760,899,678 23,829,220,651   3.431    -0.00%    -0.27%
+                            T     81,760,370,834 23,892,294,206   3.422    -0.00%    -0.00%
+                            P     81,753,992,026 23,816,419,220   3.433    -0.01%    -0.32%
+                            Z     81,754,019,786 23,905,491,431   3.420    -0.01%    +0.05%
+
+HOW TO READ THE COUNTERS
+  A vs C instructions ~ 0%   the arms run the same work; blanket adds one MSR.
+                             If this is not ~0 the cycle ratios are meaningless.
+  A vs C cycles > 0          pure DWELL - identical instructions, more cycles,
+                             i.e. the mode itself slowing execution down.
+  A vs P instructions > 0    the switches selective placement actually executes.
+  IPC = instructions/cycle   Higher is better. FALLING IPC with flat instruction
+                             counts means the same work is stalling, not that more
+                             work is being done -- a serialising switch draining the
+                             pipeline. Instructions up at flat IPC would be switch
+                             COUNT instead. cntvct cannot separate these; pair the
+                             IPC change with map_stall to confirm the mechanism.
+
+READING IT
+  C/A ~ 1.00  ->  blanket DIT is FREE on this workload. Then there is no prize,
+                  and every switch a selective policy adds is pure loss. That is
+                  a property of the workload, not a refutation of the approach.
+  P vs C      ->  the question the paper asks. P > C means blanket wins.
+  T, Z        ->  each arm's NOP twin. Subtract it before believing any number:
+                  it is the same code at the same addresses with no mode switch,
+                  so whatever it shows is layout, not DIT.
+Any row marked DIT-LEAK is NOT a result: an arm ran in a mode it does not claim.
+Cycles and instructions are both PMC; nothing is converted at an assumed clock.
+FULL=1 adds the CNTVCT and whole-process tables.
