@@ -146,9 +146,25 @@ static void cio_shim_pmc_ill(int s) { (void)s; siglongjmp(cio_shim_pmc_jb, 1); }
  *
  * kperf never showed this because a call into the kperf driver serialises by
  * construction; going to a two-cycle `mrs` is what exposed it. */
-static inline unsigned long long cio_shim_pmc0(void) {   /* cycles */
+/* CYCLES: read BARE, no isb. The ordering hazard is asymmetric and it was a
+ * mistake to generalise it from the instruction counter to this one.
+ *
+ * An early read of the INSTRUCTION counter loses every instruction that has not
+ * yet retired -- hundreds of them, measured: 5,778 against a true 6,007. An
+ * early read of a free-running CYCLE counter is off by at most the reorder
+ * window, tens of cycles, and the same skew appears at both boundaries so it
+ * largely cancels in the delta. Measured against CNTVCT over work sizes from
+ * 200 to 2,000,000 iterations, a bare PMC0 read holds a constant 4.40-4.43
+ * ratio -- i.e. it IS the cycle count, at every scale.
+ *
+ * Reading it bare removes the drain from the cycle window entirely, and with it
+ * the need to convert CNTVCT time into cycles at an assumed clock. That clock
+ * was the last soft spot in the IPC number: measured per benchmark it is 4.246
+ * GHz on argon2id and 4.450 on ed25519, a 4.8% spread that propagates straight
+ * into any IPC computed with a single constant. Now nothing is assumed. */
+static inline unsigned long long cio_shim_pmc0(void) {   /* cycles, bare */
     unsigned long long v;
-    __asm__ volatile("isb\n\tmrs %0, S3_2_c15_c0_0" : "=r"(v) :: "memory");
+    __asm__ volatile("mrs %0, S3_2_c15_c0_0" : "=r"(v) :: "memory");
     return CIO_PMC48(v);
 }
 static inline unsigned long long cio_shim_pmc1(void) {   /* instructions */
@@ -341,8 +357,10 @@ static inline void cio_shim_region_begin(void) {
         cio_shim_samp_live = (q >= cio_shim_samp_skip)
                           && ((q - cio_shim_samp_skip) % cio_shim_samp_every) == 0;
         if (cio_shim_samp_live) {
-            cio_shim_s0_cyc = cio_shim_pmc0();
+            /* instructions first (its isb drains), cycles last: the drain then
+             * precedes the cycle snapshot and is not inside the window. */
             cio_shim_s0_ins = cio_shim_pmc1();
+            cio_shim_s0_cyc = cio_shim_pmc0();
         }
     }
 #endif
@@ -367,7 +385,11 @@ static inline uint64_t cio_shim_region_end(void) {
 #endif
 #ifdef CIO_SHIM_PMC
     if (cio_shim_pmc_ok && cio_shim_samp_live) {
-        unsigned long long s1c = cio_shim_pmc0(), s1i = cio_shim_pmc1();
+        /* cycles first (bare, cheap), instructions after: the end drain lands
+         * outside the cycle window and inside the instruction one, which is
+         * where it belongs -- instructions need it, cycles must not pay it. */
+        unsigned long long s1c = cio_shim_pmc0();
+        unsigned long long s1i = cio_shim_pmc1();
         if (s1c > cio_shim_s0_cyc && s1i >= cio_shim_s0_ins) {
             unsigned long long dc = s1c - cio_shim_s0_cyc;
             if (dc < 1000000000ULL) {          /* migration guard, as below */
