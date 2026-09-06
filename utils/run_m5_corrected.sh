@@ -154,7 +154,7 @@ fi
 # ---- 2 and 3. the two timers, same binaries, same arms ----------------------
 for mode in kperf cntvct; do
   cheap=0; [[ "$mode" == cntvct ]] && cheap=1
-  info "run: $mode-timed  (CHEAP_TIMER=$cheap), 7 arms, $CIO_REPS reps"
+  info "run: $mode-timed  (CHEAP_TIMER=$cheap), $(wc -w <<<"$ARMS_ALL" | tr -d ' ') arms, $CIO_REPS reps"
   OUT="$OUT_ROOT/$mode" \
   CHEAP_TIMER="$cheap" CIO_OPT=-O2 OURS=ditprobe CIO_REPS="$CIO_REPS" \
   ARMS="$ARMS_ALL" \
