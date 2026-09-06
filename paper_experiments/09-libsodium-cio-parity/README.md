@@ -1150,6 +1150,20 @@ picoseconds or as a ratio.
 
 ## Reproducing
 
+> **Start with `./reproduce.sh` and `CLAUDE.md` in this directory.** One entry
+> point covers both instruments -- `./reproduce.sh silicon` for an M4/M5,
+> `CIO=<cio checkout> ./reproduce.sh gem5` for the simulator -- and `CLAUDE.md`
+> is the operating manual: the knobs, the validity gates, how to compare the two
+> rigs, and the traps that fail silently. The rest of this section is the
+> underlying machinery, which that script drives for you.
+>
+> The silicon arms are built by `utils/taint_libsodium_arms.sh` at the same
+> compiler configuration the gem5 rig uses, NOT by the wllvm path below: the
+> shipped defaults are per-TU concepts (callee contract, owned list, twins) that
+> a whole-library bitcode module cannot express. The wllvm archives below are
+> what the published M5/M4 numbers in this file were measured with, and stay
+> reproducible under `PRESET=legacy`.
+
 Library and arms:
 
 ```sh

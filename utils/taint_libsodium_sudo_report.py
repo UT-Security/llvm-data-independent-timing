@@ -18,9 +18,19 @@ try:
             _opt = _l.split(":", 1)[1].strip() or _opt
 except OSError:
     pass
-ORDER = ["A", "C", "B", "I", "P", "Z", "O", "Y", "F", "X", "N"]
+# Letters follow dit-tainter's scheme (B is Apple's shipped `sb` bracket, I the
+# isb stand-in gem5 substitutes, Z/Y the NOP controls), with T added: the
+# bracket's own layout control, without which its column cannot be read. On an
+# M4 the NOP twin moved 1.6 points on chacha encrypt and 68 on aes-gcm encrypt,
+# so "bracket minus base" is not the bracket's cost.
+#
+# An arm missing from here is dropped from every table without a word, which is
+# how B went unreported after it was added to the default arm set.
+ORDER = ["A", "C", "B", "I", "T", "P", "Z", "O", "Y", "F", "X", "N"]
 NAME = {"A": "unhardened", "C": "blanket DIT",
-        "B": "Apple bracket (sb)", "I": "Apple bracket (isb, as gem5)",
+        "B": "Apple bracket (sb -- the shipped sequence)",
+        "I": "Apple bracket (isb, as gem5; not shipped)",
+        "T": "Apple bracket NOPed (control for B/I)",
         "P": "pass (shipped)", "Z": "pass, switches NOPed (control for P)",
         "O": "old compiler (inherit, no twins, CIO seeds)", "Y": "old, switches NOPed (control for O)",
         "F": "whole-function", "X": "pass (old defaults)", "N": "pass (resolved)"}
