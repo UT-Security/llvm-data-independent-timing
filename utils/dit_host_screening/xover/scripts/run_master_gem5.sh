@@ -10,8 +10,9 @@
 # figures overstate it and must be re-taken. The native M5 numbers are unaffected:
 # that is real silicon, which genuinely serialises the write.
 set -u
-X=~/.treehouse/llvm-project-18cdea/2/llvm-project/utils/dit_host_screening/xover
-G=~/Documents/gem5-DIT; O=~/Documents/dit-crossover; LOG=$O/log
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+X=$REPO/utils/dit_host_screening/xover
+G=${G5:-$REPO/gem5-DIT}; O=~/Documents/dit-crossover; LOG=$O/log
 say(){ echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG/master.log"; }
 
 say "waiting for the gem5 build"

@@ -15,7 +15,7 @@ in gem5-DIT) and writes, each with a provenance header:
 Frozen files it never touches, because no committed driver can regenerate them:
 gem5_arms_ed25519.csv, gem5_arms_constant_chain.csv, gem5_stack_offset_sensitivity.csv.
 
-Env: WORK (default ~/Documents/signed_lookup-gem5), G5 (default ~/Documents/gem5-DIT),
+Env: WORK (default ~/Documents/signed_lookup-gem5), G5 (default: this repo's submodule),
 LLVM_BUILD (for the provenance line only).
 """
 import csv, datetime, json, os, pathlib, platform, subprocess, sys
@@ -23,7 +23,7 @@ import csv, datetime, json, os, pathlib, platform, subprocess, sys
 R = pathlib.Path(__file__).resolve().parents[3]
 DATA = R / "paper_experiments/02-libsodium-signed-lookup/data"
 WORK = pathlib.Path(os.environ.get("WORK", pathlib.Path.home() / "Documents/signed_lookup-gem5"))
-G5 = pathlib.Path(os.environ.get("G5", pathlib.Path.home() / "Documents/gem5-DIT"))
+G5 = pathlib.Path(os.environ.get("G5", R / "gem5-DIT"))
 LB = pathlib.Path(os.environ.get("LLVM_BUILD", R / "build"))
 sys.path.insert(0, str(G5 / "benchmarks/signed_lookup")); from run_gem5 import dumps  # noqa: E402
 

@@ -7,7 +7,7 @@
 #   ./reproduce.sh derive     import into data/ with provenance headers (utils/.../derive_exp02.py)
 #   ./reproduce.sh figures    figures/ from data/ (utils/.../fig_exp02.py)
 #
-# Env: LLVM_BUILD (required for build), G5 (gem5-DIT root, default ~/Documents/gem5-DIT),
+# Env: LLVM_BUILD (required for build), G5 (gem5-DIT root, default: this repo's submodule),
 #      WORK (run dir, default ~/Documents/signed_lookup-gem5), MPL (a python with
 #      matplotlib, default /tmp/mplvenv/bin/python; see fig_exp02.py for the venv),
 #      JOBS (gem5 processes at once, default 150).
@@ -23,19 +23,21 @@
 set -euo pipefail
 E="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 R="$(cd "$E/../.." && pwd)"
-export G5="${G5:-$HOME/Documents/gem5-DIT}"
+export G5="${G5:-$R/gem5-DIT}"
 export WORK="${WORK:-$HOME/Documents/signed_lookup-gem5}"
 MPL="${MPL:-/tmp/mplvenv/bin/python}"
 JOBS="${JOBS:-150}"
 RIG="$G5/benchmarks/signed_lookup"
+need_g5() { [[ -d "$RIG" ]] || { echo "no gem5-DIT at $G5 - run: git submodule update --init gem5-DIT (or set G5)" >&2; exit 1; }; }
 STAGES="${*:-build sweep derive figures}"
 want() { [[ " $STAGES " == *" $1 "* ]]; }
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 
 if want build; then
-  info "build arms"; "$RIG/build_gem5_linux.sh"
+  need_g5; info "build arms"; "$RIG/build_gem5_linux.sh"
 fi
 if want sweep; then
+  need_g5
   info "canonical lane (q4=3), 5 offsets";        python3 "$RIG/run_gem5.py" --offsets 5 --jobs "$JOBS" --resume
   info "pure hashed chase (q4=0), 5 offsets";     python3 "$RIG/run_gem5.py" --offsets 5 --jobs "$JOBS" --resume --pred 0
   info "q=0.5 lane (q4=2), 5 offsets";            python3 "$RIG/run_gem5.py" --offsets 5 --jobs "$JOBS" --resume --pred 2

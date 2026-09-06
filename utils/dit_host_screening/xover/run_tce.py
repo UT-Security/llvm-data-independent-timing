@@ -16,10 +16,10 @@ GATES, all exact because gem5 is deterministic:
   * Checksums identical across arms at one point. Different checksums mean the
     arms are not doing the same work and no timing comparison is valid.
 """
-import argparse, json, pathlib, re, subprocess, sys, time
+import argparse, json, os, pathlib, re, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
-G = pathlib.Path.home() / "Documents/gem5-DIT"
+G = pathlib.Path(os.environ.get("G5", pathlib.Path(__file__).resolve().parents[3] / "gem5-DIT"))
 CONFIG = G / "configs/example/arm/fdp_neoverse_v2_binary.py"
 BIN = pathlib.Path.home() / "Documents/dit-crossover/build/tce/gem5"
 
