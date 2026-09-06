@@ -220,6 +220,18 @@ NOPs do retire on this core (exactly +K per K nops) while costing ~1 cycle per
 16, so the NOP layout controls are sound: same retired count, no work. The check
 verifies this and fails if it ever stops being true.
 
+### Committed results
+
+`results/<machine>/` holds a full run: `cio.csv`, `ours.csv`, `provenance.txt`,
+and the report as it was printed. `results/m4/` is the M4 reference run --
+rooted, pinned, pure-PMC counters, every gate passing -- and its README carries
+the table plus what not to claim from it. Regenerate any table from the raw CSV
+with `OUT=results/<machine> python3 utils/taint_libsodium_sudo_report.py`.
+
+Add a machine by dropping its run directory in beside it. Do NOT overwrite
+`results/m4/` with a rerun unless the rerun is at least as clean: check the
+gates first, and in particular that `pinned` is a core and drops are 0.
+
 ## gem5
 
 ```sh
