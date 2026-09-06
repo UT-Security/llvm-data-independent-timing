@@ -32,7 +32,10 @@ gem5 number and the gem5 change it depends on land in the same PR.
 
 - Fresh checkout: `git submodule update --init gem5-DIT`. Do NOT add
   `--recursive`: gem5-DIT's own `PolyBenchC` submodule is SSH-only and nothing
-  here needs it.
+  here needs it. If another gem5-DIT clone is already on the machine, add
+  `--reference <that clone> --dissociate` - it copies the objects locally instead
+  of fetching them (279M, seconds rather than a network clone) and leaves nothing
+  borrowed once it finishes.
 - Move the pin to master's tip: `git submodule update --remote gem5-DIT`, then
   commit the new `gem5-DIT` entry alongside the measurement it belongs to.
 - **Every script defaults to the submodule** (2026-09-06). `G5` / `GEM5_ROOT`
@@ -42,11 +45,21 @@ gem5 number and the gem5 change it depends on land in the same PR.
   anywhere - a missing submodule is an error naming
   `git submodule update --init gem5-DIT`, not a silent switch to whatever that
   other tree happens to be checked out at.
-- The submodule is sources only, so **build gem5 inside it**:
-  `(cd gem5-DIT && scons build/ARM/gem5.opt -j<jobs>)`. `build/ARM/gem5.fast`
-  and the benchmark binaries land there and are gitignored. Pointing `G5` at a
-  prebuilt tree elsewhere still works, but then check its revision against the
-  pin (`git -C gem5-DIT rev-parse HEAD`) yourself - nothing else will.
+- The submodule is sources only, so **build gem5 inside it** - see the fresh-worktree
+  recipe under Build. The binaries and the benchmark objects land in
+  `gem5-DIT/build/` and are gitignored. Pointing `G5` at a prebuilt tree elsewhere
+  still works, but then check its revision against the pin
+  (`git -C gem5-DIT rev-parse HEAD`) yourself - nothing else will.
+- **Build `gem5.opt`, not just `gem5.fast`.** 39 of the 48 references across the rigs
+  invoke `build/ARM/gem5.opt` (btc, cioparity, xover, modset, sqlc, and the gem5-side
+  bitcoin scripts); only `signed_lookup` - experiment 02 - uses `gem5.fast`. A tree
+  with just one of them fails late and unevenly: cioparity's preflight dies naming
+  `gem5.opt`, while experiment 02 runs fine.
+- **A submodule's `.git` is a FILE**, not a directory - it points into the parent's
+  `.git/modules`. Any `[[ -d "$G5/.git" ]]` test is therefore FALSE for the submodule
+  and true for a plain clone, which is how experiment 01 silently stopped recording
+  the gem5 commit in `data/provenance.txt` (fixed 2026-09-06, now `-e`). Grep for the
+  pattern before adding one.
 - **The compiler defaults are local too** (2026-09-06). `LLVM` / `LLVM_BUILD` /
   `LLVM_BIN` / `CL` / `CC_PASS` resolve to `<this repo>/build` the same way, on
   every host: the per-OS split that sent macOS to `~/Documents/llvm-project/
@@ -70,7 +83,36 @@ gem5 number and the gem5 change it depends on land in the same PR.
 Running builds is fine. They are long, so start them in the background rather than
 blocking on them, and do not run benchmarks while one is in flight.
 
-- Build dir: `build/` (Debug, all targets). **Use `ninja -C build` with NO target
+**Setting up a fresh worktree**, whole sequence, verified 2026-09-06 on beckham
+(aarch64, 160 cores). Both trees land INSIDE the worktree and both are gitignored,
+which is the point: every script defaults to them, so a worktree measures the
+compiler and the simulator it just built and never another checkout's.
+
+```
+git submodule update --init gem5-DIT            # sources only; NO --recursive
+(cd gem5-DIT && scons build/ARM/gem5.opt -j<n>)   # 39 of 48 rig references invoke this
+(cd gem5-DIT && scons build/ARM/gem5.fast -j<n>)  # signed_lookup (exp 02) invokes this
+cmake -G Ninja -S llvm -B build \
+  -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
+  -DLLVM_TARGETS_TO_BUILD=AArch64 -DLLVM_ENABLE_PROJECTS='clang;lld' \
+  -DLLVM_USE_LINKER=lld -DLLVM_PARALLEL_LINK_JOBS=24 \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+ninja -C build                                  # 1335 targets, NO target list
+build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir \
+    llvm/test/Transforms/TaintAnnotate clang/test/CodeGen/taint-*.c
+```
+
+`gem5.fast` is ~10 min at -j48 and a 99 MB binary; the LLVM build is 1335 targets.
+`lld` is in the projects list because experiment 01's clang stage builds it by name;
+`-DLLVM_USE_LINKER=lld` is only a link-speed choice and wants a SYSTEM `ld.lld`, so
+drop it on a host without one rather than debugging a configure failure.
+**ccache does not carry across worktrees** (`hash_dir=true`, no `base_dir`), so budget
+a cold build in a new one, not an incremental one. Run the lit line before trusting
+the tree: a stale suite is how a compiler-side regression went two days unnoticed
+(see Testing).
+
+- Build dir: `build/` (Release + assertions per the recipe above; a `build-asserts/`
+  only if a `-debug-only` lit test needs it). **Use `ninja -C build` with NO target
   list.** The taint analysis links into `clang`, `llc` AND **`libLTO.dylib`**, and
   `ninja -C build clang llc` leaves libLTO stale - the LTO link then silently runs the
   OLD analysis with no error. That cost two 50-minute measurement builds on 2026-08-30.
