@@ -30,6 +30,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef CIO_SHIM_PMC
+#include <setjmp.h>     /* the SIGILL-safe PMC probe */
+#include <signal.h>
+#include <string.h>
+#endif
 
 /*
  * CYCLE SOURCE. CIO's drivers time ONE crypto operation per iteration, and on
@@ -92,6 +97,81 @@ static inline uint64_t cio_shim_cycles(void) {
     return c;
 }
 
+/* DIRECT PMC READS (PMC0 = cycles, PMC1 = instructions), when EL0 may have them.
+ *
+ * A kernel patched with PMCR0_USEREN_EN (bit 30) -- github.com/jprx/PacmanPatcher
+ * -- lets EL0 read Apple's fixed counters straight out of the system registers.
+ * That is the whole instrumentation problem solved rather than corrected:
+ *
+ *              per-region offset          measured on this M4
+ *   kperf      ~3,400 cycles / ~17,700 instructions   (a call into the driver)
+ *   PMC        1 cycle / 0 instructions               (one `mrs`)
+ *
+ * On a 291-cycle AES-GCM op the kperf pair is 12x the thing being measured, so
+ * absolute IPC off those counters is really the instrument's IPC (it reads 5.06
+ * where the truth is 4.10) and every percentage is compressed. With PMC reads
+ * the numbers need no offset correction at all, and the counters are exact:
+ * 33,000,004 instructions over a 3,000,000-iteration loop, reproducibly.
+ *
+ * It also needs NO ROOT, since the patch grants EL0 access -- so a rooted run is
+ * no longer the only way to get cycles.
+ *
+ * THE CATCH, and why kperf stays the default. These are PER-CORE registers, not
+ * per-thread: kpc_get_thread_counters() accumulates across a migration and a
+ * bare `mrs` does not. If the thread moves mid-region the delta is garbage --
+ * usually negative, which the guard in region_end() already drops, but a move
+ * between two P-cores can also produce a plausible-looking wrong number. The
+ * rig pins QOS to USER_INTERACTIVE and gates on P-cluster residency, which makes
+ * this unlikely, not impossible. So it is opt-in (CIO_SHIM_PMC=1), and
+ * region_end() additionally rejects a sample whose cycle delta is absurd.
+ *
+ * Availability is probed once, SIGILL-safe: on an unpatched kernel the `mrs`
+ * traps, and the probe selects kperf instead of killing the run. */
+#ifdef CIO_SHIM_PMC
+static int cio_shim_pmc_ok = 0;
+static sigjmp_buf cio_shim_pmc_jb;
+static void cio_shim_pmc_ill(int s) { (void)s; siglongjmp(cio_shim_pmc_jb, 1); }
+#define CIO_PMC48(x) ((x) & ((1ULL << 48) - 1))
+/* The `isb` is REQUIRED, not defensive. A bare `mrs` of a PMC is not ordered
+ * against the surrounding work: the region-end read can execute before the code
+ * it is supposed to be measuring has retired, and the sample comes back short.
+ * This is not theoretical -- it is how the bug was found. Measured on an
+ * AES-GCM encrypt, the Apple-bracket arm read 1,301 instructions and its
+ * instruction-matched NOP twin read 393, a 3x gap between two objects that
+ * disassemble to the same 44 instructions. The difference was the bracket's own
+ * `sb`, which happened to serialise the read that followed it; the twin, with
+ * `nop` in its place, had nothing to stop the read floating up. So the arm with
+ * a speculation barrier measured itself honestly and the one without did not,
+ * which is the worst possible failure mode for a layout control.
+ *
+ * kperf never showed this because a call into the kperf driver serialises by
+ * construction; going to a two-cycle `mrs` is what exposed it. */
+static inline unsigned long long cio_shim_pmc0(void) {   /* cycles */
+    unsigned long long v;
+    __asm__ volatile("isb\n\tmrs %0, S3_2_c15_c0_0" : "=r"(v) :: "memory");
+    return CIO_PMC48(v);
+}
+static inline unsigned long long cio_shim_pmc1(void) {   /* instructions */
+    unsigned long long v;
+    __asm__ volatile("isb\n\tmrs %0, S3_2_c15_c1_0" : "=r"(v) :: "memory");
+    return CIO_PMC48(v);
+}
+static void cio_shim_pmc_probe(void) {
+    struct sigaction sa, old;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = cio_shim_pmc_ill;
+    sigaction(SIGILL, &sa, &old);
+    if (sigsetjmp(cio_shim_pmc_jb, 1) == 0) {
+        unsigned long long a = cio_shim_pmc0(), b = cio_shim_pmc1();
+        /* A patched-but-disabled PMCR0 reads a frozen zero; require movement. */
+        cio_shim_pmc_ok = (a != 0 || b != 0);
+    } else {
+        cio_shim_pmc_ok = 0;
+    }
+    sigaction(SIGILL, &old, NULL);
+}
+#endif
+
 static unsigned long cio_shim_dit_get(void) {
     unsigned long d;
     __asm__ volatile("mrs %0, DIT" : "=r"(d));
@@ -100,6 +180,9 @@ static unsigned long cio_shim_dit_get(void) {
 
 __attribute__((constructor)) static void cio_shim_start(void) {
     pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#ifdef CIO_SHIM_PMC
+    cio_shim_pmc_probe();   /* before kperf: a patched kernel makes kperf redundant */
+#endif
 #ifdef CIO_SHIM_KPERF
     /* needs root; failure is not an error, it selects the CNTVCT fallback */
     cio_shim_kperf_ok = (perf_init("cioparity") == 0) && (perf_start() == 0);
@@ -120,7 +203,13 @@ __attribute__((constructor)) static void cio_shim_start(void) {
  * because the number was absurd. Differences across arms still cancelled it, so
  * the switch-count and cycles-per-switch results were unaffected; absolute IPC
  * was not. One read per boundary puts both counters on the same window. */
+
+static unsigned long long cio_shim_reg_drop = 0;
+
 static inline void cio_shim_read2(unsigned long long *cyc, unsigned long long *ins) {
+#ifdef CIO_SHIM_PMC
+    if (cio_shim_pmc_ok) { *cyc = cio_shim_pmc0(); *ins = cio_shim_pmc1(); return; }
+#endif
 #ifdef CIO_SHIM_KPERF
     if (cio_shim_kperf_ok) {
         u64 buf[KPC_MAX_COUNTERS] = { 0 };
@@ -202,16 +291,30 @@ static inline uint64_t cio_shim_region_end(void) {
     cio_shim_read2(&c, &i);
     uint64_t t1 = c;
 #endif
-    if (cio_shim_t0_cyc && c > cio_shim_t0_cyc) {
-        cio_shim_reg_cyc += c - cio_shim_t0_cyc;
-        cio_shim_reg_ins += i - cio_shim_t0_ins;
-        cio_shim_reg_n++;
+    if (cio_shim_t0_cyc && c > cio_shim_t0_cyc && i >= cio_shim_t0_ins) {
+        unsigned long long dc = c - cio_shim_t0_cyc;
+        /* Per-core PMCs read across a thread migration give a delta belonging to
+         * two different cores. Negative is caught above; the other direction is
+         * not, so drop anything absurd. 1e9 cycles is ~0.2s: longer than any
+         * region here including an argon2id hash, and far shorter than the
+         * counter's 48-bit range, so this rejects migrations without ever
+         * rejecting a real sample. Counted, not silently dropped. */
+        if (dc < 1000000000ULL) {
+            cio_shim_reg_cyc += dc;
+            cio_shim_reg_ins += i - cio_shim_t0_ins;
+            cio_shim_reg_n++;
+        } else {
+            cio_shim_reg_drop++;
+        }
     }
     return t1;
 }
 
 __attribute__((destructor)) static void cio_shim_end(void) {
     const char *src = "cntvct";
+#ifdef CIO_SHIM_PMC
+    if (cio_shim_pmc_ok) src = "pmc";
+#endif
     unsigned long long cyc = 0, ins = 0, stall = 0, flush = 0;
 #ifdef CIO_SHIM_KPERF
     if (cio_shim_kperf_ok) {

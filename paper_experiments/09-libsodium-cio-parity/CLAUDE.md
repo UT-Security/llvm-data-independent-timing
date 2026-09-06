@@ -61,6 +61,55 @@ ceiling *is* the L1 latency, 4 on M5 and 3 on M4, so a fixed threshold is
 unsatisfiable on the shorter one. M5 reads ~4590 MHz / ~3.93×; M4 reads
 ~4400 / 3.00×. Both pass.
 
+### Counters: check first, and it picks for you
+
+`./reproduce.sh silicon` runs `utils/cio_pmc_check.c` before it measures
+anything and selects the counter source from the answer. Run it standalone any
+time:
+
+```sh
+clang -O1 -o /tmp/pmc_check utils/cio_pmc_check.c && /tmp/pmc_check
+```
+
+| source | per-region cost | needs root | when |
+|---|---|---|---|
+| **PMC** | 1 cycle bare, ~39 `isb`-ordered | **no** | kernel patched with `PMCR0_USEREN_EN` |
+| kperf | ~3,400 cycles, ~17,700 instrs | yes | everywhere else |
+
+PMC reads Apple's fixed counters (PMC0 cycles, PMC1 retired instructions)
+straight from EL0. It needs a kernel patched by
+[PacmanPatcher](https://github.com/jprx/PacmanPatcher) — SIP off, matching KDK,
+patched kernel collection, boot into 1TR — so it is **not** the default state of
+a Mac. `PMC=1` on an unpatched machine falls back to kperf silently and by
+design, which is why the check exists: nothing breaks, and nothing tells you you
+did not get what you asked for.
+
+**Why it matters.** kperf's ~3,400 cycles is fine on a 35,000-cycle ed25519
+signature and hopeless on a 443-cycle AES-GCM encrypt, where it is several times
+the thing being measured. Absolute IPC off those counters is the *instrument's*
+IPC: it reads 5.06 where the truth is 2.88. Every percentage is compressed by
+the same offset. With PMC the numbers need no correction at all.
+
+**Two traps, both already handled, both worth knowing:**
+
+- **The reads must be `isb`-ordered.** A bare `mrs` of a PMC is not ordered
+  against surrounding work, so a region-end read can execute before the code it
+  measures has retired. Measured: the Apple-bracket arm read 1,301 instructions
+  and its NOP twin read 393 — a 3× gap between two objects that disassemble to
+  the same 44 instructions. The bracket's own `sb` serialised the read after it;
+  the twin, with `nop` there, had nothing. **The arm with a barrier measured
+  itself honestly and its control did not**, which is the worst failure mode a
+  layout control has. The shim adds the `isb`; do not remove it to save 39
+  cycles.
+- **The PMCs are per-core, not per-thread.** `kpc_get_thread_counters()`
+  accumulates across a migration; a bare `mrs` does not, so a thread that moves
+  mid-region yields a delta spanning two cores. The shim drops absurd deltas and
+  counts them — **check `reg_drop` is 0 before trusting a PMC run.**
+
+NOPs do retire on this core (exactly +K per K nops) while costing ~1 cycle per
+16, so the NOP layout controls are sound: same retired count, no work. The check
+verifies this and fails if it ever stops being true.
+
 ## gem5
 
 ```sh
