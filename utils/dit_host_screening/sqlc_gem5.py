@@ -28,7 +28,9 @@ import argparse, json, os, pathlib, re, shutil, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
 G = pathlib.Path(os.environ.get("G5", pathlib.Path(__file__).resolve().parents[2] / "gem5-DIT"))
-GEM5 = G / "build/ARM/gem5.opt"
+# gem5.fast for measurement; gem5.opt only when a run needs --debug-flags or
+# the asserts, which NDEBUG/TRACING_ON=0 compile out of .fast. GEM5_BIN switches.
+GEM5 = pathlib.Path(os.environ.get("GEM5_BIN", G / "build/ARM/gem5.fast"))
 CONFIG = G / "configs/example/arm/fdp_neoverse_v2_binary.py"
 BIN = G / "benchmarks/sqlcipher/bin"
 # arm -> (binary, DIT_MODE). `blanket` REUSES the nodit binary and selects the

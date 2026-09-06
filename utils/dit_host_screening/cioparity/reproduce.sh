@@ -49,7 +49,7 @@
 #    looks complete. Build with:
 #
 #      git submodule update --init gem5-DIT
-#      (cd gem5-DIT && scons build/ARM/gem5.opt -j<jobs>)
+#      (cd gem5-DIT && scons build/ARM/gem5.fast -j<jobs>)
 #
 # 2. An aarch64 Linux host. This is NOT cross-compilation: the taint clang emits
 #    native static ELF here. The host does not need FEAT_DIT - nothing executes
@@ -89,7 +89,10 @@ info "preflight"
 [[ -x "$LLVM/bin/llc" ]] || die "no llc at $LLVM/bin (set LLVM)"
 [[ -f "$BC/libsodium-whole.bc" ]] || die "no whole-library bitcode at $BC/libsodium-whole.bc (set BC)"
 [[ -d "$G5/src" ]] || die "no gem5 sources at $G5 - run: git submodule update --init gem5-DIT (or set G5)"
-[[ -x "$G5/build/ARM/gem5.opt" ]] || die "no gem5.opt at $G5/build/ARM - build it there with scons build/ARM/gem5.opt (or set G5)"
+# gem5.fast is the measurement binary; GEM5_BIN points at gem5.opt for a run that
+# needs --debug-flags or the asserts, which NDEBUG/TRACING_ON=0 compile out of .fast.
+GEM5_BIN="${GEM5_BIN:-$G5/build/ARM/gem5.fast}"
+[[ -x "$GEM5_BIN" ]] || die "no gem5 binary at $GEM5_BIN - build it there with scons build/ARM/gem5.fast (or set G5/GEM5_BIN)"
 
 # The two patches, checked by capability rather than by branch name: a branch can
 # be renamed, and a stock gem5 would otherwise run and quietly drop AES-GCM.
