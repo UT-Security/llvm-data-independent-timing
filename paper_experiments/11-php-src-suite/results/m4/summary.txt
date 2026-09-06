@@ -1,0 +1,122 @@
+Experiment 11, fine-grained DIT cost on Apple silicon -- the tables proposed for the paper.
+Derived from the raw files in this directory; nothing here is a new measurement.
+
+Host bellingham, Apple M4 (Mac16,10), macOS 15.7.3 on a PACMANPATCH development kernel.
+PMC0/PMC1 read from EL0 around the whole php-cgi process, thread pinned to core 9 (P-core),
+Spotlight off, page cache purged. 100 measured requests per arm after 50 warm-up, six arms
+rotating per request. Percent over arm A. See provenance.txt.
+
+
+TABLE 1 -- results, ordered by crypto boundary crossings per request
+====================================================================
+"crossings" counts calls to the seven bracket-wrapped crypto builtins, measured with the
+counting build (crypto_call_counts.txt), not estimated. Blanket is flat; fine-grained is
+zero to 128 crossings, visible at 8,000, and loses at 65,000.
+
+workload / request                          crossings  A (Mcyc)  blanket  bracket    pass   MAD
+Zend/bench.php (the micro-benchmark)                0     961.4    +9.69    -0.77   +0.27  1.01
+Symfony  login, bcrypt cost 13                      3    1623.8    +0.09    -0.02   +0.01  0.05
+Symfony  GET /            (suite's request)         5      84.5    -0.39    +0.27   +0.06  0.51
+WP       REST, anonymous                           38     128.2    +1.84    +0.19   -0.10  0.88
+WP       GET /            (suite's request)       110     151.1    +2.39    -0.00   +0.42  0.80
+WP       GET / logged in                          128     157.7    +2.34    +0.14   -0.36  0.83
+WP       login, phpass 2^13       (shipped)      8,226     132.4    +1.89    +1.36   +2.21  0.97
+WP       REST auth, phpass 2^13   (shipped)      8,230     133.6    +1.89    +1.03   +2.06  0.83
+WP       login, phpass 2^16                     65,600     159.4    +2.12    +8.31  +13.03  0.85
+WP       REST auth, phpass 2^16                 65,600     156.2    +2.41    +8.80  +13.47  0.73
+
+  "bracket" is B - Bn and "pass" is P - Z, in points of A: each selective arm differenced
+  against its own instruction-matched NOP twin, which isolates executing the switches from
+  moving the code. Relinking alone moved layout 3.9% in the pilot.
+
+  MAD is the median absolute deviation of A's samples as a percent of its median. A value
+  under it is zero.
+
+  Cut from the 18 measured rows: the six login-mix rows (1 in 100 / 20 / 5), which are the
+  noisiest in the run (MAD 2.1-2.8%), median over three request types so their instruction
+  parity is uninterpretable, and only illustrate dilution arithmetic; and three of the five
+  Symfony page rows, which are the same request repeated.
+
+
+THE MECHANISM -- two rows, same security function, opposite shape
+================================================================
+                        secret work        crossings   work per crossing   blanket  bracket
+Symfony login           1.62 G cycles              3          541 M cyc      +0.09    -0.02
+WordPress login         3.3 M cycles           8,193              400 cyc    +1.89    +1.36
+
+  Symfony does 500x more cryptographic work and pays nothing, because bcrypt's entire
+  iteration loop is inside ONE C call. WordPress does less work and pays 1.36 points,
+  because phpass's loop is PHP bytecode: between two md5() calls the interpreter
+  concatenates, allocates, dispatches into the builtin and stores the result.
+
+  A key derivation implemented in C is one crossing regardless of its cost parameter.
+  A key derivation implemented in interpreted code is one crossing PER ITERATION.
+  Fine-grained cost tracks the second and is blind to the first. This is not a fact about
+  WordPress; it is a fact about KDFs written in interpreted languages.
+
+
+TABLE 2 -- cost per crossing
+============================
+From the difference between the two round counts on the same request type (57,344 extra md5
+calls), over two independent request types. Measured cycles, not nanoseconds converted at an
+assumed clock -- the achieved clock varies 3.77-4.15 GHz across these rows.
+
+  the md5 work itself     394-472 cycles   one block, plus the interpreter's call and return
+  bracket, B - Bn         199-215          enable, sb drain, clear, overlap lost at the boundary
+  pass, P - Z             312-320          TWO region entries per call: PHP_MD5Update and
+                                           PHP_MD5Final are each seeded where the bracket
+                                           enters once. A placement policy, not an analysis limit.
+  blanket, C               15-22           md5 itself runs 3-5% slower under DIT, against the
+                                           ~1.9% the whole request pays: crypto dwells harder
+                                           than framework code, which is the code that was
+                                           benefiting from the suppressed optimisations.
+
+
+THE CROSSOVER
+=============
+Solving the linear cost models through their two measured points:
+
+                        bracket vs blanket    pass vs blanket
+  REST authenticated         14,126 calls          7,388 calls
+  logins only                12,013 calls          6,730 calls
+
+  So ~12,000-14,000 crossings per request for the bracket, ~6,700-7,400 for the pass.
+  NOTHING AT SHIPPED SETTINGS REACHES IT. The most crypto-dense realistic request these
+  applications serve -- stateless application-password authentication, which re-verifies
+  with phpass on every request because HTTP Basic carries no session -- sits at 8,230
+  crossings, and fine-grained still wins there (+1.03 against blanket's +1.89).
+
+  Reaching the crossover takes one supported hardening change: raising the iteration count
+  of a key derivation written in interpreted code. That is a change security guidance
+  recommends, and it inverts which mitigation is cheaper.
+
+
+THE DWELL DECOMPOSITION -- what the counters added over CPU time
+===============================================================
+WordPress anonymous front page. A and C are the SAME BINARY, differing only in an
+environment variable that decides whether the injected constructor executes one
+msr DIT,#1 before main.
+
+  arm            cycles      instructions    IPC
+  A          151,052,500     436,496,708    2.89
+  C blanket  154,665,400     435,765,427    2.82      +2.39% cycles, -2.4% IPC
+
+  Same instructions to within 0.17%. Blanket's cost has NO INSTRUCTION COMPONENT: it is the
+  machine executing identical work more slowly, which is what "the mode suppresses
+  data-dependent optimisations" means -- measured rather than inferred. CPU time cannot
+  see this.
+
+  The same decomposition on the selective arms: on logins-only at 2^13 the pass retires
+  0.47% more instructions (its executed switches) while costing 2.21 points of cycles, so
+  four fifths of fine-grained cost is the serialisation each msr DIT imposes, not the
+  instruction it adds. That independently reproduces experiment 09's cycles-per-switch
+  result, from an instruction count, on an application workload.
+
+  Caveat, stated because it is real and unexplained: blanket retires 0.17% FEWER
+  instructions than baseline on both pure WordPress page rows (-0.168%, -0.159%), against a
+  workload instruction MAD of 0.041% -- four times the noise floor, same sign and size in
+  two independent runs, and present on Symfony's page rows too. We have no explanation. The
+  likeliest is that PMC1 counts micro-ops rather than architectural instructions, so an
+  optimisation DIT suppresses shifts the count; untested. It cannot account for the cycle
+  cost -- it is an eighth the size and points the wrong way, C retiring LESS work while
+  taking MORE cycles, which makes the dwell reading conservative rather than doubtful.

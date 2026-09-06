@@ -2,7 +2,22 @@
 # Experiment 11: every row of the three workloads under the six arms, then the call-density
 # sweep. Idle machine, nothing else running: the arms rotate per request, so drift cannot
 # masquerade as an effect, but a busy host widens the MAD.
-# Env: W, DB_PORT, WARMUP, MEASURED (see bench.py); ROWS (default "zend symfony wordpress wpapi")
+#
+# AN IDLE MACHINE IS NOW A HARD REQUIREMENT, not advice. The metric is Apple's
+# fixed performance counters read from EL0 (bench.py), and those are PER-CORE:
+# anything else scheduled on the core inside a request is charged to that
+# request. bench.py gates every sample on its implied core clock and drops what
+# is out of range, so contention costs samples rather than corrupting results --
+# but it does cost them. Measured while Spotlight was indexing the freshly built
+# PHP trees: 47% of samples dropped. On an idle host the rate is near zero, and
+# each row prints its own count, so check it before believing a row.
+#
+# Spotlight is the usual culprit right after build_php.sh, since it wakes up to
+# index five PHP trees. build_php.sh drops a .metadata_never_index marker in W;
+# if mds is still running, let it finish before starting the run.
+#
+# Env: W, DB_PORT, WARMUP, MEASURED, METRIC, CLK_LO/CLK_HI (see bench.py);
+#      ROWS (default "zend symfony wordpress wpapi")
 set -uo pipefail
 RIG="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 W="${W:-$HOME/Documents/dit-phpsuite}"
