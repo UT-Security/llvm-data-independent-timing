@@ -44,7 +44,8 @@ import btc_gem5 as g  # GEM5, CONFIG, BIN, CONFIGS, first_dump, pick
 ARMS = {"base": "btc_flow_base", "blanket": "btc_flow_blanket",
         "api": "btc_flow_api",          # the Apple bracket on the two secret entry points
         "apinop": "btc_flow_apinop",    # its instruction-matched NOP twin
-        "taint": "btc_flow_taint"}
+        "taint": "btc_flow_taint",
+        "taintx": "btc_flow_taintx"}   # the pass with -taint-dit-external-preserves
 UNPROTECTED = ("base", "apinop")
 
 
