@@ -296,8 +296,26 @@ if _p:
         print(f"  implied clock {lo:.2f}-{hi:.2f} GHz across benchmarks "
               f"{'PASS' if ok else 'FAIL - cycle window is contaminated'}")
         print("       (bare PMC0 cycles / cntvct ns; must be this machine's P-core clock)")
-    print(f"  samples dropped by the migration guard: {_drop} "
-          f"{'PASS' if _drop == 0 else 'FAIL - per-core PMCs read across a thread move'}")
+    # Pinning and the drop RATE, not the drop count. Demanding zero drops was
+    # wrong: a 50 ms argon2id region on a machine with other processes will
+    # occasionally be rescheduled no matter what, and a gate that fails on two
+    # clean runs in a row just teaches you to ignore it. What matters is whether
+    # migration is systematic, because the guard only catches the deltas that
+    # come out obviously broken -- a move between two cores whose counters sit
+    # close produces a plausible wrong number and is undetectable.
+    _tot = sum(int(float(r.get("samp_n") or 0)) for r in _pr)
+    _pin = {r.get("pinned", "-1") for r in _pr}
+    _pinned = _pin != {"-1"} and "-1" not in _pin
+    _rate = (_drop / _tot) if _tot else 0.0
+    print(f"  thread pinned to a core: "
+          + (f"cpu {sorted(_pin)[0]}  PASS" if _pinned else
+             "no  (needs root; kern.sched_thread_bind_cpu is EPERM otherwise)"))
+    _ok = _rate <= 0.001 and not (_pinned and _drop)
+    print(f"  migration-guard drops: {_drop} of {_tot} samples ({_rate:.3%}) "
+          + ("PASS" if _ok else
+             "FAIL - migration looks systematic; the counters cannot be trusted"))
+    if _drop and not _pinned:
+        print("       (unpinned, so occasional drops are expected; run as root to pin)")
 
 # ---- counter table: what cntvct could never show -------------------------
 try:

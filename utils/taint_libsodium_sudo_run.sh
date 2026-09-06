@@ -289,7 +289,7 @@ done
 # ---------------------------------------------------------------- part 2
 info "PART 2: CIO's 6 benchmarks, their parameters (drivers at $CIO_OPT)"
 MSG="$(LC_ALL=C tr -dc '[:alnum:]' </dev/urandom | head -c 100)"; echo "$MSG" > "$OUT/msg.txt"
-: > "$OUT/cio.csv"; echo "benchmark,arm,archive,rep,mean_ticks,n,dit_exit,cycle_src,timer_src,tot_cyc,tot_ins,map_stall,flush,reg_cyc,reg_ins,reg_n,samp_cyc,samp_ins,samp_n,samp_every,pmc_off,reg_drop" >> "$OUT/cio.csv"
+: > "$OUT/cio.csv"; echo "benchmark,arm,archive,rep,mean_ticks,n,dit_exit,cycle_src,timer_src,tot_cyc,tot_ins,map_stall,flush,reg_cyc,reg_ins,reg_n,samp_cyc,samp_ins,samp_n,samp_every,pmc_off,reg_drop,pinned" >> "$OUT/cio.csv"
 for b in $CIOB; do
   src="$CIO_DIR/eval_$b.c"; [[ -f "$src" ]] || { warn "skip $b (no source)"; continue; }
   for a in $ARMS; do
@@ -357,15 +357,19 @@ for b in $CIOB; do
       se=$(sed -n 's/.*samp_every=\([0-9]*\).*/\1/p' "$err" | tail -1)
       po=$(sed -n 's/.*pmc_off=\([0-9]*\).*/\1/p' "$err" | tail -1)
       rd=$(sed -n 's/.*reg_drop=\([0-9]*\).*/\1/p' "$err" | tail -1)
+      # Which core the thread was bound to, or -1 if unpinned. Pinning needs
+      # root (kern.sched_thread_bind_cpu is EPERM otherwise) and only matters
+      # for the per-core PMCs, so an unrooted PMC run is legitimately -1.
+      pn=$(sed -n 's/.*pinned=\(-*[0-9]*\).*/\1/p' "$err" | tail -1)
       python3 - "$cc" "$b" "$lab" "$arch" "$rep" "${de:-?}" "${cs:-?}" "${tm:-?}" \
                "${tc:-0}" "${ti:-0}" "${ms:-0}" "${fl:-0}" \
                "${rc2:-0}" "${ri:-0}" "${rn:-0}" \
-               "${sc:-0}" "${si:-0}" "${sn:-0}" "${se:-0}" "${po:-0}" "${rd:-0}" \
+               "${sc:-0}" "${si:-0}" "${sn:-0}" "${se:-0}" "${po:-0}" "${rd:-0}" "${pn:--1}" \
                >> "$OUT/cio.csv" <<'PY'
 import sys
-p,b,lab,arch,rep,de,cs,tm,tc,ti,ms,fl,rc,ri,rn,sc,si,sn,se,po,rd = sys.argv[1:22]
+p,b,lab,arch,rep,de,cs,tm,tc,ti,ms,fl,rc,ri,rn,sc,si,sn,se,po,rd,pn = sys.argv[1:23]
 v=[float(x) for x in open(p).read().split('\n')[1:] if x.strip().isdigit()]
-if v: print(f"{b},{lab},{arch},{rep},{sum(v)/len(v):.3f},{len(v)},{de},{cs},{tm},{tc},{ti},{ms},{fl},{rc},{ri},{rn},{sc},{si},{sn},{se},{po},{rd}")
+if v: print(f"{b},{lab},{arch},{rep},{sum(v)/len(v):.3f},{len(v)},{de},{cs},{tm},{tc},{ti},{ms},{fl},{rc},{ri},{rn},{sc},{si},{sn},{se},{po},{rd},{pn}")
 PY
     done
   done

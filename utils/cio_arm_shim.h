@@ -27,6 +27,7 @@
 #define CIO_ARM_SHIM_H
 
 #include <pthread/qos.h>
+#include <sys/sysctl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -229,6 +230,48 @@ static unsigned long long cio_shim_pmc_off = 0;
 static int cio_shim_samp_live = 0;   /* is THIS region a sampled one? */
 static unsigned long long cio_shim_s0_cyc = 0, cio_shim_s0_ins = 0;
 
+/* PIN THE THREAD TO ONE CORE.
+ *
+ * The PMCs are per-core registers. kperf's kpc_get_thread_counters() is
+ * per-THREAD and the kernel carries it across a migration; a bare `mrs` is not,
+ * so a thread that moves between a region's two snapshots differences two
+ * different cores' counters. region_end() drops the deltas that come out
+ * obviously broken, but a move between two cores whose counters happen to sit
+ * close produces a plausible wrong number and is not detectable at all. The
+ * only real fix is to stop migrating.
+ *
+ * This kernel can do that: `kern.sched_thread_bind_cpu` exists and boot-args
+ * carry enable_skstb=1, which is what makes it functional. It is a development
+ * kernel facility, so writing it is root-only (EPERM otherwise) -- an unrooted
+ * run simply stays unpinned and says so, which is the pre-existing behaviour.
+ *
+ * QoS still goes to USER_INTERACTIVE either way: that is the P-cluster lever
+ * that works on a stock kernel, and it is what keeps an unpinned run honest.
+ *
+ * CIO_PIN_CPU picks the core. The default is the highest-numbered one, because
+ * Apple silicon numbers the efficiency cluster first and the performance
+ * cluster last, so the last index is a P-core on every part this runs on. The
+ * residency gate checks the achieved clock afterwards, so a wrong guess shows
+ * up as a gate failure rather than as quietly slow numbers. */
+static int cio_shim_pinned = -1;
+
+static void cio_shim_pin(void) {
+    int want = -1;
+    const char *e = getenv("CIO_PIN_CPU");
+    if (e) {
+        want = (int)strtol(e, NULL, 10);
+    } else {
+        int n = 0; size_t sz = sizeof n;
+        if (sysctlbyname("hw.ncpu", &n, &sz, NULL, 0) == 0 && n > 0)
+            want = n - 1;              /* last index: performance cluster */
+    }
+    if (want < 0)
+        return;
+    if (sysctlbyname("kern.sched_thread_bind_cpu", NULL, NULL, &want, sizeof want) == 0)
+        cio_shim_pinned = want;
+    /* EPERM (not root) is the normal case and not an error: leave it unpinned. */
+}
+
 static unsigned long cio_shim_dit_get(void) {
     unsigned long d;
     __asm__ volatile("mrs %0, DIT" : "=r"(d));
@@ -260,6 +303,11 @@ __attribute__((constructor)) static void cio_shim_start(void) {
 #ifdef CIO_SHIM_KPERF
     /* needs root; failure is not an error, it selects the CNTVCT fallback */
     cio_shim_kperf_ok = (perf_init("cioparity") == 0) && (perf_start() == 0);
+#endif
+#ifdef CIO_SHIM_PMC
+    /* after the PMC probe: pinning only matters when the per-core counters are
+     * the ones being read. */
+    if (cio_shim_pmc_ok) cio_shim_pin();
 #endif
     const char *e = getenv("SHIM_DIT");
     if (e && e[0] == '1')
@@ -463,11 +511,12 @@ __attribute__((destructor)) static void cio_shim_end(void) {
     fprintf(stderr, "SHIM exit dit=%lu cycles=%s timer=%s tot_cyc=%llu tot_ins=%llu "
                     "map_stall=%llu flush=%llu reg_cyc=%llu reg_ins=%llu reg_n=%llu "
                     "samp_cyc=%llu samp_ins=%llu samp_n=%llu samp_every=%llu "
-                    "pmc_off=%llu reg_drop=%llu\n",
+                    "pmc_off=%llu reg_drop=%llu pinned=%d\n",
             cio_shim_dit_get(), src, timer, cyc, ins, stall, flush,
             cio_shim_reg_cyc, cio_shim_reg_ins, cio_shim_reg_n,
             cio_shim_samp_cyc, cio_shim_samp_ins, cio_shim_samp_n,
-            cio_shim_samp_every, cio_shim_pmc_off, cio_shim_reg_drop);
+            cio_shim_samp_every, cio_shim_pmc_off, cio_shim_reg_drop,
+            cio_shim_pinned);
 }
 
 #endif /* CIO_ARM_SHIM_H */
