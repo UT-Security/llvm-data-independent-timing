@@ -18,13 +18,24 @@
 #   PART 1  our 13 primitives  (crypto-dit-benchmarks drivers, -O2)
 #   PART 2  CIO's 6 benchmarks (their drivers, their iteration counts, -O0)
 #
-# ARMS (all six share one .pe.mir, so codegen differs only where DIT does):
-#   A baseline   unhardened, DIT never set        -- the MIR round-trip control
-#   C blanket    unhardened + DIT on              -- the coarse mitigation
-#   P hardened   shipped defaults (region/30/hoist/gate)
-#   F func       -taint-dit-placement=function
-#   X fine       pre-2026-08-24 defaults (switch-cyc=0, loop-hoist=0)
-#   N narrow     shipped defaults, on indirect-call-resolved IR
+# ARMS come from PRESET (see below). The default, `gem5parity`, is the four-arm
+# comparison of paper_experiments/09's 2026-09-05 headline, measured here on
+# silicon at the compiler configuration the gem5 rig uses:
+#   A base       unhardened                       -- the denominator
+#   C blanket    unhardened + DIT on for the process
+#   S bracket    Apple's prologue/epilogue with sb -- the sequence that ships,
+#                and the only barrier form measured here
+#   T bracket    the instruction-matched NOP twin  -- layout control for S
+#   P ExpeDITe   -ftaint-harden at the shipped defaults (callee contract, DIT
+#                twins, intra-block placement, round-11 seeds, owned list)
+#   Q ExpeDITe   its NOP twin                      -- layout control for P
+# Archives for these come from utils/taint_libsodium_arms.sh, NOT from
+# taint_libsodium_eval.sh, which cannot express the shipped defaults.
+#
+# PRESET=legacy restores the original set (baseline/blanket/hardened/func/fine/
+# narrow on the wllvm archives), which is what the published M5/M4 numbers were
+# measured with. All arms of a preset share one codegen configuration, so
+# codegen differs only where DIT does.
 #
 # VALIDITY GATES, all enforced, all fatal to the affected row:
 #   1. ditprobe reads ~4x between DIT off and on   -- the instrument can see DIT
@@ -35,8 +46,16 @@
 #   6. arm order rotates every rep                 -- drift cannot fake an effect
 set -uo pipefail
 
+info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
+warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
+die()  { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The 20260901 snapshot is the toolchain the ORIGINAL run used; it predates the
+# callee contract and cannot build the parity arms. Fall back to the repo's own
+# build, which is what utils/taint_libsodium_arms.sh compiles against.
 LLVM_BIN="${LLVM_BIN:-$HOME/Documents/dit-toolchain-snap-20260901/bin}"
+[[ -x "$LLVM_BIN/llvm-objdump" ]] || LLVM_BIN="$REPO_ROOT/build/bin"
 WORK="${WORK:-$HOME/Documents/libsodium-1.0.21}"
 BENCH_DIR="${BENCH_DIR:-$HOME/Documents/crypto-dit-benchmarks}"
 CIO_DIR="${CIO_DIR:-$HOME/Documents/cio-eval}"
@@ -49,7 +68,7 @@ CIO_REPS="${CIO_REPS:-15}"
 # roughly constant offset to every sample and therefore COMPRESSES every ratio.
 # CIO_OPT=-O2 measures the same experiment the way an application would build it.
 # The library archives are -O2 either way; only the driver changes.
-CIO_OPT="${CIO_OPT:--O0}"
+#
 # CHEAP_TIMER=1 makes the driver's per-iteration samples come from CNTVCT_EL0
 # instead of the kperf counter read. The kperf read is a call into the kperf
 # driver and its cost lands INSIDE the timed region: 3234 cycles on M4, measured
@@ -59,22 +78,76 @@ CIO_OPT="${CIO_OPT:--O0}"
 # CNTVCT (21-cycle offset) serves them better. OFF by default: the numbers in
 # paper_experiments/09 came from the kperf timing and stay reproducible.
 # NOTE the samples change UNITS when this is on -- CNTVCT ticks, 1 ns on M4.
-CHEAP_TIMER="${CHEAP_TIMER:-0}"
-CHEAP=""; [[ "$CHEAP_TIMER" == 1 ]] && CHEAP="-DCIO_SHIM_CHEAP_TIMER"
+#
+# Both of these now DEFAULT from PRESET below, because a parity run needs the
+# -O2 driver and the cheap timer together; either exported explicitly wins.
 INC="$WORK/src/libsodium/include"
 SHIM="$REPO_ROOT/utils/cio_arm_shim.h"
 
 OURS="${OURS:-ditprobe ed25519 ed25519ph x25519 aead_chacha20poly1305 salsa20 xsalsa20 xchacha20 sha256 sha512 blake2b hmac_sha256 hmac_sha512}"
 CIOB="${CIOB:-ed25519 chacha20_poly1305_encrypt chacha20_poly1305_decrypt argon2id aesni256gcm_encrypt aesni256gcm_decrypt}"
 # lab:archive:dit. dit is 0 (nothing), 1 (the shim sets DIT before main: the
-# blanket arm), or `api` / `apiisb`: the Apple bracket, each public entry point
-# CIO's driver calls wrapped in Apple's prologue and epilogue (read the previous
-# DIT state, msr DIT #1, speculation barrier, the call, clear only if it was
-# clear; utils/dit_host_screening/cioparity/api_bracket.c). `api` uses Apple's
-# barrier, sb; `apiisb` uses isb sy, which is what the gem5 rig measures, since
-# gem5 does not implement sb. The interposition is a compile-time rename of the
-# driver's extern prototypes, because ld64 has no --wrap. Part 2 only.
-ARMS="${ARMS:-A:baseline:0 C:baseline:1 B:baseline:api P:hardened:0 F:func:0 X:fine:0 N:narrow:0}"
+# blanket arm), or one of the Apple-bracket forms, where each public entry point
+# CIO's driver calls is wrapped in Apple's prologue and epilogue (read the
+# previous DIT state, msr DIT #1, speculation barrier, the call, clear only if
+# it was clear; utils/dit_host_screening/cioparity/api_bracket.c):
+#
+#   api      Apple's real barrier, `sb`. What an M4 actually executes, and the
+#            only rig that can measure it -- gem5 does not implement sb.
+#   apiisb   `isb sy` in its place. NOT IN THE DEFAULT ARM SET and not a thing
+#            we ship: it exists only because gem5 has no `sb`, so the gem5 rig
+#            substitutes it. Measured against `api` on an M4 on 2026-09-05 the
+#            two are indistinguishable -- +0.9 ns, +1.5 ns and -32.3 ns apart on
+#            the three benchmarks that resolve it, all inside the arms' own
+#            0.3-1.5% MAD -- which is what lets gem5's bracket column be read as
+#            Apple's real sequence. Reach for it only to reproduce that check.
+#   apinop   the instruction-matched layout control (-DAPI_NOP): every
+#            instruction of the sequence kept at the same address, none of them
+#            touching DIT. The bracket column is unreadable without it -- on
+#            gem5 the wrapper's mere presence moved the pointer-chasing driver
+#            by 2-3 points, more than its two switches cost.
+#
+# The interposition is a compile-time rename of the driver's extern prototypes,
+# because ld64 has no --wrap. Part 2 only.
+#
+# PRESET picks the DEFAULT arm set, driver -O level and timer together, because
+# those three are not independent -- a parity run needs all three changed at
+# once. An explicitly set ARMS / CIO_OPT / CHEAP_TIMER always wins over it.
+#
+#   gem5parity (default)  The four arms of paper_experiments/09's 2026-09-05
+#         headline -- base, blanket, Apple bracket, ExpeDITe at the shipped
+#         defaults -- on archives built by utils/taint_libsodium_arms.sh at the
+#         SAME compiler configuration the gem5 rig uses (callee contract, DIT
+#         twins, intra-block placement, the round-11 fixpoint seeds, the owned
+#         list). The bracket arm uses Apple's real `sb`; both NOP twins are
+#         included, since neither the bracket nor the pass column can be read
+#         without its own layout control. Drivers at -O2 and CHEAP_TIMER=1, both of which the
+#         gem5 rig's equivalent choices imply: gem5 compiles the drivers at -O2,
+#         and it reports cycles from stats.txt with no in-binary instrument at
+#         all, which the 21-cycle CNTVCT timer approximates and the 3234-cycle
+#         kperf read does not.
+#
+#   legacy  The arm set and settings this script shipped with, on the wllvm
+#         archives from utils/taint_libsodium_eval.sh. This is what the original
+#         M5/M4 numbers in paper_experiments/09 were measured with, so it stays
+#         exactly as it was and those numbers stay reproducible.
+PRESET="${PRESET:-gem5parity}"
+case "$PRESET" in
+  gem5parity)
+    ARMS="${ARMS:-A:base:0 C:base:1 S:base:api T:base:apinop P:taint:0 Q:taintnop:0}"
+    CIO_OPT="${CIO_OPT:--O2}"; CHEAP_TIMER="${CHEAP_TIMER:-1}" ;;
+  legacy)
+    ARMS="${ARMS:-A:baseline:0 C:baseline:1 B:baseline:api P:hardened:0 F:func:0 X:fine:0 N:narrow:0}"
+    CIO_OPT="${CIO_OPT:--O0}"; CHEAP_TIMER="${CHEAP_TIMER:-0}" ;;
+  *) die "unknown PRESET '$PRESET' (gem5parity | legacy)" ;;
+esac
+CHEAP=""; [[ "$CHEAP_TIMER" == 1 ]] && CHEAP="-DCIO_SHIM_CHEAP_TIMER"
+# The unhardened arm's archive: `baseline` under the legacy preset, `base` under
+# the parity one. Both loops below use it as the "did this benchmark build at
+# all?" probe, so it must follow the arm set -- hardcoding `baseline` made the
+# whole of PART 1, ditprobe and gates 1-2 with it, silently skip under a preset
+# whose archives are named differently.
+BASE_ARCH="$(set -- $ARMS; r=${1#*:}; echo "${r%:*}")"
 API_SRC="$REPO_ROOT/utils/dit_host_screening/cioparity/api_bracket.c"
 api_syms() {   # the entry points a CIO driver calls, and the -DAPI_* group
   case "$1" in
@@ -86,9 +159,6 @@ api_syms() {   # the entry points a CIO driver calls, and the -DAPI_* group
   esac
 }
 
-info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
-warn() { printf '\033[33m    %s\033[0m\n' "$*"; }
-die()  { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------- preflight
 info "preflight"
@@ -171,7 +241,7 @@ for b in $OURS; do
 done
 read -r -a AR <<< "$ARMS"; NA=${#AR[@]}
 for b in $OURS; do
-  [[ -x "$OUT/$b.baseline" ]] || continue
+  [[ -x "$OUT/$b.$BASE_ARCH" ]] || continue
   for rep in $(seq 1 "$REPS"); do
     for k in $(seq 0 $((NA-1))); do
       a=${AR[$(( (k + rep - 1) % NA ))]}
@@ -206,11 +276,17 @@ for b in $CIOB; do
     # #include perf.c themselves -- including it twice is a duplicate definition.
     renames=""; wrapobj=""; suffix=""
     case "$dit" in
-      api|apiisb)
+      api|apiisb|apinop)
         set -- $(api_syms "$b"); grp="$1"; shift
         [[ -n "$grp" ]] || { warn "no API bracket table for $b"; continue; }
         for sy in "$@"; do renames="$renames -D$sy=expedite_api_$sy"; done
-        bar="-DAPI_BARRIER_SB"; [[ "$dit" == apiisb ]] && bar=""
+        # api: Apple's real sb. apiisb: isb sy, the form gem5 measures.
+        # apinop: the instruction-matched twin, no DIT instruction at all.
+        case "$dit" in
+          api)    bar="-DAPI_BARRIER_SB" ;;
+          apiisb) bar="" ;;
+          apinop) bar="-DAPI_NOP" ;;
+        esac
         wrapobj="$OUT/.api_bracket_$b.$dit.o"
         clang -O2 -std=gnu18 -c -DAPI_MACRO_RENAME -D$grp $bar -I"$INC" \
               -o "$wrapobj" "$API_SRC" 2>/dev/null || { warn "bracket build failed $b/$dit"; continue; }
@@ -224,7 +300,7 @@ for b in $CIOB; do
   done
 done
 for b in $CIOB; do
-  [[ -x "$OUT/eval_$b.baseline" ]] || continue
+  [[ -x "$OUT/eval_$b.$BASE_ARCH" ]] || continue
   case "$b" in argon2id) NI=100; EX=100;; ed25519) NI=1000; EX="";; *) NI=1000; EX=100;; esac
   for rep in $(seq 1 "$CIO_REPS"); do
     for k in $(seq 0 $((NA-1))); do

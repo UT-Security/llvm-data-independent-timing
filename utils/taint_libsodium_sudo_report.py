@@ -18,8 +18,17 @@ try:
             _opt = _l.split(":", 1)[1].strip() or _opt
 except OSError:
     pass
-ORDER = ["A", "C", "P", "F", "X", "N", "Z"]
-NAME = {"A": "unhardened", "C": "blanket DIT", "P": "pass (shipped)",
+# Parity arms first (the gem5 four-arm comparison and its layout controls), then
+# the legacy placement study. An arm missing from here is dropped from every
+# table without a word, which is how the bracket arm B went unreported after it
+# was added to the default arm set.
+ORDER = ["A", "C", "B", "S", "T", "P", "Q", "F", "X", "N", "Z"]
+NAME = {"A": "unhardened", "C": "blanket DIT",
+        "B": "Apple bracket, isb (retired -- gem5 stand-in only)",
+        "S": "Apple bracket (Apple's sb -- the shipped sequence)",
+        "T": "Apple bracket NOPed (control for S)",
+        "P": "pass (shipped)",
+        "Q": "pass, switches NOPed (control for P)",
         "F": "whole-function", "X": "pass (old defaults)", "N": "pass (resolved)",
         "Z": "pass, switches NOPed (control for P)"}
 
