@@ -19,6 +19,7 @@ python3 utils/dit_host_screening/cioparity/analyze.py \
 | `crypto_verify_16.txt` | why aes256gcm-decrypt has a dwell term: counters, LVP attribution, and the annotated disassembly with the pass's per-instruction verdict |
 | `argon2id.jsonl` | the argon2id stage's own counters |
 | `argon2id_analysis.txt` | its arms table and decomposition |
+| `summary.txt` | the headline table on its own: baseline, blanket, ExpeDITe under both switch models, and ExpeDITe's NOP twin, with the two caveats that qualify it |
 
 `results.csv` holds 84 rows: the 70-cell headline sweep plus argon2id's 14. The
 argon2id stage runs separately because one operation is 326M simulated cycles,
