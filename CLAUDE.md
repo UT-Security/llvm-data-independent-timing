@@ -758,10 +758,20 @@ X86/AMDGPU only), so lowering and emission remain on the legacy PM.
 build/bin/llvm-lit -sv llvm/test/CodeGen/AArch64/taint-analysis-*.mir llvm/test/Transforms/TaintAnnotate clang/test/CodeGen/taint-*.c
 ```
 
-All 58 tests pass as of 2026-09-05 (the clang tests carry the defaults: contract, twins,
+All 58 tests pass as of 2026-09-06 (the clang tests carry the defaults: contract, twins,
 intra-block placement, the external-callee flag). The whole `llvm/test/CodeGen/AArch64`
-suite was last run clean on 2026-08-27 (3898 discovered, 3894 pass, 4 pre-existing XFAIL,
+suite was last run clean the same day (3905 discovered, 3900 pass, 5 pre-existing XFAIL,
 0 failures).
+
+**The 2026-09-05 claim of 58/58 was wrong**: `taint-analysis-nonlocal-report.mir` had been
+failing since `fa4aa84e36a0` (2026-09-04) flipped the default to the callee contract.
+Under that contract a call is not a Need for its arguments, so the test's `tailer` - whose
+only secret use was forwarding the argument - owned no DIT, and `NONLOCAL` is gated on
+owning DIT, so the record it checks for was never emitted. Fixed 2026-09-06 by giving
+`tailer` a secret operation of its own; the analysis was right and the fixture was stale.
+**Run the suite before quoting it.** Five tests that write an APPENDING report to `%t` now
+`rm -f` it first, so a stale file from an earlier run or an earlier version of the test
+can no longer satisfy a CHECK on evidence this run did not produce.
 
 **End-to-end reference:** harden `playground/firefox_convolve_int.c` and compare
 per-symbol DIT placement between the clang flag and the wrapper - they must match

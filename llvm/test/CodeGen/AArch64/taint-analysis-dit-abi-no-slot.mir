@@ -1,6 +1,11 @@
 # The llc entry point has no pre-PEI carrier reservation, so -taint-dit-abi must
 # fall back safely rather than delete protection it cannot replace.
 #
+# The report files APPEND (one record per function, accumulated across the whole
+# TU), so a stale %t from an earlier lit run or an earlier version of this test
+# survives into this one and can make a CHECK pass on evidence this run did not
+# produce. Clear it first.
+# RUN: rm -f %t
 # RUN: llc -mtriple=aarch64-unknown-linux-gnu -enable-new-pm -run-taint-interproc \
 # RUN:     -taint-insert-dit -taint-dit-abi -taint-nonlocal-report=%t %s -o - \
 # RUN:   | FileCheck %s --check-prefix=ABI
