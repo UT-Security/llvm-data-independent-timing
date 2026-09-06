@@ -34,8 +34,9 @@
 set -uo pipefail
 
 R="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LLVM="${LLVM:-$HOME/Documents/llvm-data-independent-timing/build}"
-G5="${G5:-$HOME/Documents/gem5-DIT}"
+REPO="$(cd "$R/../../.." && pwd)"
+LLVM="${LLVM:-$REPO/build}"
+G5="${G5:-$REPO/gem5-DIT}"
 BC="${BC:-$HOME/Documents/libsodium-wllvm-1.0.21}"
 WORK="${WORK:-$HOME/Documents/libsodium-cioparity-wl}"
 CIO="${CIO:?set CIO to a counter-optimization/cio checkout}"
@@ -51,7 +52,7 @@ LB="$LLVM/bin"
 # has one, and say which was used.
 M5LIB="${M5LIB:-}"
 if [[ -z "$M5LIB" ]]; then
-  for c in "$G5" "$HOME/Documents/gem5-DIT" "$G5/.."/gem5-DIT*; do
+  for c in "$G5" "$REPO/gem5-DIT" "$G5/.."/gem5-DIT*; do
     [[ -f "$c/util/m5/build/arm64/out/libm5.a" ]] && { M5LIB="$c/util/m5/build/arm64/out"; break; }
   done
 fi
@@ -260,8 +261,8 @@ if want gate; then
   for arm in $ARMS; do
     g="$WORK/bin/gate_${b}.${arm}"; [[ -x "$g" ]] || continue
     d="$WORK/gate_$arm"; mkdir -p "$d"
-    "$HOME/Documents/gem5-DIT/build/ARM/gem5.opt" --outdir="$d" \
-        "$HOME/Documents/gem5-DIT/configs/example/arm/fdp_neoverse_v2_binary.py" \
+    "$G5/build/ARM/gem5.opt" --outdir="$d" \
+        "$G5/configs/example/arm/fdp_neoverse_v2_binary.py" \
         --binary "$g" --arguments "2 1 abc cc.txt" --eves --dmp --comp-simp \
         > "$d/run.log" 2>&1 || true
     got=$(sed -n 's/.*CIOGEM5 exit dit=\([01]\).*/\1/p' "$d/run.log" | tail -1)

@@ -14,11 +14,12 @@
 # layer's function pointers), MBEDTLS_HAVE_ASM off (bignum's inline asm sits
 # inside the RSA primitive), MBEDTLS_HAVE_TIME off (no clock under gem5 SE).
 #
-# Usage: MBEDTLS_SRC=~/Documents/mbedtls-3.6.2 LLVM_BUILD=... probe_static.sh [outdir]
+# Usage: MBEDTLS_SRC=~/Documents/mbedtls-3.6.2 probe_static.sh [outdir]
+# LLVM_BUILD defaults to this repo's build/.
 set -euo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MBEDTLS_SRC="${MBEDTLS_SRC:-$HOME/Documents/mbedtls-3.6.2}"
-LLVM_BUILD="${LLVM_BUILD:-$HOME/Documents/llvm-data-independent-timing/build}"
+LLVM_BUILD="${LLVM_BUILD:-$(cd "$D/../../.." && pwd)/build}"
 OUT="${1:-$PWD/decrypt_parse_probe}"
 JOBS="${JOBS:-24}"
 [[ -d "$MBEDTLS_SRC" ]] || { echo "no mbedTLS at $MBEDTLS_SRC" >&2; exit 1; }
