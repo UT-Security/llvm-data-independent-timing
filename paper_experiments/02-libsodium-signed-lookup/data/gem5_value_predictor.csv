@@ -1,16 +1,16 @@
-# provenance: run 2026-09-04 on aarch64 Linux (beckham), native static build; gem5-DIT bf9d52c66c; clang from llvm-data-independent-timing fa4aa84e36a0 (/home/rgangar/.treehouse/llvm-data-independent-timing-7b712d/4/llvm-data-independent-timing/build-subblock); gem5.fast built 2026-09-02 01:12 ; WORK=/home/rgangar/Documents/signed_lookup-gem5
+# provenance: run 2026-09-06 on aarch64 Linux (beckham), native static build; gem5-DIT ce05d32089; clang from llvm-data-independent-timing c733b86567bb (/home/rgangar/.treehouse/llvm-data-independent-timing-7b712d/7/llvm-data-independent-timing/build); gem5.fast built 2026-09-06 13:36 ; WORK=/home/rgangar/Documents/signed_lookup-gem5-20260906
 # CANONICAL lane, public lane alone (--nosecret): value predictor totals with and without DIT.
 # Mechanism: gem5, public lane alone (--nosecret).
 L,pred_q4,arm,insts,cycles,ipc,vp_predictions,vp_preds_per_1k_insts
-10,3,nodit,297610,126460,2.353,48380,162.56
-10,3,blanket,297610,171546,1.735,10216,34.33
-50,3,nodit,1119010,895888,1.249,98927,88.41
-50,3,blanket,1119010,1202224,0.931,9878,8.83
-200,3,nodit,3611890,4014068,0.900,394816,109.31
-200,3,blanket,3611890,5284369,0.684,7728,2.14
-1000,3,nodit,9409490,11349064,0.829,1173975,124.76
-1000,3,blanket,9409490,14845876,0.634,4020,0.43
-5000,3,nodit,14008810,17154399,0.817,1948825,139.11
-5000,3,blanket,14008810,22431811,0.625,995,0.07
-20000,3,nodit,15402430,18822076,0.818,1924868,124.97
-20000,3,blanket,15402430,24731971,0.623,270,0.02
+10,3,nodit,321620,142437,2.258,53572,166.57
+10,3,blanket,321620,199199,1.615,11346,35.28
+50,3,nodit,1141520,912756,1.251,107878,94.50
+50,3,blanket,1141520,1246555,0.916,11225,9.83
+200,3,nodit,3630950,4023061,0.903,397673,109.52
+200,3,blanket,3630950,5320051,0.683,9929,2.73
+1000,3,nodit,9419550,11339530,0.831,1183417,125.63
+1000,3,blanket,9419550,14865324,0.634,4583,0.49
+5000,3,nodit,14011820,17161822,0.816,2085297,148.82
+5000,3,blanket,14011820,22437236,0.624,1181,0.08
+20000,3,nodit,15403265,18885611,0.816,2865014,186.00
+20000,3,blanket,15403265,24733567,0.623,309,0.02
