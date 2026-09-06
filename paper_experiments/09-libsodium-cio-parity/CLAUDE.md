@@ -103,8 +103,21 @@ the same offset. With PMC the numbers need no correction at all.
   cycles.
 - **The PMCs are per-core, not per-thread.** `kpc_get_thread_counters()`
   accumulates across a migration; a bare `mrs` does not, so a thread that moves
-  mid-region yields a delta spanning two cores. The shim drops absurd deltas and
-  counts them — **check `reg_drop` is 0 before trusting a PMC run.**
+  mid-region yields a delta spanning two cores. The shim drops the deltas that
+  come out obviously broken and counts them as `reg_drop` — but a move between
+  two cores whose counters happen to sit close produces a *plausible* wrong
+  number and is not detectable at all, so the count is a symptom, not a filter.
+
+  **The real fix is to stop migrating, and this kernel can.**
+  `kern.sched_thread_bind_cpu` exists and boot-args carry `enable_skstb=1`,
+  which is what makes it functional. Writing it is root-only (EPERM otherwise),
+  so a rooted run pins and an unrooted one does not — `CIO_PIN_CPU=<n>` picks
+  the core, defaulting to the highest index, since Apple silicon numbers the
+  efficiency cluster first and the performance cluster last. The report says
+  which core was used, or `no`. The gate is a drop RATE (>0.1%), not zero: a
+  50 ms argon2id region on a busy machine is occasionally rescheduled no matter
+  what, and a gate that fails on clean runs teaches you to ignore it. Unpinned,
+  expect a couple of drops in ~7,000 samples; pinned, expect none.
 
 ### Sampled PMC accumulation
 
