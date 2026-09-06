@@ -160,12 +160,30 @@ DEVIATIONS FROM THE HARNESS, STATED IN FULL
 
 HOW TO READ THE TABLES
 ======================
-summary.txt Table 1 is WordPress only, ordered by crypto boundary crossings per request. One
-application means the code, the database, the bootstrap and the response are constant and
-the only variable that moves is how often the request enters a crypto builtin. That is what
-makes it a controlled sweep rather than a comparison of applications.
+summary.txt Table 1 is WordPress only, in IPC, blanket against the developer's bracket,
+ordered by crypto boundary crossings per request.
 
-Percentages are over arm A, in points. A value under the row's MAD is zero.
+One application means the code, the database, the bootstrap and the response are constant
+and the only variable that moves is how often the request enters a crypto builtin. That is
+what makes it a controlled sweep rather than a comparison of applications.
+
+IPC rather than percent-over-baseline because it is the physical quantity -- how fast the
+machine executes the work -- instead of a ratio against a baseline that varies by row. The
+arms retire near-identical instruction counts, so it carries the same information as a cycle
+table. Cycles per row are in the raw files if a reviewer wants them.
+
+Blanket against the bracket, with the pass left out, because on this suite the bracket is
+the fair representative of fine-grained placement: PHP's crypto builtins are leaves with no
+public work inside them, so the analysis has nothing to carve out that a developer writing
+Apple's recipe by hand does not already exclude. The pass in fact costs slightly MORE here
+(2.1% IPC at 2^13, 11.9% at 2^16) because it seeds PHP_MD5Update and PHP_MD5Final separately
+and enters two regions per md5 where the bracket enters one -- a placement policy, not an
+analysis limit. Its advantage is in libraries whose regions a developer cannot see by hand,
+which is experiments 02, 03 and 10, not this one. Arms P and Z are in every raw file.
+
+The bracket is reported against its NOP twin, never against the baseline. Reporting B/A
+would confound executing the switches with the layout change that emitting them causes, and
+in the pilot relinking alone moved layout 3.9% -- larger than most effects in the table.
 
 The shape to look for: blanket flat at ~2% across a 600-fold change in crossings, because
 its cost is set by how much code runs; fine-grained zero at the low end, rising with
