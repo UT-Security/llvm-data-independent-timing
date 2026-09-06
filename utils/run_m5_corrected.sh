@@ -41,7 +41,12 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export LLVM_BIN="${LLVM_BIN:-$HOME/Documents/dit-toolchain-snap-20260901/bin}"
+# The 20260901 snapshot is the toolchain the ORIGINAL run used; when it is not
+# present, fall back to this repo's own build rather than to nothing (the same
+# rule utils/taint_libsodium_sudo_run.sh applies).
+LLVM_BIN="${LLVM_BIN:-$HOME/Documents/dit-toolchain-snap-20260901/bin}"
+[[ -x "$LLVM_BIN/llvm-objdump" ]] || LLVM_BIN="$REPO_ROOT/build/bin"
+export LLVM_BIN
 export WORK="${WORK:-$HOME/Documents/libsodium-1.0.21}"
 export CIO_DIR="${CIO_DIR:-$HOME/Documents/cio-eval}"
 BENCH_DIR="${BENCH_DIR:-$HOME/Documents/crypto-dit-benchmarks}"

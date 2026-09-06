@@ -35,7 +35,7 @@ set -uo pipefail
 
 R="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$R/../../.." && pwd)"
-LLVM="${LLVM:-$HOME/Documents/llvm-data-independent-timing/build}"
+LLVM="${LLVM:-$REPO/build}"
 G5="${G5:-$REPO/gem5-DIT}"
 BC="${BC:-$HOME/Documents/libsodium-wllvm-1.0.21}"
 WORK="${WORK:-$HOME/Documents/libsodium-cioparity-wl}"

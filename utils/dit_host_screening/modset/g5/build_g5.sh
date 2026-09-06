@@ -4,7 +4,8 @@
 set -euo pipefail
 SW="$(cd "$(dirname "$0")/../.." && pwd)"
 REPO="$(cd "$SW/../.." && pwd)"
-CL=$HOME/Documents/llvm-project/build-gfix/bin/clang
+CL="${CL:-$REPO/build/bin/clang}"
+[[ -x "$CL" ]] || { echo "no clang at $CL - build it (ninja -C <repo>/build clang) or set CL" >&2; exit 1; }
 SR=$HOME/Documents/aarch64-linux-sysroot
 G5="${G5:-$REPO/gem5-DIT}"
 BTC=$HOME/Documents/bitcoin
@@ -26,4 +27,4 @@ done
 # The driver itself is NEVER instrumented: it must not contribute switches.
 $CL $X $INC -I$G5/include -O2 -w -c $D/mod_driver.c -o $D/obj_$NAME/mod_driver.o
 $CL $X $D/obj_$NAME/*.o $G5/util/m5/build/arm64/out/libm5.a -o $D/mod_$NAME
-echo "$NAME: $($HOME/Documents/llvm-project/build-gfix/bin/llvm-objdump -d $D/mod_$NAME | grep -ci 'msr.*dit') MSR DIT"
+echo "$NAME: $("$(dirname "$CL")/llvm-objdump" -d $D/mod_$NAME | grep -ci 'msr.*dit') MSR DIT"

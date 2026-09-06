@@ -47,10 +47,18 @@ gem5 number and the gem5 change it depends on land in the same PR.
   and the benchmark binaries land there and are gitignored. Pointing `G5` at a
   prebuilt tree elsewhere still works, but then check its revision against the
   pin (`git -C gem5-DIT rev-parse HEAD`) yourself - nothing else will.
-- What is NOT repointed: the `LLVM` / `LLVM_BUILD` defaults in the same scripts
-  still name `~/Documents/llvm-data-independent-timing/build`, i.e. the main
-  checkout's compiler, not the worktree's. Set it explicitly when measuring from
-  a worktree. Inside the submodule, a handful of one-off analysis scripts
+- **The compiler defaults are local too** (2026-09-06). `LLVM` / `LLVM_BUILD` /
+  `LLVM_BIN` / `CL` / `CC_PASS` resolve to `<this repo>/build` the same way, on
+  every host: the per-OS split that sent macOS to `~/Documents/llvm-project/
+  build-gfix` and Linux to `~/Documents/llvm-data-independent-timing/build` is
+  gone, so a worktree compiles with the pass it just built. If a Mac build dir is
+  not named `build`, pass `LLVM_BUILD` - every script that uses it checks for
+  clang and dies by name. The one deliberate exception is the frozen M5
+  toolchain snapshot (`~/Documents/dit-toolchain-snap-20260901`) that
+  `utils/run_m5_corrected.sh` and `utils/taint_libsodium_sudo_run.sh` reproduce a
+  published run against; both now fall back to `<repo>/build/bin` when it is
+  absent.
+- What is NOT repointed: inside the submodule, a handful of one-off analysis scripts
   (`benchmarks/tls_resume/*`, `benchmarks/crypto/run_dit_*.sh`,
   `util/spec2017/*`, `util/dit_xover/run_fr_grid.py`,
   `benchmarks/signed_lookup/run_gem5.py`'s own default) still hard-code

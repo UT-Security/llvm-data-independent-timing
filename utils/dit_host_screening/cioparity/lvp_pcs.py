@@ -9,7 +9,8 @@ The measured window is dumps[warm : warm+iters] of stats.txt, as in
 run_cio_gem5.py. Default warm=2 iters=2 (the trace runs use a short loop)."""
 import bisect, collections, os, re, subprocess, sys
 d = sys.argv[1]; warm = int(sys.argv[2]) if len(sys.argv) > 2 else 2; iters = int(sys.argv[3]) if len(sys.argv) > 3 else 2
-nm = os.path.join(os.environ.get("LLVM_BUILD", os.path.expanduser("~/Documents/llvm-data-independent-timing/build")), "bin", "llvm-nm")
+nm = os.path.join(os.environ.get("LLVM_BUILD", os.path.join(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "build")), "bin", "llvm-nm")
 blocks = open(f"{d}/stats.txt").read().split("---------- Begin Simulation Statistics ----------")[1:]
 ends = [int(re.search(r"^finalTick\s+(\d+)", b, re.M).group(1)) for b in blocks]
 lo, hi = ends[warm - 1] if warm else 0, ends[warm + iters - 1]

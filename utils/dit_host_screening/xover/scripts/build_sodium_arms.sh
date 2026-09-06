@@ -21,7 +21,8 @@
 set -uo pipefail
 
 W=${W:-$HOME/Documents/libsodium-wllvm-1.0.21}
-L=${L:-$HOME/Documents/llvm-data-independent-timing/build/bin}
+L=${L:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/build/bin}
+[[ -x "$L/clang" ]] || { echo "no clang at $L/clang - build it (ninja -C <repo>/build clang) or set L" >&2; exit 1; }
 OUT=${OUT:-$HOME/Documents/dit-crossover/build/sodium}
 BC=${BC:-$W/libsodium-whole.bc}
 SEED=${SEED:-$W/secret_m4_pointee.txt}

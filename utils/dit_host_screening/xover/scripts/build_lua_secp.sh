@@ -14,12 +14,13 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${OUT:-$HOME/Documents/dit-crossover}"
-LLVM_BUILD="${LLVM_BUILD:-$HOME/Documents/llvm-project/build-gfix}"
+LLVM_BUILD="${LLVM_BUILD:-$(cd "$HERE/../../.." && pwd)/build}"
 SECP="${SECP:-$HOME/Documents/bitcoin/src/secp256k1}"
 LUA="${LUA:-$HOME/Documents/lua-5.4.7}"
 GEM5_ROOT="${GEM5_ROOT:-$(cd "$HERE/../../.." && pwd)/gem5-DIT}"
 XCC="$GEM5_ROOT/util/cross/taint-cross-cc"
 OBJDUMP="$LLVM_BUILD/bin/llvm-objdump"
+[[ -x "$LLVM_BUILD/bin/clang" ]] || { echo "no clang at $LLVM_BUILD/bin/clang - build it (ninja -C <repo>/build clang) or set LLVM_BUILD" >&2; exit 1; }
 
 SECP_DEFS=(-DECMULT_WINDOW_SIZE=15 -DECMULT_GEN_KB=86 -I"$SECP/src" -I"$SECP/include")
 

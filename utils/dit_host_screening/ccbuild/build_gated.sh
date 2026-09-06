@@ -11,8 +11,10 @@
 # gate is off or the arms are not comparable.
 set -euo pipefail
 SW="$(cd "$(dirname "$0")/.." && pwd)"
-CC_PASS="${CC_PASS:-$HOME/Documents/llvm-project/build-gfix/bin/clang}"
-OBJD=$HOME/Documents/llvm-project/build-gfix/bin/llvm-objdump
+REPO="$(cd "$SW/../.." && pwd)"
+CC_PASS="${CC_PASS:-$REPO/build/bin/clang}"
+OBJD="$(dirname "$CC_PASS")/llvm-objdump"
+[[ -x "$CC_PASS" ]] || { echo "no clang at $CC_PASS - build it (ninja -C <repo>/build clang) or set CC_PASS" >&2; exit 1; }
 STUB="$SW/ccbuild/stubbin"
 SEED4="$SW/ccbuild/seed4.txt"
 

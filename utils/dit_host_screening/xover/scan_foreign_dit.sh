@@ -19,7 +19,8 @@
 # Exit 1 if an unaccounted-for DIT write is found.
 set -uo pipefail
 
-L=${L:-$HOME/Documents/llvm-data-independent-timing/build/bin}
+L=${L:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/build/bin}
+[[ -x "$L/llvm-objdump" ]] || { echo "no llvm-objdump at $L - build it (ninja -C <repo>/build llvm-objdump) or set L" >&2; exit 1; }
 [[ $# -ge 2 ]] || { echo "usage: $0 <binary> <ours.o|ours.a> [more...]" >&2; exit 2; }
 BIN=$1; shift
 

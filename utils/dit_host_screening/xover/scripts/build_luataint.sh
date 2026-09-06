@@ -18,7 +18,8 @@
 # deliberately instead of stumbling into it.
 set -uo pipefail
 
-L=${L:-$HOME/Documents/llvm-project/build-gfix/bin}
+L=${L:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/build/bin}
+[[ -x "$L/clang" ]] || { echo "no clang at $L/clang - build it (ninja -C <repo>/build clang) or set L" >&2; exit 1; }
 W=${W:-$HOME/Documents/dit-crossover/build/luataint}
 mkdir -p "$W"
 say(){ printf '\n=== %s ===\n' "$*"; }
