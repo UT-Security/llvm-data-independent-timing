@@ -3,9 +3,10 @@
 # usage: build_g5.sh <name> <seedfile> [extra pass flags...]
 set -euo pipefail
 SW="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO="$(cd "$SW/../.." && pwd)"
 CL=$HOME/Documents/llvm-project/build-gfix/bin/clang
 SR=$HOME/Documents/aarch64-linux-sysroot
-G5=$HOME/Documents/gem5-DIT
+G5="${G5:-$REPO/gem5-DIT}"
 BTC=$HOME/Documents/bitcoin
 D=$SW/modset/g5
 NAME=$1; SEED=$2; shift 2

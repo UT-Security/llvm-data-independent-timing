@@ -26,7 +26,7 @@ LLVM_BUILD="${LLVM_BUILD:-$HOME/Documents/llvm-project/build-gfix}"
 SECP="${SECP:-$HOME/Documents/bitcoin/src/secp256k1}"
 SQLITE_C="${SQLITE_C:-$HOME/Documents/sqlcipher-4.6.1/sqlite3.c}"
 SQLITE_DIR="$(dirname "$SQLITE_C")"
-GEM5_ROOT="${GEM5_ROOT:-$HOME/Documents/gem5-DIT}"
+GEM5_ROOT="${GEM5_ROOT:-$(cd "$HERE/../../.." && pwd)/gem5-DIT}"
 JOBS="${JOBS:-4}"
 
 CLANG="$LLVM_BUILD/bin/clang"

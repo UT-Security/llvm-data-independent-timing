@@ -22,7 +22,7 @@
 # Env: LLVM_BUILD  the taint clang build (default: ~/Documents/llvm-project/build-gfix on
 #                  macOS, ~/Documents/llvm-data-independent-timing/build on Linux)
 #      BTC         Bitcoin Core tree (default ~/Documents/bitcoin)
-#      G5          gem5-DIT tree (default ~/Documents/gem5-DIT)
+#      G5          gem5-DIT tree (default: this repo's gem5-DIT submodule)
 #      BOOST_DIR   gem5 stage, first run only: a Boost CMake config dir, e.g.
 #                  ~/Documents/boost-1.88-headers/lib/aarch64-linux-gnu/cmake/Boost-1.88.0
 #      MPL         a python with matplotlib (default python3)
@@ -37,7 +37,7 @@ E="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 R="$(cd "$E/../.." && pwd)"
 RIG="$R/utils/dit_host_screening/btc"
 BTC="${BTC:-$HOME/Documents/bitcoin}"
-G5="${G5:-$HOME/Documents/gem5-DIT}"
+G5="${G5:-$R/gem5-DIT}"
 MPL="${MPL:-python3}"
 OS="$(uname -s)"
 case "$OS" in
@@ -70,7 +70,9 @@ provenance() {
     printf '    llvm-data-independent-timing %s\n' "$(git -C "$R" rev-parse HEAD)"
     printf '    clang: %s\n' "$("$LLVM_BUILD/bin/clang" --version | head -1)"
     [[ -d "$BTC/.git" ]] && printf '    bitcoin %s\n' "$(git -C "$BTC" rev-parse HEAD)"
-    [[ -d "$G5/.git" ]] && printf '    gem5-DIT %s\n' "$(git -C "$G5" rev-parse HEAD)"
+    # -e, not -d: a submodule's .git is a FILE pointing into the parent .git dir,
+    # so -d would silently drop the gem5 commit from the provenance record.
+    [[ -e "$G5/.git" ]] && printf '    gem5-DIT %s\n' "$(git -C "$G5" rev-parse HEAD)"
   } >> "$E/data/provenance.txt"
 }
 
@@ -163,6 +165,7 @@ if want gem5; then
       -DENABLE_EXTERNAL_SIGNER=OFF -DBUILD_KERNEL_LIB=OFF > "$BTC/build-gem5cfg-configure.log"
   fi
   info "gem5: build the arms (sign: 4 arms; coinsel: base + blanket)"
+  [[ -d "$G5/benchmarks/bitcoin" ]] || { echo "no gem5-DIT at $G5 - run: git submodule update --init gem5-DIT (or set G5)" >&2; exit 1; }
   BTC="$BTC" RIG="$RIG" "$G5/benchmarks/bitcoin/build_btc_arms.sh"
   BTC="$BTC" CFG="$CFG" "$G5/benchmarks/bitcoin/build_coinsel_arms.sh"
   info "gem5: coinsel 1/1/1, coinsel4 1/1/4, sign --iter 32 (the arguments ipc.md records), 5 argv[0] offsets each"
@@ -184,6 +187,7 @@ if want flow; then
   CFG="${CFG:-$BTC/build-gem5cfg/src}"
   [[ -f "$CFG/bitcoin-build-config.h" ]] || { echo "run the gem5 stage first (it configures Bitcoin Core)" >&2; exit 1; }
   info "flow: build the arms (reuses the gem5 stage's objects)"
+  [[ -d "$G5/benchmarks/bitcoin" ]] || { echo "no gem5-DIT at $G5 - run: git submodule update --init gem5-DIT (or set G5)" >&2; exit 1; }
   BTC="$BTC" CFG="$CFG" RIG="$RIG" "$G5/benchmarks/bitcoin/build_flow_arms.sh"
   info "flow: K = 0,1,4,10,25,50,100,200,400 x base/blanket/taint x spec/serdit x 5 offsets"
   OUT="${GEM5_OUT:-$HOME/Documents/dit-browser-bench/gem5-btc}"

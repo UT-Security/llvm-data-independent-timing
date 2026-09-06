@@ -44,7 +44,7 @@ against 1000 timing samples for exactly this reason.
 import argparse, csv, hashlib, json, os, pathlib, re, shutil, statistics, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
-G5 = pathlib.Path(os.environ.get("G5", pathlib.Path.home() / "Documents/gem5-DIT"))
+G5 = pathlib.Path(os.environ.get("G5", pathlib.Path(__file__).resolve().parents[3] / "gem5-DIT"))
 CONFIG = G5 / "configs/example/arm/fdp_neoverse_v2_binary.py"
 WORK = pathlib.Path(os.environ.get("WORK", pathlib.Path.home() / "Documents/libsodium-cioparity"))
 

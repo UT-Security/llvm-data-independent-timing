@@ -35,11 +35,27 @@ gem5 number and the gem5 change it depends on land in the same PR.
   here needs it.
 - Move the pin to master's tip: `git submodule update --remote gem5-DIT`, then
   commit the new `gem5-DIT` entry alongside the measurement it belongs to.
-- The submodule is sources only. `build/ARM/gem5.fast` and the benchmark
-  binaries still live in the tree the scripts point at (`GEM5_ROOT`, else
-  `~/Documents/gem5-DIT`). Either build inside the submodule and point
-  `GEM5_ROOT` at it, or keep `~/Documents/gem5-DIT` checked out at the pinned
-  commit (`git -C gem5-DIT rev-parse HEAD`) while measuring.
+- **Every script defaults to the submodule** (2026-09-06). `G5` / `GEM5_ROOT`
+  resolve to `<this repo>/gem5-DIT`, computed from the script's own path, so a
+  worktree measures against its own gem5 and never against another checkout;
+  both variables still override. There is no `~/Documents/gem5-DIT` fallback
+  anywhere - a missing submodule is an error naming
+  `git submodule update --init gem5-DIT`, not a silent switch to whatever that
+  other tree happens to be checked out at.
+- The submodule is sources only, so **build gem5 inside it**:
+  `(cd gem5-DIT && scons build/ARM/gem5.opt -j<jobs>)`. `build/ARM/gem5.fast`
+  and the benchmark binaries land there and are gitignored. Pointing `G5` at a
+  prebuilt tree elsewhere still works, but then check its revision against the
+  pin (`git -C gem5-DIT rev-parse HEAD`) yourself - nothing else will.
+- What is NOT repointed: the `LLVM` / `LLVM_BUILD` defaults in the same scripts
+  still name `~/Documents/llvm-data-independent-timing/build`, i.e. the main
+  checkout's compiler, not the worktree's. Set it explicitly when measuring from
+  a worktree. Inside the submodule, a handful of one-off analysis scripts
+  (`benchmarks/tls_resume/*`, `benchmarks/crypto/run_dit_*.sh`,
+  `util/spec2017/*`, `util/dit_xover/run_fr_grid.py`,
+  `benchmarks/signed_lookup/run_gem5.py`'s own default) still hard-code
+  `/home/rgangar/Documents/gem5-DIT`; the rig scripts the `reproduce.sh` entry
+  points call derive their root from their own path and are fine.
 
 ## Build
 
