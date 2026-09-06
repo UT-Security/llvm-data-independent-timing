@@ -546,12 +546,30 @@ after PrologEpilogInserter**, in the ordinary pipeline. Same all-resident view, 
 point in the pipeline, no serialization - so EH, debug info and CFI stay as codegen
 built them.
 
-**Consequence for measurement: the codegen lottery is gone on the clang path.** A
-round-trip control (`-ftaint-harden=<empty seed file>`, zero switches) is now
-**byte-identical** to a plain `-O2` build. Verified 2026-08-31 on libsodium
-(`libsodium.a` and both driver binaries identical) and on libsecp256k1
-(`secp_gem5_rt` == `secp_gem5_nodit`). So a `taint`-vs-`base` delta from a
-clang-built binary is DIT cost, full stop - no round-trip term to subtract.
+**Consequence for measurement: the ROUND-TRIP lottery is gone on the clang path.**
+A round-trip control (`-ftaint-harden=<empty seed file>`, zero switches) was
+**byte-identical** to a plain `-O2` build when this was written. Verified 2026-08-31
+on libsodium (`libsodium.a` and both driver binaries identical) and on libsecp256k1
+(`secp_gem5_rt` == `secp_gem5_nodit`). So there is no round-trip term to subtract.
+
+**That byte-identity NO LONGER HOLDS, and has not since 2026-09-01**, when the
+TU-wide tail-call disable moved onto `-ftaint-harden`'s presence (see
+`-taint-no-tail-calls` above). An empty-seed control now differs from plain `-O2`
+by that alone: measured 2026-09-06 on libsodium, `libsodium.a` is **+0.89%**
+(690,598 -> 696,734 bytes), 44 tail calls become `bl` + `ret`, and it is worth
+-0.91% to +3.49% of runtime depending on the benchmark. **`-O2` is therefore NOT
+codegen-matched to a hardened arm** - use `-ftaint-harden=<empty>` as the control
+for any DIT-vs-no-DIT delta, and keep plain `-O2` only as the unhardened reference.
+`docs/results/dit-layout-lottery-2026-09-06.md` §6.
+
+**And a `taint`-vs-`base` delta is still not DIT cost on its own.** A pure relink -
+4 to 256 bytes of unreachable padding ahead of the library, identical instruction
+stream - moves these five libsodium benchmarks over a **7.04-point** range, which
+on three of five rows is larger than the whole layout term the rig attributes to
+the pass. Price it with `utils/dit_host_screening/cioparity/relink_null.sh` (a
+dozen cells) before quoting any single A/B under ~7 points on this library, and
+keep the per-policy NOP twin, which cancels layout arithmetically. Not a cache
+effect: across 350 cells the worst L1I miss rate is 1 per 13,831 accesses.
 
 **The wrapper still round-trips.** `utils/taint_harden_c.sh` drives `llc` with
 `-stop-after`/`-start-after` and the perl `<mcsymbol >` strip, so the lottery still
