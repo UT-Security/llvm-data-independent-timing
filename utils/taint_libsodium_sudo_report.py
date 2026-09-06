@@ -199,6 +199,70 @@ table(f"PART 2 - CIO's benchmarks, their parameters ({_opt} drivers, mean of "
       _u + ", mean over their iteration count (CIO's own statistic)",
       blanket_exits_set=True)
 
+# ---- sampled PMC: cycles, instructions and IPC per OPERATION -------------
+# The whole-process table below answers a different question and is kept, but
+# this is the one to read: it is per-op, it is inside the timed region, and both
+# counters come from the PMCs so nothing is converted at an assumed clock.
+try:
+    _pr = list(_csv.DictReader(open(os.path.join(OUT, "cio.csv"))))
+except FileNotFoundError:
+    _pr = []
+_p = collections.defaultdict(list)
+_drop = 0
+for r in _pr:
+    try:
+        n = float(r.get("samp_n") or 0)
+        _drop += int(float(r.get("reg_drop") or 0))
+    except ValueError:
+        continue
+    if n > 0:
+        _p[(r["benchmark"], r["arm"])].append(
+            (float(r["samp_cyc"]) / n, float(r["samp_ins"]) / n))
+if _p:
+    _every = next((r.get("samp_every") for r in _pr if r.get("samp_every")), "?")
+    print(f"\n{'='*96}\nPER-OP COUNTERS - sampled PMC, 1 region in {_every}\n{'='*96}")
+    print(f"{'benchmark':<26}{'arm':<5}{'cycles':>12}{'vs base':>10}{'instrs':>12}"
+          f"{'vs base':>10}{'IPC':>8}{'IPC ovh':>9}")
+    print("-" * 96)
+    _benches, _arms = [], []
+    for (b, a) in _p:
+        if b not in _benches: _benches.append(b)
+        if a not in _arms: _arms.append(a)
+    for b in _benches:
+        base = _p.get((b, "A"))
+        if not base:
+            continue
+        bc = st.median([x[0] for x in base]); bi = st.median([x[1] for x in base])
+        for a in [x for x in ORDER if x in _arms]:
+            v = _p.get((b, a))
+            if not v:
+                continue
+            c = st.median([x[0] for x in v]); i = st.median([x[1] for x in v])
+            ipc = i / c if c else 0
+            bipc = bi / bc if bc else 0
+            print(f"{b if a == 'A' else '':<26}{a:<5}{c:>12,.0f}{c/bc-1:>+10.2%}"
+                  f"{i:>12,.0f}{i/bi-1:>+10.2%}{ipc:>8.3f}"
+                  f"{(bipc/ipc-1) if ipc else 0:>+9.2%}")
+        print()
+    # Cycles are read bare and instructions isb-ordered, so the implied clock is
+    # a check on the whole chain: a value that is not this machine's P-core clock
+    # means the cycle window is contaminated. It read 7.30 GHz on aes256gcm-encrypt
+    # back when cycles carried the isb drain, which is how that bug was caught.
+    _ghz = []
+    for b in _benches:
+        v = _p.get((b, "A")); t = [float(r["mean_ticks"]) for r in _pr
+                                   if r["benchmark"] == b and r["arm"] == "A"]
+        if v and t:
+            _ghz.append((b, st.median([x[0] for x in v]) / st.median(t)))
+    if _ghz:
+        lo = min(g for _, g in _ghz); hi = max(g for _, g in _ghz)
+        ok = 3.0 < lo and hi < 5.0
+        print(f"  implied clock {lo:.2f}-{hi:.2f} GHz across benchmarks "
+              f"{'PASS' if ok else 'FAIL - cycle window is contaminated'}")
+        print("       (bare PMC0 cycles / cntvct ns; must be this machine's P-core clock)")
+    print(f"  samples dropped by the migration guard: {_drop} "
+          f"{'PASS' if _drop == 0 else 'FAIL - per-core PMCs read across a thread move'}")
+
 # ---- counter table: what cntvct could never show -------------------------
 try:
     _rows = list(_csv.DictReader(open(os.path.join(OUT, "cio.csv"))))
