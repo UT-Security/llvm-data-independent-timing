@@ -134,7 +134,7 @@ How the analysis is built, which bugs were found in it, and what is still open.
   coverage costs 3x the writes and +5 points renamed on signing. Two analysis
   fixes it exposed (twin argument taint, NEON register tuples) apply everywhere.
 - **[results/dit-external-preserves-2026-09-05.md](results/dit-external-preserves-2026-09-05.md)** -
-  the external-callee assumption (`-taint-dit-external-preserves`, opt-in): a
+  the external-callee assumption (`-taint-dit-external-preserves`, the default since 2026-09-05): a
   callee outside the build never writes PSTATE.DIT, so no re-assert after it. libsodium 358 -> 214
   switch sites at identical coverage; ed25519 and AES-GCM down to the
   hand-placed bracket's two switches per call; argon2id's 395,758 re-asserts
