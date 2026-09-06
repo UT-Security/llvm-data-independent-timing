@@ -129,11 +129,33 @@ one-time instructions spread over 16 samples.
 
 | want | use | why |
 |---|---|---|
-| overhead ratios | `mean_ticks` (CNTVCT) | ratio of two tick counts, frequency-free, ~21-cycle offset |
-| instruction counts | `samp_ins/samp_n` | exact; the drain retires no new instructions |
-| **throughput IPC** | `samp_ins/samp_n` over CNTVCT cycles | what a 1000-iteration loop actually delivers |
-| latency IPC | `samp_ins`/`samp_cyc` | one op to full retirement, no overlap with its neighbours |
+| cycles per op | `samp_cyc/samp_n` | true cycles, read bare -- no clock conversion |
+| instruction counts | `samp_ins/samp_n` | exact |
+| **IPC** | `samp_ins`/`samp_cyc` | both from PMC, nothing assumed |
+| overhead ratios | either, or `mean_ticks` | ratios need no clock at all |
 | switch counts per arm | denser sampling | ~16 samples cannot resolve a 6-instruction delta |
+
+**Cycles are read BARE; instructions are read `isb`-ordered.** The hazard is
+asymmetric, and treating the two counters alike is what made this hard for a
+while. An early read of the INSTRUCTION counter loses everything not yet
+retired -- measured, 5,778 against a true 6,007. An early read of a free-running
+CYCLE counter is off by at most the reorder window, and the same skew appears at
+both boundaries so it cancels. Measured against CNTVCT from 200 to 2,000,000
+iterations of work, a bare PMC0 read holds a constant 4.40-4.43 ratio: it IS the
+cycle count, at every scale.
+
+The boundary reads are ordered so the drain falls outside the cycle window on
+both sides: instructions first at region entry (its `isb` drains, then the cycle
+snapshot is taken after it), cycles first at region exit. Instructions get the
+drain, which they need; cycles never pay it.
+
+**This is what removed the last assumed constant.** Converting CNTVCT time into
+cycles needed a clock, and there is no single one: measured per benchmark it is
+4.246 GHz on argon2id and 4.450 on ed25519, 4.8% apart, and that propagates
+straight into any IPC built on a constant. With drained cycles the implied clock
+came out as 4.25 / 4.45 / 5.05 / 7.30 GHz across the four benchmarks -- the
+7.30 being visibly impossible and the tell that the short rows were drain, not
+frequency. Read bare it is 4.28-4.42 everywhere, which is DVFS and nothing else.
 
 **Sampling does not make `samp_cyc` a clean cycle count**, and it was never
 going to: a sampled region still contains its own end-`isb`. What it removes is
