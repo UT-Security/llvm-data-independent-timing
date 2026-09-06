@@ -1,3 +1,8 @@
+# The report files APPEND (one record per function, accumulated across the whole
+# TU), so a stale %t from an earlier lit run or an earlier version of this test
+# survives into this one and can make a CHECK pass on evidence this run did not
+# produce. Clear it first.
+# RUN: rm -f %t
 # RUN: llc -mtriple=aarch64-unknown-linux-gnu -enable-new-pm -run-taint-interproc \
 # RUN:     -taint-insert-dit -taint-dit-placement=function \
 # RUN:     -taint-nonlocal-report=%t %s -o /dev/null
@@ -31,6 +36,16 @@
 # (llvm::applyTaintTailCallDisable), so #0 carrying it is what a real build looks like -
 # not a fixture. `plain` below is in the same attribute group, which is the point: it
 # keeps its epilogue and is still not reported.
+#
+# SO IS `tailer`'s MULTIPLY, for a second reason. The report is gated on the function
+# OWNING DIT: one entered with DIT already set has no restore to skip, so nothing
+# degrades and there is nothing to report. Under -taint-dit-contract=callee (the
+# default since fa4aa84e36a0, 2026-09-04) a call is NOT a Need for its arguments, so a
+# `tailer` whose only secret use was forwarding %secret to the callee owned no DIT,
+# emitted no record, and this line silently stopped matching the day the default
+# flipped. `secret * 3` lowers to ADDXrs on the secret, which IS a Need, so the
+# function turns DIT on for itself and then leaves through a tail call that has no
+# epilogue - the hazard this test exists for. Do not simplify it away.
 # CHECK-DAG: NONLOCAL musttail callee=sink caller=tailer
 #
 # `plain` calls the same external through an ordinary call, reaches its epilogue,
@@ -70,7 +85,8 @@
   ; Function Attrs: nounwind uwtable
   define dso_local i64 @tailer(i64 noundef "tainted" %secret) local_unnamed_addr #0 {
   entry:
-    %call = musttail call i64 @sink(i64 noundef %secret) #3
+    %mul = mul i64 %secret, 3
+    %call = musttail call i64 @sink(i64 noundef %mul) #3
     ret i64 %call
   }
   
@@ -260,6 +276,7 @@ body:             |
   bb.0.entry:
     liveins: $x0
   
+    renamable $x0 = ADDXrs killed renamable $x0, renamable $x0, 1
     TCRETURNdi @sink, 0, csr_aarch64_aapcs, implicit $sp, implicit $x0
 ...
 ---
