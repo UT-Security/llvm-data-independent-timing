@@ -131,7 +131,10 @@ cio, cio_dit = load(os.path.join(OUT, "cio.csv"),
                     lambda r: (r['benchmark'], r['arm']),
                     lambda r: float(r['mean_ticks']))
 
-print("\nARMS: " + " | ".join(f"{a}={NAME[a]}" for a in ORDER))
+# Only the arms this run actually has: the legend is for reading the table
+# above it, and listing twelve when six ran makes it harder, not easier.
+_present = {r["arm"] for r in _rr} if _rr else set(ORDER)
+print("\nARMS: " + " | ".join(f"{a}={NAME[a]}" for a in ORDER if a in _present))
 
 # gates 1-3 come from the ditprobe rows in part 1
 probe = {k[0].split('/')[1]: {a: st.median(v) for (kk, a), v in ours.items()
@@ -176,7 +179,9 @@ if probe:
         print(f"  4. mode readback        DitBit A={bit.get('A')} C={bit.get('C')} "
               f"{'PASS' if ok else 'FAIL'}")
 
-table("PART 1 - our 13 primitives (-O2 drivers)", ours, ours_dit,
+_FULL = os.environ.get("FULL", "0") == "1"
+if _FULL:
+    table("PART 1 - our 13 primitives (-O2 drivers)", ours, ours_dit,
       "cntvct_el0 ticks/op (~1 ns), or ps/hop for ditprobe. TIME, not cycles.",
       blanket_exits_set=False)
 # What the driver DIFFERENCED is timer_src; cycle_src describes the counter
@@ -194,10 +199,20 @@ elif _tsrc == {"cntvct"}:
           "percentages are sound; the absolute column is TIME, not cycles")
 else:
     _u = f"MIXED timer sources {_tsrc} -- do not compare across arms"
-table(f"PART 2 - CIO's benchmarks, their parameters ({_opt} drivers, mean of "
-      "per-iteration counts)", cio, cio_dit,
-      _u + ", mean over their iteration count (CIO's own statistic)",
-      blanket_exits_set=True)
+if _FULL:
+    # The CNTVCT table. Superseded by the PMC one for a reason worth recording:
+    # CNTVCT measures TIME, so it carries whatever clock the machine picked, and
+    # the arms of one benchmark do not all run at the same clock. Measured on
+    # aes256gcm-decrypt: 3.44 GHz on base and the NOP twins against 4.42 on the
+    # bracket and the pass, because a 301-cycle op with nothing slowing it down
+    # never ramps while one carrying two `sb` drains stays boosted. That made the
+    # hardened arms look 34 points cheaper in time than they are in cycles. PMC
+    # cycles are DVFS-immune and are the like-for-like comparison against gem5,
+    # whose numbers are cycles at a fixed clock.
+    table(f"PART 2 - CIO's benchmarks, their parameters ({_opt} drivers, mean of "
+          "per-iteration counts)", cio, cio_dit,
+          _u + ", mean over their iteration count (CIO's own statistic)",
+          blanket_exits_set=True)
 
 # ---- sampled PMC: cycles, instructions and IPC per OPERATION -------------
 # The whole-process table below answers a different question and is kept, but
@@ -222,27 +237,48 @@ if _p:
     _every = next((r.get("samp_every") for r in _pr if r.get("samp_every")), "?")
     print(f"\n{'='*96}\nPER-OP COUNTERS - sampled PMC, 1 region in {_every}\n{'='*96}")
     print(f"{'benchmark':<26}{'arm':<5}{'cycles':>12}{'vs base':>10}{'instrs':>12}"
-          f"{'vs base':>10}{'IPC':>8}{'IPC ovh':>9}")
+          f"{'vs base':>10}{'IPC':>8}{'IPC ovh':>9}   gate")
     print("-" * 96)
     _benches, _arms = [], []
     for (b, a) in _p:
         if b not in _benches: _benches.append(b)
         if a not in _arms: _arms.append(a)
+    # dit_exit per (benchmark, arm): gate 4 used to be printed by table(), which
+    # this replaces. CIO's drivers have no DIT support, so the blanket arm comes
+    # from the shim constructor and is never cleared -- C must exit with DIT=1
+    # and every other arm with 0. An arm that leaks the mode is blanket in
+    # disguise, which is exactly the tail-call bug that went unnoticed for months.
+    _ex = collections.defaultdict(set)
+    for r in _pr:
+        _ex[(r["benchmark"], r["arm"])].add(r.get("dit_exit", "?"))
     for b in _benches:
         base = _p.get((b, "A"))
         if not base:
             continue
         bc = st.median([x[0] for x in base]); bi = st.median([x[1] for x in base])
-        for a in [x for x in ORDER if x in _arms]:
-            v = _p.get((b, a))
-            if not v:
-                continue
+        arms_here = [x for x in ORDER if x in _arms and (b, x) in _p]
+        # gate 5: the between-arm spread must clear 3x the worst within-arm MAD,
+        # or the benchmark cannot resolve the effect and no row of it means much.
+        def _disp(v):
+            m = st.median(v)
+            return (st.median([abs(x - m) for x in v]) / m) if m else 0.0
+        meds = {a: st.median([x[0] for x in _p[(b, a)]]) for a in arms_here}
+        spread = max((_disp([x[0] for x in _p[(b, a)]]) for a in arms_here), default=0.0)
+        lo = min(meds.values()) if meds else 0
+        betw = (max(meds.values()) - lo) / lo if lo > 0 else 0
+        resolvable = betw >= 3 * spread
+        for a in arms_here:
+            v = _p[(b, a)]
             c = st.median([x[0] for x in v]); i = st.median([x[1] for x in v])
             ipc = i / c if c else 0
             bipc = bi / bc if bc else 0
+            leaked = ("1" in _ex[(b, a)]) != (a == "C")
+            g = "DIT-LEAK" if leaked else ("" if resolvable else "unresolvable")
             print(f"{b if a == 'A' else '':<26}{a:<5}{c:>12,.0f}{c/bc-1:>+10.2%}"
                   f"{i:>12,.0f}{i/bi-1:>+10.2%}{ipc:>8.3f}"
-                  f"{(bipc/ipc-1) if ipc else 0:>+9.2%}")
+                  f"{(bipc/ipc-1) if ipc else 0:>+9.2%}   {g}")
+        print(f"{'':<26}MAD within {spread*100:.2f}%  range between {betw*100:.1f}%"
+              + ("" if resolvable else "   <- NOT RESOLVABLE"))
         print()
     # Cycles are read bare and instructions isb-ordered, so the implied clock is
     # a check on the whole chain: a value that is not this machine's P-core clock
@@ -273,7 +309,7 @@ for r in _rows:
     if r.get("tot_ins", "0") not in ("0", "", None):
         _c[(r["benchmark"], r["arm"])].append(
             (float(r["tot_cyc"]), float(r["tot_ins"]), float(r["map_stall"])))
-if _c:
+if _c and _FULL:
     print(f"\n{'='*96}\nCOUNTERS - whole-process totals per arm (kperf)\n{'='*96}")
     print(f"{'benchmark':<28}{'arm':<5}{'instructions':>15}{'cycles':>15}{'IPC':>8}"
           f"{'ins vs A':>10}{'cyc vs A':>10}")
@@ -315,7 +351,9 @@ READING IT
                   and every switch a selective policy adds is pure loss. That is
                   a property of the workload, not a refutation of the approach.
   P vs C      ->  the question the paper asks. P > C means blanket wins.
-  X vs P      ->  what the 2026-08-24 default change bought.
-  N vs P      ->  what indirect-call resolution costs when dwell is ~0.
+  T, Z        ->  each arm's NOP twin. Subtract it before believing any number:
+                  it is the same code at the same addresses with no mode switch,
+                  so whatever it shows is layout, not DIT.
 Any row marked DIT-LEAK is NOT a result: an arm ran in a mode it does not claim.
-""")
+Cycles and instructions are both PMC; nothing is converted at an assumed clock.
+FULL=1 adds the CNTVCT and whole-process tables.""")
