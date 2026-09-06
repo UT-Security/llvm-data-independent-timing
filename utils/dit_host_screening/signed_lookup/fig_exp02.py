@@ -72,7 +72,7 @@ for name, ys, col, ls, mk, mfc in series:
     ax.plot(xs, ys, color=col, lw=2, ls=ls, marker=mk, ms=6, mfc=mfc, mec=col, mew=1.6, zorder=3)
 ax.axhline(0, color=BASE, lw=0.9, zorder=2)
 xaxis_secret_fraction(ax, f, Ls)
-ax.set_ylabel("IPC overhead (%)")
+ax.set_ylabel("IPC Overhead (%)")
 # The unit is in the label, so the ticks are bare numbers - a "%" on every tick
 # as well is the same word six times.
 ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
