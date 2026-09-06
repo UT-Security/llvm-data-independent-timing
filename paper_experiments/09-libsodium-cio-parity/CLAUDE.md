@@ -73,8 +73,14 @@ clang -O1 -o /tmp/pmc_check utils/cio_pmc_check.c && /tmp/pmc_check
 
 | source | per-region cost | needs root | when |
 |---|---|---|---|
-| **PMC** | 1 cycle bare, ~39 `isb`-ordered | **no** | kernel patched with `PMCR0_USEREN_EN` |
+| **PMC** | 1 cycle bare, ~39 `isb`-ordered | for pinning only | kernel patched with `PMCR0_USEREN_EN` |
 | kperf | ~3,400 cycles, ~17,700 instrs | yes | everywhere else |
+
+**Root still buys something on a PMC run, and it is not the counters.**
+`kern.sched_thread_bind_cpu` is EPERM without it, and the per-core PMCs are only
+fully sound on a thread that cannot migrate. So `./reproduce.sh` still prompts:
+say yes and the thread is pinned, decline and it re-runs unrooted rather than
+losing the run. `NO_SUDO=1` skips the prompt on purpose.
 
 PMC reads Apple's fixed counters (PMC0 cycles, PMC1 retired instructions)
 straight from EL0. It needs a kernel patched by
