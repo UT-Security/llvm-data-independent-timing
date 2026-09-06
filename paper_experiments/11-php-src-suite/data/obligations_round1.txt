@@ -1,0 +1,25 @@
+OWNED: 6 seed line(s) for callees this build defines
+  BF_crypt,1,pointee                                           <- crypt_blowfish.c:php_crypt_blowfish_rn
+  BF_set_key,1,pointee                                         <- crypt_blowfish.c:php_crypt_blowfish_rn
+  BF_set_key,2,pointee                                         <- crypt_blowfish.c:php_crypt_blowfish_rn
+  _crypt_extended_r,0,pointee                                  <- crypt.c:php_crypt
+  php_sha256_crypt_r,0,pointee                                 <- crypt.c:php_crypt
+  php_sha512_crypt_r,0,pointee                                 <- crypt.c:php_crypt
+INDIRECT: 6 site(s) - seed the pointer's targets by name
+  hash.c php_hash_do_hash_hmac
+  hash.c php_hash_hmac_prep_key
+  hash.c php_hash_hmac_round
+EXTERNAL (out of scope): 42 site(s), 12 callee(s)
+  allocator  free x2
+  mover      memcpy x8
+  other      _efree x2
+  other      _emalloc x2
+  other      _php_stream_read x2
+  other      _safe_emalloc x2
+  other      bzero x2
+  other      memcmp x4
+  other      php_explicit_bzero x10
+  other      php_hash_hmac_round x2
+  other      php_md5_crypt_r x2
+  other      strlen x4
+wrote /Users/rgangar/Documents/dit-silicon-candidates/seeds_php_full_next.txt: 12 existing + 6 new seed line(s)

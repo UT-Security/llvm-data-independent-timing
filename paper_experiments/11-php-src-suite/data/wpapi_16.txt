@@ -1,0 +1,22 @@
+auth check: with credential 200, without 401 (must be 401)
+wpapi: 6 arms, 50 warm-up + 100 measured requests per row, arms rotate per request
+
+== wpapi: REST authenticated by application password, phpass 2^16 rounds   (100 measured requests/arm, MAD(A) 1.14%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         39.04   +0.00%   -2.34%
+C         39.98   +2.40%   +0.00%
+B         42.01   +7.60%   +5.08%
+Bn        38.91   -0.34%   -2.68%
+P         43.77  +12.11%   +9.49%
+Z         39.19   +0.38%   -1.97%
+  executed-switch terms: B-Bn +7.97 pts   P-Z +11.69 pts   (relative to A: B-Bn +7.94, P-Z +11.74)
+
+== wpapi: logins only, phpass 2^16 rounds   (100 measured requests/arm, MAD(A) 1.17%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         40.28   +0.00%   -1.95%
+C         41.08   +1.99%   +0.00%
+B         42.93   +6.58%   +4.50%
+Bn        40.17   -0.26%   -2.21%
+P         44.90  +11.48%   +9.30%
+Z         40.28   +0.00%   -1.95%
+  executed-switch terms: B-Bn +6.87 pts   P-Z +11.47 pts   (relative to A: B-Bn +6.85, P-Z +11.47)

@@ -1,0 +1,6 @@
+php-cgi: msr DIT sites 14, sb 7, twins 0
+php-cgi: msr DIT sites 0, sb 0, twins 0
+php-cgi: msr DIT sites 65, sb 44, twins 15
+php-cgi: msr DIT sites 90, sb 55, twins 26
+php-cgi: msr DIT sites 97, sb 57, twins 27
+php-cgi: msr DIT sites 0, sb 0, twins 27
