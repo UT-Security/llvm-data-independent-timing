@@ -1,0 +1,81 @@
+
+ARMS: A=unhardened | C=blanket DIT | B=Apple bracket (sb -- the shipped sequence) | T=Apple bracket NOPed (control for B/I) | P=pass (shipped) | Z=pass, switches NOPed (control for P)
+
+================================================================================================
+INSTRUMENT GATES (ditprobe, interleaved with every other benchmark)
+================================================================================================
+  1. DIT visible          Const 1.00 -> 3.00 cyc/hop (3.009x, Perm 3.01) PASS
+       predicted <2 cyc/hop with DIT off, and DIT on must reach Perm
+  2. negative control     Perm  0.9985x PASS (flat)
+  3. P-core residency     CoreMHz 4397-4416 PASS
+  4. mode readback        DitBit A=0.0 C=1.0 PASS
+
+================================================================================================
+PER-OP COUNTERS - sampled PMC, 1 region in 64
+================================================================================================
+benchmark                 arm        cycles   vs base      instrs   vs base     IPC  IPC ovh   gate
+------------------------------------------------------------------------------------------------
+ed25519                   A          34,351    +0.00%     149,860    +0.00%   4.363   +0.00%   
+                          C          34,672    +0.93%     149,860    +0.00%   4.322   +0.93%   
+                          B          34,794    +1.29%     149,870    +0.01%   4.307   +1.28%   
+                          T          34,294    -0.17%     149,870    +0.01%   4.370   -0.17%   
+                          P          34,989    +1.86%     149,983    +0.08%   4.287   +1.77%   
+                          Z          34,626    +0.80%     149,989    +0.09%   4.332   +0.71%   
+                          MAD within 0.08%  range between 2.0%
+
+chacha20_poly1305_encrypt A           1,057    +0.00%       4,937    +0.00%   4.671   +0.00%   
+                          C           1,061    +0.37%       4,937    +0.00%   4.654   +0.37%   
+                          B           1,252   +18.47%       4,953    +0.32%   3.955  +18.09%   
+                          T           1,060    +0.29%       4,953    +0.32%   4.673   -0.03%   
+                          P           2,271  +114.91%       5,010    +1.48%   2.206 +111.78%   
+                          Z           1,066    +0.85%       5,005    +1.38%   4.695   -0.52%   
+                          MAD within 0.65%  range between 114.9%
+
+chacha20_poly1305_decrypt A           1,169    +0.00%       5,200    +0.00%   4.450   +0.00%   
+                          C           1,193    +2.07%       5,200    +0.00%   4.359   +2.07%   
+                          B           1,364   +16.75%       5,216    +0.31%   3.823  +16.39%   
+                          T           1,186    +1.44%       5,216    +0.31%   4.400   +1.13%   
+                          P           2,292   +96.09%       5,273    +1.40%   2.301  +93.38%   
+                          Z           1,110    -5.02%       5,283    +1.60%   4.759   -6.51%   
+                          MAD within 1.79%  range between 106.4%
+
+aesni256gcm_encrypt       A             255    +0.00%       1,257    +0.00%   4.926   +0.00%   
+                          C             252    -1.32%       1,257    +0.00%   4.992   -1.32%   
+                          B             476   +86.53%       1,278    +1.67%   2.685  +83.46%   
+                          T             268    +5.09%       1,273    +1.27%   4.747   +3.77%   
+                          P             436   +70.81%       1,259    +0.16%   2.888  +70.53%   
+                          Z             252    -1.45%       1,259    +0.16%   5.006   -1.60%   
+                          MAD within 2.38%  range between 89.3%
+
+aesni256gcm_decrypt       A             298    +0.00%       1,498    +0.00%   5.022   +0.00%   
+                          C             313    +4.82%       1,498    +0.00%   4.791   +4.82%   
+                          B             642  +115.32%       1,509    +0.73%   2.349 +113.75%   
+                          T             311    +4.15%       1,514    +1.07%   4.873   +3.05%   
+                          P             604  +102.45%       1,500    +0.13%   2.484 +102.18%   
+                          Z             299    +0.08%       1,500    +0.13%   5.024   -0.05%   
+                          MAD within 1.30%  range between 115.3%
+
+argon2id                  A     213,094,554    +0.00% 667,591,592    +0.00%   3.133   +0.00%   unresolvable
+                          C     210,796,727    -1.08% 667,324,552    -0.04%   3.166   -1.04%   unresolvable
+                          B     213,596,673    +0.24% 667,562,068    -0.00%   3.125   +0.24%   unresolvable
+                          T     211,742,326    -0.63% 667,441,327    -0.02%   3.152   -0.61%   unresolvable
+                          P     211,136,059    -0.92% 667,449,089    -0.02%   3.161   -0.90%   unresolvable
+                          Z     211,024,913    -0.97% 667,111,757    -0.07%   3.161   -0.90%   unresolvable
+                          MAD within 1.72%  range between 1.3%   <- NOT RESOLVABLE
+
+  implied clock 3.50-4.29 GHz across benchmarks PASS
+       (bare PMC0 cycles / cntvct ns; must be this machine's P-core clock)
+  thread pinned to a core: cpu 9  PASS
+  migration-guard drops: 0 of 7288 samples (0.000%) PASS
+
+READING IT
+  C/A ~ 1.00  ->  blanket DIT is FREE on this workload. Then there is no prize,
+                  and every switch a selective policy adds is pure loss. That is
+                  a property of the workload, not a refutation of the approach.
+  P vs C      ->  the question the paper asks. P > C means blanket wins.
+  T, Z        ->  each arm's NOP twin. Subtract it before believing any number:
+                  it is the same code at the same addresses with no mode switch,
+                  so whatever it shows is layout, not DIT.
+Any row marked DIT-LEAK is NOT a result: an arm ran in a mode it does not claim.
+Cycles and instructions are both PMC; nothing is converted at an assumed clock.
+FULL=1 adds the CNTVCT and whole-process tables.
