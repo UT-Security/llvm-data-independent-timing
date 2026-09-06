@@ -1,9 +1,13 @@
 # 02 - libsodium signed lookup
 
-**Status: gem5 complete, re-run 2026-09-05 on the compiler's new defaults
-(the callee contract and the DIT twins, `docs/design/dit-cloning.md`); silicon
-not yet re-measured.** The numbers below are that run; the 2026-09-03 run on the
-previous compiler is under "Rerun 2026-09-05" for comparison.
+**Status: gem5 complete, re-run 2026-09-06 on the current compiler; silicon not
+yet re-measured.** The numbers below are that run: 1,100 gem5 runs, 0 failed, on
+this repo's own `gem5-DIT` submodule at the pinned commit and its own `build/`.
+The 2026-09-05 run is kept under "Rerun 2026-09-05" and the 2026-09-03 one under
+it, so the three are comparable. What moved on 2026-09-06 is the executed switch
+count, 38 -> 32 per request, from `-taint-dit-external-preserves` becoming the
+default; the headline shape did not move.
+
 The rig changed on 2026-09-03 (see "Why the rig changed"); everything measured
 before that is under "Retired signing driver" at the bottom and must not be cited.
 
@@ -26,15 +30,22 @@ seals the gathered record. The knob L, lookups per record, moves only the ratio.
 | lane | code | what it is |
 |---|---|---|
 | **public** | `lookup_lane()` - L serial, value-dependent loads into a 4 KB table: hashed contents, next index from the high bits of a 64-bit state. On 3 iterations in 4 the record's header is read first: data-dependent address, constant value, the way every record's type field is the same. | a pointer chase whose critical path is 75% LVP-predictable loads |
-| **secret** | `crypto_aead_chacha20poly1305_ietf_encrypt()` of a 100-byte record carrying the digest - experiment 09's op and message size | ~2.2k cycles, 49 committed switches per op under the pass |
+| **secret** | `crypto_aead_chacha20poly1305_ietf_encrypt()` of a 100-byte record carrying the digest - experiment 09's op and message size | ~2.2k cycles, 32 committed switches per op under the pass |
 
-Seeds are the callee contract's round-2 file for libsodium
-(`benchmarks/crypto/libsodium_secret_contract.txt` as the gem5 tree carried
-it on 2026-09-05: the CIO-parity set plus the first report's 21 lines, 86
-seeds; the round-11 fixpoint of 188 replaced it in gem5-DIT PR #101 and is
-`libsodium_secret_contract.txt` now, the round-2 file being `_r2`). The
-AEAD path is fully seeded by round 2, and the oracle frontier below confirms
-it at the floor, so the numbers stand. The build carries the owned-symbols list it generates from its
+Seeds are the callee contract's **fixpoint** for libsodium,
+`benchmarks/crypto/libsodium_secret_contract.txt`, 188 seeds over 71 functions
+(copied verbatim into `results/gem5/seeds_used.txt`). The published 2026-09-05
+table used the **round-2** file instead - the CIO-parity set plus the first
+report's 21 lines, 86 seeds - and that file no longer exists under any name:
+gem5-DIT `a20a176016` wrote the fixpoint into BOTH
+`libsodium_secret_contract.txt` and `libsodium_secret_contract_r2.txt`, which
+are today byte-identical in seed content despite `_r2`'s name and despite the
+main file's own header still describing `_r2` as "the round-2 file (86 seeds)".
+The round-2 file is recoverable at gem5-DIT `7e8630384c` if that arm is wanted.
+It should not matter here: the AEAD path is fully seeded by round 2 and the
+oracle frontier below is at the floor with it, so the extra 102 seeds are the
+signing path. That is an argument, not a measurement - the A/B has not been
+run. The build carries the owned-symbols list it generates from its
 own base objects, which is what lets a DIT-on caller name a twin in another
 TU. The pass arm is built with `-fno-optimize-sibling-calls` (redundant since
 the tail-call disable rides on `-ftaint-harden`, kept so the arm is the same
@@ -42,9 +53,9 @@ shape as before).
 
 Three axes, each with its own cost:
 
-- **secret fraction f** (the L sweep) sets what the switches cost: 38 per
-  request (49 before the twins) at 20-25 cycles each under a serialising
-  `MSR DIT`, nothing under a renamed one;
+- **secret fraction f** (the L sweep) sets what the switches cost: 32 per
+  request (38 before the external-callee assumption, 49 before the twins) at
+  20-25 cycles each under a serialising `MSR DIT`, nothing under a renamed one;
 - **LVP-predictable fraction q** of the public lane sets what blanket costs:
   linear in q, fixed at 0.75 for the canonical lane, swept in
   `data/gem5_predictability_sweep.csv`;
@@ -57,47 +68,53 @@ gem5 Neoverse-V2 FDP (`--eves --dmp --comp-simp`), median over 5 stack offsets.
 **IPC overhead** = unhardened IPC / arm IPC - 1, from the `ipc` column of
 `data/gem5_arms.csv`; positive is slower. For blanket this equals the cycles
 ratio (same instruction stream); for the pass it sits up to 3 points under the
-`vs_base_pct` cycles column, because its 38 switches per request are extra
+`vs_base_pct` cycles column, because its 32 switches per request are extra
 instructions that run at full IPC.
 
 | L | f_secret | blanket | pass, renamed | pass, serialising |
 |---|---|---|---|---|
-| 10 | 96.8% | +7.6% | -1.0% | **+28.4%** |
-| 50 | 81.2% | +12.6% | -0.5% | +22.1% |
-| 200 | 45.0% | +20.2% | -0.4% | +11.8% |
-| 1000 | 13.1% | +27.7% | +0.2% | +3.2% |
-| 5000 | 2.6% | +30.6% | +0.1% | +0.7% |
-| 20000 | 0.6% | **+31.3%** | +0.4% | -0.1% |
+| 10 | 96.5% | +2.3% | +0.9% | **+25.3%** |
+| 50 | 81.0% | +11.2% | -1.7% | +19.9% |
+| 200 | 45.1% | +19.6% | -0.6% | +10.8% |
+| 1000 | 13.5% | +27.3% | -0.4% | +3.0% |
+| 5000 | 2.7% | +30.2% | +0.1% | +0.7% |
+| 20000 | 0.6% | **+31.0%** | 0.0% | +0.4% |
 
 Spread across offsets (cycles) is under 2.3% everywhere
 (`data/gem5_stack_offset_spread.csv` has every offset's cycles); the blanket
-cell at L=20,000 is bit-identical across offsets.
+cell at L=5,000 is bit-identical across offsets.
 
-**One caveat on the two secret-heavy blanket cells.** Reproducing this table
-from a binary path of a different constant length moved blanket at f=97% from
-+1.1% to +7.3% and at f=81% from +9.0% to +12.6%, while every other cell stayed
-within a point. Where the AEAD dominates, blanket's cost depends on where the
-AEAD's stack buffers land against the predictors, and five consecutive one-byte
-offsets sample one alignment class, not all of them. The trend and the other
-four points do not depend on it; the exact value at f>80% does.
+**One caveat on the secret-heavy blanket cells, and this run walked into it.**
+Blanket at f=96.5% reads +2.3% here against +7.6% on 2026-09-05 and +1.1% on an
+earlier layout - the same cell has now been measured at +1.1%, +2.3% and +7.3%
+to +7.6% across binary path lengths, while every other cell stayed within about
+a point of the run before it. Where the AEAD dominates, blanket's cost depends
+on where the AEAD's stack buffers land against the predictors, and five
+consecutive one-byte offsets sample one alignment class, not all of them. **The
+trend and the four low-f points are solid; the exact value at f>80% is not, and
+should not be quoted to two significant figures.** Fixing it needs offsets
+sampled across alignment classes rather than five consecutive bytes, which has
+not been done.
 
 **Three readings:**
 
 1. **Blanket's cost is the public lane's lost load predictions.** It climbs from
-   +7% to +31% as the lane grows, and `data/gem5_value_predictor_by_arm.csv`
-   shows why: unhardened makes 113 load-value predictions per request at L=10
-   and 15,092 at L=20,000, blanket makes zero at every L. Nothing else DIT
+   +2% to +31% as the lane grows, and `data/gem5_value_predictor_by_arm.csv`
+   shows why: unhardened makes 124 load-value predictions per request at L=10
+   and 15,107 at L=20,000; the pass keeps 12 and 14,993 of them; blanket makes
+   zero at every L. Nothing else DIT
    gates in this model moves: comp-simp never simplifies anything here, the DMP
    never scans (the table is L1-resident), branch mispredicts are identical.
-2. **Renamed placement is free at every point**, within 1% of unhardened. The
-   public lane runs with DIT clear and keeps every prediction; the secret lane
-   pays 38 switches that cost nothing when the mode is renamed.
-3. **Serialising placement crosses blanket between 45% and 81% secret.** Its
-   cost is the switches, 20-25 cycles each, and does not depend on q at all.
-   Under a serialising `MSR DIT` selective placement therefore has a crossover
-   of its own against blanket; under a renamed one it is strictly better. The
-   twins moved the crossover up from "near 50%": at f=45% the pass now costs
-   +11.8% against blanket's +20.2% where before it was +17.7%.
+2. **Renamed placement is free at every point**, -1.7% to +0.9% of unhardened.
+   The public lane runs with DIT clear and keeps its predictions; the secret
+   lane pays 32 switches that cost nothing when the mode is renamed.
+3. **Serialising placement crosses blanket at f ~= 63% secret**, interpolating
+   between the f=45.1% and f=81.0% points. Its cost is the switches, 20-25
+   cycles each, and does not depend on q at all. Under a serialising `MSR DIT`
+   selective placement therefore has a crossover of its own against blanket;
+   under a renamed one it is strictly better. At f=45% the pass costs +10.8%
+   against blanket's +19.6% (2026-09-05: +11.8% against +20.2%; before the
+   twins, +17.7%).
 
 The same library sits at three verdicts: alone in experiment 09, blanket wins;
 here with ed25519 as the secret op, the switch model is irrelevant; here with
@@ -143,10 +160,11 @@ All exact, all passing, checked by `run_gem5.py` on every sweep:
    mode.
 3. **Exactly two stats dumps per run** - the ROI is the request loop and nothing
    else.
-4. **Committed switches are 38 per request at every L** for the pass and 0 for
-   the others - `commit.ditWrites`, a committed count. (49 before the twins;
-   the 38 that remain sit behind the Poly1305 and ChaCha20 implementation
-   tables, which an indirect call cannot redirect.)
+4. **Committed switches are 32 per request at every L** for the pass and 0 for
+   the others - `commit.ditWrites`, a committed count. (49 before the twins, 38
+   before `-taint-dit-external-preserves` removed the re-assert after each libc
+   call; the 32 that remain sit behind the Poly1305 and ChaCha20 implementation
+   tables, which an indirect call cannot redirect. The bracket arm executes 2.)
 5. **Five stack offsets per cell.** gem5 is deterministic but not
    layout-insensitive: the length of argv[0] alone moved the retired driver's
    L=500 cycles by -4%..+4% for both arms (`data/gem5_stack_offset_sensitivity.csv`).
@@ -160,22 +178,30 @@ All exact, all passing, checked by `run_gem5.py` on every sweep:
 One script, from the committed sources:
 
 ```sh
-export LLVM_BUILD=~/Documents/llvm-data-independent-timing/build   # the taint clang
-./reproduce.sh              # build, sweep, derive, figures
-./reproduce.sh sweep derive # just the numbers
+WORK=<a fresh dir> ./reproduce.sh    # build, sweep, derive, figures
+WORK=<the same dir> ./reproduce.sh sweep derive   # just the numbers
 ```
+
+`LLVM_BUILD` and `G5` default to this repo's own `build/` and `gem5-DIT`
+submodule, so a worktree measures what it built. **Use a fresh `WORK`**, or set
+`RESUME=1` only when you know the dir was filled by the same build:
+`run_gem5.py --resume` skips on `stats.txt` existing, with no binary hash and no
+compiler recorded, so resuming into an older dir silently mixes arms built weeks
+apart - and the arm list itself changed on 2026-09-05.
 
 It drives the rig in gem5-DIT (`benchmarks/signed_lookup/build_gem5_linux.sh`,
 `run_gem5.py`; gem5 on an aarch64 Linux host, no sysroot, the macOS cross path
 is `build.sh`), then `utils/dit_host_screening/signed_lookup/derive_exp02.py`
 writes `data/` with a provenance line naming the gem5-DIT and LLVM commits, and
-`fig_exp02.py` draws `figures/`. Four sweeps, 770 gem5 runs, about 25 minutes at
-150 processes on a 160-core box. gem5 is deterministic and the runner roots the
+`fig_exp02.py` draws `figures/`. Four sweeps, **1,100 gem5 runs**, a ~60 s median
+each; on a 160-core box at 100 concurrent processes the sweep is about 20 minutes
+and the five-variant build ahead of it about as long again. `JOBS` defaults to
+80% of `nproc`. gem5 is deterministic and the runner roots the
 binary path at a constant-length `/tmp` path, so another machine reproduces
 `data/` up to its simulator and compiler builds. Silicon (`run_crossover.py`,
 M5, root for kperf) has not been rerun on this lane.
 
-## The four arms (the headline, 2026-09-05)
+## The four arms (2026-09-05; superseded as the headline by the 2026-09-06 run above)
 
 The same four arms as experiment 09, on the secret-fraction sweep: **base**
 (`-O2` with our compiler, no seeds), **blanket** (DIT set once for the whole
@@ -391,6 +417,7 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 | path | what |
 |---|---|
 | `reproduce.sh` | build, sweep, derive, figures, from the committed sources |
+| `results/gem5/` | **the raw run**: one entry per run for all 1,100 runs, the runner's own CSVs, the arm switch counts, the seed file used, and the pass build's info-loss and precision reports. `data/` is the derived import of this |
 | `data/gem5_arms.csv` | **canonical**: 6 L x 4 arms, both switch models, median of 5 offsets |
 | `data/gem5_value_predictor_by_arm.csv` | what the value predictor did under each arm, per L (figure 2's input) |
 | `data/gem5_value_predictor.csv` | public lane alone, predictor totals with and without DIT |
@@ -402,7 +429,7 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 | `data/gem5_arms_ed25519.csv` | **frozen evidence**: the retired secret op on the collapsing chain, switch model irrelevant; its driver was never committed |
 | `data/gem5_stack_offset_sensitivity.csv` | **frozen evidence**: argv[0] length vs cycles on the retired driver, the reason for 5 offsets |
 | `data/retired-signing-driver/` | the 2026-08-31/09-01 silicon and gem5 data for the retired driver |
-| `figures/overhead-vs-secret-fraction.{png,pdf}` | figure 1: IPC overhead vs secret fraction, three arms |
+| `figures/overhead-vs-secret-fraction.{png,pdf}` | figure 1: IPC overhead vs secret fraction, three arms (the bracket arms are measured and kept in `results/gem5/`, but are experiment 09's comparison, not this one's) |
 | `figures/predictions-suppressed-vs-L.{png,pdf}` | figure 2: load-value predictions per request under each arm; blanket makes none, the pass keeps the public lane's |
 | `figures/crossover.html` | the retired driver's published artifact |
 | `utils/dit_host_screening/signed_lookup/fig_exp02.py` (repo root) | regenerates both figures from `data/` |
