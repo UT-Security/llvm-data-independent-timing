@@ -1,0 +1,8 @@
+date: 2026-09-06T19:03:19Z
+host: aarch64 Neoverse-N1, 160 cores, FEAT_DIT: no
+gem5: ce05d32089 (worktree submodule, master tip), gem5.opt
+llvm: 00f86ba06b5e (dit-tainter tip)
+seeds: libsodium_secret_contract.txt, 188 lines, md5 de694b48f656c13ebfcea5a0d6f51ea7
+cio drivers: sha256-verified against ~/Documents/cio-2026-09-04
+arms built in: /home/rgangar/Documents/libsodium-cioparity-exp09b
+jobs: 70 concurrent, all 70 cells in one wave
