@@ -173,6 +173,6 @@ loop. That is the correct outcome, not a placement failure.
 build_arms.sh's VARY_INPUT comment says CIO's drivers reuse one fixed 100-byte
 message, which makes the kernel's loads predictable at their ceiling, "which is
 the whole of blanket's cost on aes256-gcm decrypt". That arm was actually run:
-data/gem5_api_bracket_vary_analysis.txt has blanket on aes-decrypt at +8.09%
+../../data/gem5_api_bracket_vary_analysis.txt has blanket on aes-decrypt at +8.09%
 against +8.39% here. Varying the message changes nothing. The cost is the tag
 compare, which runs whatever the message is.
