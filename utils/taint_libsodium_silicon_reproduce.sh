@@ -116,37 +116,12 @@ while read -r cand; do
   if has_new_pass "$cand"; then FOUND="$cand"; break; fi
 done < <(toolchain_candidates)
 
-if [[ -n "$FOUND" ]]; then
-  [[ -n "${LLVM_BIN:-}" && "$FOUND" != "$LLVM_BIN" ]] && warn "LLVM_BIN had no usable pass; using $FOUND"
-  LLVM_BIN="$FOUND"
-  info "toolchain: $LLVM_BIN"
-elif [[ -n "${LLVM_BIN:-}" ]]; then
-  die "LLVM_BIN=$LLVM_BIN has no -taint-owned-symbols (pre-2026-09-05 compiler)"
-elif want toolchain && [[ -f "$BUILD/CMakeCache.txt" ]]; then
-  # An existing build dir means an incremental build: minutes, not hours.
-  info "toolchain: rebuilding $BUILD incrementally"
-  ninja -C "$BUILD" clang llc opt llvm-nm llvm-ar llvm-objdump llvm-link llvm-dis \
-    || die "toolchain build failed"
-  LLVM_BIN="$BUILD/bin"
-  has_new_pass "$LLVM_BIN" || die "built toolchain still lacks -taint-owned-symbols -- wrong branch?"
-else
-  # A build FROM SCRATCH is hours, so it never starts implicitly. It is almost
-  # always the wrong answer: the usual cause is running from a checkout that has
-  # no build/ while a perfectly good toolchain sits in another one.
-  die "no usable toolchain found. Searched:
-$(toolchain_candidates | sed 's/^/       /')
-
-     If you have one, point at it:
-       LLVM_BIN=<dir>/build/bin $0
-
-     To build one here from scratch (hours):
-       BUILD_TOOLCHAIN=1 $0"
-fi
-
-if [[ "${BUILD_TOOLCHAIN:-0}" == 1 && -z "$FOUND" ]]; then
+build_from_scratch() {
   warn "BUILD_TOOLCHAIN=1: configuring $BUILD from scratch. Expect a couple of hours."
   command -v cmake >/dev/null || die "cmake not found (brew install cmake ninja)"
   command -v ninja >/dev/null || die "ninja not found (brew install ninja)"
+  [[ -f "$REPO_ROOT/llvm/CMakeLists.txt" ]] \
+    || die "no llvm/ in $REPO_ROOT -- is this the right checkout?"
   cmake -G Ninja -S "$REPO_ROOT/llvm" -B "$BUILD" \
     -DCMAKE_BUILD_TYPE=Release \
     -DLLVM_ENABLE_PROJECTS='clang;lld' \
@@ -156,6 +131,41 @@ if [[ "${BUILD_TOOLCHAIN:-0}" == 1 && -z "$FOUND" ]]; then
   ninja -C "$BUILD" clang llc opt llvm-nm llvm-ar llvm-objdump llvm-link llvm-dis \
     || die "toolchain build failed"
   LLVM_BIN="$BUILD/bin"
+  has_new_pass "$LLVM_BIN" || die "built toolchain still lacks -taint-owned-symbols -- wrong branch?"
+}
+
+# BUILD_TOOLCHAIN must be handled INSIDE this chain. It used to sit in a second
+# `if` after it, which the no-toolchain branch could never reach: that branch
+# calls die(), so the flag the error message told you to set did nothing at all.
+if [[ -n "$FOUND" ]]; then
+  [[ -n "${LLVM_BIN:-}" && "$FOUND" != "$LLVM_BIN" ]] && warn "LLVM_BIN had no usable pass; using $FOUND"
+  LLVM_BIN="$FOUND"
+  info "toolchain: $LLVM_BIN"
+elif [[ -n "${LLVM_BIN:-}" ]]; then
+  die "LLVM_BIN=$LLVM_BIN has no -taint-owned-symbols (pre-2026-09-05 compiler)"
+elif ! want toolchain; then
+  die "no usable toolchain and the 'toolchain' stage was not requested"
+elif [[ -f "$BUILD/CMakeCache.txt" ]]; then
+  # An existing build dir means an incremental build: minutes, not hours.
+  info "toolchain: rebuilding $BUILD incrementally"
+  ninja -C "$BUILD" clang llc opt llvm-nm llvm-ar llvm-objdump llvm-link llvm-dis \
+    || die "toolchain build failed"
+  LLVM_BIN="$BUILD/bin"
+  has_new_pass "$LLVM_BIN" || die "built toolchain still lacks -taint-owned-symbols -- wrong branch?"
+elif [[ "${BUILD_TOOLCHAIN:-0}" == 1 ]]; then
+  build_from_scratch
+else
+  # A build FROM SCRATCH is hours, so it never starts implicitly. It is almost
+  # always the wrong answer: the usual cause is running from a checkout that has
+  # no build/ while a perfectly good toolchain sits in another one.
+  die "no usable toolchain found. Searched:
+$(toolchain_candidates | awk '!seen[$0]++' | sed 's/^/       /')
+
+     If you have one, point at it:
+       LLVM_BIN=<dir>/build/bin $0
+
+     To build one here from scratch (hours):
+       BUILD_TOOLCHAIN=1 $0"
 fi
 export LLVM_BIN
 
