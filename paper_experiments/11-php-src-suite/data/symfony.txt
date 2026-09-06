@@ -1,0 +1,64 @@
+symfony: 6 arms, 50 warm-up + 100 measured requests per row, arms rotate per request
+
+== symfony: suite request (/)   (100 measured requests/arm, MAD(A) 1.17%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         23.03   +0.00%   -0.41%
+C         23.13   +0.41%   +0.00%
+B         22.95   -0.34%   -0.75%
+Bn        23.02   -0.05%   -0.46%
+P         23.07   +0.14%   -0.27%
+Z         23.08   +0.20%   -0.21%
+  executed-switch terms: B-Bn -0.29 pts   P-Z -0.06 pts   (relative to A: B-Bn -0.29, P-Z -0.06)
+
+== symfony: blog index (/en/blog/)   (100 measured requests/arm, MAD(A) 1.17%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         39.59   +0.00%   -0.97%
+C         39.98   +0.98%   +0.00%
+B         39.62   +0.07%   -0.90%
+Bn        39.74   +0.39%   -0.58%
+P         39.87   +0.72%   -0.26%
+Z         39.68   +0.23%   -0.74%
+  executed-switch terms: B-Bn -0.32 pts   P-Z +0.49 pts   (relative to A: B-Bn -0.32, P-Z +0.49)
+
+== symfony: login 1 in 100   (100 measured requests/arm, MAD(A) 1.54%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         39.26   +0.00%   -0.47%
+C         39.44   +0.48%   +0.00%
+B         39.47   +0.55%   +0.07%
+Bn        39.15   -0.28%   -0.75%
+P         39.34   +0.23%   -0.25%
+Z         39.70   +1.12%   +0.64%
+  executed-switch terms: B-Bn +0.83 pts   P-Z -0.88 pts   (relative to A: B-Bn +0.83, P-Z -0.89)
+  per request type, median cpu ms: sf_anon: A=39.2 C=39.4 B=39.5 Bn=39.1 P=39.3 Z=39.7 | sf_login: A=377.2 C=383.1 B=379.5 Bn=376.6 P=383.5 Z=380.9
+
+== symfony: login 1 in 20   (100 measured requests/arm, MAD(A) 2.61%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         38.27   +0.00%   -0.84%
+C         38.59   +0.85%   +0.00%
+B         38.51   +0.64%   -0.21%
+Bn        38.51   +0.65%   -0.20%
+P         38.27   +0.01%   -0.84%
+Z         38.22   -0.11%   -0.96%
+  executed-switch terms: B-Bn -0.01 pts   P-Z +0.12 pts   (relative to A: B-Bn -0.01, P-Z +0.12)
+  per request type, median cpu ms: sf_anon: A=38.2 C=38.5 B=38.4 Bn=38.4 P=38.2 Z=38.2 | sf_login: A=380.0 C=375.1 B=376.2 Bn=378.1 P=375.2 Z=372.9
+
+== symfony: login 1 in 5   (100 measured requests/arm, MAD(A) 1.79%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         37.45   +0.00%   -0.85%
+C         37.77   +0.86%   +0.00%
+B         37.58   +0.34%   -0.52%
+Bn        37.79   +0.91%   +0.05%
+P         37.56   +0.31%   -0.55%
+Z         37.61   +0.43%   -0.43%
+  executed-switch terms: B-Bn -0.56 pts   P-Z -0.12 pts   (relative to A: B-Bn -0.57, P-Z -0.12)
+  per request type, median cpu ms: sf_anon: A=37.2 C=37.5 B=37.3 Bn=37.6 P=37.1 Z=37.5 | sf_login: A=370.5 C=370.4 B=370.3 Bn=370.3 P=370.5 Z=370.5
+
+== symfony: logins only   (100 measured requests/arm, MAD(A) 0.10%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A        370.10   +0.00%   -0.12%
+C        370.56   +0.12%   +0.00%
+B        370.19   +0.02%   -0.10%
+Bn       370.20   +0.03%   -0.10%
+P        370.25   +0.04%   -0.08%
+Z        370.27   +0.04%   -0.08%
+  executed-switch terms: B-Bn -0.00 pts   P-Z -0.01 pts   (relative to A: B-Bn -0.00, P-Z -0.01)

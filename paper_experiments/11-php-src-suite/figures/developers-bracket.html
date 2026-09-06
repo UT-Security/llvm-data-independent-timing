@@ -1,0 +1,231 @@
+<title>The Developer's Bracket</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #F5F6F9;
+    --surface: #FFFFFF;
+    --ink: #1C2130;
+    --muted: #5C6478;
+    --rule: #D5D9E2;
+    --accent: #4F5B93;
+    --accent-ink: #3B4574;
+    --secret: #A86300;
+    --secret-bg: #FFF3E0;
+    --public-bg: #EEF0F7;
+    --code-bg: #F0F1F5;
+    --display: "Fraunces", "Iowan Old Style", Georgia, serif;
+    --body: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #13161D; --surface: #1A1E28; --ink: #E7EAF1; --muted: #9DA6B8; --rule: #2C3241;
+      --accent: #8F98CF; --accent-ink: #B4BBE3; --secret: #E2A63F; --secret-bg: #2A2114;
+      --public-bg: #1F2333; --code-bg: #1F2330;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #13161D; --surface: #1A1E28; --ink: #E7EAF1; --muted: #9DA6B8; --rule: #2C3241;
+    --accent: #8F98CF; --accent-ink: #B4BBE3; --secret: #E2A63F; --secret-bg: #2A2114;
+    --public-bg: #1F2333; --code-bg: #1F2330;
+  }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.55; }
+  main { max-width: 72ch; margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+  .eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-family: var(--display); font-weight: 600; font-size: 2.6rem; line-height: 1.08; margin: 0.35rem 0 0.75rem; text-wrap: balance; font-variation-settings: "opsz" 96; }
+  h2 { font-family: var(--display); font-weight: 600; font-size: 1.5rem; margin: 2.75rem 0 0.75rem; text-wrap: balance; }
+  h3 { font-family: var(--body); font-weight: 600; font-size: 1.05rem; margin: 1.6rem 0 0.4rem; }
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  .lede { font-size: 1.15rem; color: var(--ink); max-width: 66ch; }
+  .status { display: flex; flex-wrap: wrap; gap: 0.6rem 1.4rem; font-family: var(--mono); font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 0.7rem 0; margin: 1.25rem 0 0; }
+  .status b { color: var(--ink); font-weight: 500; }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 0.08em 0.35em; border-radius: 3px; }
+  pre { font-family: var(--mono); font-size: 0.84rem; line-height: 1.5; background: var(--code-bg); border-left: 3px solid var(--rule); padding: 0.9rem 1rem; margin: 0.6rem 0 1.2rem; overflow-x: auto; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .secret { color: var(--secret); font-weight: 500; }
+  .public { color: var(--accent-ink); }
+  pre .secret { background: var(--secret-bg); }
+  pre .public { background: var(--public-bg); }
+  .tablewrap { overflow-x: auto; margin: 0.6rem 0 1.4rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; }
+  td.mono { font-family: var(--mono); font-size: 0.84rem; white-space: nowrap; }
+  td.arm { font-family: var(--mono); font-weight: 500; }
+  .fill { color: var(--muted); }
+  ul { padding-left: 1.2rem; max-width: 68ch; }
+  li { margin: 0.35rem 0; }
+  .note { border-left: 3px solid var(--accent); padding: 0.2rem 0 0.2rem 1rem; color: var(--ink); margin: 1rem 0 1.4rem; max-width: 66ch; }
+  .legend { font-size: 0.9rem; color: var(--muted); }
+  a { color: var(--accent-ink); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<main>
+  <div class="eyebrow">Experiment 11 · design and silicon results · 2026-09-05/06</div>
+  <h1>The Developer's Bracket</h1>
+  <p class="lede">PHP's own benchmark suite, run three ways: with <code>PSTATE.DIT</code> set for the whole process, with the bracket a careful developer writes at the entry of each crypto function, and with the pass placing the switches. The suite is php-src's, the applications are the ones the PHP project benchmarks releases on, and the crypto is the applications' own.</p>
+  <div class="status">
+    <span>host <b>Apple M4, Mac16,10</b></span>
+    <span>compiler <b>dit-tainter ef71e700b826 + sb flag</b></span>
+    <span>status <b>measured 2026-09-06, all rows, gates ok</b></span>
+  </div>
+
+  <h2>The question</h2>
+  <p>Setting DIT for a whole program costs whatever the program's public code loses when the predictors it relies on are switched off. Setting it only around the crypto costs the switches plus the barrier Apple's recipe puts after each enable. This experiment measures both on a benchmark nobody here wrote, and then measures whether an analysis that places the switches inside the crypto does better than the developer's bracket around it.</p>
+  <p>It feeds the paper's first and second questions: what DIT costs on shipping silicon, and what protection costs when it is placed selectively. Everything is measured on the M4, where <code>MSR DIT</code> serialises, so the numbers are the serialising column's silicon counterpart.</p>
+
+  <h2>What is already known</h2>
+  <p>Today's screen and the constructed pilot, same machine, same method. They are the reason this design exists.</p>
+  <div class="tablewrap"><table>
+    <tr><th>measured today</th><th class="num">blanket vs unhardened</th><th class="num">the pass vs its NOP twin</th></tr>
+    <tr><td>Zend/bench.php, CLI, no opcache</td><td class="num">+24.2%</td><td class="num">—</td></tr>
+    <tr><td>Zend/bench.php, opcache on, JIT off</td><td class="num">+16.2%</td><td class="num">—</td></tr>
+    <tr><td>Zend/bench.php × 5 with 200 HMAC-SHA256 per test (11% secret)</td><td class="num">+11.9%</td><td class="num">+2.4</td></tr>
+    <tr><td>HMAC-SHA256 over 4 KB, alone</td><td class="num">+19.6%</td><td class="num">+22.5</td></tr>
+  </table></div>
+  <p class="legend">The pilot grafted the HMAC onto the benchmark. The suite below replaces that with the applications' own crypto paths.</p>
+
+  <h2>The suite</h2>
+  <p>php-src ships a harness under <code>benchmark/</code> that the project uses to compare releases. It runs three workloads and counts instructions with valgrind. We run the same three the same way and time them instead, since valgrind does not exist on Apple silicon.</p>
+  <div class="tablewrap"><table>
+    <tr><th>workload</th><th>what the harness does</th><th>crypto on the harness's own requests</th></tr>
+    <tr><td>Zend/bench.php</td><td>runs the script once</td><td>none</td></tr>
+    <tr><td>Symfony Demo 2.2.3</td><td>php-cgi, front page, 50 warm-up then 50 measured requests, opcache on, JIT off</td><td>none</td></tr>
+    <tr><td>WordPress 6.2</td><td>php-cgi, front page, same counts; MySQL from the harness's docker-compose, installed by wp-cli</td><td>none anonymously; the auth-cookie HMACs on every logged-in request</td></tr>
+  </table></div>
+  <p>The harness's requests never carry a secret, so the suite as shipped is a host screen. The request mix below adds the two request types on which the applications compute on secrets, using the applications' own code paths.</p>
+
+  <h2>Where the secrets are</h2>
+  <p>Three request types. <span class="public">Public</span> work is the interpreter, the templates and the database round trip. <span class="secret">Secret</span> work is marked.</p>
+
+  <h3>Anonymous page</h3>
+  <p>The suite's default. Routing, queries, template rendering, HTML assembly. No secret is live at any point; this is the pipeline blanket pays for.</p>
+
+  <h3>Logged-in page (WordPress)</h3>
+  <p>The request carries two cookies. Before rendering, WordPress validates each one:</p>
+<pre><code>wp_validate_auth_cookie(cookie):
+  <span class="public">parse  username | expiration | token | hmac</span>
+  <span class="public">user = lookup(username)                          # MySQL</span>
+  <span class="secret">key  = hash_hmac('md5',    username|pass_frag|expiration|token, AUTH_KEY)</span>
+  <span class="secret">mac  = hash_hmac('sha256', username|expiration|token, key)</span>
+  <span class="secret">hash_equals(mac, cookie.hmac)</span>
+  <span class="secret">hash('sha256', token) against the stored session token</span>
+then a handful of nonce checks for the admin bar, each an HMAC-MD5</code></pre>
+  <p>A few thousand cycles of secret work inside a request of tens of millions. That is what deployment looks like, and it is the near-zero point of the sweep.</p>
+
+  <h3>Login (both applications)</h3>
+  <p>The password itself is the secret, and the work is chunky:</p>
+<pre><code>WordPress 6.2:  <span class="secret">wp_check_password(password, stored)  → phpass: 8,192 rounds of md5(hash . password)</span>
+                <span class="secret">wp_set_auth_cookie → the two HMACs above, to mint the cookies</span>
+Symfony Demo:   <span class="secret">password_verify(password, stored)     → bcrypt, cost 13, ext/standard</span></code></pre>
+  <p>All of it is PHP's own C: <code>md5</code> and bcrypt in ext/standard, HMAC in ext/hash. No OpenSSL is on the path, which matters because OpenSSL's cipher dispatch would put a function-pointer call on every block.</p>
+
+  <h2>The arms</h2>
+  <p>Five binaries, one of them run in two modes. Every arm that adds instructions has a NOP twin with the same instruction count and addresses, so a comparison against the twin isolates what executing the switches costs from what moving the code costs.</p>
+  <div class="tablewrap"><table>
+    <tr><th>arm</th><th>what it is</th><th>the instructions</th></tr>
+    <tr><td class="arm">A</td><td>unhardened, <code>-O2</code>, our compiler</td><td class="mono">—</td></tr>
+    <tr><td class="arm">C</td><td>blanket: A with DIT set before <code>main</code> by the injected constructor, never cleared. DIT globally, no analysis.</td><td class="mono">msr DIT, #1 once</td></tr>
+    <tr><td class="arm">B</td><td>the developer's bracket: a source-level macro at the entry and every return of the C functions behind PHP's crypto builtins. Apple's recipe, written by hand, no analysis.</td><td class="mono">entry: msr DIT, #1 ; sb<br>exit:  msr DIT, #0</td></tr>
+    <tr><td class="arm">Bn</td><td>B with every switch and barrier a <code>hint #0</code>: B's layout control</td><td class="mono">hint #0 in each place</td></tr>
+    <tr><td class="arm">P</td><td>the pass: <code>-ftaint-harden</code> with seeds on the same functions' secret parameters; callee contract, twins, intra-block placement, external callees preserve DIT, and <code>sb</code> after every enable it places</td><td class="mono">msr DIT, #1 ; sb at each region entry<br>msr DIT, #0 at each region exit</td></tr>
+    <tr><td class="arm">Z</td><td>P with every switch and barrier a <code>hint #0</code>: P's layout control</td><td class="mono">hint #0 in each place</td></tr>
+  </table></div>
+  <p>The bracket goes on exactly the functions a developer would find by reading the applications: <code>hash_hmac</code>, <code>hash</code>, <code>hash_equals</code>, <code>md5</code>, <code>crypt</code>, <code>password_hash</code>, <code>password_verify</code>. The seeds for the pass name the same functions' key, password and data parameters. Both therefore treat every call of those builtins as secret-bearing, including the <code>md5</code> calls WordPress makes on public strings. That over-approximation is stated as the policy, not hidden; it is what a developer with the same information would do.</p>
+  <div class="note">The bracket on <code>md5</code> is the interesting one. phpass calls the builtin 8,192 times per password check, so the bracket pays its enable, barrier and clear 8,192 times per login. The pass's region for the same work is decided by the analysis, not by the call boundary.</div>
+
+  <h2>The knob</h2>
+  <p>The share of requests that are logins, with the rest split between anonymous and logged-in pages. Five points: 0, 1 in 100, 1 in 20, 1 in 5, and logins only. The public work per request does not change with the knob; only how often the secret work runs. Symfony Demo takes the same knob with its own login.</p>
+
+  <h2>Method</h2>
+  <ul>
+    <li>Per workload and knob point, the harness's counts: 50 warm-up requests, then 50 measured, each a php-cgi process, opcache on, JIT off, as the harness sets it.</li>
+    <li>Arms rotate every request so drift cannot masquerade as an effect. Wall and CPU time of each php-cgi process are both recorded; MySQL runs in its own process and is outside every arm equally.</li>
+    <li>Every process is started with the constructor dylib, which raises QoS for P-core residency and reads <code>PSTATE.DIT</code> back at exit. C must exit with the bit set, every other arm clear; a run that fails this is not a result.</li>
+    <li>Reported per cell: median, MAD, percent against A and against C, and the executed-switch term as P minus Z and B minus Bn.</li>
+    <li>No root, so no cycle counters: these are time percentages, which is what the questions ask.</li>
+  </ul>
+
+  <h2>The results, 2026-09-06, sweep added 2026-09-06</h2>
+  <p>Percent over the unhardened arm A, CPU time of the php-cgi process, medians of 100 measured requests after 50 warm-up, arms rotating per request. The two right-hand columns are the executed-switch terms: each selective arm against its own NOP twin, in points of A. Every run passed the DIT readback gate with zero failed requests.</p>
+  <div class="tablewrap"><table>
+    <tr><th>WordPress 6.2, 100 requests per arm, CPU ms of php-cgi</th><th class="num">C blanket</th><th class="num">B bracket</th><th class="num">P pass</th><th class="num">B − Bn</th><th class="num">P − Z</th><th class="num">MAD</th></tr>
+    <tr><td>anonymous front page (the suite's request), 37 ms</td><td class="num">+2.1%</td><td class="num">+0.3%</td><td class="num">+0.3%</td><td class="num">+0.1</td><td class="num">+0.1</td><td class="num legend">0.9%</td></tr>
+    <tr><td>logged-in front page, 38 ms</td><td class="num">+2.0%</td><td class="num">-0.1%</td><td class="num">-0.2%</td><td class="num">-0.1</td><td class="num">+0.3</td><td class="num legend">1.0%</td></tr>
+    <tr><td>login 1 in 100</td><td class="num">+2.3%</td><td class="num">+0.1%</td><td class="num">+0.3%</td><td class="num">+0.1</td><td class="num">0.0</td><td class="num legend">1.6%</td></tr>
+    <tr><td>login 1 in 20</td><td class="num">+2.1%</td><td class="num">-0.2%</td><td class="num">+0.1%</td><td class="num">-0.1</td><td class="num">+0.3</td><td class="num legend">1.6%</td></tr>
+    <tr><td>login 1 in 5</td><td class="num">+1.5%</td><td class="num">-0.3%</td><td class="num">-0.1%</td><td class="num">-0.1</td><td class="num">-0.1</td><td class="num legend">1.7%</td></tr>
+    <tr><td>logins only (8,192 md5 calls each), 32 ms</td><td class="num">+1.3%</td><td class="num">+1.0%</td><td class="num">+1.5%</td><td class="num"><b>+1.4</b></td><td class="num"><b>+1.6</b></td><td class="num legend">1.1%</td></tr>
+  </table></div>
+  <div class="tablewrap"><table>
+    <tr><th>Symfony Demo 2.2.3, 100 requests per arm</th><th class="num">C blanket</th><th class="num">B bracket</th><th class="num">P pass</th><th class="num">B − Bn</th><th class="num">P − Z</th><th class="num">MAD</th></tr>
+    <tr><td>the suite's request (/), 23 ms</td><td class="num">+0.4%</td><td class="num">-0.3%</td><td class="num">+0.1%</td><td class="num">-0.3</td><td class="num">-0.1</td><td class="num legend">1.2%</td></tr>
+    <tr><td>blog index (/en/blog/), 40 ms</td><td class="num">+1.0%</td><td class="num">+0.1%</td><td class="num">+0.7%</td><td class="num">-0.3</td><td class="num">+0.5</td><td class="num legend">1.2%</td></tr>
+    <tr><td>login 1 in 100</td><td class="num">+0.5%</td><td class="num">+0.6%</td><td class="num">+0.2%</td><td class="num">+0.8</td><td class="num">-0.9</td><td class="num legend">1.5%</td></tr>
+    <tr><td>login 1 in 20</td><td class="num">+0.9%</td><td class="num">+0.6%</td><td class="num">0.0%</td><td class="num">0.0</td><td class="num">+0.1</td><td class="num legend">2.6%</td></tr>
+    <tr><td>login 1 in 5</td><td class="num">+0.9%</td><td class="num">+0.3%</td><td class="num">+0.3%</td><td class="num">-0.6</td><td class="num">-0.1</td><td class="num legend">1.8%</td></tr>
+    <tr><td>logins only (bcrypt cost 13), 370 ms</td><td class="num">+0.1%</td><td class="num">0.0%</td><td class="num">0.0%</td><td class="num">0.0</td><td class="num">0.0</td><td class="num legend">0.1%</td></tr>
+  </table></div>
+  <div class="tablewrap"><table>
+    <tr><th>Zend/bench.php, 50 runs per arm</th><th class="num">C blanket</th><th class="num">B bracket</th><th class="num">P pass</th><th class="num">B − Bn</th><th class="num">P − Z</th><th class="num">MAD</th></tr>
+    <tr><td>as the suite runs it, opcache on, JIT off, 237 ms</td><td class="num">+10.8%</td><td class="num">-1.1%</td><td class="num">+0.3%</td><td class="num">-0.1</td><td class="num">+1.0</td><td class="num legend">1.5%</td></tr>
+  </table></div>
+  <p class="legend">Differences under the MAD are noise. The pass arm carries 97 switch sites, 57 barriers and 27 twins in php-cgi; the bracket arm 14 switches and 7 barriers, two per wrapped builtin.</p>
+
+  <h2>The call-density sweep</h2>
+  <p>The selective arms pay per crypto-builtin <em>call</em>, not per unit of time inside one, so the knob that moves them is calls per request. Two realistic settings raise it. REST requests authenticated by an application password make WordPress verify the password with phpass on every request, with no cookie to shortcut it. And a one-line plugin sets phpass to 2<sup>16</sup> rounds, a hardening setting sites use, which is 65,537 <code>md5</code> calls per verification instead of 8,193. Same driver, 100 measured requests per arm after 50 warm-up, arms rotating.</p>
+  <div class="tablewrap"><table>
+    <tr><th>WordPress 6.2, CPU ms of php-cgi</th><th class="num">md5 calls</th><th class="num">A</th><th class="num">C blanket</th><th class="num">B − Bn</th><th class="num">P − Z</th><th class="num">MAD</th></tr>
+    <tr><td>REST anonymous, <code>/wp-json/wp/v2/posts</code></td><td class="num">0</td><td class="num">32.6 ms</td><td class="num">+1.6%</td><td class="num">-0.3</td><td class="num">+0.6</td><td class="num legend">1.4%</td></tr>
+    <tr><td>REST authenticated, phpass 2<sup>13</sup> (shipped)</td><td class="num">8,193</td><td class="num">33.6 ms</td><td class="num">+1.9%</td><td class="num">+0.7</td><td class="num">+1.4</td><td class="num legend">1.6%</td></tr>
+    <tr><td>logins only, phpass 2<sup>13</sup></td><td class="num">8,193</td><td class="num">33.5 ms</td><td class="num">+1.9%</td><td class="num">+1.4</td><td class="num">+2.0</td><td class="num legend">1.4%</td></tr>
+    <tr><td>REST authenticated, phpass 2<sup>16</sup></td><td class="num">65,537</td><td class="num">39.0 ms</td><td class="num">+2.4%</td><td class="num"><b>+8.0</b></td><td class="num"><b>+11.7</b></td><td class="num legend">1.1%</td></tr>
+    <tr><td>logins only, phpass 2<sup>16</sup></td><td class="num">65,537</td><td class="num">40.3 ms</td><td class="num">+2.0%</td><td class="num"><b>+6.9</b></td><td class="num"><b>+11.5</b></td><td class="num legend">1.2%</td></tr>
+  </table></div>
+  <p>Per call, from the difference between the two round counts on the same request type (57,344 extra <code>md5</code> calls):</p>
+  <div class="tablewrap"><table>
+    <tr><th>per md5 call</th><th class="num">ns</th><th class="num">cycles at 4.4 GHz</th><th>what it is</th></tr>
+    <tr><td>the md5 work itself</td><td class="num">95–119</td><td class="num">420–520</td><td>one block, plus the interpreter's call and return</td></tr>
+    <tr><td>bracket, B − Bn</td><td class="num">40–50</td><td class="num">180–220</td><td>enable, <code>sb</code> drain, clear, and the overlap lost across the boundary</td></tr>
+    <tr><td>pass, P − Z</td><td class="num">69–72</td><td class="num">300–320</td><td>two region entries per call: <code>PHP_MD5Update</code> and <code>PHP_MD5Final</code> are each seeded</td></tr>
+    <tr><td>blanket, C</td><td class="num">0</td><td class="num">0</td><td>a fixed 0.5–0.9 ms per request, whatever the call count</td></tr>
+  </table></div>
+  <div class="note">The crossover. Blanket's fixed cost per request equals the bracket's per-call cost at roughly 10,000 to 19,000 crypto calls per request, and the pass's at 7,000 to 13,000. Every page request and a shipped-phpass login sit below it, where selective placement wins outright. A hardened phpass sits above it: at 2<sup>16</sup> rounds blanket costs 2.4 percent where the bracket costs 8 and the pass 11.7. The switch is the cost, and the application sets its count.</div>
+
+  <h2>What it says</h2>
+  <ul>
+    <li><b>Blanket DIT costs a real PHP application 0.4 to 2.3 percent</b>: about 2 percent on every WordPress request and under 1 on Symfony's. Zend/bench.php reads +10.8 on the same binary, so the micro-benchmark overstates the prize by five to twenty-five times, the same benchmark-versus-application gap the Django row showed for CPython.</li>
+    <li><b>The developer's bracket costs nothing on page requests</b>, and 1.4 points on a WordPress login, where phpass calls <code>md5</code> 8,192 times and the bracket pays an enable, a barrier and a clear on each. At one login in twenty that is below the noise.</li>
+    <li><b>The pass matches the bracket on this suite</b>: 1.6 points on the same login row, noise everywhere else. PHP's crypto builtins are leaves with no public work inside them, so the analysis has nothing to carve out that the bracket does not already exclude. Where the pass earned its keep earlier today was libsodium and the pilot's HMAC lane, whose regions the bracket cannot see; on a request pipeline whose crypto is a handful of builtin calls, the bracket is enough.</li>
+    <li><b>bcrypt is indifferent to DIT</b>: 370 ms per Symfony login, +0.1 percent under blanket, zero switch cost for either selective arm.</li>
+    <li><b>Cost scales with crypto calls per request, and crosses blanket</b>: 65,537 <code>md5</code> calls per request (phpass at 2<sup>16</sup>) cost the bracket 7 to 8 points and the pass 11.5, against blanket's 2. About 180 to 220 cycles per bracketed call, 300 per pass-placed pair of regions. Below roughly ten thousand crypto calls per request selective placement is cheaper; above it blanket is.</li>
+    <li><b>The pass costs more than the bracket where both are dominated by the boundary</b>: it seeds <code>PHP_MD5Update</code> and <code>PHP_MD5Final</code> separately, so it enters two regions per <code>md5</code> where the bracket enters one. Seeding the builtin's entry instead of the primitives would close that gap.</li>
+    <li><b>The deployment answer at a realistic login share</b>, one in a hundred: blanket +2.3 percent on WordPress, bracket and pass within noise of unhardened. The prize is small, and both selective placements collect all of it.</li>
+  </ul>
+
+<h2>What the outcomes were expected to mean, written before the run</h2>
+  <ul>
+    <li><b>C on the anonymous rows</b> is the prize: the cost of DIT everywhere on a real request pipeline. The pilot says to expect something between the +11.7% of the interpreter benchmark and the +1.2% of the Django application, since a page request spends more of its time in the database driver and in memory traffic than the micro-benchmark does.</li>
+    <li><b>B on the login rows</b> is the cost of doing what Apple suggests by hand: 8,192 bracketed <code>md5</code> calls per WordPress login, each paying an enable, a barrier and a clear. If that is small, the bracket is enough for PHP and the analysis is a convenience. If it is not, the analysis has a job.</li>
+    <li><b>P against B</b>, on the same rows, is the placement question with both arms paying the barrier. The pilot's HMAC lane says the pass adds about 2 points of switches over the dwell any protection pays; the bracket's cost depends on how many builtin calls a login makes.</li>
+    <li><b>P and B against C at 1 in 100</b> is the deployment number: at a realistic login rate, does either selective placement beat setting the bit for the whole server.</li>
+  </ul>
+
+  <h2>Limits, stated now</h2>
+  <ul>
+    <li>Both selective arms treat every crypto builtin call as secret-bearing, including hashing of public strings. Neither can see userland taint, and the paper should say so.</li>
+    <li>WordPress on MySQL is two processes; the arms differ only in php-cgi, and CPU time of php-cgi is the number that excludes the database. It is not a gem5 workload in this form; WordPress's SQLite integration plugin would make it one.</li>
+    <li>Instruction counts are the harness's metric and are not available here. Time on an idle machine with rotating arms and the DIT readback gate is the substitute, as in every silicon experiment in the tree.</li>
+    <li>Relinking PHP moved code layout by 3.9% in the pilot. Arms are compared against their own NOP twins, never against A alone.</li>
+  </ul>
+
+  <h2>What exists today</h2>
+  <ul>
+    <li>PHP 8.4.25 built with the taint compiler in three variants, ext/hash hardened, HMAC verified against the base build; <code>~/Documents/dit-silicon-candidates</code>.</li>
+    <li>The compiler's <code>-taint-dit-enable-barrier=sb</code> flag, with the NOP control replacing the barrier alongside the switch; uncommitted with the default flip of the external-callee assumption and the test pins.</li>
+    <li>The timing harness with rotating arms and the readback gate, and the Zend pilot's four tables.</li>
+  </ul>
+  <p>Done since: the full build with php-cgi and the applications' extensions, the bracket macro in the seven builtins with its NOP switch, the two applications from php-src's repositories, MySQL for WordPress, and the request-mix driver over the harness's sequence.</p>
+</main>

@@ -1,0 +1,65 @@
+logged in: 3 cookies
+wordpress: 6 arms, 50 warm-up + 100 measured requests per row, arms rotate per request
+
+== wordpress: anon (the suite's request)   (100 measured requests/arm, MAD(A) 0.88%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         37.31   +0.00%   -2.06%
+C         38.10   +2.11%   +0.00%
+B         37.43   +0.31%   -1.76%
+Bn        37.39   +0.21%   -1.86%
+P         37.42   +0.29%   -1.78%
+Z         37.37   +0.18%   -1.89%
+  executed-switch terms: B-Bn +0.11 pts   P-Z +0.12 pts   (relative to A: B-Bn +0.11, P-Z +0.12)
+
+== wordpress: logged-in pages   (100 measured requests/arm, MAD(A) 1.01%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         38.22   +0.00%   -1.92%
+C         38.96   +1.95%   +0.00%
+B         38.20   -0.05%   -1.97%
+Bn        38.22   +0.01%   -1.90%
+P         38.15   -0.17%   -2.08%
+Z         38.05   -0.44%   -2.35%
+  executed-switch terms: B-Bn -0.07 pts   P-Z +0.27 pts   (relative to A: B-Bn -0.07, P-Z +0.27)
+
+== wordpress: login 1 in 100   (100 measured requests/arm, MAD(A) 1.61%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         37.81   +0.00%   -2.22%
+C         38.66   +2.27%   +0.00%
+B         37.83   +0.05%   -2.16%
+Bn        37.78   -0.06%   -2.27%
+P         37.92   +0.30%   -1.92%
+Z         37.91   +0.27%   -1.96%
+  executed-switch terms: B-Bn +0.11 pts   P-Z +0.04 pts   (relative to A: B-Bn +0.11, P-Z +0.04)
+  per request type, median cpu ms: wp_anon: A=37.2 C=38.1 B=37.5 Bn=37.4 P=37.6 Z=37.5 | wp_loggedin: A=38.1 C=39.1 B=38.4 Bn=38.0 P=38.3 Z=38.4 | wp_login: A=30.6 C=31.1 B=30.9 Bn=30.5 P=31.4 Z=30.3
+
+== wordpress: login 1 in 20   (100 measured requests/arm, MAD(A) 1.59%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         37.84   +0.00%   -2.07%
+C         38.64   +2.12%   +0.00%
+B         37.78   -0.15%   -2.22%
+Bn        37.80   -0.10%   -2.17%
+P         37.89   +0.13%   -1.95%
+Z         37.79   -0.13%   -2.20%
+  executed-switch terms: B-Bn -0.06 pts   P-Z +0.26 pts   (relative to A: B-Bn -0.06, P-Z +0.26)
+  per request type, median cpu ms: wp_anon: A=37.3 C=38.1 B=37.6 Bn=37.4 P=37.2 Z=37.5 | wp_loggedin: A=38.2 C=39.3 B=38.3 Bn=38.2 P=38.5 Z=38.1 | wp_login: A=30.6 C=31.4 B=31.3 Bn=30.8 P=31.1 Z=30.8
+
+== wordpress: login 1 in 5   (100 measured requests/arm, MAD(A) 1.73%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         37.85   +0.00%   -1.50%
+C         38.43   +1.53%   +0.00%
+B         37.75   -0.26%   -1.76%
+Bn        37.80   -0.13%   -1.63%
+P         37.82   -0.07%   -1.58%
+Z         37.87   +0.07%   -1.44%
+  executed-switch terms: B-Bn -0.14 pts   P-Z -0.14 pts   (relative to A: B-Bn -0.14, P-Z -0.14)
+  per request type, median cpu ms: wp_anon: A=37.7 C=38.1 B=37.4 Bn=37.4 P=37.5 Z=37.6 | wp_loggedin: A=38.4 C=39.3 B=38.3 Bn=38.2 P=38.7 Z=38.4 | wp_login: A=31.2 C=31.7 B=31.3 Bn=30.8 P=31.6 Z=31.0
+
+== wordpress: logins only   (100 measured requests/arm, MAD(A) 1.07%, gate ok, failures 0)
+arm      cpu ms     vs A     vs C
+A         31.93   +0.00%   -1.25%
+C         32.33   +1.27%   +0.00%
+B         32.25   +1.02%   -0.24%
+Bn        31.82   -0.33%   -1.58%
+P         32.41   +1.51%   +0.24%
+Z         31.91   -0.04%   -1.29%
+  executed-switch terms: B-Bn +1.36 pts   P-Z +1.55 pts   (relative to A: B-Bn +1.35, P-Z +1.55)

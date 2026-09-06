@@ -1,0 +1,195 @@
+--- php-8.4.25/main/dit_bracket.h
++++ main/dit_bracket.h
+@@ -0,0 +1,28 @@
++/* The developer's bracket (experiment 11, arm B).
++ *
++ * What Apple's corecrypto does at the boundary of a routine that touches a
++ * secret, written by hand at the entry of a PHP crypto builtin: set PSTATE.DIT,
++ * then a speculation barrier so nothing after the write runs under the old
++ * mode; clear the bit again on the way out. No analysis, no knowledge of where
++ * the secret goes inside.
++ *
++ *   -DDIT_BRACKET=1                 emit the bracket
++ *   -DDIT_BRACKET=1 -DDIT_BRACKET_NOP=1   emit `hint #0` in each place instead:
++ *                                   the layout control (arm Bn), same
++ *                                   instruction count and addresses, no switch.
++ */
++#ifndef DIT_BRACKET_H
++#define DIT_BRACKET_H
++#if defined(DIT_BRACKET) && DIT_BRACKET
++#  if defined(DIT_BRACKET_NOP) && DIT_BRACKET_NOP
++#    define DIT_BRACKET_ENTER() __asm__ volatile("hint #0\n\thint #0" ::: "memory")
++#    define DIT_BRACKET_LEAVE() __asm__ volatile("hint #0" ::: "memory")
++#  else
++#    define DIT_BRACKET_ENTER() __asm__ volatile("msr DIT, #1\n\tsb" ::: "memory")
++#    define DIT_BRACKET_LEAVE() __asm__ volatile("msr DIT, #0" ::: "memory")
++#  endif
++#else
++#  define DIT_BRACKET_ENTER() ((void)0)
++#  define DIT_BRACKET_LEAVE() ((void)0)
++#endif
++#endif
+--- php-8.4.25/ext/hash/hash.c
++++ ext/hash/hash.c
+@@ -1,3 +1,4 @@
++#include "dit_bracket.h"
+ /*
+   +----------------------------------------------------------------------+
+   | Copyright (c) The PHP Group                                          |
+@@ -419,7 +420,7 @@
+ 
+ /* {{{ Generate a hash of a given input string
+ Returns lowercase hexits by default */
+-PHP_FUNCTION(hash)
++static void zif_hash_body(INTERNAL_FUNCTION_PARAMETERS)
+ {
+ 	zend_string *algo;
+ 	char *data;
+@@ -576,7 +577,7 @@
+ 
+ /* {{{ Generate a hash of a given input string with a key using HMAC
+ Returns lowercase hexits by default */
+-PHP_FUNCTION(hash_hmac)
++static void zif_hash_hmac_body(INTERNAL_FUNCTION_PARAMETERS)
+ {
+ 	zend_string *algo;
+ 	char *data, *key;
+@@ -1109,7 +1110,7 @@
+ 
+ /* {{{ Compares two strings using the same time whether they're equal or not.
+    A difference in length will leak */
+-PHP_FUNCTION(hash_equals)
++static void zif_hash_equals_body(INTERNAL_FUNCTION_PARAMETERS)
+ {
+ 	zval *known_zval, *user_zval;
+ 	int result = 0;
+@@ -1715,3 +1716,27 @@
+ 	STANDARD_MODULE_PROPERTIES
+ };
+ /* }}} */
++
++/* experiment 11: the developer's bracket around hash() */
++PHP_FUNCTION(hash)
++{
++	DIT_BRACKET_ENTER();
++	zif_hash_body(INTERNAL_FUNCTION_PARAM_PASSTHRU);
++	DIT_BRACKET_LEAVE();
++}
++
++/* experiment 11: the developer's bracket around hash_hmac() */
++PHP_FUNCTION(hash_hmac)
++{
++	DIT_BRACKET_ENTER();
++	zif_hash_hmac_body(INTERNAL_FUNCTION_PARAM_PASSTHRU);
++	DIT_BRACKET_LEAVE();
++}
++
++/* experiment 11: the developer's bracket around hash_equals() */
++PHP_FUNCTION(hash_equals)
++{
++	DIT_BRACKET_ENTER();
++	zif_hash_equals_body(INTERNAL_FUNCTION_PARAM_PASSTHRU);
++	DIT_BRACKET_LEAVE();
++}
+--- php-8.4.25/ext/standard/md5.c
++++ ext/standard/md5.c
+@@ -1,3 +1,4 @@
++#include "dit_bracket.h"
+ /*
+    +----------------------------------------------------------------------+
+    | Copyright (c) The PHP Group                                          |
+@@ -39,7 +40,7 @@
+ /* }}} */
+ 
+ /* {{{ Calculate the md5 hash of a string */
+-PHP_FUNCTION(md5)
++static void zif_md5_body(INTERNAL_FUNCTION_PARAMETERS)
+ {
+ 	zend_string *arg;
+ 	bool raw_output = 0;
+@@ -385,4 +386,12 @@
+ 	result[15] = ctx->d >> 24;
+ 
+ 	ZEND_SECURE_ZERO(ctx, sizeof(*ctx));
++}
++
++/* experiment 11: the developer's bracket around md5() */
++PHP_FUNCTION(md5)
++{
++	DIT_BRACKET_ENTER();
++	zif_md5_body(INTERNAL_FUNCTION_PARAM_PASSTHRU);
++	DIT_BRACKET_LEAVE();
+ }
+--- php-8.4.25/ext/standard/crypt.c
++++ ext/standard/crypt.c
+@@ -1,3 +1,4 @@
++#include "dit_bracket.h"
+ /*
+    +----------------------------------------------------------------------+
+    | Copyright (c) The PHP Group                                          |
+@@ -186,7 +187,7 @@
+ 
+ 
+ /* {{{ Hash a string */
+-PHP_FUNCTION(crypt)
++static void zif_crypt_body(INTERNAL_FUNCTION_PARAMETERS)
+ {
+ 	char salt[PHP_MAX_SALT_LEN + 1];
+ 	char *str, *salt_in = NULL;
+@@ -218,3 +219,11 @@
+ 	RETURN_STR(result);
+ }
+ /* }}} */
++
++/* experiment 11: the developer's bracket around crypt() */
++PHP_FUNCTION(crypt)
++{
++	DIT_BRACKET_ENTER();
++	zif_crypt_body(INTERNAL_FUNCTION_PARAM_PASSTHRU);
++	DIT_BRACKET_LEAVE();
++}
+--- php-8.4.25/ext/standard/password.c
++++ ext/standard/password.c
+@@ -1,3 +1,4 @@
++#include "dit_bracket.h"
+ /*
+    +----------------------------------------------------------------------+
+    | Copyright (c) The PHP Group                                          |
+@@ -609,7 +610,7 @@
+ /* }}} */
+ 
+ /* {{{ Verify a hash created using crypt() or password_hash() */
+-PHP_FUNCTION(password_verify)
++static void zif_password_verify_body(INTERNAL_FUNCTION_PARAMETERS)
+ {
+ 	zend_string *password, *hash;
+ 	const php_password_algo *algo;
+@@ -625,7 +626,7 @@
+ /* }}} */
+ 
+ /* {{{ Hash a password */
+-PHP_FUNCTION(password_hash)
++static void zif_password_hash_body(INTERNAL_FUNCTION_PARAMETERS)
+ {
+ 	zend_string *password, *digest = NULL;
+ 	zend_string *algo_str;
+@@ -671,3 +672,19 @@
+ 	} ZEND_HASH_FOREACH_END();
+ }
+ /* }}} */
++
++/* experiment 11: the developer's bracket around password_verify() */
++PHP_FUNCTION(password_verify)
++{
++	DIT_BRACKET_ENTER();
++	zif_password_verify_body(INTERNAL_FUNCTION_PARAM_PASSTHRU);
++	DIT_BRACKET_LEAVE();
++}
++
++/* experiment 11: the developer's bracket around password_hash() */
++PHP_FUNCTION(password_hash)
++{
++	DIT_BRACKET_ENTER();
++	zif_password_hash_body(INTERNAL_FUNCTION_PARAM_PASSTHRU);
++	DIT_BRACKET_LEAVE();
++}

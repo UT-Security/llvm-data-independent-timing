@@ -1,0 +1,21 @@
+OWNED: 0 seed line(s) for callees this build defines
+INDIRECT: 6 site(s) - seed the pointer's targets by name
+  hash.c php_hash_do_hash_hmac
+  hash.c php_hash_hmac_prep_key
+  hash.c php_hash_hmac_round
+EXTERNAL (out of scope): 80 site(s), 14 callee(s)
+  allocator  free x2
+  mover      memcpy x20
+  other      _efree x8
+  other      _emalloc x6
+  other      _php_stream_read x2
+  other      _safe_emalloc x2
+  other      ap_php_snprintf x2
+  other      bzero x2
+  other      memcmp x4
+  other      php_explicit_bzero x18
+  other      php_hash_hmac_round x2
+  other      php_md5_crypt_r x2
+  other      strlen x8
+  other      strncpy x2
+wrote /Users/rgangar/Documents/dit-silicon-candidates/seeds_php_full_next.txt: 28 existing + 0 new seed line(s)
