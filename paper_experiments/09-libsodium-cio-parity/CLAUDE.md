@@ -131,12 +131,30 @@ one-time instructions spread over 16 samples.
 |---|---|---|
 | overhead ratios | `mean_ticks` (CNTVCT) | ratio of two tick counts, frequency-free, ~21-cycle offset |
 | instruction counts | `samp_ins/samp_n` | exact; the drain retires no new instructions |
-| IPC | `samp_ins`/`samp_cyc` | same window, which IPC requires |
+| **throughput IPC** | `samp_ins/samp_n` over CNTVCT cycles | what a 1000-iteration loop actually delivers |
+| latency IPC | `samp_ins`/`samp_cyc` | one op to full retirement, no overlap with its neighbours |
 | switch counts per arm | denser sampling | ~16 samples cannot resolve a 6-instruction delta |
 
-Do NOT divide `samp_ins` by CNTVCT cycles. Those are different windows, and
-mixing them is the bug the shim's own comment describes -- it once produced an
-"IPC" of 12-14 on an 8-wide core.
+**Sampling does not make `samp_cyc` a clean cycle count**, and it was never
+going to: a sampled region still contains its own end-`isb`. What it removes is
+the perturbation of the other 63 regions, which is the part that could bias an
+arm comparison. Measured excess of `samp_cyc` over CNTVCT: +143 cycles on a
+275-cycle aes-gcm-encrypt (52%), +48 on chacha (4%), ~0 on the longer arms.
+
+That pattern is the point. The excess is not a fixed instrumentation cost --
+it is **lost inter-operation overlap**. A short op in a tight loop overlaps
+heavily with its neighbours and forcing full retirement gives that up; a
+2,325-cycle op has little to lose. So no constant correction exists, and the two
+IPCs above are two real quantities rather than a right and a wrong one.
+
+**Mixing PMC instructions with CNTVCT cycles is legitimate here**, which is not
+obvious and was got wrong once in this file. The window objection only bites
+when the INSTRUCTION count depends on the window -- that is what made the old
+kperf IPC read 12-14 on an 8-wide core, because its instruction window bracketed
+extra driver calls. Measured directly, this one does not: 1,804.0 instructions
+per op whether instrumented per-op or once around 1000 ops. Prefer throughput
+IPC for the paper, since CIO's drivers are a loop and that is what they
+measure.
 
 `pmc_off` is the null-region floor measured in that process. It is reported,
 never applied: it is a floor, and the real drain lengthens with what is in
