@@ -68,6 +68,26 @@ static unsigned long long outlen;
 static uint32_t chase[CHASE_N];
 static volatile uint32_t chase_sink;
 
+/* PRECONDITIONING. Not "clear everything" -- nothing here can prove a
+ * microarchitectural structure was reset, and a scrub aimed at the wrong one is
+ * theatre. The achievable goal is a DEFINED starting state rather than a clean
+ * one: run the same sequence before every measured region so that what each
+ * primitive inherits is a constant instead of whatever its neighbour left.
+ *
+ * The loads below carry values that never repeat and are not a function of
+ * their address, which is what a value predictor has to give up on. 8 passes
+ * over 256 KB is ~2 ms, paid once outside the timed window. */
+#define SCRUB_N (1 << 16)
+static uint32_t scrub_buf[SCRUB_N];
+static volatile uint32_t scrub_sink;
+
+static void scrub(void) {
+    uint32_t acc = 0;
+    for (int pass = 0; pass < 8; pass++)
+        for (int i = 0; i < SCRUB_N; i++) acc += scrub_buf[i];
+    scrub_sink = acc;
+}
+
 static void setup(const char *what) {
     /* DETERMINISTIC, and it has to be. Each arm is a separate process, so a
      * randomised setup gives the two arms different data to work on. Most of
@@ -81,6 +101,8 @@ static void setup(const char *what) {
     for (unsigned i = 0; i < sizeof seed; i++) seed[i] = (unsigned char)(i * 11 + 1);
     crypto_sign_seed_keypair(pk, sk, seed);
     for (int i = 0; i < CHASE_N; i++) chase[i] = (uint32_t)((i * 2654435761u) % CHASE_N);
+    uint32_t r = 0x9e3779b9u;   /* deterministic, so the scrub is the same every run */
+    for (int i = 0; i < SCRUB_N; i++) { r ^= r << 13; r ^= r >> 17; r ^= r << 5; scrub_buf[i] = r; }
     if (!strcmp(what, "chacha_dec"))
         crypto_aead_chacha20poly1305_ietf_encrypt(out, &outlen, msg, MLEN, NULL, 0, NULL, npub, key);
     else if (!strcmp(what, "aes_dec"))
@@ -132,6 +154,12 @@ int main(int argc, char **argv) {
     if (e && e[0] == '1') __asm__ volatile("msr dit, #1\n\tisb" ::: "memory");
 
     const char *what = argc > 1 ? argv[1] : "aes_enc";
+    /* `chase+<prim>` warms the value predictor inside THIS process, before the
+     * timed region. That makes ordering a within-run variable measured at one
+     * clock, instead of a between-run one confounded by DVFS. */
+    int prechase = 0;
+    if (!strncmp(what, "chase+", 6)) { prechase = 1; what += 6; }
+    const int do_scrub = !(getenv("SCRUB") && getenv("SCRUB")[0] == '0');
     long iters  = argc > 2 ? atol(argv[2]) : 200000;
     long warm   = argc > 3 ? atol(argv[3]) : 20000;
 
@@ -152,12 +180,18 @@ int main(int argc, char **argv) {
     if (!op) { fprintf(stderr, "unknown primitive: %s\n", what); return 2; }
     for (long i = 0; i < warm; i++) op();
 
+    /* Order matters: scrub to the defined state, THEN apply whatever this row is
+     * meant to inherit, then measure. Scrubbing after the chase would erase the
+     * very thing the chase row exists to test. */
+    if (do_scrub) scrub();
+    if (prechase) for (long i = 0; i < 200000; i++) op_control();
+
     uint64_t c0, i0, c1, i1, t0, t1;
     counters(&c0, &i0); t0 = now_ticks();
     for (long i = 0; i < iters; i++) op();
     t1 = now_ticks(); counters(&c1, &i1);
 
-    printf("%s,%s,%ld,%llu,%llu,%llu,%llu\n", what, (e && e[0] == '1') ? "C" : "A",
+    printf("%s%s,%s,%ld,%llu,%llu,%llu,%llu\n", prechase ? "chase+" : "", what, (e && e[0] == '1') ? "C" : "A",
            iters, (unsigned long long)(c1 - c0), (unsigned long long)(i1 - i0),
            (unsigned long long)(t1 - t0), (unsigned long long)dit_bit());
     /* CNTFRQ_EL0 is the ONLY thing that sets the units of the tick column. Do not
