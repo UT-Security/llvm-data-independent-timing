@@ -96,6 +96,21 @@ the thing being measured. Absolute IPC off those counters is the *instrument's*
 IPC: it reads 5.06 where the truth is 2.88. Every percentage is compressed by
 the same offset. With PMC the numbers need no correction at all.
 
+**When the PMCs are available, kperf is not started at all.** It answers the
+same question a thousand times more expensively, and every one of its reads is
+work executed inside the measured program. It also caused a real bug: with kperf
+active its call sat between the sampled PMC snapshots, putting two kperf reads
+inside the window -- a constant **+35,265 instructions per sample** and an
+implied clock of **116 GHz**. That cost the whole-process `tot_cyc`/`tot_ins`
+columns, which is no loss: on CIO's drivers the timed crypto is 21-30% of
+process cycles, so whole-process totals were the wrong instrument for a claim
+about the measured call anyway.
+
+**The clock is a diagnostic, never an input.** Nothing computes with it -- IPC is
+`samp_ins/samp_cyc` and the overheads are ratios, both pure PMC. But bare PMC0
+cycles over CNTVCT ns *must* come out as this machine's P-core clock, so it is a
+free check on the whole chain, and it is what caught the 116 GHz.
+
 **Two traps, both already handled, both worth knowing:**
 
 - **The reads must be `isb`-ordered.** A bare `mrs` of a PMC is not ordered
