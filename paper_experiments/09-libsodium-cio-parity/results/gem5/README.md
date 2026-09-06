@@ -12,14 +12,25 @@ python3 utils/dit_host_screening/cioparity/analyze.py \
 
 | file | what |
 |---|---|
-| `results.csv` | one row per benchmark x arm x switch model, 70 rows, with a header block naming every arm |
+| `results.csv` | one row per benchmark x arm x switch model, 84 rows, with a header block naming every arm |
 | `results.jsonl` | the same runs with every parsed counter, which `analyze.py` reads |
 | `analysis.txt` | the arms table, the decomposition and the per-switch table, as printed |
 | `provenance.txt` | host, gem5 and compiler revisions, seed file md5, concurrency |
 | `crypto_verify_16.txt` | why aes256gcm-decrypt has a dwell term: counters, LVP attribution, and the annotated disassembly with the pass's per-instruction verdict |
+| `argon2id.jsonl` | the argon2id stage's own counters |
+| `argon2id_analysis.txt` | its arms table and decomposition |
 
-argon2id is not here. It runs as a separate stage (one operation is 326M
-simulated cycles) and lands in `results.csv` when it finishes.
+`results.csv` holds 84 rows: the 70-cell headline sweep plus argon2id's 14. The
+argon2id stage runs separately because one operation is 326M simulated cycles,
+and on `gem5.fast` - verified first to reproduce `gem5.opt` exactly, same cycles
+and same instruction counts, on both a hardened and an unhardened cell.
+
+On argon2id every arm is inside a point and a half and all three policies hold
+DIT for 100.00% of the operation, which is what f -> 100% looks like: there is
+nothing for selective placement to be selective about. ExpeDITe commits 3
+switches per hash there (`-taint-dit-external-preserves`; without it the three
+glibc `memcpy` inside `fill_block` cost 395,758), worth +0.205 points, while its
+layout term is +0.863 points on 1,563 extra instructions out of 620 million.
 
 ## How it was measured
 
@@ -31,9 +42,11 @@ callee contract, DIT twins, intra-block region placement, external-preserves -
 against the 188-line contract fixpoint seed file and the derived owned list.
 CIO's six drivers are used byte-for-byte and sha256-verified.
 
-All 70 cells ran concurrently. gem5 is deterministic, so there are no
-repetitions: a settled region is exact and the 15-rep median the silicon rig
-needs is replaced by gates.
+All 70 headline cells ran concurrently, and argon2id's 14 as a second wave. gem5
+is deterministic, so there are no repetitions: a settled region is exact and the
+15-rep median the silicon rig needs is replaced by gates. What determinism does
+NOT buy is immunity to the link-address lottery below - that is noise between
+binaries, not between runs, and repeating a run cannot see it.
 
 ### The two switch models
 
@@ -117,8 +130,12 @@ Every gate passed. A gate failure is a hard stop, not a footnote, because a
 failed control invalidates everything downstream of it.
 
 - every driver reported the crypto verified
-- `base`, `blanket` and `taintnop` are cycle-identical across the two switch
-  models - none executes a switch, so the model must not move them
+- `base` and `taintnop` are cycle-identical across the two switch models - no
+  `msr DIT` exists in them at all, so the model must not move them. **`blanket`
+  is deliberately not held to this** and does move slightly (on argon2id,
+  +0.512 spec against +0.636 serdit, with `ditSuppressed` differing too):
+  `--no-speculative-dit` changes how the decoder tracks the mode, not only what
+  a write costs, and blanket runs with the mode set throughout
 - `simInsts` identical across models for every arm: the same binary doing the
   same work
 - `taint` and `taintnop` instruction counts agree within 0.5%, so their
