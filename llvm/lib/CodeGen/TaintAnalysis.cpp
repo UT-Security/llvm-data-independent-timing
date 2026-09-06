@@ -4435,7 +4435,7 @@ static void fallbackToFunctionGranularity(MachineFunction &MF,
   for (MachineBasicBlock &MBB : MF) {
     SmallVector<MachineInstr *, 8> ToErase;
     for (MachineInstr &MI : MBB)
-      if (TII->getTimingModeStateAfter(MI))
+      if (TII->getTimingModeStateAfter(MI) || TII->isTimingModeSwitchBarrier(MI))
         ToErase.push_back(&MI);
     for (MachineInstr *I : ToErase)
       I->eraseFromParent();

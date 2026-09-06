@@ -1689,6 +1689,13 @@ public:
                                       MachineBasicBlock::iterator MI,
                                       const DebugLoc &DL, bool Enable) const;
 
+  /// The speculation barrier insertTimingModeSwitch may place right after an
+  /// enable (AArch64 -taint-dit-enable-barrier). It belongs to the switch: the
+  /// pass erases it with the switch and the NOP control substitutes it too.
+  virtual bool isTimingModeSwitchBarrier(const MachineInstr &MI) const {
+    return false;
+  }
+
   /// Reserve stack storage for this function's INCOMING timing-mode value, so
   /// that a callee-saved timing-mode ABI can restore it (docs/design/dit-abi.md).
   /// Must be called BEFORE PrologEpilogInserter: PEI lays the frame out, and an

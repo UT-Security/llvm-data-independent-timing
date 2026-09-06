@@ -146,7 +146,7 @@ fi
     if clang -O0 -o "$_cfb" "$_cf" 2>/dev/null; then "$_cfb"; else printf unknown; fi
     rm -f "$_cf" "$_cfb"
   ) Hz  (tbfrequency $(sysctl -n hw.tbfrequency 2>/dev/null || echo ?) Hz)"
-  echo "seed: $(grep -c '^[a-z]' "$WORK/secret_m4_pointee.txt" 2>/dev/null) lines from CIO libsodium.uarch_checker.config"
+  echo "seed: $(grep -c '^[A-Za-z_]' "$WORK/secret_m4_pointee.txt" 2>/dev/null) lines, $(sed -n '1p' "$WORK/secret_m4_pointee.txt" 2>/dev/null | cut -c1-110)"
   for a in $ARMS; do r=${a#*:}; arch=${r%:*}
     n=$("$LLVM_BIN/llvm-objdump" -d "$WORK/libsodium-$arch.a" 2>/dev/null | grep -cE 'msr[[:space:]]+DIT')
     echo "  ${a%%:*} $arch  msr_DIT=$n"; done
