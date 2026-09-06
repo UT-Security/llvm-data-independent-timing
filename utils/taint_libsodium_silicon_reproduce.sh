@@ -35,9 +35,14 @@
 #   CIO_REPS=<n>      reps per benchmark       (default 15, the paper's protocol)
 #   SKIP_ARGON=1      drop argon2id: ~60 of the run's ~70 minutes, and the row
 #                     least likely to resolve (it is free in every arm)
-#   NO_SUDO=1         force the unrooted path even without PMC. Ratios stay
-#                     valid -- the parity preset times with CNTVCT either way --
-#                     but you lose the cycle and instruction columns entirely.
+#   NO_SUDO=1         skip the sudo prompt. With PMC the counters are still
+#                     exact -- root is wanted for PINNING, since
+#                     kern.sched_thread_bind_cpu is EPERM otherwise and the
+#                     per-core PMCs are only fully sound on a thread that cannot
+#                     migrate. Without PMC you also lose the cycle and
+#                     instruction columns entirely.
+#   CIO_PIN_CPU=<n>   which core to pin to (default: highest index, which is a
+#                     performance core -- Apple silicon numbers efficiency first)
 #
 # COUNTERS ARE CHOSEN BY TESTING, not by you. The `counters` stage runs
 # utils/cio_pmc_check.c: if this kernel exposes Apple's PMCs to EL0
@@ -244,19 +249,47 @@ if want run; then
   env_args=(LLVM_BIN="$LLVM_BIN" WORK="$LIBWORK" CIO_DIR="$CIO_DIR"
             BENCH_DIR="$BENCH_DIR" OUT="$OUT" CIO_REPS="$CIO_REPS" REPS=5
             OURS=ditprobe CIOB="$CIOB" PMC="$PMC")
-  # With PMC there is nothing left for root to provide: the counters are already
-  # readable, exactly, from EL0. Only the kperf fallback needs the prompt.
-  if [[ "$PMC" == 1 || "${NO_SUDO:-0}" == 1 || "$(id -u)" -eq 0 ]]; then
-    [[ "${NO_SUDO:-0}" == 1 && "$PMC" != 1 ]] && \
+  # Root buys two DIFFERENT things, and PMC only removed the need for one.
+  #
+  #   counters  PMC reads them from EL0, so root is not needed for those. This
+  #             is what made the prompt skippable in the first place.
+  #   pinning   kern.sched_thread_bind_cpu is EPERM without root. The per-core
+  #             PMCs are only fully sound when the thread cannot migrate, and
+  #             the migration guard catches only the deltas that come out
+  #             obviously broken -- a move between two cores whose counters sit
+  #             close is a plausible wrong number and is undetectable.
+  #
+  # So root is still worth having on a PMC run. It is not required: unrooted
+  # still measures correctly, it just carries the migration exposure, and the
+  # report says which it was. NO_SUDO=1 skips the prompt deliberately.
+  if [[ "$(id -u)" -eq 0 ]]; then
+    env "${env_args[@]}" bash "$REPO_ROOT/utils/taint_libsodium_sudo_run.sh" \
+      || die "run failed"
+  elif [[ "${NO_SUDO:-0}" == 1 ]]; then
+    if [[ "$PMC" == 1 ]]; then
+      warn "NO_SUDO=1: counters are fine (PMC), but the thread cannot be pinned"
+    else
       warn "NO_SUDO=1 without PMC: no cycle counters; ratios still valid"
+    fi
     env "${env_args[@]}" bash "$REPO_ROOT/utils/taint_libsodium_sudo_run.sh" \
       || die "run failed"
   else
-    info "    sudo needed for kperf cycle counters -- you will be prompted"
-    sudo -E env "${env_args[@]}" bash "$REPO_ROOT/utils/taint_libsodium_sudo_run.sh" \
-      || die "run failed"
-    # sudo wrote them; hand them back so the report and any later run can read.
-    [[ -n "${SUDO_USER:-$USER}" ]] && sudo chown -R "${SUDO_USER:-$USER}" "$OUT" 2>/dev/null
+    if [[ "$PMC" == 1 ]]; then
+      info "    sudo pins the thread to one core (the counters already work without it)"
+    else
+      info "    sudo needed for kperf cycle counters -- you will be prompted"
+    fi
+    if sudo -E env "${env_args[@]}" bash "$REPO_ROOT/utils/taint_libsodium_sudo_run.sh"; then
+      # sudo wrote them; hand them back so the report and any later run can read.
+      [[ -n "${SUDO_USER:-$USER}" ]] && sudo chown -R "${SUDO_USER:-$USER}" "$OUT" 2>/dev/null
+    elif [[ "$PMC" == 1 ]]; then
+      # Declining the prompt should not lose the run when PMC can carry it.
+      warn "sudo declined or failed; re-running unrooted (unpinned, counters still exact)"
+      env "${env_args[@]}" bash "$REPO_ROOT/utils/taint_libsodium_sudo_run.sh" \
+        || die "run failed"
+    else
+      die "run failed"
+    fi
   fi
 fi
 
