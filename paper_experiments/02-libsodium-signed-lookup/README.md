@@ -11,6 +11,11 @@ before that is under "Retired signing driver" at the bottom and must not be cite
 `figures/predictions-suppressed-vs-L.{png,pdf}`, regenerated from `data/` by
 `utils/dit_host_screening/signed_lookup/fig_exp02.py`.
 
+**Raw results:** `results/gem5/` holds what the rig actually wrote - one entry per
+run for all 1,100 runs, the arm switch counts, the seed file used, and the
+analysis reports - before `derive_exp02.py` imports it into `data/`. Its README
+says what each file is and where the 1.7 GB of per-run `stats.txt` lives.
+
 ---
 
 ## The flow
