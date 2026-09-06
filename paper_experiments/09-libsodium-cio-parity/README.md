@@ -953,6 +953,101 @@ baseline of 252.
 > probe's `NO VALID PASSES` as fatal. Native timing needs an exclusive machine;
 > gem5 is exempt because it is deterministic, native is not.
 
+### The M5 on the 2026-09-05 compiler, and the run that flipped a default
+
+Same host (Mac17,2), same protocol, `CHEAP_TIMER=1`, 15 reps, and the eight
+arms of the current recipe (the Apple bracket `B` included), run twice on
+2026-09-05 with two toolchains built from the same tree:
+
+- **shipped defaults** (`data/m5_20260905_reassert_*`, 14:35): the compiler
+  at `9cb4beebb7d1` as merged that morning - callee contract, twins,
+  intra-block region placement - with `-taint-dit-external-preserves=0`, so
+  DIT-on code re-asserts after every libc call. Hardened arm: 360 switch sites
+  (the 2026-09-02 compiler placed 521).
+- **the external-callee assumption on** (`data/m5_20260905_default_*`,
+  16:51): the same tree with the one-line flip to `cl::init(true)` that lands
+  with this section. Hardened arm: 217 sites; resolved arm 464 -> 307.
+
+Every arm was rebuilt from its toolchain after a full `make clean` (the
+arm-build script now stamps the toolchain and cleans when it changes). The
+instrumentation offsets were 2480 and 2476 cycles; all four gates pass in both
+runs, no arm leaked its mode, and the plausibility gates pass. Provenance
+caveat: the 16:51 run was launched with `LLVM_BIN` still naming the 14:35
+snapshot, so its `m5_provenance_*` files record that path. The seven prebuilt
+archives do not depend on that variable; only arm `Z` is rebuilt at run time,
+by `llc -start-after=prologepilog` on the flipped build's hardened MIR, and it
+was verified to differ from `P` in exactly 217 instructions, each an
+`msr DIT` turned into a `nop`. The numbers stand; the toolchain that built
+the arms is `SOURCE_COMMIT` of the flip.
+
+**The pass against the unhardened build, three compilers, one host.** CNTVCT
+ticks/op, median of 15 reps:
+
+| benchmark | 2026-09-02 compiler | shipped defaults, re-assert on | external-callee assumption on |
+|---|---:|---:|---:|
+| ed25519 sign | +13.42% | +2.73% | **+0.44%** |
+| chacha20-poly1305 enc | +383.26% | +167.08% | **+142.43%** |
+| chacha20-poly1305 dec | +390.40% | +172.30% | **+144.84%** |
+| aes256-gcm enc | +427.35% | +181.75% | **+84.48%** |
+| aes256-gcm dec | +314.35% | +148.49% | **+77.03%** |
+| argon2id | +0.02% | +11.61% | **-0.29%** |
+
+**The flipped run, every arm.** `A` is ticks/op; the arms are % vs `A`; MAD is
+`A`'s over its 15 reps:
+
+| benchmark | A | MAD | blanket C | Apple bracket B | pass P | func F | old def X | resolved N | nopsw Z |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| ed25519 sign | 8,015 | 0.11% | +0.37% | +1.58% | **+0.44%** | +0.97% | +0.89% | +0.79% | -0.16% |
+| chacha20-poly1305 enc | 244 | 0.51% | +0.55% | +18.67% | **+142.43%** | +141.60% | +268.55% | **+14.83%** | +0.49% |
+| chacha20-poly1305 dec | 258 | 0.41% | +1.82% | +14.89% | **+144.84%** | +145.33% | +272.66% | **+12.39%** | +0.18% |
+| aes256-gcm enc | 54 | 1.50% | +3.41% | +93.41% | **+84.48%** | +81.21% | +81.63% | +84.55% | -0.00% |
+| aes256-gcm dec | 77 | 0.89% | -0.85% | +85.86% | **+77.03%** | +75.73% | +188.29% | +77.49% | -0.98% |
+| argon2id | 43,436,471 | 0.08% | -0.22% | -0.25% | **-0.29%** | -0.23% | -0.21% | -0.26% | -0.01% |
+
+Four readings.
+
+1. **argon2id's +11.61% under the shipped defaults was the re-assert, all of
+   it.** The kperf counters for that run show the pass at +0.06% instructions
+   and +12.9% cycles over unhardened; +0.06% of 81.7 billion is 395,758
+   switches per hash times the driver's 125 hashes, the count the gem5 section
+   above gives for the re-assert after glibc's `memcpy`. With the assumption on
+   the instruction count is identical to unhardened and the row is -0.29%, a
+   tie with blanket's -0.22%. gem5 predicted +1.08%; silicon gives zero. This
+   row is why the default flipped.
+2. **ed25519 is a tie with blanket**: +0.44% against +0.37%, at a MAD of
+   0.11%. The 2026-09-02 compiler paid +13.42% here.
+3. **The two AES-GCM rows halved, and the pass now sits under Apple's
+   bracket**: +84% and +77% against the bracket's +93% and +86%. The gap, 8 to 9
+   points of a 54 to 77 ns call, is about 20 cycles: the bracket's `sb`, which
+   the gem5 bracket study above priced at the same figure. The rest is switch
+   execution on a very short operation. The pass's static site count on these
+   paths is three to eight (`crypto_aead_aes256gcm_encrypt` 3, its
+   `_detached_afternm` 5; decrypt 3 and 4), so do not read a per-switch cost off
+   this row: the silicon rig cannot count executions, and gem5's two-per-op is
+   for a different arm build (below).
+4. **On chacha, resolving the indirect calls is now the whole remaining
+   lever.** The resolved arm `N` went from +46.9% / +54.7% under the shipped
+   defaults to **+14.8% / +12.4%**, ten times better than the pass and under
+   the Apple bracket on both rows; the whole-process kperf cycles agree (N
+   +1.9% / +2.5% against P +26.9% / +27.3%). Everything the pass still pays on
+   chacha sits behind the ChaCha20 and Poly1305 implementation tables the twins
+   cannot reach. Blanket is +0.55% / +1.82% there.
+
+The NOP control is within 1% of unhardened on every row, so `P - Z` equals
+`P - A`: the cost is switch execution, not layout. Blanket still wins or ties
+every row - this experiment remains the negative control it was designed to be -
+but its margin over the pass on ed25519 and argon2id is now zero, and the
+resolved arm is within 13 points of it on chacha.
+
+Two things to hold on to when reading across runs. The aes256-gcm encrypt
+baseline moved from 57 to 54 ticks between the 14:35 and 16:51 runs, the
+rebuilt base object's layout, so compare arms within a run on that row. And
+these silicon arms are the eval script's build: whole-library bitcode through
+the wrapper flow, the 65-line CIO-parity seed file, no owned list. The gem5
+four-arm headline above is the cioparity `build_arms.sh` build with the
+fixpoint seeds and the owned list. They agree on every direction and on
+argon2id's mechanism; they are not the same binary.
+
 ### Running this on another host
 
 The M4 numbers above came from the corrected timer and the seven-arm set. To get

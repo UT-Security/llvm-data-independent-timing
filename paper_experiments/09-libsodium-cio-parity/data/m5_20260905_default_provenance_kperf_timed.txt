@@ -1,0 +1,20 @@
+date: 2026-09-05T21:51:20Z
+host: Mac17,2 Apple M5
+root: yes
+llvm: /Users/rohan/Documents/dit-toolchain-snap-20260905/bin
+  LLVM version 23.0.0git
+  DEBUG build with assertions.
+reps: ours=25 cio=15
+cio driver opt: -O2
+arms: A:baseline:0 C:baseline:1 B:baseline:api P:hardened:0 F:func:0 X:fine:0 N:narrow:0 Z:nopsw:0
+region timer: kperf counter read (carries the ~3234-cycle region offset)
+cntfrq_el0: 1000000000 Hz  (tbfrequency 24000000 Hz)
+seed: 65 lines from CIO libsodium.uarch_checker.config
+  A baseline  msr_DIT=0
+  C baseline  msr_DIT=0
+  B baseline  msr_DIT=0
+  P hardened  msr_DIT=217
+  F func  msr_DIT=250
+  X fine  msr_DIT=371
+  N narrow  msr_DIT=307
+  Z nopsw  msr_DIT=0
