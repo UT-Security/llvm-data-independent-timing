@@ -17,7 +17,6 @@ workload / request                          crossings  A (Mcyc)  blanket  bracke
 Zend/bench.php (the micro-benchmark)                0     961.4    +9.69    -0.77   +0.27  1.01
 Symfony  login, bcrypt cost 13                      3    1623.8    +0.09    -0.02   +0.01  0.05
 Symfony  GET /            (suite's request)         5      84.5    -0.39    +0.27   +0.06  0.51
-WP       REST, anonymous                           38     128.2    +1.84    +0.19   -0.10  0.88
 WP       GET /            (suite's request)       110     151.1    +2.39    -0.00   +0.42  0.80
 WP       GET / logged in                          128     157.7    +2.34    +0.14   -0.36  0.83
 WP       login, phpass 2^13       (shipped)      8,226     132.4    +1.89    +1.36   +2.21  0.97
@@ -32,10 +31,19 @@ WP       REST auth, phpass 2^16                 65,600     156.2    +2.41    +8.
   MAD is the median absolute deviation of A's samples as a percent of its median. A value
   under it is zero.
 
-  Cut from the 18 measured rows: the six login-mix rows (1 in 100 / 20 / 5), which are the
-  noisiest in the run (MAD 2.1-2.8%), median over three request types so their instruction
-  parity is uninterpretable, and only illustrate dilution arithmetic; and three of the five
-  Symfony page rows, which are the same request repeated.
+  Cut from the 18 measured rows, all of them present in the raw files beside this one:
+
+    the six login-mix rows (1 in 100 / 20 / 5, both applications) -- the noisiest in the run
+      (MAD 2.1-2.8%), median over three request types so their instruction parity is
+      uninterpretable, and they only illustrate dilution arithmetic that a sentence states
+      better: a login's cost divided by its share of traffic.
+    Symfony GET /en/blog/ -- the suite's own request already covers an anonymous Symfony page.
+    WP REST anonymous (38 crossings, blanket +1.84, bracket +0.19, pass -0.10) -- this one is
+      a real loss and belongs in the prose. It is the SAME endpoint as the REST-authenticated
+      row with the credential removed, so the pair is the cleanest single-variable comparison
+      in the experiment: 38 crossings against 8,230, bracket +0.19 against +1.03, with the
+      application, the code, the query and the response identical. Cite it when explaining
+      that cost tracks crossings rather than the request.
 
 
 THE MECHANISM -- two rows, same security function, opposite shape
