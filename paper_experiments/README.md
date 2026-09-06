@@ -17,6 +17,14 @@ So the directory name is the **workload**, never the phenomenon. Numbered
 prefixes follow the order the experiments appear in the paper, not the order they
 were run.
 
+**Experiment 12 is the hardware-side companion to 06.** 06 asks whether this
+folder's *cost* results survive a core whose `MSR DIT` is expensive; 12 asks
+whether the *protection* survives the cheap implementations, and finds that two
+of four leak, on opposite sides of the region. It is the only experiment here
+with no compiler involvement at all: a hand-written probe, inline `msr dit`, and
+its numbers move with the simulator rather than the pass. Its prefix is the next
+free number, not a position in the paper.
+
 | # | workload | public lane | secret lane | knob | status |
 |---|---|---|---|---|---|
 | 01 | [Bitcoin Core wallet](01-bitcoin-core-wallet/) | coin selection, 4 solvers | `CKey::Sign` per input | inputs per tx | **complete, both instruments; gem5 half re-taken on the current compiler 2026-09-03 and the flow added on gem5 (the pass wins through f = 54% under either switch; beyond that, inside the code-placement floor), silicon re-take pending on the M5 (`reproduce.sh`)** |
@@ -30,6 +38,7 @@ were run.
 | 09 | [libsodium, CIO parity](09-libsodium-cio-parity/) | **none - the whole program is crypto** | CIO's own 6 benchmarks, their seeds | **none - the NEGATIVE CONTROL: measures where placement does NOT belong** | **complete, silicon x2 (M5 + M4) + gem5 switch model; percentages corrected 4-15x, conclusions unchanged**; **gem5 2026-09-05: the hand-placed API bracket arm added and the pass re-run on the new defaults (twins cut the serialising cost 13-14 points on every AEAD row; the bracket is within 1-4 points of blanket; verdict unchanged); M5 re-run 2026-09-05 on the shipped defaults, then with the external-callee assumption on: ed25519 and argon2id tie blanket, AES-GCM halves, the resolved arm beats Apple's bracket on chacha.** |
 | 10 | [mbedTLS session ticket](10-mbedtls-session-ticket/) | ClientHello and record handling; the application behind the server | AES-GCM ticket decrypt, then the PARSE of the resumption secret in plain C (TLS 1.2 RSA premaster as the literature anchor) | resumption rate, records per connection | **gates G0/G1 passed 2026-09-03; re-run 2026-09-05 on the compiler's new defaults (section 16): serialising +252% -> +40%, coverage 99.955%, renamed +11.3% of which all is instruction fetch on the duplicated code; blanket still wins** |
 | 11 | [php-src's benchmark suite](11-php-src-suite/) | the interpreter, templates and database round trip of WordPress 6.2 and Symfony Demo 2.2.3; Zend/bench.php | phpass (md5 x 8,193 or 65,537 per verification), bcrypt, the auth-cookie HMACs | crypto calls per request (login share; application-password REST; phpass rounds) | **complete, silicon (M4, 2026-09-06)**: blanket +0.4 to +2.4% on the applications, +10.8% on Zend/bench.php; the developer's bracket and the pass are noise on every page request, +1.4/+1.6 on a login, and +8/+11.7 at 65,537 md5 calls per request, where blanket (+2.4) wins; crossover near 10^4 crypto calls per request. `reproduce.sh` builds and runs it on any Apple Silicon Mac |
+| 12 | [DIT clear shadow](12-dit-clear-shadow/) | **none - a microbenchmark, and no compiler involvement** | 16 LVP-predictable loads in a DIT region and in a clear's shadow | **the `MSR DIT` microarchitecture - measures PROTECTION across four switch designs** | **complete, gem5** |
 
 ## Compiler changes and experiment validity
 
@@ -136,6 +145,7 @@ One artifact per experiment. Republish through the recorded URL (`Artifact` with
 | 09c | DIT overhead on libsodium (paper figure, M4 + M5 + ExpeDITe) | `09-libsodium-cio-parity/figures/three-machines-region.png` |
 | 10 | The Secret Leaves the Primitive (design page, no data yet) | https://claude.ai/code/artifact/d1ac0e15-a836-41b6-8b13-0d7c434e457b |
 | 11 | The Developer's Bracket (design written first, results and the call-density sweep added) | https://claude.ai/code/artifact/a70963ab-5df6-4717-b6f3-140fe328c20e |
+| 12 | Clear shadow, four switch designs (paper figures, gem5) | `12-dit-clear-shadow/figures/leaks.png`, `gap-sweep.png`, `cycles.png` |
 
 ### Candidates, from `../docs/paper/evaluation-framework.md` §6
 
