@@ -19,8 +19,7 @@
 #                             switch models, 5 argv[0] offsets, ~2 h on 110 cores (Linux)
 #   ./reproduce.sh flowfig    figures/gem5-flow-crossover.{png,pdf} from data/gem5/flow_*.csv
 #
-# Env: LLVM_BUILD  the taint clang build (default: ~/Documents/llvm-project/build-gfix on
-#                  macOS, ~/Documents/llvm-data-independent-timing/build on Linux)
+# Env: LLVM_BUILD  the taint clang build (default: this repo's build/)
 #      BTC         Bitcoin Core tree (default ~/Documents/bitcoin)
 #      G5          gem5-DIT tree (default: this repo's gem5-DIT submodule)
 #      BOOST_DIR   gem5 stage, first run only: a Boost CMake config dir, e.g.
@@ -41,8 +40,8 @@ G5="${G5:-$R/gem5-DIT}"
 MPL="${MPL:-python3}"
 OS="$(uname -s)"
 case "$OS" in
-  Darwin) LLVM_BUILD="${LLVM_BUILD:-$HOME/Documents/llvm-project/build-gfix}"; JOBS="${JOBS:-$(sysctl -n hw.ncpu)}" ;;
-  Linux)  LLVM_BUILD="${LLVM_BUILD:-$HOME/Documents/llvm-data-independent-timing/build}"; JOBS="${JOBS:-$(( $(nproc) * 3 / 4 ))}" ;;
+  Darwin) LLVM_BUILD="${LLVM_BUILD:-$R/build}"; JOBS="${JOBS:-$(sysctl -n hw.ncpu)}" ;;
+  Linux)  LLVM_BUILD="${LLVM_BUILD:-$R/build}"; JOBS="${JOBS:-$(( $(nproc) * 3 / 4 ))}" ;;
   *) echo "unsupported host $OS" >&2; exit 1 ;;
 esac
 export LLVM_BUILD
@@ -78,6 +77,7 @@ provenance() {
 
 if want clang; then
   info "rebuild the taint clang at $(git -C "$R" rev-parse --short HEAD)"
+  [[ -f "$LLVM_BUILD/build.ninja" ]] || { echo "no configured build at $LLVM_BUILD - cmake it first, or set LLVM_BUILD" >&2; exit 1; }
   ninja -C "$LLVM_BUILD" clang lld llvm-objdump llvm-ar llvm-ranlib llvm-nm
   "$LLVM_BUILD/bin/clang" --version | head -1
 fi

@@ -1,7 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 SW="$(cd "$(dirname "$0")/.." && pwd)"
-CL=$HOME/Documents/llvm-project/build-gfix/bin/clang
+REPO="$(cd "$SW/../.." && pwd)"
+CL="${CL:-$REPO/build/bin/clang}"
+[[ -x "$CL" ]] || { echo "no clang at $CL - build it (ninja -C <repo>/build clang) or set CL" >&2; exit 1; }
 BTC=$HOME/Documents/bitcoin
 SEED=$SW/btc/seed9.txt
 NAME=$1; shift

@@ -2,9 +2,10 @@
 """Bucket an arm's under-taint (or the null arm's secret-op universe) by what
 kind of code it sits in. usage: classify.py <binary> <err> [<err0 to subtract>] [RES]
 With an n0 file and RES, reports per-resumption deltas."""
-import bisect, re, subprocess, sys
+import bisect, os, pathlib, re, subprocess, sys
 from collections import defaultdict
-NM='/home/rgangar/Documents/llvm-data-independent-timing/build/bin/llvm-nm'
+NM = str(pathlib.Path(os.environ.get("LLVM_BUILD",
+    pathlib.Path(__file__).resolve().parents[3] / "build")) / "bin/llvm-nm")
 binp, errp = sys.argv[1], sys.argv[2]
 err0 = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] != '-' else None
 RES = int(sys.argv[4]) if len(sys.argv) > 4 else 1
