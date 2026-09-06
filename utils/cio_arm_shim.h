@@ -272,6 +272,14 @@ static void cio_shim_pin(void) {
     /* EPERM (not root) is the normal case and not an error: leave it unpinned. */
 }
 
+static int cio_shim_pmc_available(void) {
+#ifdef CIO_SHIM_PMC
+    return cio_shim_pmc_ok;
+#else
+    return 0;
+#endif
+}
+
 static unsigned long cio_shim_dit_get(void) {
     unsigned long d;
     __asm__ volatile("mrs %0, DIT" : "=r"(d));
@@ -301,8 +309,25 @@ __attribute__((constructor)) static void cio_shim_start(void) {
     }
 #endif
 #ifdef CIO_SHIM_KPERF
-    /* needs root; failure is not an error, it selects the CNTVCT fallback */
-    cio_shim_kperf_ok = (perf_init("cioparity") == 0) && (perf_start() == 0);
+    /* needs root; failure is not an error, it selects the CNTVCT fallback.
+     *
+     * SKIPPED ENTIRELY when the PMCs are readable, and that is not a tidiness
+     * choice. kperf answers the same question a thousand times more expensively
+     * -- ~17,700 instructions and ~3,400 cycles per read against one `mrs` --
+     * and every one of those reads is work done inside the measured program. It
+     * also caused a real bug: with kperf active, read2() ran between the sampled
+     * PMC snapshots and put two kperf calls inside the window, a constant
+     * +35,265 instructions per sample and an implied clock of 116 GHz. The
+     * snapshot ordering was fixed too, but not calling kperf at all is what
+     * makes the fix unnecessary.
+     *
+     * What is lost: the whole-process tot_cyc/tot_ins/map_stall/flush columns,
+     * which only kperf provides. They answered a coarser question than the
+     * per-op PMC table does -- on CIO's drivers the timed crypto is 21-30% of
+     * process cycles, so whole-process totals were the wrong instrument for a
+     * claim about the measured call anyway. */
+    if (!cio_shim_pmc_available())
+        cio_shim_kperf_ok = (perf_init("cioparity") == 0) && (perf_start() == 0);
 #endif
 #ifdef CIO_SHIM_PMC
     /* after the PMC probe: pinning only matters when the per-core counters are
@@ -398,18 +423,13 @@ static inline uint64_t cio_shim_cntvct(void) {
  * line reports timer= so the choice is recorded with the results. */
 static inline void cio_shim_region_begin(void) {
 #ifdef CIO_SHIM_PMC
-    /* Decide first, then read: the read must not happen on an unsampled region,
-     * or the drain is back on every iteration and sampling bought nothing. */
+    /* Decide up front -- the read must not happen on an unsampled region, or
+     * the drain is back on every iteration and sampling bought nothing -- but
+     * do not READ yet. See below. */
     if (cio_shim_pmc_ok) {
         unsigned long long q = cio_shim_samp_seq++;
         cio_shim_samp_live = (q >= cio_shim_samp_skip)
                           && ((q - cio_shim_samp_skip) % cio_shim_samp_every) == 0;
-        if (cio_shim_samp_live) {
-            /* instructions first (its isb drains), cycles last: the drain then
-             * precedes the cycle snapshot and is not inside the window. */
-            cio_shim_s0_ins = cio_shim_pmc1();
-            cio_shim_s0_cyc = cio_shim_pmc0();
-        }
     }
 #endif
 #ifdef CIO_SHIM_CHEAP_TIMER
@@ -419,10 +439,41 @@ static inline void cio_shim_region_begin(void) {
     cio_shim_read2(&cio_shim_t0_cyc, &cio_shim_t0_ins);
     cio_shim_t0_timer = cio_shim_t0_cyc;
 #endif
+#ifdef CIO_SHIM_PMC
+    /* THE PMC SNAPSHOT MUST BE INNERMOST, i.e. taken AFTER read2() here and
+     * BEFORE it at the exit. read2() is a kperf call on a rooted run -- ~17,700
+     * instructions and ~3,400 cycles -- and taking the PMC snapshot first put
+     * BOTH of them inside the sampled window. Measured on a rooted run: a
+     * constant +35,265 instructions per sample on every benchmark, which is
+     * exactly two kperf reads, and an implied clock of 116 GHz. It was invisible
+     * unrooted, where read2() falls back to a one-instruction CNTVCT read.
+     *
+     * Innermost also means the cheap CNTVCT read sits outside the PMC window
+     * rather than inside it, which costs nothing and keeps the two instruments
+     * from measuring each other.
+     *
+     * Within the pair: instructions first (its isb drains), cycles last, so the
+     * drain precedes the cycle snapshot instead of landing inside the window. */
+    if (cio_shim_pmc_ok && cio_shim_samp_live) {
+        cio_shim_s0_ins = cio_shim_pmc1();
+        cio_shim_s0_cyc = cio_shim_pmc0();
+    }
+#endif
 }
 /* returns the END timer value, so the driver's (end - start) is unchanged */
 static inline uint64_t cio_shim_region_end(void) {
     unsigned long long c = 0, i = 0;
+#ifdef CIO_SHIM_PMC
+    /* Innermost, so read2()'s kperf call is outside this window (see the note in
+     * region_begin). Cycles first (bare, cheap), instructions after: the end
+     * drain then lands outside the cycle window and inside the instruction one,
+     * which is where it belongs. */
+    unsigned long long s1c = 0, s1i = 0;
+    if (cio_shim_pmc_ok && cio_shim_samp_live) {
+        s1c = cio_shim_pmc0();
+        s1i = cio_shim_pmc1();
+    }
+#endif
 #ifdef CIO_SHIM_CHEAP_TIMER
     uint64_t t1 = cio_shim_cntvct();                      /* cheap: first */
     cio_shim_read2(&c, &i);                               /* expensive: after */
@@ -433,11 +484,6 @@ static inline uint64_t cio_shim_region_end(void) {
 #endif
 #ifdef CIO_SHIM_PMC
     if (cio_shim_pmc_ok && cio_shim_samp_live) {
-        /* cycles first (bare, cheap), instructions after: the end drain lands
-         * outside the cycle window and inside the instruction one, which is
-         * where it belongs -- instructions need it, cycles must not pay it. */
-        unsigned long long s1c = cio_shim_pmc0();
-        unsigned long long s1i = cio_shim_pmc1();
         if (s1c > cio_shim_s0_cyc && s1i >= cio_shim_s0_ins) {
             unsigned long long dc = s1c - cio_shim_s0_cyc;
             if (dc < 1000000000ULL) {          /* migration guard, as below */
