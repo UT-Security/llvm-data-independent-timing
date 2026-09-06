@@ -270,7 +270,23 @@ Re-read a finished run without re-running it:
 
 ```sh
 OUT=<run dir> python3 utils/taint_libsodium_sudo_report.py
+OUT=<run dir> FULL=1 python3 utils/taint_libsodium_sudo_report.py   # + CNTVCT, whole-process
 ```
+
+The default is the instrument gates and the per-op PMC table, which is the one
+to read: cycles and instructions both from the PMCs, nothing converted at an
+assumed clock. `FULL=1` adds the CNTVCT and whole-process tables.
+
+**The CNTVCT table is not a second opinion on the PMC one.** CNTVCT measures
+TIME, so it carries whatever clock the machine picked, and the arms of a single
+benchmark do not all run at the same clock. Measured on aes256gcm-decrypt:
+3.44 GHz on base and the NOP twins against 4.42 on the bracket and the pass,
+because a 301-cycle operation with nothing slowing it down never ramps while one
+carrying two `sb` drains stays boosted. That made the hardened arms look 34
+points cheaper in time than they are in cycles. Where the clock IS flat --
+ed25519 and argon2id, constant to three digits -- the two agree to a few
+hundredths. Use PMC cycles: DVFS-immune, and the like-for-like comparison
+against gem5, whose numbers are cycles at a fixed clock.
 
 ---
 
