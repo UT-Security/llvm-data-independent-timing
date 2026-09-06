@@ -178,8 +178,12 @@ process), the **Apple bracket** (the driver's AEAD entry points wrapped in
 Apple's prologue and epilogue: read the previous DIT state, `msr DIT, #1`,
 speculation barrier as `isb sy`, the call, clear only if it was clear; the
 same `api_bracket.c` as experiment 09, interposed with the linker's
-`--wrap`), and **ExpeDITe** at the shipped defaults (callee contract, twins,
-intra-block placement, the fixpoint seeds, the owned list). Blanket and the
+`--wrap`), and **ExpeDITe** at the defaults of the measurement (callee
+contract, twins, intra-block placement, the fixpoint seeds, the owned list),
+without the external-callee assumption, which became the default later the
+same day: this column is `-taint-dit-external-preserves=0` in today's terms,
+and "The external-callee assumption" below is what a default build now
+emits. Blanket and the
 bracket under the serialising `MSR DIT`, which is what an M4 or M5 does;
 ExpeDITe under both. IPC overhead against base, median over five stack
 offsets, 300 runs, all gates pass except the known L=10 base-model wobble

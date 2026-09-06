@@ -113,8 +113,9 @@ re-asserted after each, 393,216 times per hash, +7.58% serialising for a
 hash the old compiler ran unprotected at +1.97%; aes256-gcm decrypt's 4-byte
 tail cost four of its six switches the same way.
 
-**`-taint-dit-external-preserves`** (2026-09-05, opt-in, bool) is the
-assumption, stated as such: a direct call whose callee this module does not
+**`-taint-dit-external-preserves`** (2026-09-05, bool; opt-in when this was
+written, the DEFAULT since later the same day, `=0` restores the re-assert)
+is the assumption, stated as such: a direct call whose callee this module does not
 define returns PSTATE.DIT as it found it. `calleeLeavesDITSet` answers yes
 for it, so no re-assert follows the call in any emitter and the region
 verifier's dataflow does not model it as a clear; step 3b does not retract

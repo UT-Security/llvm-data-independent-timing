@@ -379,9 +379,12 @@ the write. Executed switches per op in brackets.
 - **Apple bracket**: each public entry point wrapped in Apple's prologue and
   epilogue (read the previous state, `msr DIT, #1`, speculation barrier as
   `isb sy`, the call, clear only if it was clear), no analysis;
-- **ExpeDITe**: `-ftaint-harden` at the shipped defaults (callee contract,
-  twins, intra-block region placement) with the fixpoint seeds and the
-  owned list.
+- **ExpeDITe**: `-ftaint-harden` at the defaults of the measurement (callee
+  contract, twins, intra-block region placement) with the fixpoint seeds and
+  the owned list, and WITHOUT the external-callee assumption, which became
+  the default later the same day: this column is
+  `-taint-dit-external-preserves=0` in today's terms, and the
+  external-assumption table further down is what a default build now emits.
 
 | benchmark | base cycles/op | blanket | Apple bracket | ExpeDITe, serialising | ExpeDITe, renamed |
 |---|---|---|---|---|---|
