@@ -1,0 +1,6 @@
+date: 2026-09-06T19:07:33Z
+host: Mac17,2 Apple M5
+root: yes
+libsodium: /Users/rohan/Documents/libsodium-arms-silicon/base/libsodium-base.a
+clang: Apple clang version 17.0.0 (clang-1700.4.4.1)
+reps: 21  iters: 200000

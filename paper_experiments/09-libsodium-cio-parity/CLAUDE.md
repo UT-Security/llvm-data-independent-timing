@@ -233,6 +233,15 @@ Add a machine by dropping its run directory in beside it. Do NOT overwrite
 `results/m4/` with a rerun unless the rerun is at least as clean: check the
 gates first, and in particular that `pinned` is a core and drops are 0.
 
+`results/m5/` is NOT m4-grade and its README says so up front. That machine's
+kernel does not expose the PMCs to EL0, so the parity rig fell back to kperf and
+its per-op table is empty; what is quotable there is the blanket number from
+`./reproduce.sh blanket`, cross-checked against m4 to within about a point on
+every primitive. Its `cio.csv` also predates the `pinned` column. Do not read
+its per-region percentages against m4's PMC table: `reg_cyc` charges a kperf
+pair per region, so base aes256-gcm encrypt reads 2,866 cyc/op there against the
+M4's 255, which divides every percentage by roughly an order of magnitude.
+
 ## Blanket only
 
 ```sh
@@ -346,6 +355,25 @@ happened.
 **Never edit a rig script while a run is in flight.** bash reads scripts
 incrementally; an in-place rewrite shifts byte offsets under the running shell.
 Use an atomic replace (write a temp file, `os.replace`) or wait.
+
+**A cycle ratio on a short AEAD op depends on HOW LONG THE RIG HAS BEEN
+RUNNING.** Measured on the M5, seven rooted runs: aes256-gcm decrypt blanket
+reads **+3.8%** in runs lasting minutes and **-0.9%** in runs lasting seconds.
+Arm A (DIT off) carries the whole 4.5% swing; arm C barely moves. Two candidate
+mechanisms were tested and both are WRONG -- it is not inherited predictor state
+(a 200,000-iteration chase inside the measured process changes nothing) and it is
+not the core clock (a 400-rep run spanning 4.607 to 4.391 GHz held arm A flat at
+809-810, r = -0.169). Something saturates within the first minutes of sustained
+load; do not guess which.
+
+The blanket rig mitigates this with `SOAK` (default 180 s), a fixed load run
+before the first measurement so every run starts from the steady state. **A
+soaked number and an unsoaked one are not comparable.** This reaches
+`results/m4/` too: it is a long run, so it sits in the same regime as the M5's
+long runs, which is why its +4.82% and the M5's +3.81% agree.
+
+**Gate 3 does not catch this and cannot**: it compares arms within a run, and
+they always match. The variance is between runs.
 
 **Do not change `PRESET=legacy` or the wllvm archives.** They back the published
 M5/M4 numbers in `README.md` and must stay reproducible.
