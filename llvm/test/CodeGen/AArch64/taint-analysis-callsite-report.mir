@@ -1,3 +1,8 @@
+# The report files APPEND (one record per function, accumulated across the whole
+# TU), so a stale %t from an earlier lit run or an earlier version of this test
+# survives into this one and can make a CHECK pass on evidence this run did not
+# produce. Clear it first.
+# RUN: rm -f %t
 # RUN: llc -mtriple=aarch64 -enable-new-pm -run-taint-interproc -taint-callsite-report=%t %s -o /dev/null
 # RUN: FileCheck %s < %t
 
