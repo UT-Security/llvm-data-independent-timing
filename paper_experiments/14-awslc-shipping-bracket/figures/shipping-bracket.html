@@ -231,7 +231,7 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
     const arms = ['C','B','Bs','H','Hs'];
     document.getElementById('sw2').innerHTML = arms.map(a => `<span style="--sw:${COL(a)}">${NAME[a]}</span>`).join('');
     const groups = PR.map(([label,k]) => ({label, r: DATA.rows[k]})).filter(g => g.r);
-    groups.push({label: 'geometric mean', r: {pct: Object.fromEntries(arms.map(a => [a, geomean(used, a)])), suspect: []}});
+    groups.push({label: 'geometric mean', r: {pct: Object.fromEntries(arms.map(a => [a, geomean(used, a, true)])), suspect: []}});   // every cell counts
     // ratio to A: 1.00x is no cost; the axis is set by the clean cells and starts a little under the lowest bar
     const ratio = p => p == null || Number.isNaN(p) ? null : p / 100 + 1;
     const rlab = v => Math.abs(v) < 10 ? `${v.toFixed(2)}x` : Math.abs(v) < 1e3 ? `${v.toFixed(1)}x` : `${v.toPrecision(2)}x`;

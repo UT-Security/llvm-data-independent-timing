@@ -4,8 +4,8 @@
   plot_awslc.py summary.json [--out DIR]
 
 Writes into DIR (default: next to the JSON):
-  paper_rows.png    the paper's ten rows, grouped bars for C, B, Bs, H, Hs as the ratio to A (1.00x = no cost), plus
-                    the geometric mean group (clean cells); a suspect cell (median known wrong) is
+  paper_rows.png    the paper's ten rows, grouped bars for C, B, Bs, H, Hs as the ratio to A (1.00x = no cost), no title, plus
+                    the geometric mean group (every cell); a suspect cell (median known wrong) is
                     hatched, capped at the axis top and labelled with its true value
   all_rows.png      every row, one panel per arm, horizontal bars in table order, symmetric-log
                     axis so a 16-byte AES block at +366% and a hash at -1% share a scale; suspect
@@ -45,7 +45,7 @@ def geomean(rows, arm, include_suspect):
 def paper_chart(an, out):
     rows = [(lab, an['rows'].get(k)) for lab, k in PAPER]
     rows = [(lab, r) for lab, r in rows if r]
-    labels = [lab for lab, _ in rows] + ['geometric mean\n(clean cells)']
+    labels = [lab for lab, _ in rows] + ['geometric mean']
     n, w = len(labels), 0.16
     fig, ax = plt.subplots(figsize=(14, 6.2))
     # bars are the ratio of cycles per op to the unhardened arm, drawn from 1.00x (no cost). The axis is set by
@@ -57,7 +57,7 @@ def paper_chart(an, out):
     # a label is lifted one line when the neighbouring bar's label would overprint it (values within 4% of the axis)
     near = 0.04 * (top - lo)
     for i, arm in enumerate(ARMS):
-        vals = [ratio(r['pct'].get(arm, float('nan'))) for _, r in rows] + [ratio(geomean([r for _, r in rows], arm, False))]
+        vals = [ratio(r['pct'].get(arm, float('nan'))) for _, r in rows] + [ratio(geomean([r for _, r in rows], arm, True))]   # every cell counts
         sus = [arm in r.get('suspect', []) for _, r in rows] + [False]
         xs = [j + (i - 2) * w for j in range(n)]
         drawn = [min(v, top) if v == v else v for v in vals]
@@ -72,11 +72,11 @@ def paper_chart(an, out):
                             fontsize=7, xytext=(0, 2 + lift if v >= 1 else -2 - lift), textcoords='offset points', color='#B5473A' if s else '#333')
     ax.set_ylim(lo - (top - lo) * 0.05, top * 1.04)
     ax.axhline(1, color='#888', linewidth=0.8)
-    ax.set_xticks(range(n)); ax.set_xticklabels(labels, rotation=28, ha='right', fontsize=9)
-    ax.yaxis.set_major_formatter(ratfmt); ax.set_ylabel('cycles per operation, ratio to unhardened (A); 1.00x = no cost')
-    v = an['validity']
-    ax.set_title(f"AWS-LC's DIT bracket on `bssl speed`: Apple M4, CPU {v.get('pin_cpu')} hard-bound, {v.get('timeout_ms')} ms windows, medians of {v.get('reps')} reps", fontsize=11)
-    ax.legend(ncol=5, fontsize=9, frameon=False, loc='upper right')
+    ax.set_xticks(range(n)); ax.set_xticklabels(labels, rotation=28, ha='right', fontsize=9, fontweight='bold')
+    ax.yaxis.set_major_formatter(ratfmt); ax.set_ylabel('Cycles/op Overhead', fontweight='bold')
+    for t in ax.get_yticklabels(): t.set_fontweight('bold')
+    # no title: the figure is captioned where it is placed
+    ax.legend(ncol=5, fontsize=9, frameon=False, loc='upper right', prop={'weight': 'bold', 'size': 9})
     ax.grid(axis='y', color='#ddd', linewidth=0.6); ax.set_axisbelow(True)
     for s in ('top', 'right'): ax.spines[s].set_visible(False)
     fig.tight_layout(); fig.savefig(os.path.join(out, 'paper_rows.png'), dpi=160); plt.close(fig)
