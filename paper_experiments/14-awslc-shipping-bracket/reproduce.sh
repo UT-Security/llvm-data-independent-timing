@@ -21,8 +21,8 @@
 #
 # Before the run stage: a quiet-machine check (load average, the busiest processes, user-facing
 # applications still open; refuses above a 1-minute load of 2.0 unless FORCE=1), and Spotlight
-# indexing is switched off for the duration inside the sudo session and switched back on after,
-# if it was on (SPOTLIGHT_RESTORE=0 leaves it off).
+# indexing is switched off for the duration inside the sudo session and switched back on after
+# (SPOTLIGHT_RESTORE=0 leaves it off).
 #
 # Env: RUNS (how many times the run stage repeats; a bare integer among the arguments sets it),
 #      W (work dir, default ~/Documents/dit-awslc), PIN_CPU (9, a P-core: hard bind via
@@ -82,15 +82,15 @@ if want run; then
   mkdir -p "$W/results" 2>/dev/null || true
   # one sudo session for the whole stage (the credential cache would expire during a 20-minute
   # run); the chown back to the invoking user happens inside it, so nothing root-owned is left
-  rm -rf "$W/results/run-"*
+  rm -rf "$W/results/run-"*; mkdir -p "$W/results"; : > "$W/results/driver-stderr.log"; echo "reproduce $(date '+%F %T') RUNS=$RUNS stages: $STAGES" >> "$W/results/driver-stderr.log"
   for ((i = 1; i <= RUNS; i++)); do
     [[ $RUNS -gt 1 ]] && info "run $i of $RUNS"
     sudo -E env PATH="$PATH" HOME="$HOME" W="$W" PIN_CPU="$PIN_CPU" REPO="$R" REPS="${REPS:-7}" WARM="${WARM:-1}" \
         TIMEOUT_MS="${TIMEOUT_MS:-400}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
         SPOTLIGHT_RESTORE="${SPOTLIGHT_RESTORE:-1}" \
-        bash -c 'was_on=$(mdutil -s / 2>/dev/null | grep -c "Indexing enabled"); mdutil -a -i off >/dev/null 2>&1 && echo "    spotlight indexing off for the run";
-                 mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" | tee "$W/results/speed.txt"; rc=${PIPESTATUS[0]}; chown -R "$ME" "$W/results";
-                 if [[ "$was_on" == 1 && "$SPOTLIGHT_RESTORE" == 1 ]]; then mdutil -a -i on >/dev/null 2>&1 && echo "    spotlight indexing back on"; fi; exit $rc' \
+        bash -c 'mdutil -a -i off >/dev/null 2>&1 && echo "    spotlight indexing off for the run";
+                 mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" 2> >(tee -a "$W/results/driver-stderr.log" >&2) | tee "$W/results/speed.txt"; rc=${PIPESTATUS[0]}; chown -R "$ME" "$W/results";
+                 if [[ "$SPOTLIGHT_RESTORE" == 1 ]]; then mdutil -a -i on >/dev/null 2>&1 && echo "    spotlight indexing back on"; fi; exit $rc' \
       || die "run $i failed"
     grep -E '^pinned|^gate' "$W/results/speed.txt"
     mkdir -p "$W/results/run-$i"; cp "$W/results/speed.txt" "$W/results/speed.json" "$W/results/run-$i/"

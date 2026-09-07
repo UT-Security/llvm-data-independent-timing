@@ -122,13 +122,13 @@ for k in sorted(samples):
     pct = {a: (med[a] / med['A'] - 1) * 100 for a in med if a != 'A'}
     bsb = (med['Bs'] - med['B']) / med['A'] * 100 if 'Bs' in med and 'B' in med else float('nan')      # the barrier's price per op
     bh = (med['B'] - med['H']) / med['A'] * 100 if 'B' in med and 'H' in med else float('nan')          # the per-call clear, and the dwell gaps it opens
+    nsop = {a: st.median(v[2] for v in d[a]) for a in d}                    # ns per op, every arm
+    cell_clock = {a: med[a] / nsop[a] * 1000 for a in d}                     # MHz implied by the cell's medians: a cell whose
+                                                                             # majority of samples was garbage lands outside the band
     sus = [a for a in d if not CLOCK_LO <= cell_clock[a] <= CLOCK_HI]
     line = f"{k[:44]:44s}{med['A']:>10.0f}{ipc:>6.2f}" + ''.join(f"{pct.get(a, float('nan')):>+7.1f}%" for a in arms if a != 'A') + f"{bsb:>+8.2f}{bh:>+8.2f}{mad:>6.2f}%"
     if sus: line += f"   SUSPECT: {','.join(sus)} (cell clock outside band; a majority of that cell's samples was flagged)"
     print(line)
-    nsop = {a: st.median(v[2] for v in d[a]) for a in d}                    # ns per op, every arm
-    cell_clock = {a: med[a] / nsop[a] * 1000 for a in d}                     # MHz implied by the cell's medians: a cell whose
-                                                                             # majority of samples was garbage lands outside the band
     ins = {a: st.median(v[1] for v in d[a]) for a in d}                     # instructions per op, every arm
     ipc_all = {a: ins[a] / med[a] for a in d}                                # IPC = instructions / cycles, every arm
     results[k] = dict(median_cycles_per_op=med, median_instrs_per_op=ins, median_ns_per_op=nsop, cell_clock_mhz=cell_clock,
