@@ -8069,7 +8069,8 @@
    "sb_after_changing": 51.24410167495813,
    "sb_after_nonchanging": 115.14634361025992
   },
-  "pair_price_cycles": 153.54942718601967
+  "pair_price_cycles": 153.54942718601967,
+  "block_entry_price_cycles": 93.64986507427795
  },
  "validity": {
   "arms": [
@@ -8330,37 +8331,49 @@
  "density": {
   "CMAC-AES-128-CBC [16384 B]": {
    "B_minus_A": 96712.30699999999,
-   "implied_entries": 629.844791819617,
+   "implied_entries": 1032.7009753115294,
+   "unit_price": 93.64986507427795,
+   "unit": "single-block AES entry",
    "blocks": 1024,
    "pct_B": 236.94182021488862
   },
   "CMAC-AES-128-CBC [16 B]": {
    "B_minus_A": 228.6805715539254,
-   "implied_entries": 1.4892961552822144,
+   "implied_entries": 2.4418676030397743,
+   "unit_price": 93.64986507427795,
+   "unit": "single-block AES entry",
    "blocks": 1,
    "pct_B": 406.7473036384544
   },
   "EVP-AES-128-GCM encrypt [16 B]": {
    "B_minus_A": 524.1860671173326,
    "implied_entries": 3.4137936996814706,
+   "unit_price": 153.54942718601967,
+   "unit": "AEAD-level entry",
    "blocks": null,
    "pct_B": 303.5942063404123
   },
   "EVP-AES-128-GCM encrypt [16384 B]": {
    "B_minus_A": 547.2211195741193,
    "implied_entries": 3.5638108822847014,
+   "unit_price": 153.54942718601967,
+   "unit": "AEAD-level entry",
    "blocks": null,
    "pct_B": 9.504413482624319
   },
   "EVP-AES-128-CBC decrypt [16 B]": {
    "B_minus_A": 336.85132190329756,
    "implied_entries": 2.193764757554023,
+   "unit_price": 153.54942718601967,
+   "unit": "AEAD-level entry",
    "blocks": null,
    "pct_B": 325.9848841931723
   },
   "AEAD-AES-128-GCM open [16 B]": {
    "B_minus_A": 178.41730166865517,
    "implied_entries": 1.1619535477166512,
+   "unit_price": 153.54942718601967,
+   "unit": "AEAD-level entry",
    "blocks": null,
    "pct_B": 86.78209476231413
   }

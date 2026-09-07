@@ -1,6 +1,6 @@
 # Experiment 14 analysis: AWS-LC's shipped DIT bracket on `bssl speed`
 
-Source `/Users/rgangar/.treehouse/llvm-data-independent-timing-7b712d/1/llvm-data-independent-timing/paper_experiments/14-awslc-shipping-bracket/results-m4/speed.json`, analysed 2026-09-06. Arms: A = release, no DIT, C = blanket (DIT set before main), B = shipped bracket, Bs = bracket + sb, H = vendor hoisting (-dit), Hs = hoisting + sb.
+Source `paper_experiments/14-awslc-shipping-bracket/results-m4/speed.json`, analysed 2026-09-06. Arms: A = release, no DIT, C = blanket (DIT set before main), B = shipped bracket, Bs = bracket + sb, H = vendor hoisting (-dit), Hs = hoisting + sb.
 
 ## Validity
 
@@ -46,16 +46,16 @@ Source `/Users/rgangar/.treehouse/llvm-data-independent-timing-7b712d/1/llvm-dat
 
 ## Density: how many bracket entries an operation pays for
 
-One entry (two changing writes) costs 154 cycles on the seal row; B - A divided by that is the entries per op.
+One AEAD-level entry (two changing writes) costs 154 cycles on the seal row and one single-block AES entry 94; B - A divided by the applicable price is the entries per op.
 
-| row | B - A cycles | implied entries/op | B vs A |
-|---|---|---|---|
-| CMAC-AES-128-CBC [16384 B] | 96,712 | 629.8 (1024 AES blocks) | +236.9% |
-| CMAC-AES-128-CBC [16 B] | 229 | 1.5 (1 AES blocks) | +406.7% |
-| EVP-AES-128-GCM encrypt [16 B] | 524 | 3.4 | +303.6% |
-| EVP-AES-128-GCM encrypt [16384 B] | 547 | 3.6 | +9.5% |
-| EVP-AES-128-CBC decrypt [16 B] | 337 | 2.2 | +326.0% |
-| AEAD-AES-128-GCM open [16 B] | 178 | 1.2 | +86.8% |
+| row | B - A cycles | unit price | implied entries/op | B vs A |
+|---|---|---|---|---|
+| CMAC-AES-128-CBC [16384 B] | 96,712 | 94 (single-block AES entry) | 1033 (1024 AES blocks) | +236.9% |
+| CMAC-AES-128-CBC [16 B] | 229 | 94 (single-block AES entry) | 2 (1 AES blocks) | +406.7% |
+| EVP-AES-128-GCM encrypt [16 B] | 524 | 154 (AEAD-level entry) | 3 | +303.6% |
+| EVP-AES-128-GCM encrypt [16384 B] | 547 | 154 (AEAD-level entry) | 4 | +9.5% |
+| EVP-AES-128-CBC decrypt [16 B] | 337 | 154 (AEAD-level entry) | 2 | +326.0% |
+| AEAD-AES-128-GCM open [16 B] | 178 | 154 (AEAD-level entry) | 1 | +86.8% |
 
 ## Blanket DIT moving a row by more than 2% (C vs A, rows with MAD < 2%)
 

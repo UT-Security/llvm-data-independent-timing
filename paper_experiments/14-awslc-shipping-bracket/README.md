@@ -216,8 +216,8 @@ seal and 3% at 16 KB because the denominator moves.
 
 **Nesting.** Dividing B - A by the price of one entry: the AEAD open path pays for 1.2
 AEAD-level entries (its inner entry finds the bit already set and pays only the read),
-the EVP cipher layer for 3.4 to 3.6, and CMAC at 16 KB for 1,029 single-block entries at
-94 cycles each (one bracketed `AES_encrypt` per 16 bytes, plus the setup), which is +237%
+the EVP cipher layer for 3.4 to 3.6, and CMAC at 16 KB for about 1,030 single-block entries
+at 94 cycles each (one bracketed `AES_encrypt` per 16 bytes, plus the setup), which is +237%
 at every size: the phpass shape, in a shipping library.
 
 **The vendor's claim.** "Close to the release build" under hoisting is true above a
