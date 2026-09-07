@@ -1,0 +1,59 @@
+PSTATE.DIT overhead on libsodium, gem5 Neoverse V2
+==============================================================================
+
+Percentage slowdown against the unhardened build. Experiment 09, 2026-09-06.
+gem5 ce05d32089 (in-tree submodule), compiler 00f86ba06b5e, 84 cells, all
+gates passed. Raw data in this directory; writeup in ../../rerun-2026-09-06.md.
+
+arm                         ed25519   chacha enc   chacha dec  aes-gcm enc  aes-gcm dec     argon2id
+----------------------------------------------------------------------------------------------------
+baseline (unhardened)        +0.00%       +0.00%       +0.00%       +0.00%       +0.00%       +0.00%
+blanket                      +0.22%       +1.37%       +0.70%       +0.41%       +8.39%       +0.64%
+ExpeDITe, serialising        -1.50%      +39.31%      +38.03%       +3.40%      +24.36%       +1.07%
+ExpeDITe, renamed            -2.03%       +3.84%       +6.67%       -6.16%       +9.32%       +1.14%
+ExpeDITe, NOP                -2.34%       +4.72%       +6.10%       -6.33%       +1.11%       +0.86%
+
+ExpeDITe switches/op              2           32           32            2            2            3
+baseline cyc/op              78,790        2,186        2,290        1,217        1,077  326,450,006
+
+How to read it
+--------------
+
+blanket is DIT set once before main, no analysis and no switches: it is the
+CEILING on what selective placement can save, and on five of six rows it is
+under 1.4%. At f -> 100% there is very little to recover.
+
+ExpeDITe, NOP is the same hardened binary with every `msr DIT` replaced by
+HINT #0 -- identical placement, identical instruction count, same addresses,
+no mode switch executing. It is model-independent by construction, which is why
+it has one number instead of two. Where an ExpeDITe row sits close to it, the
+switches are not what is being paid for.
+
+Serialising is what real silicon does; renamed is the counterfactual only a
+simulator can run. The gap between the two ExpeDITe rows is switch
+serialisation and nothing else -- the same binary, one mechanism changed. On the
+chacha rows that gap is 35 points, and those are the rows emitting 32 switches
+per operation against 2 or 3 everywhere else.
+
+Two caveats, both load-bearing
+------------------------------
+
+1. The pass rows are on a denominator that flatters them. -taint-no-tail-calls
+   rides on -ftaint-harden, so ExpeDITe pays a TU-wide tail-call disable that
+   the unhardened baseline never does: 44 tail calls become bl+ret, +0.89%
+   library text, worth -0.91% to +3.49% runtime. Against `rt` (hardened
+   codegen, empty seed file, zero switches) the serialising row reads -0.59 /
+   +35.71 / +33.39 / +3.29 / +22.22 and the renamed row -1.13 / +1.16 / +3.08 /
+   -6.26 / +7.43.
+
+2. Anything smaller than its column's relink spread is not a result. Linking the
+   UNHARDENED library K bytes later in .text -- unreachable padding, identical
+   instruction stream, identical committed instruction count -- moves these
+   benchmarks 5.40 / 4.53 / 7.04 / 0.50 / 1.94 points (no ensemble exists for
+   argon2id). Six unreachable NOPs move chacha decrypt +6.18%. That is why the
+   NOP row goes NEGATIVE on two columns: a build doing strictly more work cannot
+   be 6.33% faster, so that number is an address artifact. Over 12 link offsets
+   it becomes -0.15%. Working: docs/results/dit-layout-lottery-2026-09-06.md.
+
+The serialising rows and the blanket comparison clear both caveats by tens of
+points. No renamed difference under about five points survives them.
