@@ -47,7 +47,7 @@ def xaxis_secret_fraction(ax, f, Ls):
     fraction is in data/gem5_arms.csv, not on the plot."""
     ax.set_xlim(-2, 102); ax.set_xticks([0, 20, 40, 60, 80, 100])
     ax.set_xticklabels([f"{t}%" for t in (0, 20, 40, 60, 80, 100)])
-    ax.set_xlabel("Secret fraction of the request (cycles in the AEAD lane)")
+    ax.set_xlabel("Secret fraction of the request (cycles in the AEAD lane)", fontweight="bold")
 
 rows = [r for r in csv.DictReader(l for l in open(G / "gem5_arms.csv") if not l.startswith("#"))]
 Ls = sorted({int(r["L"]) for r in rows})
@@ -63,16 +63,18 @@ q4 = int(rows[0]["pred_q4"])
 # ---------------------------------------------------------------- fig 1
 fig, ax = plt.subplots(figsize=(6.4, 3.9), dpi=300); fig.patch.set_facecolor(SURF); style(ax)
 xs = [f[L] for L in Ls]
-# Legend vocabulary matches the experiment 09 figure: coarse = blanket DIT,
+# "blanket" is what the arm is called in the data, the CSVs and the README, so it
+# is what the legend says. (Experiment 09's figure still says "coarse" for the
+# same arm - that one has not been changed yet.)
 # fine = region placement; ExpeDITe is the gem5 model under each MSR DIT implementation.
-series = [("coarse", ov("blanket", "-"), BLUE, "-", "o", BLUE),
+series = [("blanket", ov("blanket", "-"), BLUE, "-", "o", BLUE),
           ("ExpeDITe (serialized)", ov("pass", "serialising"), ORANGE, "-", "o", ORANGE),
           ("ExpeDITe (renamed)", ov("pass", "renamed"), ORANGE, (0, (4, 2)), "o", SURF)]
 for name, ys, col, ls, mk, mfc in series:
     ax.plot(xs, ys, color=col, lw=2, ls=ls, marker=mk, ms=6, mfc=mfc, mec=col, mew=1.6, zorder=3)
 ax.axhline(0, color=BASE, lw=0.9, zorder=2)
 xaxis_secret_fraction(ax, f, Ls)
-ax.set_ylabel("IPC Overhead (%)")
+ax.set_ylabel("IPC Overhead (%)", fontweight="bold")
 # The unit is in the label, so the ticks are bare numbers - a "%" on every tick
 # as well is the same word six times.
 ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
@@ -95,10 +97,10 @@ ax.set_yscale("symlog", linthresh=100, linscale=0.6)
 ax.set_yticks([0, 100, 1000, 10000]); ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.0f}")); ax.minorticks_off()
 ax.set_ylim(-8, 40000)
 xaxis_secret_fraction(ax, f, Ls)
-ax.set_ylabel("Load-value predictions per request")
+ax.set_ylabel("Load-value predictions per request", fontweight="bold")
 handles = [Line2D([], [], color=BASE, lw=2, marker="o", ms=6, mfc=BASE, mec=BASE, label="unhardened"),
            Line2D([], [], color=ORANGE, lw=2, ls=(0, (4, 2)), marker="o", ms=6, mfc=SURF, mec=ORANGE, label="ExpeDITe"),
-           Line2D([], [], color=BLUE, lw=2, marker="o", ms=6, mfc=BLUE, mec=BLUE, label="coarse")]
+           Line2D([], [], color=BLUE, lw=2, marker="o", ms=6, mfc=BLUE, mec=BLUE, mew=1.6, label="blanket")]
 ax.legend(handles=handles, frameon=False, fontsize=7.4, loc="upper right")
 fig.tight_layout(); fig.savefig(FIG / "predictions-suppressed-vs-L.png", dpi=300, facecolor=SURF); fig.savefig(FIG / "predictions-suppressed-vs-L.pdf", facecolor=SURF)
 print("wrote", FIG / "overhead-vs-secret-fraction.{png,pdf}", FIG / "predictions-suppressed-vs-L.{png,pdf}")
