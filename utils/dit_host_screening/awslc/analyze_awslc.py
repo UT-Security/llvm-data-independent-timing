@@ -33,7 +33,7 @@ def pct(m, a):
 def analyze(d):
     R = d['results']; out = {'rows': {}, 'series': {}, 'prices': {}, 'validity': {}, 'anomalies': [], 'density': {}}
     v = out['validity']
-    v.update(runs_count=d.get('runs_count', 1), runs=d.get('runs'),
+    v.update(runs_count=d.get('runs_count', 1), runs=d.get('runs'), aggregate=d.get('aggregate'),
              arms=d.get('arms', ARMS), tests=d.get('tests'), reps=d.get('reps'), timeout_ms=d.get('timeout_ms'), chunks=d.get('chunks'),
              pin_cpu=d.get('pin_cpu'), unpinned=d.get('unpinned', 0), failures=len(d.get('failures', [])),
              flagged=d.get('flagged', d.get('dropped', 0)), flag_mode='flagged (kept)' if 'flagged' in d else 'DROPPED (old driver)',
@@ -179,7 +179,7 @@ def report_md(an, src):
     L.append(f"Source `{src}`, analysed {datetime.date.today().isoformat()}. Arms: " + ', '.join(f"{a} = {ARM_NAME[a]}" for a in v['arms']) + ".\n")
     L.append("## Validity\n")
     if v['runs_count'] > 1:
-        L.append(f"- {v['runs_count']} runs, each cell the MEAN across runs of that run's median; per-cell spread across runs (max-min)/mean: median {v['run_spread_pct']['median']:.2f}%, p90 {v['run_spread_pct']['p90']:.2f}%, max {v['run_spread_pct']['max']:.1f}%"
+        L.append(f"- {v['runs_count']} runs, each cell the {(v.get('aggregate') or 'mean').upper()} across runs of that run's median; per-cell spread across runs (max-min)/mean: median {v['run_spread_pct']['median']:.2f}%, p90 {v['run_spread_pct']['p90']:.2f}%, max {v['run_spread_pct']['max']:.1f}%"
                  + ''.join(f"\n  - run {i + 1}: flagged {r.get('flagged')}, unpinned {r.get('unpinned')}, failures {r.get('failures')}, rows {r.get('rows')}" for i, r in enumerate(v['runs'] or [])))
     L.append(f"- pinned to CPU {v['pin_cpu']} (kern.sched_thread_bind_cpu); processes not reporting the bind: {v['unpinned']}")
     L.append(f"- failures: {v['failures']}; rows without PMC cycles: {v['no_pmc_rows']}; samples {v['flag_mode']} for implied clock outside band {v.get('clock_band')}: {v['flagged']}")
@@ -377,7 +377,7 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
   if (V.clock) cells.push(['implied clock, all samples', `${Math.round(V.clock.min)} – ${Math.round(V.clock.max)} MHz`, '']);
   if (V.samples_per_row_A) cells.push(['A samples per row', `${V.samples_per_row_A.min} – ${V.samples_per_row_A.max} of ${V.reps}`, '']);
   cells.push(['window per row', `${V.timeout_ms} ms`, '']);
-  if ((V.runs_count ?? 1) > 1) cells.push(['runs averaged (per-cell spread, median / max)', `${V.runs_count} (${V.run_spread_pct.median.toFixed(2)}% / ${V.run_spread_pct.max.toFixed(1)}%)`, '']);
+  if ((V.runs_count ?? 1) > 1) cells.push([`runs combined by ${V.aggregate ?? 'mean'} (per-cell spread, median / max)`, `${V.runs_count} (${V.run_spread_pct.median.toFixed(2)}% / ${V.run_spread_pct.max.toFixed(1)}%)`, '']);
   cells.push(['suspect cells (majority of samples flagged; marked \u2020)', V.suspect_cells ?? 0, (V.suspect_cells??0)===0?'ok':'flag']);
   document.getElementById('status').innerHTML = cells.map(([k,v,c]) => `<div class="${c}">${esc(k)}<b>${esc(v)}</b></div>`).join('');
 }
