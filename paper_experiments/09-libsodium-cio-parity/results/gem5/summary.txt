@@ -16,6 +16,12 @@ ExpeDITe, NOP                -2.34%       +4.72%       +6.10%       -6.33%      
 ExpeDITe switches/op              2           32           32            2            2            3
 baseline cyc/op              78,790        2,186        2,290        1,217        1,077  326,450,006
 
+As a figure: paper_experiments/figures/dit-overhead-gem5.pdf, the same rows,
+regenerated with
+
+  python3 paper_experiments/fig_bracket_vs_blanket.py --machine gem5 \
+      --figure summary            # --wide for a screen render with value labels
+
 How to read it
 --------------
 
