@@ -96,6 +96,41 @@ def analyze(d):
                                        unit='single-block AES entry' if unit == block and blocks else 'AEAD-level entry', blocks=blocks, pct_B=r['pct'].get('B'))
     return out
 
+# The paper's ten rows: (label, row key, priced by the single-block entry?)
+PAPER_ROWS = [
+    ("AES-128 single block",                    "AES-128 encrypt",                    True),
+    ("EVP AES-GCM encrypt, 16 B",               "EVP-AES-128-GCM encrypt [16 B]",     False),
+    ("AEAD AES-GCM seal, 16 B",                 "AEAD-AES-128-GCM seal [16 B]",       False),
+    ("AEAD AES-GCM open, 16 B",                 "AEAD-AES-128-GCM open [16 B]",       False),
+    ("AEAD ChaCha20-Poly1305 seal, 16 B",       "AEAD-ChaCha20-Poly1305 seal [16 B]", False),
+    ("AEAD AES-GCM seal, 1350 B (a TLS record)","AEAD-AES-128-GCM seal [1350 B]",     False),
+    ("AEAD AES-GCM seal, 16 KB",                "AEAD-AES-128-GCM seal [16384 B]",    False),
+    ("CMAC-AES-128, 16 KB",                     "CMAC-AES-128-CBC [16384 B]",         True),
+    ("ECDSA P-256 sign",                        "ECDSA P-256 signing",                False),
+    ("RNG, 16 B",                               "RNG [16 B]",                         False),
+]
+# what a run needs to produce exactly these rows: the filters and the chunk sizes
+PAPER_TESTS = "AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG"
+PAPER_CHUNKS = "16,1350,16384"
+
+def paper_table(an):
+    p = an['prices']; pair = p.get('pair_price_cycles'); block = p.get('block_entry_price_cycles') or pair
+    hdr = "| # | op | A cyc/op | entries/op | C blanket | B bracket | Bs bracket+sb | H hoisted | Hs hoisted+sb | MAD |"
+    md = [hdr, "|---|---|---|---|---|---|---|---|---|---|"]; csv = ["n,op,A_cycles_per_op,entries_per_op,C_pct,B_pct,Bs_pct,H_pct,Hs_pct,MAD_pct"]
+    missing = []
+    for i, (label, key, isblk) in enumerate(PAPER_ROWS, 1):
+        r = an['rows'].get(key)
+        if not r: missing.append(key); continue
+        c = r['cycles']; a = c['A']; unit = block if isblk else pair
+        entries = (c['B'] - a) / unit if unit and 'B' in c else float('nan')
+        q = {x: (c[x] / a - 1) * 100 if x in c else float('nan') for x in ('C', 'B', 'Bs', 'H', 'Hs')}
+        md.append(f"| {i} | {label} | {a:,.0f} | {entries:,.0f} | " + ' | '.join(f"{q[x]:+.0f}%" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + f" | {r['mad']:.2f}% |")
+        csv.append(f"{i},\"{label}\",{a:.1f},{entries:.1f}," + ','.join(f"{q[x]:.2f}" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + f",{r['mad']:.3f}")
+    note = (f"Entries per op = (B - A) / one entry's price: {fmt_cyc(pair)} cycles for an AEAD-level entry, {fmt_cyc(block)} for a single-block AES entry "
+            f"(rows 1 and 8). Run only these rows with BENCH_TESTS=\"{PAPER_TESTS}\" CHUNKS={PAPER_CHUNKS}.")
+    if missing: note += " MISSING from this run: " + ', '.join(missing)
+    return '\n'.join(md) + '\n\n' + note + '\n', '\n'.join(csv) + '\n', missing
+
 def fmt_pct(x): return 'n/a' if x is None or x != x else f"{x:+.1f}%"
 def fmt_cyc(x): return 'n/a' if x is None or x != x else f"{x:,.0f}"
 
@@ -248,6 +283,10 @@ HTML_TEMPLATE = r'''<title>The Shipping Bracket</title>
   <p>Blanket DIT (arm C) costs nothing on the crypto. On several rows it is <em>faster</em> than unhardened, and the vendor's hoisted arm, which also holds DIT on throughout, moves with it. The rows share one feature: fresh random bytes. On this core DIT disables the data-dependent prefetcher, and random words look like pointers to it. A hypothesis, stated as one.</p>
   <div class="tablewrap" id="anomaly-table"></div>
 
+  <h2>The paper's ten rows</h2>
+  <p>The set that carries the argument: the same 154-cycle entry at three message sizes (rows 3, 6, 7), the two faces of nesting (2 and 8), the barrier's price (4 against 3, and every Hs against its H), a non-AES primitive (5), a long operation where nothing matters (9), and the row where blanket wins outright (10). A run restricted to these rows takes about two minutes.</p>
+  <div class="tablewrap" id="paper-table"></div>
+
   <h2>Every row</h2>
   <p class="legend">Percent over A, cycles per operation. B&nbsp;&minus;&nbsp;A in absolute cycles. MAD is the spread of A's samples as a percent of its median.</p>
   <div class="tablewrap" id="full-table"></div>
@@ -354,6 +393,18 @@ const V = DATA.validity;
   for (const x of A) t += `<tr><td class="row">${esc(x.key)}</td><td class="num">${cyc(x.A)}</td><td class="num ${x.C_pct<0?'cold':'hot'}">${fmt(x.C_pct)}</td><td class="num">${fmt(x.H_pct)}</td><td class="num">${x.mad.toFixed(2)}%</td></tr>`;
   t += '</table>'; document.getElementById('anomaly-table').innerHTML = A.length ? t : '<p class="legend">none beyond 2%</p>';
 }
+// paper table
+{
+  const PR = [["AES-128 single block","AES-128 encrypt",true],["EVP AES-GCM encrypt, 16 B","EVP-AES-128-GCM encrypt [16 B]",false],["AEAD AES-GCM seal, 16 B","AEAD-AES-128-GCM seal [16 B]",false],
+    ["AEAD AES-GCM open, 16 B","AEAD-AES-128-GCM open [16 B]",false],["AEAD ChaCha20-Poly1305 seal, 16 B","AEAD-ChaCha20-Poly1305 seal [16 B]",false],["AEAD AES-GCM seal, 1350 B (a TLS record)","AEAD-AES-128-GCM seal [1350 B]",false],
+    ["AEAD AES-GCM seal, 16 KB","AEAD-AES-128-GCM seal [16384 B]",false],["CMAC-AES-128, 16 KB","CMAC-AES-128-CBC [16384 B]",true],["ECDSA P-256 sign","ECDSA P-256 signing",false],["RNG, 16 B","RNG [16 B]",false]];
+  const pair = DATA.prices.pair_price_cycles, block = DATA.prices.block_entry_price_cycles || pair;
+  let t = `<table><tr><th>#</th><th>op</th><th class="num">A cyc/op</th><th class="num">entries/op</th><th class="num">C blanket</th><th class="num">B bracket</th><th class="num">Bs +sb</th><th class="num">H hoisted</th><th class="num">Hs hoisted+sb</th><th class="num">MAD</th></tr>`;
+  PR.forEach(([label,key,isblk],i) => { const r = DATA.rows[key]; if (!r) { t += `<tr><td class="row">${i+1}</td><td>${esc(label)}</td><td colspan="8" class="legend">not in this run</td></tr>`; return; }
+    const a = r.cycles.A, unit = isblk ? block : pair, e = (r.cycles.B - a) / unit;
+    t += `<tr><td class="row">${i+1}</td><td>${esc(label)}</td><td class="num">${cyc(a)}</td><td class="num">${cyc(e)}</td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num ${x==='B'?'hot':''}">${fmt(r.pct[x],0)}</td>`).join('')}<td class="num">${r.mad.toFixed(2)}%</td></tr>`; });
+  t += '</table>'; document.getElementById('paper-table').innerHTML = t;
+}
 // full table + ipc table
 {
   const keys = Object.keys(DATA.rows).sort();
@@ -386,7 +437,11 @@ def main():
     if isinstance(an['provenance'], list): an['provenance'] = ' | '.join(an['provenance'])
     out = a.out or os.path.dirname(os.path.abspath(a.json))
     os.makedirs(out, exist_ok=True)
-    open(os.path.join(out, 'report.md'), 'w').write(report_md(an, a.json))
+    pt_md, pt_csv, missing = paper_table(an)
+    an['paper_table_md'] = pt_md
+    open(os.path.join(out, 'paper_table.md'), 'w').write(pt_md)
+    open(os.path.join(out, 'paper_table.csv'), 'w').write(pt_csv)
+    open(os.path.join(out, 'report.md'), 'w').write(report_md(an, a.json) + "\n## The paper's ten rows\n\n" + pt_md)
     json.dump(an, open(os.path.join(out, 'summary.json'), 'w'), indent=1, default=float)
     if a.html:
         open(a.html, 'w').write(HTML_TEMPLATE.replace('__DATA__', json.dumps(an, default=float)))
@@ -394,7 +449,9 @@ def main():
     print(f"rows {len(an['rows'])}; flagged {v['flagged']} ({v['flag_mode']}); unpinned {v['unpinned']}; "
           f"one-entry prices (GCM seal 16 B): pair {p.get('changing_pair')}, read+nonchanging {p.get('read_plus_nonchanging')}, "
           f"sb after change {p.get('sb_after_changing')}, sb after nonchange {p.get('sb_after_nonchanging')}")
-    print(f"wrote {out}/report.md, {out}/summary.json" + (f", {a.html}" if a.html else ''))
+    print(f"wrote {out}/report.md, {out}/summary.json, {out}/paper_table.md, {out}/paper_table.csv" + (f", {a.html}" if a.html else ''))
+    if missing: print("paper table: rows missing from this run:", ', '.join(missing))
+    print(pt_md)
 
 if __name__ == '__main__':
     main()

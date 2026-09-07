@@ -10,7 +10,9 @@
 #                             asks for sudo: the hard bind is a kern.* sysctl write, root only; the
 #                             driver alone runs as root and the results are chowned back afterwards
 #   ./reproduce.sh collect    run results + provenance -> results-<host>/ (results-m4/ here); build diffs and counts -> data/
-#   ./reproduce.sh analyze    report.md + summary.json into results-<host>/, the page into figures/shipping-bracket.html
+#   ./reproduce.sh analyze    report.md, summary.json, paper_table.{md,csv} into results-<host>/, the page into figures/
+#   ./reproduce.sh paper      ONLY the paper's ten rows: run with BENCH_TESTS and CHUNKS restricted to what produces
+#                             them (about two minutes), then collect and analyze, and print the table
 #
 # Env: W (work dir, default ~/Documents/dit-awslc), PIN_CPU (9, a P-core: hard bind via
 #      kern.sched_thread_bind_cpu, needs the enable_skstb=1 kernel), REPS/WARM (7/1), TIMEOUT_MS (50),
@@ -24,6 +26,11 @@ export W="${W:-$HOME/Documents/dit-awslc}" PIN_CPU="${PIN_CPU:-9}"   # -> DITCTL
 HOST_TAG="${HOST_TAG:-$(sysctl -n machdep.cpu.brand_string 2>/dev/null | tr 'A-Z ' 'a-z-' | sed 's/^apple-//')}"
 RES="$E/results-${HOST_TAG:-unknown}"
 STAGES="${*:-pmc build run collect analyze}"
+if [[ " $STAGES " == *" paper "* ]]; then
+  # the paper stage is run+collect+analyze with the filters and sizes that yield exactly the ten rows
+  export BENCH_TESTS="${BENCH_TESTS:-AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG}" CHUNKS="${CHUNKS:-16,1350,16384}"
+  STAGES="${STAGES/paper/run collect analyze paper}"
+fi
 want() { [[ " $STAGES " == *" $1 "* ]]; }
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 die()  { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -71,4 +78,5 @@ if want analyze; then
   info "analyze -> $RES/report.md, $E/figures/shipping-bracket.html"; mkdir -p "$E/figures"
   python3 "$RIG/analyze_awslc.py" "$RES/speed.json" --out "$RES" --html "$E/figures/shipping-bracket.html" --provenance "$RES/provenance.txt"
 fi
+if want paper; then info "the paper's ten rows"; cat "$RES/paper_table.md"; fi
 info "done: $STAGES"

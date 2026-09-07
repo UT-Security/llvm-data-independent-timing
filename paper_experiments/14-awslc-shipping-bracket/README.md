@@ -154,8 +154,13 @@ other arm as percent over A, Bs - B and B - H in points of A, MAD of A.
 ## How to run
 
 ```
-paper_experiments/14-awslc-shipping-bracket/reproduce.sh          # pmc build run collect
+paper_experiments/14-awslc-shipping-bracket/reproduce.sh          # pmc build run collect analyze
+paper_experiments/14-awslc-shipping-bracket/reproduce.sh paper    # only the paper's ten rows, ~2 min, prints the table
 ```
+
+The `paper` stage restricts the run to `BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG"`
+and `CHUNKS=16,1350,16384`, which is what produces exactly the ten rows below, then collects,
+analyses and prints `results-<host>/paper_table.md` (a CSV beside it). Both stay overridable.
 
 Stages: `pmc` (gate: the kernel must expose the PMCs, otherwise every row's cycles would
 be zero), `build` (downloads v5.8.0, patches, five `bssl` builds with the platform
@@ -197,6 +202,26 @@ Apple M4, CPU 9 hard-bound, 50 ms windows (the default since this run; the first
 | ML-KEM-768 decaps | 33,176 | 4.19 | 4.17 | +0.2% | +0.6% | +192 | +0.6% | +0.2% | +0.5% | 0.16% |
 | RNG, 16 B | 6,792 | 2.26 | 2.11 | **-25.4%** | +7.3% | +499 | +8.5% | -25.4% | -22.1% | 0.07% |
 | SHA-256, 16 B (not bracketed) | 116 | 3.99 | 4.04 | -1.7% | -1.2% | -1 | -1.1% | -1.6% | -1.6% | 0.23% |
+
+**The paper's ten rows** (`results-m4/paper_table.md`; entries per op = (B - A) over one
+entry's price, 154 cycles for an AEAD-level entry and 94 for a single-block AES entry):
+
+| # | op | A cyc/op | entries/op | C blanket | B bracket | Bs +sb | H hoisted | Hs hoisted+sb |
+|---|---|---|---|---|---|---|---|---|
+| 1 | AES-128 single block | 34 | 1 | 0% | +277% | +360% | -2% | +144% |
+| 2 | EVP AES-GCM encrypt, 16 B | 173 | 3.4 | 0% | +304% | +346% | +1% | +173% |
+| 3 | AEAD AES-GCM seal, 16 B | 190 | 1 | 0% | +81% | +83% | +10% | +44% |
+| 4 | AEAD AES-GCM open, 16 B | 206 | 1.2 | 0% | +87% | +112% | +21% | +77% |
+| 5 | AEAD ChaCha20-Poly1305 seal, 16 B | 579 | 1.7 | 0% | +44% | +48% | +4% | +35% |
+| 6 | AEAD AES-GCM seal, 1350 B (a TLS record) | 716 | 1 | 0% | +21% | +22% | +2% | +12% |
+| 7 | AEAD AES-GCM seal, 16 KB | 5,787 | 1 | 0% | +3% | +3% | +1% | +2% |
+| 8 | CMAC-AES-128, 16 KB | 40,817 | 1,033 | -1% | +237% | +286% | -4% | +125% |
+| 9 | ECDSA P-256 sign | 42,785 | 4.5 | -4% | +2% | +2% | -3% | -3% |
+| 10 | RNG, 16 B | 6,792 | 3 | -25% | +7% | +8% | -25% | -22% |
+
+Rows 3, 6 and 7 are the same 154-cycle entry at three sizes; 2 and 8 the two faces of
+nesting; Hs against H the barrier's price after a non-serialising write, which undoes most
+of what hoisting bought.
 
 **The three prices**, from the two rows that enter exactly one bracketed function per
 operation (the AEAD seal calls `EVP_AEAD_CTX_seal_scatter` directly; the single-block
@@ -272,7 +297,7 @@ directly. The other 6,475 windows sit at 3,879 to 4,461 MHz implied clock, media
 - `reproduce.sh`; rig in `utils/dit_host_screening/awslc/` (`build_awslc.sh`,
   `patch_speed_pmc.py`, `patch_bracket_variant.py`, `bench_awslc.py`).
 - `results-m4/`: this host's run: `speed.txt`, `speed.json`, `provenance.txt`, and from `analyze`
-  `report.md`, `summary.json`. `collect` writes to `results-<host>/`, named from the CPU brand.
+  `report.md`, `summary.json`, `paper_table.md`, `paper_table.csv`. `collect` writes to `results-<host>/`, named from the CPU brand.
 - `data/`: the build record: `switch_counts.txt`, `bracket_sites.txt`, `speed_pmc.diff`, `variants.diff`.
 - `figures/shipping-bracket.html` - the page `analyze_awslc.py` renders from `speed.json`
   (validity strip, the size-series chart, the three prices, density, the vendor's claim, every row).
