@@ -45,11 +45,15 @@ if want pmc; then
 fi
 if want build; then info "build"; "$RIG/build_awslc.sh" all; fi
 if want run; then
+  # the injected library must match the driver's protocol (DITCTL_PIN_CPU, pinned= in the exit line):
+  # rebuild it from the current source every run, a one-second compile, so a stale copy cannot
+  # silently turn a pinned run into a cluster-bound one (it did once: 2026-09-07)
+  info "libditctl.dylib from utils/cio_ditctl.c"; cc -O2 -dynamiclib -o "$W/libditctl.dylib" "$R/utils/cio_ditctl.c" || die "libditctl build failed"
   info "run (sudo for the driver: kern.sched_thread_bind_cpu is a root-only write)"
   mkdir -p "$W/results" 2>/dev/null || true
   # one sudo session for the whole stage (the credential cache would expire during a 20-minute
   # run); the chown back to the invoking user happens inside it, so nothing root-owned is left
-  sudo -E env PATH="$PATH" HOME="$HOME" W="$W" PIN_CPU="$PIN_CPU" REPS="${REPS:-7}" WARM="${WARM:-1}" \
+  sudo -E env PATH="$PATH" HOME="$HOME" W="$W" PIN_CPU="$PIN_CPU" REPO="$R" REPS="${REPS:-7}" WARM="${WARM:-1}" \
       TIMEOUT_MS="${TIMEOUT_MS:-50}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
       bash -c 'mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" | tee "$W/results/speed.txt"; chown -R "$ME" "$W/results"' \
     || die "run failed"

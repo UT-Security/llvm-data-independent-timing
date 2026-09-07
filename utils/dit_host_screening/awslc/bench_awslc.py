@@ -48,6 +48,16 @@ DEFAULT_TESTS = 'AEAD-AES-128-GCM,AEAD-ChaCha20-Poly1305,AES-128,SHA-256,HMAC-SH
 TESTS = [t for t in (sys.argv[1:] or (os.environ.get('BENCH_TESTS') or DEFAULT_TESTS).split(',')) if t]
 OUT = f'{W}/results'; os.makedirs(OUT, exist_ok=True)
 
+def check_library():
+    """The injected library must speak this driver's protocol: pinned= in its exit line."""
+    env = {k: os.environ[k] for k in ('PATH', 'HOME') if k in os.environ}
+    env.update(DYLD_INSERT_LIBRARIES=f'{W}/libditctl.dylib', DITCTL_PIN='0')
+    # our own arm64 binary with a filter that matches nothing: system binaries are arm64e and refuse the insert
+    p = subprocess.run([f'{W}/build-rel/tool/bssl', 'speed', '-filter', '__none__', '-timeout_ms', '1'], env=env, capture_output=True, text=True)
+    if 'pinned=' not in p.stderr:
+        raise SystemExit(f"{W}/libditctl.dylib does not report pinned= (stale build?): rebuild it from utils/cio_ditctl.c; its exit line was {p.stderr.strip()!r}")
+check_library()
+
 def run(arm, test):
     env = {k: os.environ[k] for k in ('PATH', 'HOME') if k in os.environ}
     env.update(DYLD_INSERT_LIBRARIES=f'{W}/libditctl.dylib', ENABLE_DIT=str(arm[2]))

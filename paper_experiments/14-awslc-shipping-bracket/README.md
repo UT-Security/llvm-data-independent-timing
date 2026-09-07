@@ -159,8 +159,17 @@ paper_experiments/14-awslc-shipping-bracket/reproduce.sh paper    # only the pap
 ```
 
 The `paper` stage restricts the run to `BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG"`
-and `CHUNKS=16,1350,16384`, which is what produces exactly the ten rows below, then collects,
-analyses and prints `results-<host>/paper_table.md` (a CSV beside it). Both stay overridable.
+and `CHUNKS=16,1350,16384`, then collects, analyses and prints `results-<host>/paper_table.md`
+(a CSV beside it). Both stay overridable. It still measures about 66 rows, not ten: the tool's
+`-filter` is a substring match against each test's name, and the single-block test is named
+`AES-128`, so any filter that reaches it also reaches every other AES-128 test. The table picks
+its ten rows out of those. About two minutes.
+
+The run stage rebuilds `libditctl.dylib` from `utils/cio_ditctl.c` every time and the driver
+refuses a library whose exit line lacks `pinned=`: a stale copy of the library built from an
+older source once turned a pinned run into a cluster-bound one, which the driver reported (192
+processes not pinned, 441 flagged samples) and which produced medians off by orders of
+magnitude in the cells where migrated samples were the majority.
 
 Stages: `pmc` (gate: the kernel must expose the PMCs, otherwise every row's cycles would
 be zero), `build` (downloads v5.8.0, patches, five `bssl` builds with the platform
