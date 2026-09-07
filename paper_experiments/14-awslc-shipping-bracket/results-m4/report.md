@@ -219,6 +219,9 @@ One AEAD-level entry (two changing writes) costs 157 cycles on the seal row and 
 | SHA-256 [16384 B] | 21,324 | 1.41 | -0.1% | -0.0% | -4 | -0.0% | -0.1% | -0.1% | 0.12% |
 | SHA-256 [256 B] | 403 | 2.30 | -0.3% | +0.2% | 1 | +0.0% | +0.4% | +0.0% | 0.09% |
 | SHA-256 [8192 B] | 10,693 | 1.43 | -0.1% | +0.0% | 1 | +0.0% | -0.1% | -0.1% | 0.00% |
+| **geometric mean of the ratio to A, all 121 clean rows** | | | **-1.8%** | **+46.7%** |  | **+57.0%** | **+0.3%** | **+33.4%** | |
+
+The geometric mean leaves out cells marked suspect (6 at most in any column); every other row counts once, so it is a summary over the tool's rows, not over any application's mix of them.
 
 ## IPC and instructions per op, every arm
 
@@ -366,5 +369,6 @@ One AEAD-level entry (two changing writes) costs 157 cycles on the seal row and 
 | 8 | CMAC-AES-128, 16 KB | 40,774 | 1,014 | -1% | +236% | +286% | -4% | +125% | 0.01% |
 | 9 | ECDSA P-256 sign | 42,710 | 5 | -4% | +2% | +2% | -3% | -3% | 0.03% |
 | 10 | RNG, 16 B | 6,781 | 3 | -25% | +7% | +9% | -25% | -22% | 0.06% |
+| | **geometric mean of the ratio to A** | | | **-3%** | **+80%** | **+91%** | **+1%** | **+46%** | |
 
 Entries per op = (B - A) / one entry's price: 157 cycles for an AEAD-level entry, 95 for a single-block AES entry (rows 1 and 8). Run only these rows with BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG" CHUNKS=16,1350,16384.

@@ -228,10 +228,15 @@ entry's price, 154 cycles for an AEAD-level entry and 94 for a single-block AES 
 | 8 | CMAC-AES-128, 16 KB | 40,774 | 1,014 | -1% | +236% | +286% | -4% | +125% | 0.01% |
 | 9 | ECDSA P-256 sign | 42,710 | 5 | -4% | +2% | +2% | -3% | -3% | 0.03% |
 | 10 | RNG, 16 B | 6,781 | 3 | -25% | +7% | +9% | -25% | -22% | 0.06% |
+| | **geometric mean of the ratio to A** | | | **-3%** | **+80%** | **+91%** | **+1%** | **+46%** | |
 
 Rows 3, 6 and 7 are the same 154-cycle entry at three sizes; 2 and 8 the two faces of
 nesting; Hs against H the barrier's price after a non-serialising write, which undoes most
-of what hoisting bought.
+of what hoisting bought. The geometric mean of the ratio to A over these ten rows is C -3%,
+B +80%, Bs +91%, H +1%, Hs +46%; over all 121 rows without a suspect cell it is C -1.8%,
+B +46.7%, Bs +57.0%, H +0.3%, Hs +33.4%. A geometric mean over the tool's rows weights each
+row once and says nothing about any application's mix of them; it is a summary of this table,
+not a cost model.
 
 **The three prices**, from the two rows that enter exactly one bracketed function per
 operation (the AEAD seal calls `EVP_AEAD_CTX_seal_scatter` directly; the single-block

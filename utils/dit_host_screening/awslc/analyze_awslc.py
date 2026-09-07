@@ -137,12 +137,28 @@ def paper_table(an):
         rowmark = '\u2020' if sus else ''
         md.append(f"| {i} | {label}{rowmark} | {a:,.0f}{dg('A')} | {entries:,.0f} | " + ' | '.join(f"{q[x]:+.0f}%{dg(x)}" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + f" | {r['mad']:.2f}% |")
         csv.append(f"{i},\"{label}\",{a:.1f},{entries:.1f}," + ','.join(f"{q[x]:.2f}" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + f",{r['mad']:.3f}")
+    rows_used = [an['rows'][k] for _, k, _ in PAPER_ROWS if k in an['rows']]
+    gm = {x: geomean_pct(rows_used, x) for x in ('C', 'B', 'Bs', 'H', 'Hs')}
+    md.append("| | **geometric mean of the ratio to A** | | | " + ' | '.join(f"**{gm[x][0]:+.0f}%**" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + " | |")
+    csv.append("geomean,\"geometric mean of arm/A over the rows above\",,," + ','.join(f"{gm[x][0]:.2f}" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + ",")
     note = (f"Entries per op = (B - A) / one entry's price: {fmt_cyc(pair)} cycles for an AEAD-level entry, {fmt_cyc(block)} for a single-block AES entry "
             f"(rows 1 and 8). Run only these rows with BENCH_TESTS=\"{PAPER_TESTS}\" CHUNKS={PAPER_CHUNKS}.")
     if missing: note += " MISSING from this run: " + ', '.join(missing)
     if any(an['rows'].get(k, {}).get('suspect') for _, k, _ in PAPER_ROWS):
         note += " \u2020 marks a cell whose median implies a clock outside the P-core band: a majority of its samples carried the backward-counter fault; the value is kept but not to be read."
     return '\n'.join(md) + '\n\n' + note + '\n', '\n'.join(csv) + '\n', missing
+
+import math
+def geomean_pct(rows, arm):
+    """Geometric mean of arm/A over the given rows, as percent over A; a cell marked suspect in
+    either arm is left out (its median is known wrong) and the count left out is returned."""
+    logs, skipped = [], 0
+    for r in rows:
+        c = r['cycles']
+        if arm not in c or 'A' not in c: continue
+        if arm in r.get('suspect', []) or 'A' in r.get('suspect', []): skipped += 1; continue
+        logs.append(math.log(c[arm] / c['A']))
+    return ((math.exp(sum(logs) / len(logs)) - 1) * 100 if logs else float('nan')), len(logs), skipped
 
 def fmt_pct(x): return 'n/a' if x is None or x != x else f"{x:+.1f}%"
 def fmt_cyc(x): return 'n/a' if x is None or x != x else f"{x:,.0f}"
@@ -196,6 +212,10 @@ def report_md(an, src):
         dg = lambda a: '\u2020' if a in r.get('suspect', []) else ''
         rowmark = '\u2020' if r.get('suspect') else ''
         L.append(f"| {k}{rowmark} | {fmt_cyc(c['A'])}{dg('A')} | {r['ipc'].get('A', float('nan')):.2f} | {fmt_pct(q.get('C'))}{dg('C')} | {fmt_pct(q.get('B'))}{dg('B')} | {fmt_cyc(r.get('B_minus_A_cyc'))} | {fmt_pct(q.get('Bs'))}{dg('Bs')} | {fmt_pct(q.get('H'))}{dg('H')} | {fmt_pct(q.get('Hs'))}{dg('Hs')} | {r['mad']:.2f}% |")
+    allrows = list(an['rows'].values())
+    gm = {x: geomean_pct(allrows, x) for x in ('C', 'B', 'Bs', 'H', 'Hs')}
+    L.append(f"| **geometric mean of the ratio to A, all {gm['B'][1]} clean rows** | | | " + ' | '.join(f"**{gm[x][0]:+.1f}%**" if x != 'B' else f"**{gm[x][0]:+.1f}%** | " for x in ('C', 'B', 'Bs', 'H', 'Hs')) + " | |")
+    L.append(f"\nThe geometric mean leaves out cells marked suspect ({max(g[2] for g in gm.values())} at most in any column); every other row counts once, so it is a summary over the tool's rows, not over any application's mix of them.")
     if any(len(r['ipc']) > 1 for r in an['rows'].values()):
         L.append("\n## IPC and instructions per op, every arm\n")
         L.append("| row | instr/op A | " + ' | '.join(f"IPC {a}" for a in ARMS) + " | B-A instr |\n|---|---|" + '---|' * len(ARMS) + "---|")
@@ -329,6 +349,7 @@ const fmt = (x, d=1) => (x==null || Number.isNaN(x)) ? 'n/a' : (x>=0?'+':'') + x
 const cyc = x => (x==null || Number.isNaN(x)) ? 'n/a' : Math.round(x).toLocaleString();
 const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const V = DATA.validity;
+const geomean = (rows, arm) => { const l = rows.filter(r => r.cycles[arm] != null && !(r.suspect||[]).includes(arm) && !(r.suspect||[]).includes('A')).map(r => Math.log(r.cycles[arm] / r.cycles.A)); return l.length ? (Math.exp(l.reduce((a,b)=>a+b,0)/l.length) - 1) * 100 : NaN; };
 // status strip
 {
   const cells = [];
@@ -422,6 +443,8 @@ const V = DATA.validity;
     const a = r.cycles.A, unit = isblk ? block : pair, e = (r.cycles.B - a) / unit;
     const dg = x => (r.suspect||[]).includes(x) ? '\u2020' : '';
     t += `<tr><td class="row">${i+1}</td><td>${esc(label)}${(r.suspect||[]).length?'\u2020':''}</td><td class="num">${cyc(a)}${dg('A')}</td><td class="num">${cyc(e)}</td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num ${x==='B'?'hot':''}">${fmt(r.pct[x],0)}${dg(x)}</td>`).join('')}<td class="num">${r.mad.toFixed(2)}%</td></tr>`; });
+  const used = PR.map(([,k]) => DATA.rows[k]).filter(Boolean);
+  t += `<tr><td class="row"></td><td><b>geometric mean of the ratio to A</b></td><td></td><td></td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num"><b>${fmt(geomean(used, x),0)}</b></td>`).join('')}<td></td></tr>`;
   t += '</table>'; document.getElementById('paper-table').innerHTML = t;
 }
 // full table + ipc table
@@ -431,6 +454,8 @@ const V = DATA.validity;
   for (const k of keys) { const r = DATA.rows[k];
     const dg = x => (r.suspect||[]).includes(x) ? '\u2020' : '';
     t += `<tr><td class="row">${esc(k)}${(r.suspect||[]).length?'\u2020':''}</td><td class="num">${cyc(r.cycles.A)}${dg('A')}</td><td class="num">${(r.ipc.A??NaN).toFixed(2)}</td>${ARMS.slice(1).map(a=>`<td class="num">${fmt(r.pct[a])}${dg(a)}</td>`).join('')}<td class="num">${cyc(r.B_minus_A_cyc)}</td><td class="num">${r.mad.toFixed(2)}%</td></tr>`; }
+  const all = keys.map(k => DATA.rows[k]);
+  t += `<tr><td class="row"><b>geometric mean of the ratio to A, clean cells</b></td><td></td><td></td>${ARMS.slice(1).map(a=>`<td class="num"><b>${fmt(geomean(all, a))}</b></td>`).join('')}<td></td><td></td></tr>`;
   t += '</table>'; document.getElementById('full-table').innerHTML = t;
   const hasAll = keys.some(k => Object.keys(DATA.rows[k].ipc).length > 1);
   if (hasAll) {
