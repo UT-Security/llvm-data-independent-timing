@@ -13,6 +13,11 @@ a bold geometric-mean row. Reads the analysis summary and writes three files:
   awslc_standalone.tex   a one-page document that inputs all of them, to compile a preview (tectonic / pdflatex)
 
 Usage:  latex_table_awslc.py summary.json --out DIR [--scale-max 5] [--bands 25,50,25] [--rank-by B] [--band-arms B,Bs,H,Hs]
+                              [--census data/dit_census.json]   (default: <out>/../../data/dit_census.json when it exists)
+
+With a census the band table covers only the rows that enter the DIT bracket (a row that never enters it
+runs the same instructions in every arm and can only dilute the bands); the caption says how many were left
+out and why. The ten-row table is unaffected: its rows all enter the bracket.
 
 The rows and arm names are the plot script's (plot_awslc.py), so the table and paper_rows.png always
 agree. A suspect cell (median known wrong) is printed with a dagger and left uncoloured; nothing is left
@@ -103,12 +108,17 @@ def table_close(caption, label):
     return [r"\bottomrule", r"\end{tabular}", r"\caption{%s}" % caption, r"\label{%s}" % label,
             r"\setlength{\aboverulesep}{0.6ex}\setlength{\belowrulesep}{0.9ex}", r"\end{table}"]
 
-def bands_table(an, scale_max, bands=(25, 50, 25), rank_by=None, arms=('B', 'Bs', 'H', 'Hs')):
+def bands_table(an, scale_max, bands=(25, 50, 25), rank_by=None, arms=('B', 'Bs', 'H', 'Hs'), census=None):
     """All rows, grouped. One row per band: the geomean over every row, then the slowest `bands[0]`%, the
     middle `bands[1]`% (centred on the median) and the fastest `bands[2]`% of the cells. Each column ranks its
     own cells unless rank_by names an arm, in which case every column follows that arm's order. Every cell
     counts; a band that contains a suspect cell is marked with a dagger."""
     rows = [r for r in an['rows'].values() if all(x in r['pct'] and r['pct'][x] == r['pct'][x] for x in arms)]
+    left_out = 0
+    if census:   # keep only the rows the census saw entering the bracket at least once per call
+        epc = {x.get('key', x['description']): x['entries_per_call'] for x in census['rows']}   # key = description + size, the driver's row key
+        kept = [r for r in rows if epc.get(r['key'], 1) > 0]
+        left_out = len(rows) - len(kept); rows = kept
     n = len(rows)
     def gm(vals): return math.exp(sum(math.log(v) for v in vals) / len(vals)) if vals else float('nan')
     def band_slices(n):
@@ -124,7 +134,7 @@ def bands_table(an, scale_max, bands=(25, 50, 25), rank_by=None, arms=('B', 'Bs'
         sus = [a in r.get('suspect', []) or 'A' in r.get('suspect', []) for r in order]
         per_arm[a] = {'all': (gm(vals), any(sus)), 'slow': (gm(vals[sl['slow']]), any(sus[sl['slow']])),
                       'mid': (gm(vals[sl['mid']]), any(sus[sl['mid']])), 'fast': (gm(vals[sl['fast']]), any(sus[sl['fast']]))}
-    labels = [('all', r"\textbf{All %d benchmarks}" % n, True), ('slow', r"Slowest %g\%% (%d)" % (bands[0], k_slow), False),
+    labels = [('all', r"\textbf{All %d benchmarks}" % n if not census else r"\textbf{All %d bracketed benchmarks}" % n, True), ('slow', r"Slowest %g\%% (%d)" % (bands[0], k_slow), False),
               ('mid', r"Middle %g\%% (%d)" % (bands[1], k_mid), False), ('fast', r"Fastest %g\%% (%d)" % (bands[2], k_fast), False)]
     L = table_open("Every row of the run, grouped into bands of each arm's cells; each cell is a geometric mean of ratios to the unhardened build", first_col='Benchmarks', arms=arms)
     suspect_rows = sorted(r['key'] for r in rows if r.get('suspect'))
@@ -142,10 +152,13 @@ def bands_table(an, scale_max, bands=(25, 50, 25), rank_by=None, arms=('B', 'Bs'
     v = an['validity']
     how = (r"Each column ranks its own cells, so a band holds different benchmarks in different columns." if not rank_by
            else r"Every column follows the %s column's ranking, so a band holds the same benchmarks across the row." % ARM_LABEL_TEX.get(rank_by, rank_by))
+    which = (r"over all %d rows" % n if not census else
+             r"over the %d rows that enter the bracket (%d rows of the run never do: hashes, HMACs, signature verification; "
+             r"they run the same instructions in every arm and are left out)" % (n, left_out))
     cap = (r"\textbf{AWS-LC's DIT bracket across every \texttt{bssl speed} row.} \textit{Geometric mean of cycles per operation relative to the "
-           r"unhardened build (1.00 = no cost) over all %d rows, and over the slowest %g\%%, the middle %g\%% and the fastest %g\%% of them. %s "
+           r"unhardened build (1.00 = no cost) %s, and over the slowest %g\%%, the middle %g\%% and the fastest %g\%% of them. %s "
            r"Apple M4 P-core, hard-bound, %s\,ms windows, medians of %s repetitions, %s runs combined by the per-cell median. Every cell counts.%s}"
-           % (n, bands[0], bands[1], bands[2], how, v.get('timeout_ms'), v.get('reps'), v.get('runs_count', 1),
+           % (which, bands[0], bands[1], bands[2], how, v.get('timeout_ms'), v.get('reps'), v.get('runs_count', 1),
               (r" The counter fault corrupted a median in %s (%s); that row is in every All cell, and $^\dagger$ marks the band it fell into."
                % ('one row' if len(suspect_rows) == 1 else '%d rows' % len(suspect_rows), ', '.join(tex_escape(k) for k in suspect_rows))) if suspect_rows else ''))
     L += table_close(cap, 'tab:awslc-bands')
@@ -206,7 +219,11 @@ def main():
     ap.add_argument('--bands', default='25,50,25', help='percent of rows in the slowest, middle and fastest band of the all-rows table')
     ap.add_argument('--rank-by', default=None, choices=ARMS, help='rank every column of the all-rows table by this arm (default: each column by itself)')
     ap.add_argument('--band-arms', default='B,Bs,H,Hs', help='columns of the all-rows table (default: the four AWS arms; add C for Coarse)')
+    ap.add_argument('--census', default=None, help='dit_census.json; the band table then covers only rows that enter the bracket (default: <out>/../../data/dit_census.json if present; "none" to disable)')
     a = ap.parse_args()
+    census = None
+    cpath = a.census if a.census else os.path.join(a.out, '..', '..', 'data', 'dit_census.json')
+    if cpath != 'none' and os.path.exists(cpath): census = json.load(open(cpath))
     bands = tuple(float(x) for x in a.bands.split(','))
     band_arms = tuple(x for x in ARMS if x in a.band_arms.split(','))
     an = json.load(open(a.json))
@@ -216,10 +233,10 @@ def main():
     scale_max = a.scale_max or (math.ceil(max(clean)) if clean else 5)
     open(os.path.join(a.out, 'awslc_gradient.tex'), 'w').write(GRADIENT.replace('%%', '%').replace('__MAX__', f"{scale_max:g}"))
     open(os.path.join(a.out, 'awslc_paper_rows.tex'), 'w').write(table(an, scale_max))
-    open(os.path.join(a.out, 'awslc_all_rows_bands.tex'), 'w').write(bands_table(an, scale_max, bands, a.rank_by, band_arms))
+    open(os.path.join(a.out, 'awslc_all_rows_bands.tex'), 'w').write(bands_table(an, scale_max, bands, a.rank_by, band_arms, census))
     open(os.path.join(a.out, 'awslc_standalone.tex'), 'w').write(STANDALONE)
     print(f"wrote {a.out}/awslc_gradient.tex, awslc_paper_rows.tex, awslc_all_rows_bands.tex (bands {a.bands}, columns {','.join(band_arms)}, "
-          f"{'ranked by ' + a.rank_by if a.rank_by else 'each column ranked on its own cells'}), awslc_standalone.tex (colour scale 0..{scale_max:g}, white at 1.00)")
+          f"{'ranked by ' + a.rank_by if a.rank_by else 'each column ranked on its own cells'}{', bracketed rows only per ' + cpath if census else ''}), awslc_standalone.tex (colour scale 0..{scale_max:g}, white at 1.00)")
 
 if __name__ == '__main__':
     main()

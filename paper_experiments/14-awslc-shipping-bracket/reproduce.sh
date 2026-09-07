@@ -17,7 +17,9 @@
 #   ./reproduce.sh analyze    report.md, summary.json, paper_table.{md,csv}, geomeans and the bar charts into
 #                             results-<host>/summary/, the page into figures/, the LaTeX table into figures/latex/
 #   census   (not in the default list) build the counting variant and run every row of the suite once:
-#            which benchmarks enter the bracket, and how many entries per call -> data/dit_census.{md,json}
+#            which benchmarks enter the bracket, and how many entries per call -> data/dit_census.{md,json},
+#            data/bracketed_filters.txt (the default run's test list) and benchmarks-info.md. The run stage
+#            makes it first when the filter list is missing and BENCH_TESTS is unset.
 #   ./reproduce.sh paper      ONLY the paper's ten rows: run with BENCH_TESTS and CHUNKS restricted to what produces
 #                             them (about 20 minutes at 400 ms), then collect and analyze, and print the table
 #
@@ -47,7 +49,7 @@ for a in "$@"; do if [[ "$a" =~ ^[0-9]+$ ]]; then RUNS="$a"; else ARGS+=("$a"); 
 STAGES="${ARGS[*]:-pmc build run collect analyze}"
 if [[ " $STAGES " == *" paper "* ]]; then
   # the paper stage is run+collect+analyze with the filters and sizes that yield exactly the ten rows
-  export BENCH_TESTS="${BENCH_TESTS:-AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG}" CHUNKS="${CHUNKS:-16,1350,16384}"
+  export BENCH_TESTS="${BENCH_TESTS:-AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256 signing,RNG}" CHUNKS="${CHUNKS:-16,1350,16384}"
   STAGES="${STAGES/paper/run collect analyze paper}"
 fi
 want() { [[ " $STAGES " == *" $1 "* ]]; }
@@ -71,6 +73,17 @@ if want build; then
     info "build"; "$RIG/build_awslc.sh" all
   fi
 fi
+run_census() {
+  # which rows of the whole suite enter the bracket, and how often per call: a fourth build whose bracket
+  # counts its entries, run once over every row at short windows (a count, not a timing; no pin, no sudo).
+  # Writes data/dit_census.{md,json}, data/bracketed_filters.txt (the default test list) and benchmarks-info.md.
+  info "census: the ditcount build and every row of the suite -> $E/data/dit_census.{md,json}, $E/data/bracketed_filters.txt, $E/benchmarks-info.md"
+  if [[ ! -x "$W/build-ditcount/tool/bssl" || "${REBUILD:-0}" == 1 ]]; then bash "$RIG/build_awslc.sh" count || die "census build failed"; fi
+  # the recorded run, when there is one, is checked against the census (which of its rows never enter the bracket)
+  local rec="$RES/raw/speed.json"
+  python3 "$RIG/count_awslc.py" --tree "$W" --out "$E/data" --timeout-ms "${CENSUS_MS:-20}" \
+      $([[ -s "$rec" ]] && printf -- '--recorded %q' "$rec") --info-md "$E/benchmarks-info.md" || die "census failed"
+}
 quiet_check() {
   # current CPU use, not the load average: the load average lags by minutes and our own build stage
   # leaves it above 3 for a while after nothing is running any more
@@ -99,10 +112,15 @@ if want run; then
   # one sudo session for the whole stage (the credential cache would expire during a 20-minute
   # run); the chown back to the invoking user happens inside it, so nothing root-owned is left
   rm -rf "$W/results/run-"*; mkdir -p "$W/results"; : > "$W/results/driver-stderr.log"; echo "reproduce $(date '+%F %T') RUNS=$RUNS stages: $STAGES" >> "$W/results/driver-stderr.log"
+  # Without BENCH_TESTS the run is exactly the rows that enter the bracket: the census's filter list. If the
+  # census has not been made on this checkout, make it first (ditcount build + every row once, ~5 min, no sudo).
+  FILTERS="$E/data/bracketed_filters.txt"
+  if [[ -z "${BENCH_TESTS:-}" && ! -s "$FILTERS" ]]; then info "no $FILTERS: running the census first"; STAGES="$STAGES census"; run_census; fi
+  [[ -n "${BENCH_TESTS:-}" ]] && info "BENCH_TESTS set: $BENCH_TESTS" || info "rows: the $(grep -vc '^#' "$FILTERS") census filters in $FILTERS (every row that enters the bracket)"
   for ((i = 1; i <= RUNS; i++)); do
     [[ $RUNS -gt 1 ]] && info "run $i of $RUNS"
     sudo -E env PATH="$PATH" HOME="$HOME" W="$W" PIN_CPU="$PIN_CPU" REPO="$R" REPS="${REPS:-7}" WARM="${WARM:-1}" \
-        TIMEOUT_MS="${TIMEOUT_MS:-400}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
+        TIMEOUT_MS="${TIMEOUT_MS:-400}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} BENCH_TESTS_FILE="$FILTERS" ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
         SPOTLIGHT_RESTORE="${SPOTLIGHT_RESTORE:-1}" \
         bash -c 'perl -e "alarm 60; exec @ARGV" mdutil -i off / >/dev/null 2>&1 && echo "    spotlight indexing off (root volume) for the run";
                  mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" 2> >(tee -a "$W/results/driver-stderr.log" >&2) | tee "$W/results/speed.txt"; rc=${PIPESTATUS[0]}; chown -R "$ME" "$W/results";
@@ -145,13 +163,6 @@ if want analyze; then
   "${MPL:-python3}" "$RIG/plot_awslc.py" "$RES/summary/summary.json" --out "$RES/summary" && cp "$RES/summary/paper_rows.png" "$E/figures/paper_rows.png"
   python3 "$RIG/latex_table_awslc.py" "$RES/summary/summary.json" --out "$E/figures/latex"   # the paper chart as a LaTeX table (MTE-paper style)
 fi
-if want census; then
-  # which rows of the whole suite enter the bracket, and how often per call: a fourth build whose bracket
-  # counts its entries, run once over every row at short windows (a count, not a timing; no pin, no sudo)
-  info "census: the ditcount build and every row of the suite -> $E/data/dit_census.{md,json}"
-  if [[ ! -x "$W/build-ditcount/tool/bssl" || "${REBUILD:-0}" == 1 ]]; then bash "$RIG/build_awslc.sh" count || die "census build failed"; fi
-  python3 "$RIG/count_awslc.py" --tree "$W" --out "$E/data" --timeout-ms "${CENSUS_MS:-20}" || die "census failed"
-  grep -E '^\*\*|rows in' "$E/data/dit_census.md" | head -3
-fi
+if want census; then run_census; fi
 if want paper; then info "the paper's ten rows"; cat "$RES/summary/paper_table.md"; fi
 info "done: $STAGES"

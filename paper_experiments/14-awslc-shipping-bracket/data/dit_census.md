@@ -1,6 +1,6 @@
 # Which `bssl speed` rows enter AWS-LC's DIT bracket
 
-Census build (`ditcount`: the shipped bracket with a counter in `armv8_set_dit`), every row of the suite at 20 ms, one thread. 632 rows in 304 families; **381 rows in 213 families enter the bracket at least once per timed loop, 251 rows in 91 families never do**. Entries per call is ditEntries / numCalls; a range means it changes with the input size.
+Census build (`ditcount`: the shipped bracket with a counter in `armv8_set_dit`), every row of the suite at 20 ms, one thread. 632 rows in 304 families; **381 rows in 213 families enter the bracket at least once per timed loop, 251 rows in 91 families never do**. Entries per call is ditEntries / numCalls; a range means it changes with the input size. `bracketed_filters.txt` (145 filters) selects exactly the entering rows.
 
 ## Families that enter the bracket
 

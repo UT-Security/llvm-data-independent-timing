@@ -1,6 +1,7 @@
 {
  "rows": [
   {
+   "key": "AES-128 encrypt setup",
    "description": "AES-128 encrypt setup",
    "family": "AES-128 encrypt setup",
    "size": null,
@@ -9,6 +10,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-128 encrypt",
    "description": "AES-128 encrypt",
    "family": "AES-128 encrypt",
    "size": null,
@@ -17,6 +19,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-128 decrypt setup",
    "description": "AES-128 decrypt setup",
    "family": "AES-128 decrypt setup",
    "size": null,
@@ -25,6 +28,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-128 decrypt",
    "description": "AES-128 decrypt",
    "family": "AES-128 decrypt",
    "size": null,
@@ -33,6 +37,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-192 encrypt setup",
    "description": "AES-192 encrypt setup",
    "family": "AES-192 encrypt setup",
    "size": null,
@@ -41,6 +46,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-192 encrypt",
    "description": "AES-192 encrypt",
    "family": "AES-192 encrypt",
    "size": null,
@@ -49,6 +55,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-192 decrypt setup",
    "description": "AES-192 decrypt setup",
    "family": "AES-192 decrypt setup",
    "size": null,
@@ -57,6 +64,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-192 decrypt",
    "description": "AES-192 decrypt",
    "family": "AES-192 decrypt",
    "size": null,
@@ -65,6 +73,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-256 encrypt setup",
    "description": "AES-256 encrypt setup",
    "family": "AES-256 encrypt setup",
    "size": null,
@@ -73,6 +82,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-256 encrypt",
    "description": "AES-256 encrypt",
    "family": "AES-256 encrypt",
    "size": null,
@@ -81,6 +91,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-256 decrypt setup",
    "description": "AES-256 decrypt setup",
    "family": "AES-256 decrypt setup",
    "size": null,
@@ -89,6 +100,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AES-256 decrypt",
    "description": "AES-256 decrypt",
    "family": "AES-256 decrypt",
    "size": null,
@@ -97,6 +109,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-128-GCM encrypt init",
    "description": "EVP-AES-128-GCM encrypt init",
    "family": "EVP-AES-128-GCM encrypt init",
    "size": null,
@@ -105,6 +118,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-128-GCM encrypt [16 B]",
    "description": "EVP-AES-128-GCM encrypt",
    "family": "EVP-AES-128-GCM encrypt",
    "size": 16,
@@ -113,6 +127,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-GCM encrypt [256 B]",
    "description": "EVP-AES-128-GCM encrypt",
    "family": "EVP-AES-128-GCM encrypt",
    "size": 256,
@@ -121,6 +136,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-GCM encrypt [1350 B]",
    "description": "EVP-AES-128-GCM encrypt",
    "family": "EVP-AES-128-GCM encrypt",
    "size": 1350,
@@ -129,6 +145,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-GCM encrypt [8192 B]",
    "description": "EVP-AES-128-GCM encrypt",
    "family": "EVP-AES-128-GCM encrypt",
    "size": 8192,
@@ -137,6 +154,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-GCM encrypt [16384 B]",
    "description": "EVP-AES-128-GCM encrypt",
    "family": "EVP-AES-128-GCM encrypt",
    "size": 16384,
@@ -145,6 +163,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-GCM decrypt init",
    "description": "EVP-AES-128-GCM decrypt init",
    "family": "EVP-AES-128-GCM decrypt init",
    "size": null,
@@ -153,6 +172,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-128-GCM decrypt [16 B]",
    "description": "EVP-AES-128-GCM decrypt",
    "family": "EVP-AES-128-GCM decrypt",
    "size": 16,
@@ -161,6 +181,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-GCM decrypt [256 B]",
    "description": "EVP-AES-128-GCM decrypt",
    "family": "EVP-AES-128-GCM decrypt",
    "size": 256,
@@ -169,6 +190,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-GCM decrypt [1350 B]",
    "description": "EVP-AES-128-GCM decrypt",
    "family": "EVP-AES-128-GCM decrypt",
    "size": 1350,
@@ -177,6 +199,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-GCM decrypt [8192 B]",
    "description": "EVP-AES-128-GCM decrypt",
    "family": "EVP-AES-128-GCM decrypt",
    "size": 8192,
@@ -185,6 +208,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-GCM decrypt [16384 B]",
    "description": "EVP-AES-128-GCM decrypt",
    "family": "EVP-AES-128-GCM decrypt",
    "size": 16384,
@@ -193,6 +217,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM encrypt init",
    "description": "EVP-AES-192-GCM encrypt init",
    "family": "EVP-AES-192-GCM encrypt init",
    "size": null,
@@ -201,6 +226,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-192-GCM encrypt [16 B]",
    "description": "EVP-AES-192-GCM encrypt",
    "family": "EVP-AES-192-GCM encrypt",
    "size": 16,
@@ -209,6 +235,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM encrypt [256 B]",
    "description": "EVP-AES-192-GCM encrypt",
    "family": "EVP-AES-192-GCM encrypt",
    "size": 256,
@@ -217,6 +244,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM encrypt [1350 B]",
    "description": "EVP-AES-192-GCM encrypt",
    "family": "EVP-AES-192-GCM encrypt",
    "size": 1350,
@@ -225,6 +253,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM encrypt [8192 B]",
    "description": "EVP-AES-192-GCM encrypt",
    "family": "EVP-AES-192-GCM encrypt",
    "size": 8192,
@@ -233,6 +262,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM encrypt [16384 B]",
    "description": "EVP-AES-192-GCM encrypt",
    "family": "EVP-AES-192-GCM encrypt",
    "size": 16384,
@@ -241,6 +271,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM decrypt init",
    "description": "EVP-AES-192-GCM decrypt init",
    "family": "EVP-AES-192-GCM decrypt init",
    "size": null,
@@ -249,6 +280,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-192-GCM decrypt [16 B]",
    "description": "EVP-AES-192-GCM decrypt",
    "family": "EVP-AES-192-GCM decrypt",
    "size": 16,
@@ -257,6 +289,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM decrypt [256 B]",
    "description": "EVP-AES-192-GCM decrypt",
    "family": "EVP-AES-192-GCM decrypt",
    "size": 256,
@@ -265,6 +298,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM decrypt [1350 B]",
    "description": "EVP-AES-192-GCM decrypt",
    "family": "EVP-AES-192-GCM decrypt",
    "size": 1350,
@@ -273,6 +307,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM decrypt [8192 B]",
    "description": "EVP-AES-192-GCM decrypt",
    "family": "EVP-AES-192-GCM decrypt",
    "size": 8192,
@@ -281,6 +316,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-GCM decrypt [16384 B]",
    "description": "EVP-AES-192-GCM decrypt",
    "family": "EVP-AES-192-GCM decrypt",
    "size": 16384,
@@ -289,6 +325,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM encrypt init",
    "description": "EVP-AES-256-GCM encrypt init",
    "family": "EVP-AES-256-GCM encrypt init",
    "size": null,
@@ -297,6 +334,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-256-GCM encrypt [16 B]",
    "description": "EVP-AES-256-GCM encrypt",
    "family": "EVP-AES-256-GCM encrypt",
    "size": 16,
@@ -305,6 +343,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM encrypt [256 B]",
    "description": "EVP-AES-256-GCM encrypt",
    "family": "EVP-AES-256-GCM encrypt",
    "size": 256,
@@ -313,6 +352,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM encrypt [1350 B]",
    "description": "EVP-AES-256-GCM encrypt",
    "family": "EVP-AES-256-GCM encrypt",
    "size": 1350,
@@ -321,6 +361,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM encrypt [8192 B]",
    "description": "EVP-AES-256-GCM encrypt",
    "family": "EVP-AES-256-GCM encrypt",
    "size": 8192,
@@ -329,6 +370,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM encrypt [16384 B]",
    "description": "EVP-AES-256-GCM encrypt",
    "family": "EVP-AES-256-GCM encrypt",
    "size": 16384,
@@ -337,6 +379,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM decrypt init",
    "description": "EVP-AES-256-GCM decrypt init",
    "family": "EVP-AES-256-GCM decrypt init",
    "size": null,
@@ -345,6 +388,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-256-GCM decrypt [16 B]",
    "description": "EVP-AES-256-GCM decrypt",
    "family": "EVP-AES-256-GCM decrypt",
    "size": 16,
@@ -353,6 +397,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM decrypt [256 B]",
    "description": "EVP-AES-256-GCM decrypt",
    "family": "EVP-AES-256-GCM decrypt",
    "size": 256,
@@ -361,6 +406,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM decrypt [1350 B]",
    "description": "EVP-AES-256-GCM decrypt",
    "family": "EVP-AES-256-GCM decrypt",
    "size": 1350,
@@ -369,6 +415,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM decrypt [8192 B]",
    "description": "EVP-AES-256-GCM decrypt",
    "family": "EVP-AES-256-GCM decrypt",
    "size": 8192,
@@ -377,6 +424,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-GCM decrypt [16384 B]",
    "description": "EVP-AES-256-GCM decrypt",
    "family": "EVP-AES-256-GCM decrypt",
    "size": 16384,
@@ -385,6 +433,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-CTR encrypt init",
    "description": "EVP-AES-128-CTR encrypt init",
    "family": "EVP-AES-128-CTR encrypt init",
    "size": null,
@@ -393,6 +442,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-128-CTR encrypt [16 B]",
    "description": "EVP-AES-128-CTR encrypt",
    "family": "EVP-AES-128-CTR encrypt",
    "size": 16,
@@ -401,6 +451,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CTR encrypt [256 B]",
    "description": "EVP-AES-128-CTR encrypt",
    "family": "EVP-AES-128-CTR encrypt",
    "size": 256,
@@ -409,6 +460,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CTR encrypt [1350 B]",
    "description": "EVP-AES-128-CTR encrypt",
    "family": "EVP-AES-128-CTR encrypt",
    "size": 1350,
@@ -417,6 +469,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CTR encrypt [8192 B]",
    "description": "EVP-AES-128-CTR encrypt",
    "family": "EVP-AES-128-CTR encrypt",
    "size": 8192,
@@ -425,6 +478,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CTR encrypt [16384 B]",
    "description": "EVP-AES-128-CTR encrypt",
    "family": "EVP-AES-128-CTR encrypt",
    "size": 16384,
@@ -433,6 +487,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CTR decrypt init",
    "description": "EVP-AES-128-CTR decrypt init",
    "family": "EVP-AES-128-CTR decrypt init",
    "size": null,
@@ -441,6 +496,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-128-CTR decrypt [16 B]",
    "description": "EVP-AES-128-CTR decrypt",
    "family": "EVP-AES-128-CTR decrypt",
    "size": 16,
@@ -449,6 +505,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-CTR decrypt [256 B]",
    "description": "EVP-AES-128-CTR decrypt",
    "family": "EVP-AES-128-CTR decrypt",
    "size": 256,
@@ -457,6 +514,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-CTR decrypt [1350 B]",
    "description": "EVP-AES-128-CTR decrypt",
    "family": "EVP-AES-128-CTR decrypt",
    "size": 1350,
@@ -465,6 +523,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-CTR decrypt [8192 B]",
    "description": "EVP-AES-128-CTR decrypt",
    "family": "EVP-AES-128-CTR decrypt",
    "size": 8192,
@@ -473,6 +532,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-CTR decrypt [16384 B]",
    "description": "EVP-AES-128-CTR decrypt",
    "family": "EVP-AES-128-CTR decrypt",
    "size": 16384,
@@ -481,6 +541,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-CTR encrypt init",
    "description": "EVP-AES-192-CTR encrypt init",
    "family": "EVP-AES-192-CTR encrypt init",
    "size": null,
@@ -489,6 +550,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-192-CTR encrypt [16 B]",
    "description": "EVP-AES-192-CTR encrypt",
    "family": "EVP-AES-192-CTR encrypt",
    "size": 16,
@@ -497,6 +559,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CTR encrypt [256 B]",
    "description": "EVP-AES-192-CTR encrypt",
    "family": "EVP-AES-192-CTR encrypt",
    "size": 256,
@@ -505,6 +568,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CTR encrypt [1350 B]",
    "description": "EVP-AES-192-CTR encrypt",
    "family": "EVP-AES-192-CTR encrypt",
    "size": 1350,
@@ -513,6 +577,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CTR encrypt [8192 B]",
    "description": "EVP-AES-192-CTR encrypt",
    "family": "EVP-AES-192-CTR encrypt",
    "size": 8192,
@@ -521,6 +586,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CTR encrypt [16384 B]",
    "description": "EVP-AES-192-CTR encrypt",
    "family": "EVP-AES-192-CTR encrypt",
    "size": 16384,
@@ -529,6 +595,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CTR decrypt init",
    "description": "EVP-AES-192-CTR decrypt init",
    "family": "EVP-AES-192-CTR decrypt init",
    "size": null,
@@ -537,6 +604,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-192-CTR decrypt [16 B]",
    "description": "EVP-AES-192-CTR decrypt",
    "family": "EVP-AES-192-CTR decrypt",
    "size": 16,
@@ -545,6 +613,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-CTR decrypt [256 B]",
    "description": "EVP-AES-192-CTR decrypt",
    "family": "EVP-AES-192-CTR decrypt",
    "size": 256,
@@ -553,6 +622,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-CTR decrypt [1350 B]",
    "description": "EVP-AES-192-CTR decrypt",
    "family": "EVP-AES-192-CTR decrypt",
    "size": 1350,
@@ -561,6 +631,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-CTR decrypt [8192 B]",
    "description": "EVP-AES-192-CTR decrypt",
    "family": "EVP-AES-192-CTR decrypt",
    "size": 8192,
@@ -569,6 +640,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-192-CTR decrypt [16384 B]",
    "description": "EVP-AES-192-CTR decrypt",
    "family": "EVP-AES-192-CTR decrypt",
    "size": 16384,
@@ -577,6 +649,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-CTR encrypt init",
    "description": "EVP-AES-256-CTR encrypt init",
    "family": "EVP-AES-256-CTR encrypt init",
    "size": null,
@@ -585,6 +658,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-256-CTR encrypt [16 B]",
    "description": "EVP-AES-256-CTR encrypt",
    "family": "EVP-AES-256-CTR encrypt",
    "size": 16,
@@ -593,6 +667,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CTR encrypt [256 B]",
    "description": "EVP-AES-256-CTR encrypt",
    "family": "EVP-AES-256-CTR encrypt",
    "size": 256,
@@ -601,6 +676,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CTR encrypt [1350 B]",
    "description": "EVP-AES-256-CTR encrypt",
    "family": "EVP-AES-256-CTR encrypt",
    "size": 1350,
@@ -609,6 +685,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CTR encrypt [8192 B]",
    "description": "EVP-AES-256-CTR encrypt",
    "family": "EVP-AES-256-CTR encrypt",
    "size": 8192,
@@ -617,6 +694,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CTR encrypt [16384 B]",
    "description": "EVP-AES-256-CTR encrypt",
    "family": "EVP-AES-256-CTR encrypt",
    "size": 16384,
@@ -625,6 +703,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CTR decrypt init",
    "description": "EVP-AES-256-CTR decrypt init",
    "family": "EVP-AES-256-CTR decrypt init",
    "size": null,
@@ -633,6 +712,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-256-CTR decrypt [16 B]",
    "description": "EVP-AES-256-CTR decrypt",
    "family": "EVP-AES-256-CTR decrypt",
    "size": 16,
@@ -641,6 +721,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-CTR decrypt [256 B]",
    "description": "EVP-AES-256-CTR decrypt",
    "family": "EVP-AES-256-CTR decrypt",
    "size": 256,
@@ -649,6 +730,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-CTR decrypt [1350 B]",
    "description": "EVP-AES-256-CTR decrypt",
    "family": "EVP-AES-256-CTR decrypt",
    "size": 1350,
@@ -657,6 +739,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-CTR decrypt [8192 B]",
    "description": "EVP-AES-256-CTR decrypt",
    "family": "EVP-AES-256-CTR decrypt",
    "size": 8192,
@@ -665,6 +748,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-256-CTR decrypt [16384 B]",
    "description": "EVP-AES-256-CTR decrypt",
    "family": "EVP-AES-256-CTR decrypt",
    "size": 16384,
@@ -673,6 +757,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-AES-128-CBC encrypt init",
    "description": "EVP-AES-128-CBC encrypt init",
    "family": "EVP-AES-128-CBC encrypt init",
    "size": null,
@@ -681,6 +766,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-128-CBC encrypt [16 B]",
    "description": "EVP-AES-128-CBC encrypt",
    "family": "EVP-AES-128-CBC encrypt",
    "size": 16,
@@ -689,6 +775,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CBC encrypt [256 B]",
    "description": "EVP-AES-128-CBC encrypt",
    "family": "EVP-AES-128-CBC encrypt",
    "size": 256,
@@ -697,6 +784,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CBC encrypt [1350 B]",
    "description": "EVP-AES-128-CBC encrypt",
    "family": "EVP-AES-128-CBC encrypt",
    "size": 1350,
@@ -705,6 +793,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CBC encrypt [8192 B]",
    "description": "EVP-AES-128-CBC encrypt",
    "family": "EVP-AES-128-CBC encrypt",
    "size": 8192,
@@ -713,6 +802,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CBC encrypt [16384 B]",
    "description": "EVP-AES-128-CBC encrypt",
    "family": "EVP-AES-128-CBC encrypt",
    "size": 16384,
@@ -721,6 +811,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-128-CBC decrypt init",
    "description": "EVP-AES-128-CBC decrypt init",
    "family": "EVP-AES-128-CBC decrypt init",
    "size": null,
@@ -729,6 +820,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-128-CBC decrypt [16 B]",
    "description": "EVP-AES-128-CBC decrypt",
    "family": "EVP-AES-128-CBC decrypt",
    "size": 16,
@@ -737,6 +829,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-128-CBC decrypt [256 B]",
    "description": "EVP-AES-128-CBC decrypt",
    "family": "EVP-AES-128-CBC decrypt",
    "size": 256,
@@ -745,6 +838,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-128-CBC decrypt [1350 B]",
    "description": "EVP-AES-128-CBC decrypt",
    "family": "EVP-AES-128-CBC decrypt",
    "size": 1350,
@@ -753,6 +847,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-128-CBC decrypt [8192 B]",
    "description": "EVP-AES-128-CBC decrypt",
    "family": "EVP-AES-128-CBC decrypt",
    "size": 8192,
@@ -761,6 +856,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-128-CBC decrypt [16384 B]",
    "description": "EVP-AES-128-CBC decrypt",
    "family": "EVP-AES-128-CBC decrypt",
    "size": 16384,
@@ -769,6 +865,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-192-CBC encrypt init",
    "description": "EVP-AES-192-CBC encrypt init",
    "family": "EVP-AES-192-CBC encrypt init",
    "size": null,
@@ -777,6 +874,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-192-CBC encrypt [16 B]",
    "description": "EVP-AES-192-CBC encrypt",
    "family": "EVP-AES-192-CBC encrypt",
    "size": 16,
@@ -785,6 +883,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CBC encrypt [256 B]",
    "description": "EVP-AES-192-CBC encrypt",
    "family": "EVP-AES-192-CBC encrypt",
    "size": 256,
@@ -793,6 +892,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CBC encrypt [1350 B]",
    "description": "EVP-AES-192-CBC encrypt",
    "family": "EVP-AES-192-CBC encrypt",
    "size": 1350,
@@ -801,6 +901,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CBC encrypt [8192 B]",
    "description": "EVP-AES-192-CBC encrypt",
    "family": "EVP-AES-192-CBC encrypt",
    "size": 8192,
@@ -809,6 +910,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CBC encrypt [16384 B]",
    "description": "EVP-AES-192-CBC encrypt",
    "family": "EVP-AES-192-CBC encrypt",
    "size": 16384,
@@ -817,6 +919,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-192-CBC decrypt init",
    "description": "EVP-AES-192-CBC decrypt init",
    "family": "EVP-AES-192-CBC decrypt init",
    "size": null,
@@ -825,6 +928,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-192-CBC decrypt [16 B]",
    "description": "EVP-AES-192-CBC decrypt",
    "family": "EVP-AES-192-CBC decrypt",
    "size": 16,
@@ -833,6 +937,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-192-CBC decrypt [256 B]",
    "description": "EVP-AES-192-CBC decrypt",
    "family": "EVP-AES-192-CBC decrypt",
    "size": 256,
@@ -841,6 +946,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-192-CBC decrypt [1350 B]",
    "description": "EVP-AES-192-CBC decrypt",
    "family": "EVP-AES-192-CBC decrypt",
    "size": 1350,
@@ -849,6 +955,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-192-CBC decrypt [8192 B]",
    "description": "EVP-AES-192-CBC decrypt",
    "family": "EVP-AES-192-CBC decrypt",
    "size": 8192,
@@ -857,6 +964,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-192-CBC decrypt [16384 B]",
    "description": "EVP-AES-192-CBC decrypt",
    "family": "EVP-AES-192-CBC decrypt",
    "size": 16384,
@@ -865,6 +973,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-256-CBC encrypt init",
    "description": "EVP-AES-256-CBC encrypt init",
    "family": "EVP-AES-256-CBC encrypt init",
    "size": null,
@@ -873,6 +982,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-256-CBC encrypt [16 B]",
    "description": "EVP-AES-256-CBC encrypt",
    "family": "EVP-AES-256-CBC encrypt",
    "size": 16,
@@ -881,6 +991,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CBC encrypt [256 B]",
    "description": "EVP-AES-256-CBC encrypt",
    "family": "EVP-AES-256-CBC encrypt",
    "size": 256,
@@ -889,6 +1000,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CBC encrypt [1350 B]",
    "description": "EVP-AES-256-CBC encrypt",
    "family": "EVP-AES-256-CBC encrypt",
    "size": 1350,
@@ -897,6 +1009,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CBC encrypt [8192 B]",
    "description": "EVP-AES-256-CBC encrypt",
    "family": "EVP-AES-256-CBC encrypt",
    "size": 8192,
@@ -905,6 +1018,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CBC encrypt [16384 B]",
    "description": "EVP-AES-256-CBC encrypt",
    "family": "EVP-AES-256-CBC encrypt",
    "size": 16384,
@@ -913,6 +1027,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-AES-256-CBC decrypt init",
    "description": "EVP-AES-256-CBC decrypt init",
    "family": "EVP-AES-256-CBC decrypt init",
    "size": null,
@@ -921,6 +1036,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-AES-256-CBC decrypt [16 B]",
    "description": "EVP-AES-256-CBC decrypt",
    "family": "EVP-AES-256-CBC decrypt",
    "size": 16,
@@ -929,6 +1045,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-256-CBC decrypt [256 B]",
    "description": "EVP-AES-256-CBC decrypt",
    "family": "EVP-AES-256-CBC decrypt",
    "size": 256,
@@ -937,6 +1054,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-256-CBC decrypt [1350 B]",
    "description": "EVP-AES-256-CBC decrypt",
    "family": "EVP-AES-256-CBC decrypt",
    "size": 1350,
@@ -945,6 +1063,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-256-CBC decrypt [8192 B]",
    "description": "EVP-AES-256-CBC decrypt",
    "family": "EVP-AES-256-CBC decrypt",
    "size": 8192,
@@ -953,6 +1072,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "EVP-AES-256-CBC decrypt [16384 B]",
    "description": "EVP-AES-256-CBC decrypt",
    "family": "EVP-AES-256-CBC decrypt",
    "size": 16384,
@@ -961,6 +1081,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AES-256-XTS encrypt init",
    "description": "AES-256-XTS encrypt init",
    "family": "AES-256-XTS encrypt init",
    "size": null,
@@ -969,6 +1090,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "AES-256-XTS encrypt [16 B]",
    "description": "AES-256-XTS encrypt",
    "family": "AES-256-XTS encrypt",
    "size": 16,
@@ -977,6 +1099,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AES-256-XTS encrypt [256 B]",
    "description": "AES-256-XTS encrypt",
    "family": "AES-256-XTS encrypt",
    "size": 256,
@@ -985,6 +1108,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AES-256-XTS encrypt [1350 B]",
    "description": "AES-256-XTS encrypt",
    "family": "AES-256-XTS encrypt",
    "size": 1350,
@@ -993,6 +1117,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AES-256-XTS encrypt [8192 B]",
    "description": "AES-256-XTS encrypt",
    "family": "AES-256-XTS encrypt",
    "size": 8192,
@@ -1001,6 +1126,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AES-256-XTS encrypt [16384 B]",
    "description": "AES-256-XTS encrypt",
    "family": "AES-256-XTS encrypt",
    "size": 16384,
@@ -1009,6 +1135,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AES-256-XTS decrypt init",
    "description": "AES-256-XTS decrypt init",
    "family": "AES-256-XTS decrypt init",
    "size": null,
@@ -1017,6 +1144,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "AES-256-XTS decrypt [16 B]",
    "description": "AES-256-XTS decrypt",
    "family": "AES-256-XTS decrypt",
    "size": 16,
@@ -1025,6 +1153,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "AES-256-XTS decrypt [256 B]",
    "description": "AES-256-XTS decrypt",
    "family": "AES-256-XTS decrypt",
    "size": 256,
@@ -1033,6 +1162,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "AES-256-XTS decrypt [1350 B]",
    "description": "AES-256-XTS decrypt",
    "family": "AES-256-XTS decrypt",
    "size": 1350,
@@ -1041,6 +1171,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "AES-256-XTS decrypt [8192 B]",
    "description": "AES-256-XTS decrypt",
    "family": "AES-256-XTS decrypt",
    "size": 8192,
@@ -1049,6 +1180,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "AES-256-XTS decrypt [16384 B]",
    "description": "AES-256-XTS decrypt",
    "family": "AES-256-XTS decrypt",
    "size": 16384,
@@ -1057,6 +1189,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-RC4 encrypt init",
    "description": "EVP-RC4 encrypt init",
    "family": "EVP-RC4 encrypt init",
    "size": null,
@@ -1065,6 +1198,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-RC4 encrypt [16 B]",
    "description": "EVP-RC4 encrypt",
    "family": "EVP-RC4 encrypt",
    "size": 16,
@@ -1073,6 +1207,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-RC4 encrypt [256 B]",
    "description": "EVP-RC4 encrypt",
    "family": "EVP-RC4 encrypt",
    "size": 256,
@@ -1081,6 +1216,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-RC4 encrypt [1350 B]",
    "description": "EVP-RC4 encrypt",
    "family": "EVP-RC4 encrypt",
    "size": 1350,
@@ -1089,6 +1225,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-RC4 encrypt [8192 B]",
    "description": "EVP-RC4 encrypt",
    "family": "EVP-RC4 encrypt",
    "size": 8192,
@@ -1097,6 +1234,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-RC4 encrypt [16384 B]",
    "description": "EVP-RC4 encrypt",
    "family": "EVP-RC4 encrypt",
    "size": 16384,
@@ -1105,6 +1243,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EVP-RC4 decrypt init",
    "description": "EVP-RC4 decrypt init",
    "family": "EVP-RC4 decrypt init",
    "size": null,
@@ -1113,6 +1252,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-RC4 decrypt [16 B]",
    "description": "EVP-RC4 decrypt",
    "family": "EVP-RC4 decrypt",
    "size": 16,
@@ -1121,6 +1261,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-RC4 decrypt [256 B]",
    "description": "EVP-RC4 decrypt",
    "family": "EVP-RC4 decrypt",
    "size": 256,
@@ -1129,6 +1270,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-RC4 decrypt [1350 B]",
    "description": "EVP-RC4 decrypt",
    "family": "EVP-RC4 decrypt",
    "size": 1350,
@@ -1137,6 +1279,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-RC4 decrypt [8192 B]",
    "description": "EVP-RC4 decrypt",
    "family": "EVP-RC4 decrypt",
    "size": 8192,
@@ -1145,6 +1288,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-RC4 decrypt [16384 B]",
    "description": "EVP-RC4 decrypt",
    "family": "EVP-RC4 decrypt",
    "size": 16384,
@@ -1153,6 +1297,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "MD4 [16 B]",
    "description": "MD4",
    "family": "MD4",
    "size": 16,
@@ -1161,6 +1306,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD4 [256 B]",
    "description": "MD4",
    "family": "MD4",
    "size": 256,
@@ -1169,6 +1315,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD4 [1350 B]",
    "description": "MD4",
    "family": "MD4",
    "size": 1350,
@@ -1177,6 +1324,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD4 [8192 B]",
    "description": "MD4",
    "family": "MD4",
    "size": 8192,
@@ -1185,6 +1333,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD4 [16384 B]",
    "description": "MD4",
    "family": "MD4",
    "size": 16384,
@@ -1193,6 +1342,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5 [16 B]",
    "description": "MD5",
    "family": "MD5",
    "size": 16,
@@ -1201,6 +1351,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5 [256 B]",
    "description": "MD5",
    "family": "MD5",
    "size": 256,
@@ -1209,6 +1360,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5 [1350 B]",
    "description": "MD5",
    "family": "MD5",
    "size": 1350,
@@ -1217,6 +1369,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5 [8192 B]",
    "description": "MD5",
    "family": "MD5",
    "size": 8192,
@@ -1225,6 +1378,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5 [16384 B]",
    "description": "MD5",
    "family": "MD5",
    "size": 16384,
@@ -1233,6 +1387,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-1 [16 B]",
    "description": "SHA-1",
    "family": "SHA-1",
    "size": 16,
@@ -1241,6 +1396,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-1 [256 B]",
    "description": "SHA-1",
    "family": "SHA-1",
    "size": 256,
@@ -1249,6 +1405,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-1 [1350 B]",
    "description": "SHA-1",
    "family": "SHA-1",
    "size": 1350,
@@ -1257,6 +1414,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-1 [8192 B]",
    "description": "SHA-1",
    "family": "SHA-1",
    "size": 8192,
@@ -1265,6 +1423,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-1 [16384 B]",
    "description": "SHA-1",
    "family": "SHA-1",
    "size": 16384,
@@ -1273,6 +1432,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-224 [16 B]",
    "description": "SHA-224",
    "family": "SHA-224",
    "size": 16,
@@ -1281,6 +1441,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-224 [256 B]",
    "description": "SHA-224",
    "family": "SHA-224",
    "size": 256,
@@ -1289,6 +1450,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-224 [1350 B]",
    "description": "SHA-224",
    "family": "SHA-224",
    "size": 1350,
@@ -1297,6 +1459,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-224 [8192 B]",
    "description": "SHA-224",
    "family": "SHA-224",
    "size": 8192,
@@ -1305,6 +1468,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-224 [16384 B]",
    "description": "SHA-224",
    "family": "SHA-224",
    "size": 16384,
@@ -1313,6 +1477,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-256 [16 B]",
    "description": "SHA-256",
    "family": "SHA-256",
    "size": 16,
@@ -1321,6 +1486,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-256 [256 B]",
    "description": "SHA-256",
    "family": "SHA-256",
    "size": 256,
@@ -1329,6 +1495,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-256 [1350 B]",
    "description": "SHA-256",
    "family": "SHA-256",
    "size": 1350,
@@ -1337,6 +1504,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-256 [8192 B]",
    "description": "SHA-256",
    "family": "SHA-256",
    "size": 8192,
@@ -1345,6 +1513,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-256 [16384 B]",
    "description": "SHA-256",
    "family": "SHA-256",
    "size": 16384,
@@ -1353,6 +1522,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-384 [16 B]",
    "description": "SHA-384",
    "family": "SHA-384",
    "size": 16,
@@ -1361,6 +1531,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-384 [256 B]",
    "description": "SHA-384",
    "family": "SHA-384",
    "size": 256,
@@ -1369,6 +1540,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-384 [1350 B]",
    "description": "SHA-384",
    "family": "SHA-384",
    "size": 1350,
@@ -1377,6 +1549,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-384 [8192 B]",
    "description": "SHA-384",
    "family": "SHA-384",
    "size": 8192,
@@ -1385,6 +1558,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-384 [16384 B]",
    "description": "SHA-384",
    "family": "SHA-384",
    "size": 16384,
@@ -1393,6 +1567,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-512 [16 B]",
    "description": "SHA-512",
    "family": "SHA-512",
    "size": 16,
@@ -1401,6 +1576,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-512 [256 B]",
    "description": "SHA-512",
    "family": "SHA-512",
    "size": 256,
@@ -1409,6 +1585,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-512 [1350 B]",
    "description": "SHA-512",
    "family": "SHA-512",
    "size": 1350,
@@ -1417,6 +1594,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-512 [8192 B]",
    "description": "SHA-512",
    "family": "SHA-512",
    "size": 8192,
@@ -1425,6 +1603,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA-512 [16384 B]",
    "description": "SHA-512",
    "family": "SHA-512",
    "size": 16384,
@@ -1433,6 +1612,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-224 [16 B]",
    "description": "SHA3-224",
    "family": "SHA3-224",
    "size": 16,
@@ -1441,6 +1621,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-224 [256 B]",
    "description": "SHA3-224",
    "family": "SHA3-224",
    "size": 256,
@@ -1449,6 +1630,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-224 [1350 B]",
    "description": "SHA3-224",
    "family": "SHA3-224",
    "size": 1350,
@@ -1457,6 +1639,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-224 [8192 B]",
    "description": "SHA3-224",
    "family": "SHA3-224",
    "size": 8192,
@@ -1465,6 +1648,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-224 [16384 B]",
    "description": "SHA3-224",
    "family": "SHA3-224",
    "size": 16384,
@@ -1473,6 +1657,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-256 [16 B]",
    "description": "SHA3-256",
    "family": "SHA3-256",
    "size": 16,
@@ -1481,6 +1666,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-256 [256 B]",
    "description": "SHA3-256",
    "family": "SHA3-256",
    "size": 256,
@@ -1489,6 +1675,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-256 [1350 B]",
    "description": "SHA3-256",
    "family": "SHA3-256",
    "size": 1350,
@@ -1497,6 +1684,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-256 [8192 B]",
    "description": "SHA3-256",
    "family": "SHA3-256",
    "size": 8192,
@@ -1505,6 +1693,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-256 [16384 B]",
    "description": "SHA3-256",
    "family": "SHA3-256",
    "size": 16384,
@@ -1513,6 +1702,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-384 [16 B]",
    "description": "SHA3-384",
    "family": "SHA3-384",
    "size": 16,
@@ -1521,6 +1711,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-384 [256 B]",
    "description": "SHA3-384",
    "family": "SHA3-384",
    "size": 256,
@@ -1529,6 +1720,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-384 [1350 B]",
    "description": "SHA3-384",
    "family": "SHA3-384",
    "size": 1350,
@@ -1537,6 +1729,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-384 [8192 B]",
    "description": "SHA3-384",
    "family": "SHA3-384",
    "size": 8192,
@@ -1545,6 +1738,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-384 [16384 B]",
    "description": "SHA3-384",
    "family": "SHA3-384",
    "size": 16384,
@@ -1553,6 +1747,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-512 [16 B]",
    "description": "SHA3-512",
    "family": "SHA3-512",
    "size": 16,
@@ -1561,6 +1756,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-512 [256 B]",
    "description": "SHA3-512",
    "family": "SHA3-512",
    "size": 256,
@@ -1569,6 +1765,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-512 [1350 B]",
    "description": "SHA3-512",
    "family": "SHA3-512",
    "size": 1350,
@@ -1577,6 +1774,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-512 [8192 B]",
    "description": "SHA3-512",
    "family": "SHA3-512",
    "size": 8192,
@@ -1585,6 +1783,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHA3-512 [16384 B]",
    "description": "SHA3-512",
    "family": "SHA3-512",
    "size": 16384,
@@ -1593,6 +1792,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "KECCAK-256 [16 B]",
    "description": "KECCAK-256",
    "family": "KECCAK-256",
    "size": 16,
@@ -1601,6 +1801,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "KECCAK-256 [256 B]",
    "description": "KECCAK-256",
    "family": "KECCAK-256",
    "size": 256,
@@ -1609,6 +1810,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "KECCAK-256 [1350 B]",
    "description": "KECCAK-256",
    "family": "KECCAK-256",
    "size": 1350,
@@ -1617,6 +1819,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "KECCAK-256 [8192 B]",
    "description": "KECCAK-256",
    "family": "KECCAK-256",
    "size": 8192,
@@ -1625,6 +1828,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "KECCAK-256 [16384 B]",
    "description": "KECCAK-256",
    "family": "KECCAK-256",
    "size": 16384,
@@ -1633,6 +1837,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-128 [16 B]",
    "description": "SHAKE-128",
    "family": "SHAKE-128",
    "size": 16,
@@ -1641,6 +1846,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-128 [256 B]",
    "description": "SHAKE-128",
    "family": "SHAKE-128",
    "size": 256,
@@ -1649,6 +1855,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-128 [1350 B]",
    "description": "SHAKE-128",
    "family": "SHAKE-128",
    "size": 1350,
@@ -1657,6 +1864,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-128 [8192 B]",
    "description": "SHAKE-128",
    "family": "SHAKE-128",
    "size": 8192,
@@ -1665,6 +1873,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-128 [16384 B]",
    "description": "SHAKE-128",
    "family": "SHAKE-128",
    "size": 16384,
@@ -1673,6 +1882,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-256 [16 B]",
    "description": "SHAKE-256",
    "family": "SHAKE-256",
    "size": 16,
@@ -1681,6 +1891,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-256 [256 B]",
    "description": "SHAKE-256",
    "family": "SHAKE-256",
    "size": 256,
@@ -1689,6 +1900,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-256 [1350 B]",
    "description": "SHAKE-256",
    "family": "SHAKE-256",
    "size": 1350,
@@ -1697,6 +1909,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-256 [8192 B]",
    "description": "SHAKE-256",
    "family": "SHAKE-256",
    "size": 8192,
@@ -1705,6 +1918,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE-256 [16384 B]",
    "description": "SHAKE-256",
    "family": "SHAKE-256",
    "size": 16384,
@@ -1713,6 +1927,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Absorb) [16 B]",
    "description": "SHAKE256-x4 (Absorb)",
    "family": "SHAKE256-x4 (Absorb)",
    "size": 16,
@@ -1721,6 +1936,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Absorb) [256 B]",
    "description": "SHAKE256-x4 (Absorb)",
    "family": "SHAKE256-x4 (Absorb)",
    "size": 256,
@@ -1729,6 +1945,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Absorb) [1350 B]",
    "description": "SHAKE256-x4 (Absorb)",
    "family": "SHAKE256-x4 (Absorb)",
    "size": 1350,
@@ -1737,6 +1954,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Absorb) [8192 B]",
    "description": "SHAKE256-x4 (Absorb)",
    "family": "SHAKE256-x4 (Absorb)",
    "size": 8192,
@@ -1745,6 +1963,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Absorb) [16384 B]",
    "description": "SHAKE256-x4 (Absorb)",
    "family": "SHAKE256-x4 (Absorb)",
    "size": 16384,
@@ -1753,6 +1972,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Squeeze) [16 B]",
    "description": "SHAKE256-x4 (Squeeze)",
    "family": "SHAKE256-x4 (Squeeze)",
    "size": 16,
@@ -1761,6 +1981,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Squeeze) [256 B]",
    "description": "SHAKE256-x4 (Squeeze)",
    "family": "SHAKE256-x4 (Squeeze)",
    "size": 256,
@@ -1769,6 +1990,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Squeeze) [1350 B]",
    "description": "SHAKE256-x4 (Squeeze)",
    "family": "SHAKE256-x4 (Squeeze)",
    "size": 1350,
@@ -1777,6 +1999,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Squeeze) [8192 B]",
    "description": "SHAKE256-x4 (Squeeze)",
    "family": "SHAKE256-x4 (Squeeze)",
    "size": 8192,
@@ -1785,6 +2008,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SHAKE256-x4 (Squeeze) [16384 B]",
    "description": "SHAKE256-x4 (Squeeze)",
    "family": "SHAKE256-x4 (Squeeze)",
    "size": 16384,
@@ -1793,6 +2017,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "RIPEMD-160 [16 B]",
    "description": "RIPEMD-160",
    "family": "RIPEMD-160",
    "size": 16,
@@ -1801,6 +2026,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "RIPEMD-160 [256 B]",
    "description": "RIPEMD-160",
    "family": "RIPEMD-160",
    "size": 256,
@@ -1809,6 +2035,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "RIPEMD-160 [1350 B]",
    "description": "RIPEMD-160",
    "family": "RIPEMD-160",
    "size": 1350,
@@ -1817,6 +2044,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "RIPEMD-160 [8192 B]",
    "description": "RIPEMD-160",
    "family": "RIPEMD-160",
    "size": 8192,
@@ -1825,6 +2053,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "RIPEMD-160 [16384 B]",
    "description": "RIPEMD-160",
    "family": "RIPEMD-160",
    "size": 16384,
@@ -1833,6 +2062,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5-SHA-1 [16 B]",
    "description": "MD5-SHA-1",
    "family": "MD5-SHA-1",
    "size": 16,
@@ -1841,6 +2071,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5-SHA-1 [256 B]",
    "description": "MD5-SHA-1",
    "family": "MD5-SHA-1",
    "size": 256,
@@ -1849,6 +2080,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5-SHA-1 [1350 B]",
    "description": "MD5-SHA-1",
    "family": "MD5-SHA-1",
    "size": 1350,
@@ -1857,6 +2089,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5-SHA-1 [8192 B]",
    "description": "MD5-SHA-1",
    "family": "MD5-SHA-1",
    "size": 8192,
@@ -1865,6 +2098,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "MD5-SHA-1 [16384 B]",
    "description": "MD5-SHA-1",
    "family": "MD5-SHA-1",
    "size": 16384,
@@ -1873,6 +2107,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5 init",
    "description": "HMAC-MD5 init",
    "family": "HMAC-MD5 init",
    "size": null,
@@ -1881,6 +2116,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5 [16 B]",
    "description": "HMAC-MD5",
    "family": "HMAC-MD5",
    "size": 16,
@@ -1889,6 +2125,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5 [256 B]",
    "description": "HMAC-MD5",
    "family": "HMAC-MD5",
    "size": 256,
@@ -1897,6 +2134,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5 [1350 B]",
    "description": "HMAC-MD5",
    "family": "HMAC-MD5",
    "size": 1350,
@@ -1905,6 +2143,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5 [8192 B]",
    "description": "HMAC-MD5",
    "family": "HMAC-MD5",
    "size": 8192,
@@ -1913,6 +2152,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5 [16384 B]",
    "description": "HMAC-MD5",
    "family": "HMAC-MD5",
    "size": 16384,
@@ -1921,6 +2161,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1 init",
    "description": "HMAC-SHA1 init",
    "family": "HMAC-SHA1 init",
    "size": null,
@@ -1929,6 +2170,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1 [16 B]",
    "description": "HMAC-SHA1",
    "family": "HMAC-SHA1",
    "size": 16,
@@ -1937,6 +2179,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1 [256 B]",
    "description": "HMAC-SHA1",
    "family": "HMAC-SHA1",
    "size": 256,
@@ -1945,6 +2188,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1 [1350 B]",
    "description": "HMAC-SHA1",
    "family": "HMAC-SHA1",
    "size": 1350,
@@ -1953,6 +2197,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1 [8192 B]",
    "description": "HMAC-SHA1",
    "family": "HMAC-SHA1",
    "size": 8192,
@@ -1961,6 +2206,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1 [16384 B]",
    "description": "HMAC-SHA1",
    "family": "HMAC-SHA1",
    "size": 16384,
@@ -1969,6 +2215,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256 init",
    "description": "HMAC-SHA256 init",
    "family": "HMAC-SHA256 init",
    "size": null,
@@ -1977,6 +2224,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256 [16 B]",
    "description": "HMAC-SHA256",
    "family": "HMAC-SHA256",
    "size": 16,
@@ -1985,6 +2233,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256 [256 B]",
    "description": "HMAC-SHA256",
    "family": "HMAC-SHA256",
    "size": 256,
@@ -1993,6 +2242,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256 [1350 B]",
    "description": "HMAC-SHA256",
    "family": "HMAC-SHA256",
    "size": 1350,
@@ -2001,6 +2251,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256 [8192 B]",
    "description": "HMAC-SHA256",
    "family": "HMAC-SHA256",
    "size": 8192,
@@ -2009,6 +2260,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256 [16384 B]",
    "description": "HMAC-SHA256",
    "family": "HMAC-SHA256",
    "size": 16384,
@@ -2017,6 +2269,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384 init",
    "description": "HMAC-SHA384 init",
    "family": "HMAC-SHA384 init",
    "size": null,
@@ -2025,6 +2278,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384 [16 B]",
    "description": "HMAC-SHA384",
    "family": "HMAC-SHA384",
    "size": 16,
@@ -2033,6 +2287,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384 [256 B]",
    "description": "HMAC-SHA384",
    "family": "HMAC-SHA384",
    "size": 256,
@@ -2041,6 +2296,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384 [1350 B]",
    "description": "HMAC-SHA384",
    "family": "HMAC-SHA384",
    "size": 1350,
@@ -2049,6 +2305,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384 [8192 B]",
    "description": "HMAC-SHA384",
    "family": "HMAC-SHA384",
    "size": 8192,
@@ -2057,6 +2314,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384 [16384 B]",
    "description": "HMAC-SHA384",
    "family": "HMAC-SHA384",
    "size": 16384,
@@ -2065,6 +2323,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512 init",
    "description": "HMAC-SHA512 init",
    "family": "HMAC-SHA512 init",
    "size": null,
@@ -2073,6 +2332,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512 [16 B]",
    "description": "HMAC-SHA512",
    "family": "HMAC-SHA512",
    "size": 16,
@@ -2081,6 +2341,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512 [256 B]",
    "description": "HMAC-SHA512",
    "family": "HMAC-SHA512",
    "size": 256,
@@ -2089,6 +2350,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512 [1350 B]",
    "description": "HMAC-SHA512",
    "family": "HMAC-SHA512",
    "size": 1350,
@@ -2097,6 +2359,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512 [8192 B]",
    "description": "HMAC-SHA512",
    "family": "HMAC-SHA512",
    "size": 8192,
@@ -2105,6 +2368,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512 [16384 B]",
    "description": "HMAC-SHA512",
    "family": "HMAC-SHA512",
    "size": 16384,
@@ -2113,6 +2377,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224 init",
    "description": "HMAC-SHA3-224 init",
    "family": "HMAC-SHA3-224 init",
    "size": null,
@@ -2121,6 +2386,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224 [16 B]",
    "description": "HMAC-SHA3-224",
    "family": "HMAC-SHA3-224",
    "size": 16,
@@ -2129,6 +2395,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224 [256 B]",
    "description": "HMAC-SHA3-224",
    "family": "HMAC-SHA3-224",
    "size": 256,
@@ -2137,6 +2404,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224 [1350 B]",
    "description": "HMAC-SHA3-224",
    "family": "HMAC-SHA3-224",
    "size": 1350,
@@ -2145,6 +2413,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224 [8192 B]",
    "description": "HMAC-SHA3-224",
    "family": "HMAC-SHA3-224",
    "size": 8192,
@@ -2153,6 +2422,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224 [16384 B]",
    "description": "HMAC-SHA3-224",
    "family": "HMAC-SHA3-224",
    "size": 16384,
@@ -2161,6 +2431,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256 init",
    "description": "HMAC-SHA3-256 init",
    "family": "HMAC-SHA3-256 init",
    "size": null,
@@ -2169,6 +2440,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256 [16 B]",
    "description": "HMAC-SHA3-256",
    "family": "HMAC-SHA3-256",
    "size": 16,
@@ -2177,6 +2449,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256 [256 B]",
    "description": "HMAC-SHA3-256",
    "family": "HMAC-SHA3-256",
    "size": 256,
@@ -2185,6 +2458,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256 [1350 B]",
    "description": "HMAC-SHA3-256",
    "family": "HMAC-SHA3-256",
    "size": 1350,
@@ -2193,6 +2467,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256 [8192 B]",
    "description": "HMAC-SHA3-256",
    "family": "HMAC-SHA3-256",
    "size": 8192,
@@ -2201,6 +2476,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256 [16384 B]",
    "description": "HMAC-SHA3-256",
    "family": "HMAC-SHA3-256",
    "size": 16384,
@@ -2209,6 +2485,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384 init",
    "description": "HMAC-SHA3-384 init",
    "family": "HMAC-SHA3-384 init",
    "size": null,
@@ -2217,6 +2494,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384 [16 B]",
    "description": "HMAC-SHA3-384",
    "family": "HMAC-SHA3-384",
    "size": 16,
@@ -2225,6 +2503,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384 [256 B]",
    "description": "HMAC-SHA3-384",
    "family": "HMAC-SHA3-384",
    "size": 256,
@@ -2233,6 +2512,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384 [1350 B]",
    "description": "HMAC-SHA3-384",
    "family": "HMAC-SHA3-384",
    "size": 1350,
@@ -2241,6 +2521,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384 [8192 B]",
    "description": "HMAC-SHA3-384",
    "family": "HMAC-SHA3-384",
    "size": 8192,
@@ -2249,6 +2530,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384 [16384 B]",
    "description": "HMAC-SHA3-384",
    "family": "HMAC-SHA3-384",
    "size": 16384,
@@ -2257,6 +2539,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512 init",
    "description": "HMAC-SHA3-512 init",
    "family": "HMAC-SHA3-512 init",
    "size": null,
@@ -2265,6 +2548,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512 [16 B]",
    "description": "HMAC-SHA3-512",
    "family": "HMAC-SHA3-512",
    "size": 16,
@@ -2273,6 +2557,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512 [256 B]",
    "description": "HMAC-SHA3-512",
    "family": "HMAC-SHA3-512",
    "size": 256,
@@ -2281,6 +2566,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512 [1350 B]",
    "description": "HMAC-SHA3-512",
    "family": "HMAC-SHA3-512",
    "size": 1350,
@@ -2289,6 +2575,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512 [8192 B]",
    "description": "HMAC-SHA3-512",
    "family": "HMAC-SHA3-512",
    "size": 8192,
@@ -2297,6 +2584,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512 [16384 B]",
    "description": "HMAC-SHA3-512",
    "family": "HMAC-SHA3-512",
    "size": 16384,
@@ -2305,6 +2593,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5-OneShot [16 B]",
    "description": "HMAC-MD5-OneShot",
    "family": "HMAC-MD5-OneShot",
    "size": 16,
@@ -2313,6 +2602,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5-OneShot [256 B]",
    "description": "HMAC-MD5-OneShot",
    "family": "HMAC-MD5-OneShot",
    "size": 256,
@@ -2321,6 +2611,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5-OneShot [1350 B]",
    "description": "HMAC-MD5-OneShot",
    "family": "HMAC-MD5-OneShot",
    "size": 1350,
@@ -2329,6 +2620,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5-OneShot [8192 B]",
    "description": "HMAC-MD5-OneShot",
    "family": "HMAC-MD5-OneShot",
    "size": 8192,
@@ -2337,6 +2629,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-MD5-OneShot [16384 B]",
    "description": "HMAC-MD5-OneShot",
    "family": "HMAC-MD5-OneShot",
    "size": 16384,
@@ -2345,6 +2638,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1-OneShot [16 B]",
    "description": "HMAC-SHA1-OneShot",
    "family": "HMAC-SHA1-OneShot",
    "size": 16,
@@ -2353,6 +2647,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1-OneShot [256 B]",
    "description": "HMAC-SHA1-OneShot",
    "family": "HMAC-SHA1-OneShot",
    "size": 256,
@@ -2361,6 +2656,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1-OneShot [1350 B]",
    "description": "HMAC-SHA1-OneShot",
    "family": "HMAC-SHA1-OneShot",
    "size": 1350,
@@ -2369,6 +2665,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1-OneShot [8192 B]",
    "description": "HMAC-SHA1-OneShot",
    "family": "HMAC-SHA1-OneShot",
    "size": 8192,
@@ -2377,6 +2674,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA1-OneShot [16384 B]",
    "description": "HMAC-SHA1-OneShot",
    "family": "HMAC-SHA1-OneShot",
    "size": 16384,
@@ -2385,6 +2683,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256-OneShot [16 B]",
    "description": "HMAC-SHA256-OneShot",
    "family": "HMAC-SHA256-OneShot",
    "size": 16,
@@ -2393,6 +2692,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256-OneShot [256 B]",
    "description": "HMAC-SHA256-OneShot",
    "family": "HMAC-SHA256-OneShot",
    "size": 256,
@@ -2401,6 +2701,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256-OneShot [1350 B]",
    "description": "HMAC-SHA256-OneShot",
    "family": "HMAC-SHA256-OneShot",
    "size": 1350,
@@ -2409,6 +2710,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256-OneShot [8192 B]",
    "description": "HMAC-SHA256-OneShot",
    "family": "HMAC-SHA256-OneShot",
    "size": 8192,
@@ -2417,6 +2719,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA256-OneShot [16384 B]",
    "description": "HMAC-SHA256-OneShot",
    "family": "HMAC-SHA256-OneShot",
    "size": 16384,
@@ -2425,6 +2728,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384-OneShot [16 B]",
    "description": "HMAC-SHA384-OneShot",
    "family": "HMAC-SHA384-OneShot",
    "size": 16,
@@ -2433,6 +2737,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384-OneShot [256 B]",
    "description": "HMAC-SHA384-OneShot",
    "family": "HMAC-SHA384-OneShot",
    "size": 256,
@@ -2441,6 +2746,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384-OneShot [1350 B]",
    "description": "HMAC-SHA384-OneShot",
    "family": "HMAC-SHA384-OneShot",
    "size": 1350,
@@ -2449,6 +2755,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384-OneShot [8192 B]",
    "description": "HMAC-SHA384-OneShot",
    "family": "HMAC-SHA384-OneShot",
    "size": 8192,
@@ -2457,6 +2764,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA384-OneShot [16384 B]",
    "description": "HMAC-SHA384-OneShot",
    "family": "HMAC-SHA384-OneShot",
    "size": 16384,
@@ -2465,6 +2773,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512-OneShot [16 B]",
    "description": "HMAC-SHA512-OneShot",
    "family": "HMAC-SHA512-OneShot",
    "size": 16,
@@ -2473,6 +2782,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512-OneShot [256 B]",
    "description": "HMAC-SHA512-OneShot",
    "family": "HMAC-SHA512-OneShot",
    "size": 256,
@@ -2481,6 +2791,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512-OneShot [1350 B]",
    "description": "HMAC-SHA512-OneShot",
    "family": "HMAC-SHA512-OneShot",
    "size": 1350,
@@ -2489,6 +2800,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512-OneShot [8192 B]",
    "description": "HMAC-SHA512-OneShot",
    "family": "HMAC-SHA512-OneShot",
    "size": 8192,
@@ -2497,6 +2809,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA512-OneShot [16384 B]",
    "description": "HMAC-SHA512-OneShot",
    "family": "HMAC-SHA512-OneShot",
    "size": 16384,
@@ -2505,6 +2818,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224-OneShot [16 B]",
    "description": "HMAC-SHA3-224-OneShot",
    "family": "HMAC-SHA3-224-OneShot",
    "size": 16,
@@ -2513,6 +2827,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224-OneShot [256 B]",
    "description": "HMAC-SHA3-224-OneShot",
    "family": "HMAC-SHA3-224-OneShot",
    "size": 256,
@@ -2521,6 +2836,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224-OneShot [1350 B]",
    "description": "HMAC-SHA3-224-OneShot",
    "family": "HMAC-SHA3-224-OneShot",
    "size": 1350,
@@ -2529,6 +2845,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224-OneShot [8192 B]",
    "description": "HMAC-SHA3-224-OneShot",
    "family": "HMAC-SHA3-224-OneShot",
    "size": 8192,
@@ -2537,6 +2854,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-224-OneShot [16384 B]",
    "description": "HMAC-SHA3-224-OneShot",
    "family": "HMAC-SHA3-224-OneShot",
    "size": 16384,
@@ -2545,6 +2863,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256-OneShot [16 B]",
    "description": "HMAC-SHA3-256-OneShot",
    "family": "HMAC-SHA3-256-OneShot",
    "size": 16,
@@ -2553,6 +2872,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256-OneShot [256 B]",
    "description": "HMAC-SHA3-256-OneShot",
    "family": "HMAC-SHA3-256-OneShot",
    "size": 256,
@@ -2561,6 +2881,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256-OneShot [1350 B]",
    "description": "HMAC-SHA3-256-OneShot",
    "family": "HMAC-SHA3-256-OneShot",
    "size": 1350,
@@ -2569,6 +2890,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256-OneShot [8192 B]",
    "description": "HMAC-SHA3-256-OneShot",
    "family": "HMAC-SHA3-256-OneShot",
    "size": 8192,
@@ -2577,6 +2899,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-256-OneShot [16384 B]",
    "description": "HMAC-SHA3-256-OneShot",
    "family": "HMAC-SHA3-256-OneShot",
    "size": 16384,
@@ -2585,6 +2908,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384-OneShot [16 B]",
    "description": "HMAC-SHA3-384-OneShot",
    "family": "HMAC-SHA3-384-OneShot",
    "size": 16,
@@ -2593,6 +2917,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384-OneShot [256 B]",
    "description": "HMAC-SHA3-384-OneShot",
    "family": "HMAC-SHA3-384-OneShot",
    "size": 256,
@@ -2601,6 +2926,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384-OneShot [1350 B]",
    "description": "HMAC-SHA3-384-OneShot",
    "family": "HMAC-SHA3-384-OneShot",
    "size": 1350,
@@ -2609,6 +2935,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384-OneShot [8192 B]",
    "description": "HMAC-SHA3-384-OneShot",
    "family": "HMAC-SHA3-384-OneShot",
    "size": 8192,
@@ -2617,6 +2944,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-384-OneShot [16384 B]",
    "description": "HMAC-SHA3-384-OneShot",
    "family": "HMAC-SHA3-384-OneShot",
    "size": 16384,
@@ -2625,6 +2953,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512-OneShot [16 B]",
    "description": "HMAC-SHA3-512-OneShot",
    "family": "HMAC-SHA3-512-OneShot",
    "size": 16,
@@ -2633,6 +2962,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512-OneShot [256 B]",
    "description": "HMAC-SHA3-512-OneShot",
    "family": "HMAC-SHA3-512-OneShot",
    "size": 256,
@@ -2641,6 +2971,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512-OneShot [1350 B]",
    "description": "HMAC-SHA3-512-OneShot",
    "family": "HMAC-SHA3-512-OneShot",
    "size": 1350,
@@ -2649,6 +2980,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512-OneShot [8192 B]",
    "description": "HMAC-SHA3-512-OneShot",
    "family": "HMAC-SHA3-512-OneShot",
    "size": 8192,
@@ -2657,6 +2989,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HMAC-SHA3-512-OneShot [16384 B]",
    "description": "HMAC-SHA3-512-OneShot",
    "family": "HMAC-SHA3-512-OneShot",
    "size": 16384,
@@ -2665,6 +2998,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "CMAC-AES-128-CBC init",
    "description": "CMAC-AES-128-CBC init",
    "family": "CMAC-AES-128-CBC init",
    "size": null,
@@ -2673,6 +3007,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "CMAC-AES-128-CBC [16 B]",
    "description": "CMAC-AES-128-CBC",
    "family": "CMAC-AES-128-CBC",
    "size": 16,
@@ -2681,6 +3016,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "CMAC-AES-128-CBC [256 B]",
    "description": "CMAC-AES-128-CBC",
    "family": "CMAC-AES-128-CBC",
    "size": 256,
@@ -2689,6 +3025,7 @@
    "entries_per_call": 17.0
   },
   {
+   "key": "CMAC-AES-128-CBC [1350 B]",
    "description": "CMAC-AES-128-CBC",
    "family": "CMAC-AES-128-CBC",
    "size": 1350,
@@ -2697,6 +3034,7 @@
    "entries_per_call": 86.0
   },
   {
+   "key": "CMAC-AES-128-CBC [8192 B]",
    "description": "CMAC-AES-128-CBC",
    "family": "CMAC-AES-128-CBC",
    "size": 8192,
@@ -2705,6 +3043,7 @@
    "entries_per_call": 513.0
   },
   {
+   "key": "CMAC-AES-128-CBC [16384 B]",
    "description": "CMAC-AES-128-CBC",
    "family": "CMAC-AES-128-CBC",
    "size": 16384,
@@ -2713,6 +3052,7 @@
    "entries_per_call": 1025.0
   },
   {
+   "key": "CMAC-AES-256-CBC init",
    "description": "CMAC-AES-256-CBC init",
    "family": "CMAC-AES-256-CBC init",
    "size": null,
@@ -2721,6 +3061,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "CMAC-AES-256-CBC [16 B]",
    "description": "CMAC-AES-256-CBC",
    "family": "CMAC-AES-256-CBC",
    "size": 16,
@@ -2729,6 +3070,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "CMAC-AES-256-CBC [256 B]",
    "description": "CMAC-AES-256-CBC",
    "family": "CMAC-AES-256-CBC",
    "size": 256,
@@ -2737,6 +3079,7 @@
    "entries_per_call": 17.0
   },
   {
+   "key": "CMAC-AES-256-CBC [1350 B]",
    "description": "CMAC-AES-256-CBC",
    "family": "CMAC-AES-256-CBC",
    "size": 1350,
@@ -2745,6 +3088,7 @@
    "entries_per_call": 86.0
   },
   {
+   "key": "CMAC-AES-256-CBC [8192 B]",
    "description": "CMAC-AES-256-CBC",
    "family": "CMAC-AES-256-CBC",
    "size": 8192,
@@ -2753,6 +3097,7 @@
    "entries_per_call": 513.0
   },
   {
+   "key": "CMAC-AES-256-CBC [16384 B]",
    "description": "CMAC-AES-256-CBC",
    "family": "CMAC-AES-256-CBC",
    "size": 16384,
@@ -2761,6 +3106,7 @@
    "entries_per_call": 1025.0
   },
   {
+   "key": "RNG [16 B]",
    "description": "RNG",
    "family": "RNG",
    "size": 16,
@@ -2769,6 +3115,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "RNG [256 B]",
    "description": "RNG",
    "family": "RNG",
    "size": 256,
@@ -2777,6 +3124,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "RNG [1350 B]",
    "description": "RNG",
    "family": "RNG",
    "size": 1350,
@@ -2785,6 +3133,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "RNG [8192 B]",
    "description": "RNG",
    "family": "RNG",
    "size": 8192,
@@ -2793,6 +3142,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "RNG [16384 B]",
    "description": "RNG",
    "family": "RNG",
    "size": 16384,
@@ -2801,6 +3151,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "ECDH P-224",
    "description": "ECDH P-224",
    "family": "ECDH P-224",
    "size": null,
@@ -2809,6 +3160,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "ECDH P-256",
    "description": "ECDH P-256",
    "family": "ECDH P-256",
    "size": null,
@@ -2817,6 +3169,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "ECDH P-384",
    "description": "ECDH P-384",
    "family": "ECDH P-384",
    "size": null,
@@ -2825,6 +3178,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "ECDH P-521",
    "description": "ECDH P-521",
    "family": "ECDH P-521",
    "size": null,
@@ -2833,6 +3187,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "ECDH secp256k1",
    "description": "ECDH secp256k1",
    "family": "ECDH secp256k1",
    "size": null,
@@ -2841,6 +3196,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "ECDSA P-224 signing",
    "description": "ECDSA P-224 signing",
    "family": "ECDSA P-224 signing",
    "size": null,
@@ -2849,6 +3205,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "ECDSA P-224 verify",
    "description": "ECDSA P-224 verify",
    "family": "ECDSA P-224 verify",
    "size": null,
@@ -2857,6 +3214,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "ECDSA P-256 signing",
    "description": "ECDSA P-256 signing",
    "family": "ECDSA P-256 signing",
    "size": null,
@@ -2865,6 +3223,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "ECDSA P-256 verify",
    "description": "ECDSA P-256 verify",
    "family": "ECDSA P-256 verify",
    "size": null,
@@ -2873,6 +3232,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "ECDSA P-384 signing",
    "description": "ECDSA P-384 signing",
    "family": "ECDSA P-384 signing",
    "size": null,
@@ -2881,6 +3241,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "ECDSA P-384 verify",
    "description": "ECDSA P-384 verify",
    "family": "ECDSA P-384 verify",
    "size": null,
@@ -2889,6 +3250,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "ECDSA P-521 signing",
    "description": "ECDSA P-521 signing",
    "family": "ECDSA P-521 signing",
    "size": null,
@@ -2897,6 +3259,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "ECDSA P-521 verify",
    "description": "ECDSA P-521 verify",
    "family": "ECDSA P-521 verify",
    "size": null,
@@ -2905,6 +3268,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "ECDSA secp256k1 signing",
    "description": "ECDSA secp256k1 signing",
    "family": "ECDSA secp256k1 signing",
    "size": null,
@@ -2913,6 +3277,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "ECDSA secp256k1 verify",
    "description": "ECDSA secp256k1 verify",
    "family": "ECDSA secp256k1 verify",
    "size": null,
@@ -2921,6 +3286,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Generate P-224 with EVP_PKEY_keygen",
    "description": "Generate P-224 with EVP_PKEY_keygen",
    "family": "Generate P-224 with EVP_PKEY_keygen",
    "size": null,
@@ -2929,6 +3295,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "Generate P-256 with EVP_PKEY_keygen",
    "description": "Generate P-256 with EVP_PKEY_keygen",
    "family": "Generate P-256 with EVP_PKEY_keygen",
    "size": null,
@@ -2937,6 +3304,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "Generate P-384 with EVP_PKEY_keygen",
    "description": "Generate P-384 with EVP_PKEY_keygen",
    "family": "Generate P-384 with EVP_PKEY_keygen",
    "size": null,
@@ -2945,6 +3313,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "Generate P-521 with EVP_PKEY_keygen",
    "description": "Generate P-521 with EVP_PKEY_keygen",
    "family": "Generate P-521 with EVP_PKEY_keygen",
    "size": null,
@@ -2953,6 +3322,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "Generate secp256k1 with EVP_PKEY_keygen",
    "description": "Generate secp256k1 with EVP_PKEY_keygen",
    "family": "Generate secp256k1 with EVP_PKEY_keygen",
    "size": null,
@@ -2961,6 +3331,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "Generate P-224 with EC_KEY_generate_key",
    "description": "Generate P-224 with EC_KEY_generate_key",
    "family": "Generate P-224 with EC_KEY_generate_key",
    "size": null,
@@ -2969,6 +3340,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "Generate P-256 with EC_KEY_generate_key",
    "description": "Generate P-256 with EC_KEY_generate_key",
    "family": "Generate P-256 with EC_KEY_generate_key",
    "size": null,
@@ -2977,6 +3349,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "Generate P-384 with EC_KEY_generate_key",
    "description": "Generate P-384 with EC_KEY_generate_key",
    "family": "Generate P-384 with EC_KEY_generate_key",
    "size": null,
@@ -2985,6 +3358,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "Generate P-521 with EC_KEY_generate_key",
    "description": "Generate P-521 with EC_KEY_generate_key",
    "family": "Generate P-521 with EC_KEY_generate_key",
    "size": null,
@@ -2993,6 +3367,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "Generate secp256k1 with EC_KEY_generate_key",
    "description": "Generate secp256k1 with EC_KEY_generate_key",
    "family": "Generate secp256k1 with EC_KEY_generate_key",
    "size": null,
@@ -3001,6 +3376,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP ECDH P-224",
    "description": "EVP ECDH P-224",
    "family": "EVP ECDH P-224",
    "size": null,
@@ -3009,6 +3385,7 @@
    "entries_per_call": 35.0
   },
   {
+   "key": "EVP ECDH P-256",
    "description": "EVP ECDH P-256",
    "family": "EVP ECDH P-256",
    "size": null,
@@ -3017,6 +3394,7 @@
    "entries_per_call": 35.0
   },
   {
+   "key": "EVP ECDH P-384",
    "description": "EVP ECDH P-384",
    "family": "EVP ECDH P-384",
    "size": null,
@@ -3025,6 +3403,7 @@
    "entries_per_call": 35.0
   },
   {
+   "key": "EVP ECDH P-521",
    "description": "EVP ECDH P-521",
    "family": "EVP ECDH P-521",
    "size": null,
@@ -3033,6 +3412,7 @@
    "entries_per_call": 35.0
   },
   {
+   "key": "EVP ECDH secp256k1",
    "description": "EVP ECDH secp256k1",
    "family": "EVP ECDH secp256k1",
    "size": null,
@@ -3041,6 +3421,7 @@
    "entries_per_call": 35.0
   },
   {
+   "key": "EVP ECDH X25519",
    "description": "EVP ECDH X25519",
    "family": "EVP ECDH X25519",
    "size": null,
@@ -3049,6 +3430,7 @@
    "entries_per_call": 25.0
   },
   {
+   "key": "EC POINT P-224 dbl",
    "description": "EC POINT P-224 dbl",
    "family": "EC POINT P-224 dbl",
    "size": null,
@@ -3057,6 +3439,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT P-224 add",
    "description": "EC POINT P-224 add",
    "family": "EC POINT P-224 add",
    "size": null,
@@ -3065,6 +3448,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT P-224 mul",
    "description": "EC POINT P-224 mul",
    "family": "EC POINT P-224 mul",
    "size": null,
@@ -3073,6 +3457,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT P-224 mul base",
    "description": "EC POINT P-224 mul base",
    "family": "EC POINT P-224 mul base",
    "size": null,
@@ -3081,6 +3466,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT P-224 mul public",
    "description": "EC POINT P-224 mul public",
    "family": "EC POINT P-224 mul public",
    "size": null,
@@ -3089,6 +3475,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EC POINT P-256 dbl",
    "description": "EC POINT P-256 dbl",
    "family": "EC POINT P-256 dbl",
    "size": null,
@@ -3097,6 +3484,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT P-256 add",
    "description": "EC POINT P-256 add",
    "family": "EC POINT P-256 add",
    "size": null,
@@ -3105,6 +3493,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT P-256 mul",
    "description": "EC POINT P-256 mul",
    "family": "EC POINT P-256 mul",
    "size": null,
@@ -3113,6 +3502,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT P-256 mul base",
    "description": "EC POINT P-256 mul base",
    "family": "EC POINT P-256 mul base",
    "size": null,
@@ -3121,6 +3511,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT P-256 mul public",
    "description": "EC POINT P-256 mul public",
    "family": "EC POINT P-256 mul public",
    "size": null,
@@ -3129,6 +3520,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EC POINT P-384 dbl",
    "description": "EC POINT P-384 dbl",
    "family": "EC POINT P-384 dbl",
    "size": null,
@@ -3137,6 +3529,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT P-384 add",
    "description": "EC POINT P-384 add",
    "family": "EC POINT P-384 add",
    "size": null,
@@ -3145,6 +3538,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT P-384 mul",
    "description": "EC POINT P-384 mul",
    "family": "EC POINT P-384 mul",
    "size": null,
@@ -3153,6 +3547,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT P-384 mul base",
    "description": "EC POINT P-384 mul base",
    "family": "EC POINT P-384 mul base",
    "size": null,
@@ -3161,6 +3556,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT P-384 mul public",
    "description": "EC POINT P-384 mul public",
    "family": "EC POINT P-384 mul public",
    "size": null,
@@ -3169,6 +3565,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EC POINT P-521 dbl",
    "description": "EC POINT P-521 dbl",
    "family": "EC POINT P-521 dbl",
    "size": null,
@@ -3177,6 +3574,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT P-521 add",
    "description": "EC POINT P-521 add",
    "family": "EC POINT P-521 add",
    "size": null,
@@ -3185,6 +3583,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT P-521 mul",
    "description": "EC POINT P-521 mul",
    "family": "EC POINT P-521 mul",
    "size": null,
@@ -3193,6 +3592,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT P-521 mul base",
    "description": "EC POINT P-521 mul base",
    "family": "EC POINT P-521 mul base",
    "size": null,
@@ -3201,6 +3601,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT P-521 mul public",
    "description": "EC POINT P-521 mul public",
    "family": "EC POINT P-521 mul public",
    "size": null,
@@ -3209,6 +3610,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "EC POINT secp256k1 dbl",
    "description": "EC POINT secp256k1 dbl",
    "family": "EC POINT secp256k1 dbl",
    "size": null,
@@ -3217,6 +3619,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT secp256k1 add",
    "description": "EC POINT secp256k1 add",
    "family": "EC POINT secp256k1 add",
    "size": null,
@@ -3225,6 +3628,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EC POINT secp256k1 mul",
    "description": "EC POINT secp256k1 mul",
    "family": "EC POINT secp256k1 mul",
    "size": null,
@@ -3233,6 +3637,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT secp256k1 mul base",
    "description": "EC POINT secp256k1 mul base",
    "family": "EC POINT secp256k1 mul base",
    "size": null,
@@ -3241,6 +3646,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "EC POINT secp256k1 mul public",
    "description": "EC POINT secp256k1 mul public",
    "family": "EC POINT secp256k1 mul public",
    "size": null,
@@ -3249,6 +3655,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "scrypt (N = 1024, r = 8, p = 16)",
    "description": "scrypt (N = 1024, r = 8, p = 16)",
    "family": "scrypt (N = 1024, r = 8, p = 16)",
    "size": null,
@@ -3257,6 +3664,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "scrypt (N = 16384, r = 8, p = 1)",
    "description": "scrypt (N = 16384, r = 8, p = 1)",
    "family": "scrypt (N = 16384, r = 8, p = 1)",
    "size": null,
@@ -3265,6 +3673,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 encrypt init",
    "description": "EVP-ChaCha20-Poly1305 encrypt init",
    "family": "EVP-ChaCha20-Poly1305 encrypt init",
    "size": null,
@@ -3273,6 +3682,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 encrypt [16 B]",
    "description": "EVP-ChaCha20-Poly1305 encrypt",
    "family": "EVP-ChaCha20-Poly1305 encrypt",
    "size": 16,
@@ -3281,6 +3691,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 encrypt [256 B]",
    "description": "EVP-ChaCha20-Poly1305 encrypt",
    "family": "EVP-ChaCha20-Poly1305 encrypt",
    "size": 256,
@@ -3289,6 +3700,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 encrypt [1350 B]",
    "description": "EVP-ChaCha20-Poly1305 encrypt",
    "family": "EVP-ChaCha20-Poly1305 encrypt",
    "size": 1350,
@@ -3297,6 +3709,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 encrypt [8192 B]",
    "description": "EVP-ChaCha20-Poly1305 encrypt",
    "family": "EVP-ChaCha20-Poly1305 encrypt",
    "size": 8192,
@@ -3305,6 +3718,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 encrypt [16384 B]",
    "description": "EVP-ChaCha20-Poly1305 encrypt",
    "family": "EVP-ChaCha20-Poly1305 encrypt",
    "size": 16384,
@@ -3313,6 +3727,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 decrypt init",
    "description": "EVP-ChaCha20-Poly1305 decrypt init",
    "family": "EVP-ChaCha20-Poly1305 decrypt init",
    "size": null,
@@ -3321,6 +3736,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 decrypt [16 B]",
    "description": "EVP-ChaCha20-Poly1305 decrypt",
    "family": "EVP-ChaCha20-Poly1305 decrypt",
    "size": 16,
@@ -3329,6 +3745,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 decrypt [256 B]",
    "description": "EVP-ChaCha20-Poly1305 decrypt",
    "family": "EVP-ChaCha20-Poly1305 decrypt",
    "size": 256,
@@ -3337,6 +3754,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 decrypt [1350 B]",
    "description": "EVP-ChaCha20-Poly1305 decrypt",
    "family": "EVP-ChaCha20-Poly1305 decrypt",
    "size": 1350,
@@ -3345,6 +3763,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 decrypt [8192 B]",
    "description": "EVP-ChaCha20-Poly1305 decrypt",
    "family": "EVP-ChaCha20-Poly1305 decrypt",
    "size": 8192,
@@ -3353,6 +3772,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "EVP-ChaCha20-Poly1305 decrypt [16384 B]",
    "description": "EVP-ChaCha20-Poly1305 decrypt",
    "family": "EVP-ChaCha20-Poly1305 decrypt",
    "size": 16384,
@@ -3361,6 +3781,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "FFDH 2048",
    "description": "FFDH 2048",
    "family": "FFDH 2048",
    "size": null,
@@ -3369,6 +3790,7 @@
    "entries_per_call": 8.0
   },
   {
+   "key": "FFDH 4096",
    "description": "FFDH 4096",
    "family": "FFDH 4096",
    "size": null,
@@ -3377,6 +3799,7 @@
    "entries_per_call": 8.0
   },
   {
+   "key": "RSA 2048 signing",
    "description": "RSA 2048 signing",
    "family": "RSA 2048 signing",
    "size": null,
@@ -3385,6 +3808,7 @@
    "entries_per_call": 4.244274809160306
   },
   {
+   "key": "RSA 2048 verify (same key)",
    "description": "RSA 2048 verify (same key)",
    "family": "RSA 2048 verify (same key)",
    "size": null,
@@ -3393,6 +3817,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "RSA 2048 verify (fresh key)",
    "description": "RSA 2048 verify (fresh key)",
    "family": "RSA 2048 verify (fresh key)",
    "size": null,
@@ -3401,6 +3826,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "RSA 2048 private key parse",
    "description": "RSA 2048 private key parse",
    "family": "RSA 2048 private key parse",
    "size": null,
@@ -3409,6 +3835,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "RSA 3072 signing",
    "description": "RSA 3072 signing",
    "family": "RSA 3072 signing",
    "size": null,
@@ -3417,6 +3844,7 @@
    "entries_per_call": 4.185840707964601
   },
   {
+   "key": "RSA 3072 verify (same key)",
    "description": "RSA 3072 verify (same key)",
    "family": "RSA 3072 verify (same key)",
    "size": null,
@@ -3425,6 +3853,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "RSA 3072 verify (fresh key)",
    "description": "RSA 3072 verify (fresh key)",
    "family": "RSA 3072 verify (fresh key)",
    "size": null,
@@ -3433,6 +3862,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "RSA 3072 private key parse",
    "description": "RSA 3072 private key parse",
    "family": "RSA 3072 private key parse",
    "size": null,
@@ -3441,6 +3871,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "RSA 4096 signing",
    "description": "RSA 4096 signing",
    "family": "RSA 4096 signing",
    "size": null,
@@ -3449,6 +3880,7 @@
    "entries_per_call": 4.109090909090909
   },
   {
+   "key": "RSA 4096 verify (same key)",
    "description": "RSA 4096 verify (same key)",
    "family": "RSA 4096 verify (same key)",
    "size": null,
@@ -3457,6 +3889,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "RSA 4096 verify (fresh key)",
    "description": "RSA 4096 verify (fresh key)",
    "family": "RSA 4096 verify (fresh key)",
    "size": null,
@@ -3465,6 +3898,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "RSA 4096 private key parse",
    "description": "RSA 4096 private key parse",
    "family": "RSA 4096 private key parse",
    "size": null,
@@ -3473,6 +3907,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "RSA 8192 signing",
    "description": "RSA 8192 signing",
    "family": "RSA 8192 signing",
    "size": null,
@@ -3481,6 +3916,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "RSA 8192 verify (same key)",
    "description": "RSA 8192 verify (same key)",
    "family": "RSA 8192 verify (same key)",
    "size": null,
@@ -3489,6 +3925,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "RSA 8192 verify (fresh key)",
    "description": "RSA 8192 verify (fresh key)",
    "family": "RSA 8192 verify (fresh key)",
    "size": null,
@@ -3497,6 +3934,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "RSA 8192 private key parse",
    "description": "RSA 8192 private key parse",
    "family": "RSA 8192 private key parse",
    "size": null,
@@ -3505,6 +3943,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "RSA 2048 key-gen",
    "description": "RSA 2048 key-gen",
    "family": "RSA 2048 key-gen",
    "size": null,
@@ -3513,6 +3952,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "RSA 3072 key-gen",
    "description": "RSA 3072 key-gen",
    "family": "RSA 3072 key-gen",
    "size": null,
@@ -3521,6 +3961,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "RSA 4096 key-gen",
    "description": "RSA 4096 key-gen",
    "family": "RSA 4096 key-gen",
    "size": null,
@@ -3529,6 +3970,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "ML-KEM-512 keygen",
    "description": "ML-KEM-512 keygen",
    "family": "ML-KEM-512 keygen",
    "size": null,
@@ -3537,6 +3979,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "ML-KEM-512 encaps",
    "description": "ML-KEM-512 encaps",
    "family": "ML-KEM-512 encaps",
    "size": null,
@@ -3545,6 +3988,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "ML-KEM-512 decaps",
    "description": "ML-KEM-512 decaps",
    "family": "ML-KEM-512 decaps",
    "size": null,
@@ -3553,6 +3997,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "ML-KEM-768 keygen",
    "description": "ML-KEM-768 keygen",
    "family": "ML-KEM-768 keygen",
    "size": null,
@@ -3561,6 +4006,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "ML-KEM-768 encaps",
    "description": "ML-KEM-768 encaps",
    "family": "ML-KEM-768 encaps",
    "size": null,
@@ -3569,6 +4015,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "ML-KEM-768 decaps",
    "description": "ML-KEM-768 decaps",
    "family": "ML-KEM-768 decaps",
    "size": null,
@@ -3577,6 +4024,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "ML-KEM-1024 keygen",
    "description": "ML-KEM-1024 keygen",
    "family": "ML-KEM-1024 keygen",
    "size": null,
@@ -3585,6 +4033,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "ML-KEM-1024 encaps",
    "description": "ML-KEM-1024 encaps",
    "family": "ML-KEM-1024 encaps",
    "size": null,
@@ -3593,6 +4042,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "ML-KEM-1024 decaps",
    "description": "ML-KEM-1024 decaps",
    "family": "ML-KEM-1024 decaps",
    "size": null,
@@ -3601,6 +4051,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "MLDSA44 keygen",
    "description": "MLDSA44 keygen",
    "family": "MLDSA44 keygen",
    "size": null,
@@ -3609,6 +4060,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "MLDSA44 signing",
    "description": "MLDSA44 signing",
    "family": "MLDSA44 signing",
    "size": null,
@@ -3617,6 +4069,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "MLDSA44 verify",
    "description": "MLDSA44 verify",
    "family": "MLDSA44 verify",
    "size": null,
@@ -3625,6 +4078,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "MLDSA65 keygen",
    "description": "MLDSA65 keygen",
    "family": "MLDSA65 keygen",
    "size": null,
@@ -3633,6 +4087,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "MLDSA65 signing",
    "description": "MLDSA65 signing",
    "family": "MLDSA65 signing",
    "size": null,
@@ -3641,6 +4096,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "MLDSA65 verify",
    "description": "MLDSA65 verify",
    "family": "MLDSA65 verify",
    "size": null,
@@ -3649,6 +4105,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "MLDSA87 keygen",
    "description": "MLDSA87 keygen",
    "family": "MLDSA87 keygen",
    "size": null,
@@ -3657,6 +4114,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "MLDSA87 signing",
    "description": "MLDSA87 signing",
    "family": "MLDSA87 signing",
    "size": null,
@@ -3665,6 +4123,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "MLDSA87 verify",
    "description": "MLDSA87 verify",
    "family": "MLDSA87 verify",
    "size": null,
@@ -3673,6 +4132,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM seal init",
    "description": "AEAD-AES-128-GCM seal init",
    "family": "AEAD-AES-128-GCM seal init",
    "size": null,
@@ -3681,6 +4141,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM seal [16 B]",
    "description": "AEAD-AES-128-GCM seal",
    "family": "AEAD-AES-128-GCM seal",
    "size": 16,
@@ -3689,6 +4150,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM seal [256 B]",
    "description": "AEAD-AES-128-GCM seal",
    "family": "AEAD-AES-128-GCM seal",
    "size": 256,
@@ -3697,6 +4159,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM seal [1350 B]",
    "description": "AEAD-AES-128-GCM seal",
    "family": "AEAD-AES-128-GCM seal",
    "size": 1350,
@@ -3705,6 +4168,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM seal [8192 B]",
    "description": "AEAD-AES-128-GCM seal",
    "family": "AEAD-AES-128-GCM seal",
    "size": 8192,
@@ -3713,6 +4177,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM seal [16384 B]",
    "description": "AEAD-AES-128-GCM seal",
    "family": "AEAD-AES-128-GCM seal",
    "size": 16384,
@@ -3721,6 +4186,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM open init",
    "description": "AEAD-AES-128-GCM open init",
    "family": "AEAD-AES-128-GCM open init",
    "size": null,
@@ -3729,6 +4195,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM open [16 B]",
    "description": "AEAD-AES-128-GCM open",
    "family": "AEAD-AES-128-GCM open",
    "size": 16,
@@ -3737,6 +4204,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-GCM open [256 B]",
    "description": "AEAD-AES-128-GCM open",
    "family": "AEAD-AES-128-GCM open",
    "size": 256,
@@ -3745,6 +4213,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-GCM open [1350 B]",
    "description": "AEAD-AES-128-GCM open",
    "family": "AEAD-AES-128-GCM open",
    "size": 1350,
@@ -3753,6 +4222,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-GCM open [8192 B]",
    "description": "AEAD-AES-128-GCM open",
    "family": "AEAD-AES-128-GCM open",
    "size": 8192,
@@ -3761,6 +4231,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-GCM open [16384 B]",
    "description": "AEAD-AES-128-GCM open",
    "family": "AEAD-AES-128-GCM open",
    "size": 16384,
@@ -3769,6 +4240,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM seal init",
    "description": "AEAD-AES-256-GCM seal init",
    "family": "AEAD-AES-256-GCM seal init",
    "size": null,
@@ -3777,6 +4249,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM seal [16 B]",
    "description": "AEAD-AES-256-GCM seal",
    "family": "AEAD-AES-256-GCM seal",
    "size": 16,
@@ -3785,6 +4258,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM seal [256 B]",
    "description": "AEAD-AES-256-GCM seal",
    "family": "AEAD-AES-256-GCM seal",
    "size": 256,
@@ -3793,6 +4267,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM seal [1350 B]",
    "description": "AEAD-AES-256-GCM seal",
    "family": "AEAD-AES-256-GCM seal",
    "size": 1350,
@@ -3801,6 +4276,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM seal [8192 B]",
    "description": "AEAD-AES-256-GCM seal",
    "family": "AEAD-AES-256-GCM seal",
    "size": 8192,
@@ -3809,6 +4285,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM seal [16384 B]",
    "description": "AEAD-AES-256-GCM seal",
    "family": "AEAD-AES-256-GCM seal",
    "size": 16384,
@@ -3817,6 +4294,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM open init",
    "description": "AEAD-AES-256-GCM open init",
    "family": "AEAD-AES-256-GCM open init",
    "size": null,
@@ -3825,6 +4303,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM open [16 B]",
    "description": "AEAD-AES-256-GCM open",
    "family": "AEAD-AES-256-GCM open",
    "size": 16,
@@ -3833,6 +4312,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM open [256 B]",
    "description": "AEAD-AES-256-GCM open",
    "family": "AEAD-AES-256-GCM open",
    "size": 256,
@@ -3841,6 +4321,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM open [1350 B]",
    "description": "AEAD-AES-256-GCM open",
    "family": "AEAD-AES-256-GCM open",
    "size": 1350,
@@ -3849,6 +4330,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM open [8192 B]",
    "description": "AEAD-AES-256-GCM open",
    "family": "AEAD-AES-256-GCM open",
    "size": 8192,
@@ -3857,6 +4339,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM open [16384 B]",
    "description": "AEAD-AES-256-GCM open",
    "family": "AEAD-AES-256-GCM open",
    "size": 16384,
@@ -3865,6 +4348,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-ChaCha20-Poly1305 seal init",
    "description": "AEAD-ChaCha20-Poly1305 seal init",
    "family": "AEAD-ChaCha20-Poly1305 seal init",
    "size": null,
@@ -3873,6 +4357,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-ChaCha20-Poly1305 seal [16 B]",
    "description": "AEAD-ChaCha20-Poly1305 seal",
    "family": "AEAD-ChaCha20-Poly1305 seal",
    "size": 16,
@@ -3881,6 +4366,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-ChaCha20-Poly1305 seal [256 B]",
    "description": "AEAD-ChaCha20-Poly1305 seal",
    "family": "AEAD-ChaCha20-Poly1305 seal",
    "size": 256,
@@ -3889,6 +4375,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-ChaCha20-Poly1305 seal [1350 B]",
    "description": "AEAD-ChaCha20-Poly1305 seal",
    "family": "AEAD-ChaCha20-Poly1305 seal",
    "size": 1350,
@@ -3897,6 +4384,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-ChaCha20-Poly1305 seal [8192 B]",
    "description": "AEAD-ChaCha20-Poly1305 seal",
    "family": "AEAD-ChaCha20-Poly1305 seal",
    "size": 8192,
@@ -3905,6 +4393,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-ChaCha20-Poly1305 seal [16384 B]",
    "description": "AEAD-ChaCha20-Poly1305 seal",
    "family": "AEAD-ChaCha20-Poly1305 seal",
    "size": 16384,
@@ -3913,6 +4402,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-DES-EDE3-CBC-SHA1 seal init",
    "description": "AEAD-DES-EDE3-CBC-SHA1 seal init",
    "family": "AEAD-DES-EDE3-CBC-SHA1 seal init",
    "size": null,
@@ -3921,6 +4411,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-DES-EDE3-CBC-SHA1 seal [16 B]",
    "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "size": 16,
@@ -3929,6 +4420,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-DES-EDE3-CBC-SHA1 seal [256 B]",
    "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "size": 256,
@@ -3937,6 +4429,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-DES-EDE3-CBC-SHA1 seal [1350 B]",
    "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "size": 1350,
@@ -3945,6 +4438,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "AEAD-DES-EDE3-CBC-SHA1 seal [8192 B]",
    "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "size": 8192,
@@ -3953,6 +4447,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-DES-EDE3-CBC-SHA1 seal [16384 B]",
    "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
    "size": 16384,
@@ -3961,6 +4456,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 seal init",
    "description": "AEAD-AES-128-CBC-SHA1 seal init",
    "family": "AEAD-AES-128-CBC-SHA1 seal init",
    "size": null,
@@ -3969,6 +4465,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 seal [16 B]",
    "description": "AEAD-AES-128-CBC-SHA1 seal",
    "family": "AEAD-AES-128-CBC-SHA1 seal",
    "size": 16,
@@ -3977,6 +4474,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 seal [256 B]",
    "description": "AEAD-AES-128-CBC-SHA1 seal",
    "family": "AEAD-AES-128-CBC-SHA1 seal",
    "size": 256,
@@ -3985,6 +4483,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 seal [1350 B]",
    "description": "AEAD-AES-128-CBC-SHA1 seal",
    "family": "AEAD-AES-128-CBC-SHA1 seal",
    "size": 1350,
@@ -3993,6 +4492,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 seal [8192 B]",
    "description": "AEAD-AES-128-CBC-SHA1 seal",
    "family": "AEAD-AES-128-CBC-SHA1 seal",
    "size": 8192,
@@ -4001,6 +4501,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 seal [16384 B]",
    "description": "AEAD-AES-128-CBC-SHA1 seal",
    "family": "AEAD-AES-128-CBC-SHA1 seal",
    "size": 16384,
@@ -4009,6 +4510,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 seal init",
    "description": "AEAD-AES-256-CBC-SHA1 seal init",
    "family": "AEAD-AES-256-CBC-SHA1 seal init",
    "size": null,
@@ -4017,6 +4519,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 seal [16 B]",
    "description": "AEAD-AES-256-CBC-SHA1 seal",
    "family": "AEAD-AES-256-CBC-SHA1 seal",
    "size": 16,
@@ -4025,6 +4528,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 seal [256 B]",
    "description": "AEAD-AES-256-CBC-SHA1 seal",
    "family": "AEAD-AES-256-CBC-SHA1 seal",
    "size": 256,
@@ -4033,6 +4537,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 seal [1350 B]",
    "description": "AEAD-AES-256-CBC-SHA1 seal",
    "family": "AEAD-AES-256-CBC-SHA1 seal",
    "size": 1350,
@@ -4041,6 +4546,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 seal [8192 B]",
    "description": "AEAD-AES-256-CBC-SHA1 seal",
    "family": "AEAD-AES-256-CBC-SHA1 seal",
    "size": 8192,
@@ -4049,6 +4555,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 seal [16384 B]",
    "description": "AEAD-AES-256-CBC-SHA1 seal",
    "family": "AEAD-AES-256-CBC-SHA1 seal",
    "size": 16384,
@@ -4057,6 +4564,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 open init",
    "description": "AEAD-AES-128-CBC-SHA1 open init",
    "family": "AEAD-AES-128-CBC-SHA1 open init",
    "size": null,
@@ -4065,6 +4573,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 open [16 B]",
    "description": "AEAD-AES-128-CBC-SHA1 open",
    "family": "AEAD-AES-128-CBC-SHA1 open",
    "size": 16,
@@ -4073,6 +4582,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 open [256 B]",
    "description": "AEAD-AES-128-CBC-SHA1 open",
    "family": "AEAD-AES-128-CBC-SHA1 open",
    "size": 256,
@@ -4081,6 +4591,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 open [1350 B]",
    "description": "AEAD-AES-128-CBC-SHA1 open",
    "family": "AEAD-AES-128-CBC-SHA1 open",
    "size": 1350,
@@ -4089,6 +4600,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 open [8192 B]",
    "description": "AEAD-AES-128-CBC-SHA1 open",
    "family": "AEAD-AES-128-CBC-SHA1 open",
    "size": 8192,
@@ -4097,6 +4609,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-128-CBC-SHA1 open [16384 B]",
    "description": "AEAD-AES-128-CBC-SHA1 open",
    "family": "AEAD-AES-128-CBC-SHA1 open",
    "size": 16384,
@@ -4105,6 +4618,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 open init",
    "description": "AEAD-AES-256-CBC-SHA1 open init",
    "family": "AEAD-AES-256-CBC-SHA1 open init",
    "size": null,
@@ -4113,6 +4627,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 open [16 B]",
    "description": "AEAD-AES-256-CBC-SHA1 open",
    "family": "AEAD-AES-256-CBC-SHA1 open",
    "size": 16,
@@ -4121,6 +4636,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 open [256 B]",
    "description": "AEAD-AES-256-CBC-SHA1 open",
    "family": "AEAD-AES-256-CBC-SHA1 open",
    "size": 256,
@@ -4129,6 +4645,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 open [1350 B]",
    "description": "AEAD-AES-256-CBC-SHA1 open",
    "family": "AEAD-AES-256-CBC-SHA1 open",
    "size": 1350,
@@ -4137,6 +4654,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 open [8192 B]",
    "description": "AEAD-AES-256-CBC-SHA1 open",
    "family": "AEAD-AES-256-CBC-SHA1 open",
    "size": 8192,
@@ -4145,6 +4663,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-256-CBC-SHA1 open [16384 B]",
    "description": "AEAD-AES-256-CBC-SHA1 open",
    "family": "AEAD-AES-256-CBC-SHA1 open",
    "size": 16384,
@@ -4153,6 +4672,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV seal init",
    "description": "AEAD-AES-128-GCM-SIV seal init",
    "family": "AEAD-AES-128-GCM-SIV seal init",
    "size": null,
@@ -4161,6 +4681,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV seal [16 B]",
    "description": "AEAD-AES-128-GCM-SIV seal",
    "family": "AEAD-AES-128-GCM-SIV seal",
    "size": 16,
@@ -4169,6 +4690,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV seal [256 B]",
    "description": "AEAD-AES-128-GCM-SIV seal",
    "family": "AEAD-AES-128-GCM-SIV seal",
    "size": 256,
@@ -4177,6 +4699,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV seal [1350 B]",
    "description": "AEAD-AES-128-GCM-SIV seal",
    "family": "AEAD-AES-128-GCM-SIV seal",
    "size": 1350,
@@ -4185,6 +4708,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV seal [8192 B]",
    "description": "AEAD-AES-128-GCM-SIV seal",
    "family": "AEAD-AES-128-GCM-SIV seal",
    "size": 8192,
@@ -4193,6 +4717,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV seal [16384 B]",
    "description": "AEAD-AES-128-GCM-SIV seal",
    "family": "AEAD-AES-128-GCM-SIV seal",
    "size": 16384,
@@ -4201,6 +4726,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV seal init",
    "description": "AEAD-AES-256-GCM-SIV seal init",
    "family": "AEAD-AES-256-GCM-SIV seal init",
    "size": null,
@@ -4209,6 +4735,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV seal [16 B]",
    "description": "AEAD-AES-256-GCM-SIV seal",
    "family": "AEAD-AES-256-GCM-SIV seal",
    "size": 16,
@@ -4217,6 +4744,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV seal [256 B]",
    "description": "AEAD-AES-256-GCM-SIV seal",
    "family": "AEAD-AES-256-GCM-SIV seal",
    "size": 256,
@@ -4225,6 +4753,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV seal [1350 B]",
    "description": "AEAD-AES-256-GCM-SIV seal",
    "family": "AEAD-AES-256-GCM-SIV seal",
    "size": 1350,
@@ -4233,6 +4762,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV seal [8192 B]",
    "description": "AEAD-AES-256-GCM-SIV seal",
    "family": "AEAD-AES-256-GCM-SIV seal",
    "size": 8192,
@@ -4241,6 +4771,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV seal [16384 B]",
    "description": "AEAD-AES-256-GCM-SIV seal",
    "family": "AEAD-AES-256-GCM-SIV seal",
    "size": 16384,
@@ -4249,6 +4780,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV open init",
    "description": "AEAD-AES-128-GCM-SIV open init",
    "family": "AEAD-AES-128-GCM-SIV open init",
    "size": null,
@@ -4257,6 +4789,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV open [16 B]",
    "description": "AEAD-AES-128-GCM-SIV open",
    "family": "AEAD-AES-128-GCM-SIV open",
    "size": 16,
@@ -4265,6 +4798,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV open [256 B]",
    "description": "AEAD-AES-128-GCM-SIV open",
    "family": "AEAD-AES-128-GCM-SIV open",
    "size": 256,
@@ -4273,6 +4807,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV open [1350 B]",
    "description": "AEAD-AES-128-GCM-SIV open",
    "family": "AEAD-AES-128-GCM-SIV open",
    "size": 1350,
@@ -4281,6 +4816,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV open [8192 B]",
    "description": "AEAD-AES-128-GCM-SIV open",
    "family": "AEAD-AES-128-GCM-SIV open",
    "size": 8192,
@@ -4289,6 +4825,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-GCM-SIV open [16384 B]",
    "description": "AEAD-AES-128-GCM-SIV open",
    "family": "AEAD-AES-128-GCM-SIV open",
    "size": 16384,
@@ -4297,6 +4834,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV open init",
    "description": "AEAD-AES-256-GCM-SIV open init",
    "family": "AEAD-AES-256-GCM-SIV open init",
    "size": null,
@@ -4305,6 +4843,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV open [16 B]",
    "description": "AEAD-AES-256-GCM-SIV open",
    "family": "AEAD-AES-256-GCM-SIV open",
    "size": 16,
@@ -4313,6 +4852,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV open [256 B]",
    "description": "AEAD-AES-256-GCM-SIV open",
    "family": "AEAD-AES-256-GCM-SIV open",
    "size": 256,
@@ -4321,6 +4861,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV open [1350 B]",
    "description": "AEAD-AES-256-GCM-SIV open",
    "family": "AEAD-AES-256-GCM-SIV open",
    "size": 1350,
@@ -4329,6 +4870,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV open [8192 B]",
    "description": "AEAD-AES-256-GCM-SIV open",
    "family": "AEAD-AES-256-GCM-SIV open",
    "size": 8192,
@@ -4337,6 +4879,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-256-GCM-SIV open [16384 B]",
    "description": "AEAD-AES-256-GCM-SIV open",
    "family": "AEAD-AES-256-GCM-SIV open",
    "size": 16384,
@@ -4345,6 +4888,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "AEAD-AES-128-CCM-Bluetooth seal init",
    "description": "AEAD-AES-128-CCM-Bluetooth seal init",
    "family": "AEAD-AES-128-CCM-Bluetooth seal init",
    "size": null,
@@ -4353,6 +4897,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-CCM-Bluetooth seal [16 B]",
    "description": "AEAD-AES-128-CCM-Bluetooth seal",
    "family": "AEAD-AES-128-CCM-Bluetooth seal",
    "size": 16,
@@ -4361,6 +4906,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-CCM-Bluetooth seal [256 B]",
    "description": "AEAD-AES-128-CCM-Bluetooth seal",
    "family": "AEAD-AES-128-CCM-Bluetooth seal",
    "size": 256,
@@ -4369,6 +4915,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-CCM-Bluetooth seal [1350 B]",
    "description": "AEAD-AES-128-CCM-Bluetooth seal",
    "family": "AEAD-AES-128-CCM-Bluetooth seal",
    "size": 1350,
@@ -4377,6 +4924,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-CCM-Bluetooth seal [8192 B]",
    "description": "AEAD-AES-128-CCM-Bluetooth seal",
    "family": "AEAD-AES-128-CCM-Bluetooth seal",
    "size": 8192,
@@ -4385,6 +4933,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "AEAD-AES-128-CCM-Bluetooth seal [16384 B]",
    "description": "AEAD-AES-128-CCM-Bluetooth seal",
    "family": "AEAD-AES-128-CCM-Bluetooth seal",
    "size": 16384,
@@ -4393,6 +4942,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "Ed25519 key generation",
    "description": "Ed25519 key generation",
    "family": "Ed25519 key generation",
    "size": null,
@@ -4401,6 +4951,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "Ed25519 signing",
    "description": "Ed25519 signing",
    "family": "Ed25519 signing",
    "size": null,
@@ -4409,6 +4960,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "Ed25519 verify",
    "description": "Ed25519 verify",
    "family": "Ed25519 verify",
    "size": null,
@@ -4417,6 +4969,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Curve25519 base-point multiplication",
    "description": "Curve25519 base-point multiplication",
    "family": "Curve25519 base-point multiplication",
    "size": null,
@@ -4425,6 +4978,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "Curve25519 arbitrary point multiplication",
    "description": "Curve25519 arbitrary point multiplication",
    "family": "Curve25519 arbitrary point multiplication",
    "size": null,
@@ -4433,6 +4987,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "ECDH X25519",
    "description": "ECDH X25519",
    "family": "ECDH X25519",
    "size": null,
@@ -4441,6 +4996,7 @@
    "entries_per_call": 2.0
   },
   {
+   "key": "SPAKE2 over Ed25519",
    "description": "SPAKE2 over Ed25519",
    "family": "SPAKE2 over Ed25519",
    "size": null,
@@ -4449,6 +5005,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "RSA FIPS 2048 key-gen",
    "description": "RSA FIPS 2048 key-gen",
    "family": "RSA FIPS 2048 key-gen",
    "size": null,
@@ -4457,6 +5014,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "RSA FIPS 3072 key-gen",
    "description": "RSA FIPS 3072 key-gen",
    "family": "RSA FIPS 3072 key-gen",
    "size": null,
@@ -4465,6 +5023,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "RSA FIPS 4096 key-gen",
    "description": "RSA FIPS 4096 key-gen",
    "family": "RSA FIPS 4096 key-gen",
    "size": null,
@@ -4473,6 +5032,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "HRSS generate",
    "description": "HRSS generate",
    "family": "HRSS generate",
    "size": null,
@@ -4481,6 +5041,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "HRSS encap",
    "description": "HRSS encap",
    "family": "HRSS encap",
    "size": null,
@@ -4489,6 +5050,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "HRSS decap",
    "description": "HRSS decap",
    "family": "HRSS decap",
    "size": null,
@@ -4497,6 +5059,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "BLAKE2b-256 [16 B]",
    "description": "BLAKE2b-256",
    "family": "BLAKE2b-256",
    "size": 16,
@@ -4505,6 +5068,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "BLAKE2b-256 [256 B]",
    "description": "BLAKE2b-256",
    "family": "BLAKE2b-256",
    "size": 256,
@@ -4513,6 +5077,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "BLAKE2b-256 [1350 B]",
    "description": "BLAKE2b-256",
    "family": "BLAKE2b-256",
    "size": 1350,
@@ -4521,6 +5086,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "BLAKE2b-256 [8192 B]",
    "description": "BLAKE2b-256",
    "family": "BLAKE2b-256",
    "size": 8192,
@@ -4529,6 +5095,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "BLAKE2b-256 [16384 B]",
    "description": "BLAKE2b-256",
    "family": "BLAKE2b-256",
    "size": 16384,
@@ -4537,6 +5104,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Generate P-224 with EC_KEY_generate_key_fips",
    "description": "Generate P-224 with EC_KEY_generate_key_fips",
    "family": "Generate P-224 with EC_KEY_generate_key_fips",
    "size": null,
@@ -4545,6 +5113,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "Generate P-256 with EC_KEY_generate_key_fips",
    "description": "Generate P-256 with EC_KEY_generate_key_fips",
    "family": "Generate P-256 with EC_KEY_generate_key_fips",
    "size": null,
@@ -4553,6 +5122,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "Generate P-384 with EC_KEY_generate_key_fips",
    "description": "Generate P-384 with EC_KEY_generate_key_fips",
    "family": "Generate P-384 with EC_KEY_generate_key_fips",
    "size": null,
@@ -4561,6 +5131,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "Generate P-521 with EC_KEY_generate_key_fips",
    "description": "Generate P-521 with EC_KEY_generate_key_fips",
    "family": "Generate P-521 with EC_KEY_generate_key_fips",
    "size": null,
@@ -4569,6 +5140,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "Generate secp256k1 with EC_KEY_generate_key_fips",
    "description": "Generate secp256k1 with EC_KEY_generate_key_fips",
    "family": "Generate secp256k1 with EC_KEY_generate_key_fips",
    "size": null,
@@ -4577,6 +5149,7 @@
    "entries_per_call": 5.0
   },
   {
+   "key": "CRYPTO_refcount_inc 1000 iterations with 1 threads",
    "description": "CRYPTO_refcount_inc 1000 iterations with 1 threads",
    "family": "CRYPTO_refcount_inc 1000 iterations with 1 threads",
    "size": null,
@@ -4585,6 +5158,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "CRYPTO_sysrand [16 B]",
    "description": "CRYPTO_sysrand",
    "family": "CRYPTO_sysrand",
    "size": 16,
@@ -4593,6 +5167,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "CRYPTO_sysrand [256 B]",
    "description": "CRYPTO_sysrand",
    "family": "CRYPTO_sysrand",
    "size": 256,
@@ -4601,6 +5176,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "CRYPTO_sysrand [1350 B]",
    "description": "CRYPTO_sysrand",
    "family": "CRYPTO_sysrand",
    "size": 1350,
@@ -4609,6 +5185,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "CRYPTO_sysrand [8192 B]",
    "description": "CRYPTO_sysrand",
    "family": "CRYPTO_sysrand",
    "size": 8192,
@@ -4617,6 +5194,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "CRYPTO_sysrand [16384 B]",
    "description": "CRYPTO_sysrand",
    "family": "CRYPTO_sysrand",
    "size": 16384,
@@ -4625,6 +5203,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "hash-to-curve P256_XMD:SHA-256_SSWU_RO_",
    "description": "hash-to-curve P256_XMD:SHA-256_SSWU_RO_",
    "family": "hash-to-curve P256_XMD:SHA-256_SSWU_RO_",
    "size": null,
@@ -4633,6 +5212,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "hash-to-curve P384_XMD:SHA-384_SSWU_RO_",
    "description": "hash-to-curve P384_XMD:SHA-384_SSWU_RO_",
    "family": "hash-to-curve P384_XMD:SHA-384_SSWU_RO_",
    "size": null,
@@ -4641,6 +5221,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "hash-to-scalar P384_XMD:SHA-512",
    "description": "hash-to-scalar P384_XMD:SHA-512",
    "family": "hash-to-scalar P384_XMD:SHA-512",
    "size": null,
@@ -4649,6 +5230,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp1-Batch1 generate_key",
    "description": "TrustToken-Exp1-Batch1 generate_key",
    "family": "TrustToken-Exp1-Batch1 generate_key",
    "size": null,
@@ -4657,6 +5239,7 @@
    "entries_per_call": 18.0
   },
   {
+   "key": "TrustToken-Exp1-Batch1 begin_issuance",
    "description": "TrustToken-Exp1-Batch1 begin_issuance",
    "family": "TrustToken-Exp1-Batch1 begin_issuance",
    "size": null,
@@ -4665,6 +5248,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "TrustToken-Exp1-Batch1 issue",
    "description": "TrustToken-Exp1-Batch1 issue",
    "family": "TrustToken-Exp1-Batch1 issue",
    "size": null,
@@ -4673,6 +5257,7 @@
    "entries_per_call": 24.0
   },
   {
+   "key": "TrustToken-Exp1-Batch1 finish_issuance",
    "description": "TrustToken-Exp1-Batch1 finish_issuance",
    "family": "TrustToken-Exp1-Batch1 finish_issuance",
    "size": null,
@@ -4681,6 +5266,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "TrustToken-Exp1-Batch1 begin_redemption",
    "description": "TrustToken-Exp1-Batch1 begin_redemption",
    "family": "TrustToken-Exp1-Batch1 begin_redemption",
    "size": null,
@@ -4689,6 +5275,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp1-Batch1 redeem",
    "description": "TrustToken-Exp1-Batch1 redeem",
    "family": "TrustToken-Exp1-Batch1 redeem",
    "size": null,
@@ -4697,6 +5284,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp1-Batch10 generate_key",
    "description": "TrustToken-Exp1-Batch10 generate_key",
    "family": "TrustToken-Exp1-Batch10 generate_key",
    "size": null,
@@ -4705,6 +5293,7 @@
    "entries_per_call": 18.0
   },
   {
+   "key": "TrustToken-Exp1-Batch10 begin_issuance",
    "description": "TrustToken-Exp1-Batch10 begin_issuance",
    "family": "TrustToken-Exp1-Batch10 begin_issuance",
    "size": null,
@@ -4713,6 +5302,7 @@
    "entries_per_call": 70.0
   },
   {
+   "key": "TrustToken-Exp1-Batch10 issue",
    "description": "TrustToken-Exp1-Batch10 issue",
    "family": "TrustToken-Exp1-Batch10 issue",
    "size": null,
@@ -4721,6 +5311,7 @@
    "entries_per_call": 51.0
   },
   {
+   "key": "TrustToken-Exp1-Batch10 finish_issuance",
    "description": "TrustToken-Exp1-Batch10 finish_issuance",
    "family": "TrustToken-Exp1-Batch10 finish_issuance",
    "size": null,
@@ -4729,6 +5320,7 @@
    "entries_per_call": 30.0
   },
   {
+   "key": "TrustToken-Exp1-Batch10 begin_redemption",
    "description": "TrustToken-Exp1-Batch10 begin_redemption",
    "family": "TrustToken-Exp1-Batch10 begin_redemption",
    "size": null,
@@ -4737,6 +5329,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp1-Batch10 redeem",
    "description": "TrustToken-Exp1-Batch10 redeem",
    "family": "TrustToken-Exp1-Batch10 redeem",
    "size": null,
@@ -4745,6 +5338,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp2VOfPRF-Batch1 generate_key",
    "description": "TrustToken-Exp2VOfPRF-Batch1 generate_key",
    "family": "TrustToken-Exp2VOfPRF-Batch1 generate_key",
    "size": null,
@@ -4753,6 +5347,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "TrustToken-Exp2VOfPRF-Batch1 begin_issuance",
    "description": "TrustToken-Exp2VOfPRF-Batch1 begin_issuance",
    "family": "TrustToken-Exp2VOfPRF-Batch1 begin_issuance",
    "size": null,
@@ -4761,6 +5356,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "TrustToken-Exp2VOfPRF-Batch1 issue",
    "description": "TrustToken-Exp2VOfPRF-Batch1 issue",
    "family": "TrustToken-Exp2VOfPRF-Batch1 issue",
    "size": null,
@@ -4769,6 +5365,7 @@
    "entries_per_call": 6.0
   },
   {
+   "key": "TrustToken-Exp2VOfPRF-Batch1 finish_issuance",
    "description": "TrustToken-Exp2VOfPRF-Batch1 finish_issuance",
    "family": "TrustToken-Exp2VOfPRF-Batch1 finish_issuance",
    "size": null,
@@ -4777,6 +5374,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "TrustToken-Exp2VOfPRF-Batch1 begin_redemption",
    "description": "TrustToken-Exp2VOfPRF-Batch1 begin_redemption",
    "family": "TrustToken-Exp2VOfPRF-Batch1 begin_redemption",
    "size": null,
@@ -4785,6 +5383,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp2VOfPRF-Batch1 redeem",
    "description": "TrustToken-Exp2VOfPRF-Batch1 redeem",
    "family": "TrustToken-Exp2VOfPRF-Batch1 redeem",
    "size": null,
@@ -4793,6 +5392,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "TrustToken-Exp2VOPRF-Batch10 generate_key",
    "description": "TrustToken-Exp2VOPRF-Batch10 generate_key",
    "family": "TrustToken-Exp2VOPRF-Batch10 generate_key",
    "size": null,
@@ -4801,6 +5401,7 @@
    "entries_per_call": 4.0
   },
   {
+   "key": "TrustToken-Exp2VOPRF-Batch10 begin_issuance",
    "description": "TrustToken-Exp2VOPRF-Batch10 begin_issuance",
    "family": "TrustToken-Exp2VOPRF-Batch10 begin_issuance",
    "size": null,
@@ -4809,6 +5410,7 @@
    "entries_per_call": 70.0
   },
   {
+   "key": "TrustToken-Exp2VOPRF-Batch10 issue",
    "description": "TrustToken-Exp2VOPRF-Batch10 issue",
    "family": "TrustToken-Exp2VOPRF-Batch10 issue",
    "size": null,
@@ -4817,6 +5419,7 @@
    "entries_per_call": 15.0
   },
   {
+   "key": "TrustToken-Exp2VOPRF-Batch10 finish_issuance",
    "description": "TrustToken-Exp2VOPRF-Batch10 finish_issuance",
    "family": "TrustToken-Exp2VOPRF-Batch10 finish_issuance",
    "size": null,
@@ -4825,6 +5428,7 @@
    "entries_per_call": 10.0
   },
   {
+   "key": "TrustToken-Exp2VOPRF-Batch10 begin_redemption",
    "description": "TrustToken-Exp2VOPRF-Batch10 begin_redemption",
    "family": "TrustToken-Exp2VOPRF-Batch10 begin_redemption",
    "size": null,
@@ -4833,6 +5437,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp2VOPRF-Batch10 redeem",
    "description": "TrustToken-Exp2VOPRF-Batch10 redeem",
    "family": "TrustToken-Exp2VOPRF-Batch10 redeem",
    "size": null,
@@ -4841,6 +5446,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch1 generate_key",
    "description": "TrustToken-Exp2PMB-Batch1 generate_key",
    "family": "TrustToken-Exp2PMB-Batch1 generate_key",
    "size": null,
@@ -4849,6 +5455,7 @@
    "entries_per_call": 18.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch1 begin_issuance",
    "description": "TrustToken-Exp2PMB-Batch1 begin_issuance",
    "family": "TrustToken-Exp2PMB-Batch1 begin_issuance",
    "size": null,
@@ -4857,6 +5464,7 @@
    "entries_per_call": 7.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch1 issue",
    "description": "TrustToken-Exp2PMB-Batch1 issue",
    "family": "TrustToken-Exp2PMB-Batch1 issue",
    "size": null,
@@ -4865,6 +5473,7 @@
    "entries_per_call": 24.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch1 finish_issuance",
    "description": "TrustToken-Exp2PMB-Batch1 finish_issuance",
    "family": "TrustToken-Exp2PMB-Batch1 finish_issuance",
    "size": null,
@@ -4873,6 +5482,7 @@
    "entries_per_call": 3.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch1 begin_redemption",
    "description": "TrustToken-Exp2PMB-Batch1 begin_redemption",
    "family": "TrustToken-Exp2PMB-Batch1 begin_redemption",
    "size": null,
@@ -4881,6 +5491,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch1 redeem",
    "description": "TrustToken-Exp2PMB-Batch1 redeem",
    "family": "TrustToken-Exp2PMB-Batch1 redeem",
    "size": null,
@@ -4889,6 +5500,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch10 generate_key",
    "description": "TrustToken-Exp2PMB-Batch10 generate_key",
    "family": "TrustToken-Exp2PMB-Batch10 generate_key",
    "size": null,
@@ -4897,6 +5509,7 @@
    "entries_per_call": 18.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch10 begin_issuance",
    "description": "TrustToken-Exp2PMB-Batch10 begin_issuance",
    "family": "TrustToken-Exp2PMB-Batch10 begin_issuance",
    "size": null,
@@ -4905,6 +5518,7 @@
    "entries_per_call": 70.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch10 issue",
    "description": "TrustToken-Exp2PMB-Batch10 issue",
    "family": "TrustToken-Exp2PMB-Batch10 issue",
    "size": null,
@@ -4913,6 +5527,7 @@
    "entries_per_call": 51.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch10 finish_issuance",
    "description": "TrustToken-Exp2PMB-Batch10 finish_issuance",
    "family": "TrustToken-Exp2PMB-Batch10 finish_issuance",
    "size": null,
@@ -4921,6 +5536,7 @@
    "entries_per_call": 30.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch10 begin_redemption",
    "description": "TrustToken-Exp2PMB-Batch10 begin_redemption",
    "family": "TrustToken-Exp2PMB-Batch10 begin_redemption",
    "size": null,
@@ -4929,6 +5545,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "TrustToken-Exp2PMB-Batch10 redeem",
    "description": "TrustToken-Exp2PMB-Batch10 redeem",
    "family": "TrustToken-Exp2PMB-Batch10 redeem",
    "size": null,
@@ -4937,6 +5554,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Ed25519 PKCS#8 v1 encode",
    "description": "Ed25519 PKCS#8 v1 encode",
    "family": "Ed25519 PKCS#8 v1 encode",
    "size": null,
@@ -4945,6 +5563,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Ed25519 PKCS#8 v1 decode",
    "description": "Ed25519 PKCS#8 v1 decode",
    "family": "Ed25519 PKCS#8 v1 decode",
    "size": null,
@@ -4953,6 +5572,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "Ed25519 PKCS#8 v2 encode",
    "description": "Ed25519 PKCS#8 v2 encode",
    "family": "Ed25519 PKCS#8 v2 encode",
    "size": null,
@@ -4961,6 +5581,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Ed25519 PKCS#8 v2 decode",
    "description": "Ed25519 PKCS#8 v2 decode",
    "family": "Ed25519 PKCS#8 v2 decode",
    "size": null,
@@ -4969,6 +5590,7 @@
    "entries_per_call": 1.0
   },
   {
+   "key": "base64 decode [1272 B]",
    "description": "base64 decode",
    "family": "base64 decode",
    "size": 1272,
@@ -4977,6 +5599,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SipHash-2-4 [16 B]",
    "description": "SipHash-2-4",
    "family": "SipHash-2-4",
    "size": 16,
@@ -4985,6 +5608,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SipHash-2-4 [256 B]",
    "description": "SipHash-2-4",
    "family": "SipHash-2-4",
    "size": 256,
@@ -4993,6 +5617,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SipHash-2-4 [1350 B]",
    "description": "SipHash-2-4",
    "family": "SipHash-2-4",
    "size": 1350,
@@ -5001,6 +5626,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SipHash-2-4 [8192 B]",
    "description": "SipHash-2-4",
    "family": "SipHash-2-4",
    "size": 8192,
@@ -5009,6 +5635,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "SipHash-2-4 [16384 B]",
    "description": "SipHash-2-4",
    "family": "SipHash-2-4",
    "size": 16384,
@@ -5017,6 +5644,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Jitter [16 B]",
    "description": "Jitter",
    "family": "Jitter",
    "size": 16,
@@ -5025,6 +5653,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Jitter [256 B]",
    "description": "Jitter",
    "family": "Jitter",
    "size": 256,
@@ -5033,6 +5662,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Jitter [1350 B]",
    "description": "Jitter",
    "family": "Jitter",
    "size": 1350,
@@ -5041,6 +5671,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Jitter [8192 B]",
    "description": "Jitter",
    "family": "Jitter",
    "size": 8192,
@@ -5049,6 +5680,7 @@
    "entries_per_call": 0.0
   },
   {
+   "key": "Jitter [16384 B]",
    "description": "Jitter",
    "family": "Jitter",
    "size": 16384,
@@ -5079,13 +5711,203 @@
   "crypto/evp_extra/evp_asn1.c": 1,
   "crypto/evp_extra/p_dh_asn1.c": 4
  },
+ "source_sites_by_dir": {
+  "fipsmodule/kdf": 3,
+  "fipsmodule/dh": 20,
+  "fipsmodule/rsa": 47,
+  "fipsmodule/ec": 3,
+  "fipsmodule/cipher": 13,
+  "fipsmodule/hkdf": 2,
+  "fipsmodule/tls": 2,
+  "fipsmodule/sshkdf": 1,
+  "fipsmodule/evp": 71,
+  "fipsmodule/rand": 5,
+  "fipsmodule/curve25519": 5,
+  "fipsmodule/aes": 4,
+  "evp_extra": 5
+ },
  "timeout_ms": "20",
  "threads": 1,
+ "filters": [
+  "RNG",
+  "FFDH 2048",
+  "FFDH 4096",
+  "ECDH P-224",
+  "ECDH P-256",
+  "ECDH P-384",
+  "ECDH P-521",
+  "HRSS encap",
+  "ECDH X25519",
+  "HRSS generate",
+  "ECDH secp256k1",
+  "MLDSA44 keygen",
+  "MLDSA44 verify",
+  "MLDSA65 keygen",
+  "MLDSA65 verify",
+  "MLDSA87 keygen",
+  "MLDSA87 verify",
+  "AES-128 encrypt",
+  "AES-128 decrypt",
+  "AES-192 encrypt",
+  "AES-192 decrypt",
+  "AES-256 encrypt",
+  "AES-256 decrypt",
+  "EVP-RC4 encrypt",
+  "EVP-RC4 decrypt",
+  "MLDSA44 signing",
+  "MLDSA65 signing",
+  "MLDSA87 signing",
+  "Ed25519 signing",
+  "CMAC-AES-128-CBC",
+  "CMAC-AES-256-CBC",
+  "RSA 2048 signing",
+  "RSA 3072 signing",
+  "RSA 4096 signing",
+  "RSA 8192 signing",
+  "ML-KEM-512 keygen",
+  "ML-KEM-512 encaps",
+  "ML-KEM-512 decaps",
+  "ML-KEM-768 keygen",
+  "ML-KEM-768 encaps",
+  "ML-KEM-768 decaps",
+  "EC POINT P-224 mul",
+  "EC POINT P-256 mul",
+  "EC POINT P-384 mul",
+  "EC POINT P-521 mul",
+  "ML-KEM-1024 keygen",
+  "ML-KEM-1024 encaps",
+  "ML-KEM-1024 decaps",
+  "AES-256-XTS encrypt",
+  "AES-256-XTS decrypt",
+  "ECDSA P-224 signing",
+  "ECDSA P-256 signing",
+  "ECDSA P-384 signing",
+  "ECDSA P-521 signing",
+  "SPAKE2 over Ed25519",
+  "AEAD-AES-128-GCM seal",
+  "AEAD-AES-128-GCM open",
+  "AEAD-AES-256-GCM seal",
+  "AEAD-AES-256-GCM open",
+  "EC POINT secp256k1 mul",
+  "Ed25519 key generation",
+  "EVP-AES-128-GCM encrypt",
+  "EVP-AES-128-GCM decrypt",
+  "EVP-AES-192-GCM encrypt",
+  "EVP-AES-192-GCM decrypt",
+  "EVP-AES-256-GCM encrypt",
+  "EVP-AES-256-GCM decrypt",
+  "EVP-AES-128-CTR encrypt",
+  "EVP-AES-128-CTR decrypt",
+  "EVP-AES-192-CTR encrypt",
+  "EVP-AES-192-CTR decrypt",
+  "EVP-AES-256-CTR encrypt",
+  "EVP-AES-256-CTR decrypt",
+  "EVP-AES-128-CBC encrypt",
+  "EVP-AES-128-CBC decrypt",
+  "EVP-AES-192-CBC encrypt",
+  "EVP-AES-192-CBC decrypt",
+  "EVP-AES-256-CBC encrypt",
+  "EVP-AES-256-CBC decrypt",
+  "ECDSA secp256k1 signing",
+  "Ed25519 PKCS#8 v1 decode",
+  "Ed25519 PKCS#8 v2 decode",
+  "AEAD-AES-128-GCM-SIV seal",
+  "AEAD-AES-256-GCM-SIV seal",
+  "AEAD-AES-128-GCM-SIV open",
+  "AEAD-AES-256-GCM-SIV open",
+  "RSA 2048 verify (same key)",
+  "RSA 2048 private key parse",
+  "RSA 3072 verify (same key)",
+  "RSA 3072 private key parse",
+  "RSA 4096 verify (same key)",
+  "RSA 4096 private key parse",
+  "RSA 8192 verify (same key)",
+  "RSA 8192 private key parse",
+  "AEAD-AES-128-CBC-SHA1 seal",
+  "AEAD-AES-256-CBC-SHA1 seal",
+  "AEAD-AES-128-CBC-SHA1 open",
+  "AEAD-AES-256-CBC-SHA1 open",
+  "RSA 2048 verify (fresh key)",
+  "RSA 3072 verify (fresh key)",
+  "RSA 4096 verify (fresh key)",
+  "RSA 8192 verify (fresh key)",
+  "AEAD-ChaCha20-Poly1305 seal",
+  "AEAD-DES-EDE3-CBC-SHA1 seal",
+  "TrustToken-Exp1-Batch1 issue",
+  "EVP-ChaCha20-Poly1305 encrypt",
+  "EVP-ChaCha20-Poly1305 decrypt",
+  "TrustToken-Exp1-Batch10 issue",
+  "AEAD-AES-128-CCM-Bluetooth seal",
+  "TrustToken-Exp2PMB-Batch1 issue",
+  "TrustToken-Exp2PMB-Batch10 issue",
+  "TrustToken-Exp2VOfPRF-Batch1 issue",
+  "TrustToken-Exp2VOPRF-Batch10 issue",
+  "Generate P-224 with EVP_PKEY_keygen",
+  "Generate P-256 with EVP_PKEY_keygen",
+  "Generate P-384 with EVP_PKEY_keygen",
+  "Generate P-521 with EVP_PKEY_keygen",
+  "TrustToken-Exp1-Batch1 generate_key",
+  "TrustToken-Exp2VOfPRF-Batch1 redeem",
+  "TrustToken-Exp2VOPRF-Batch10 redeem",
+  "Curve25519 base-point multiplication",
+  "TrustToken-Exp1-Batch10 generate_key",
+  "TrustToken-Exp1-Batch1 begin_issuance",
+  "TrustToken-Exp1-Batch1 finish_issuance",
+  "TrustToken-Exp1-Batch10 begin_issuance",
+  "TrustToken-Exp2PMB-Batch1 generate_key",
+  "Generate secp256k1 with EVP_PKEY_keygen",
+  "Generate P-224 with EC_KEY_generate_key",
+  "Generate P-256 with EC_KEY_generate_key",
+  "Generate P-384 with EC_KEY_generate_key",
+  "Generate P-521 with EC_KEY_generate_key",
+  "TrustToken-Exp1-Batch10 finish_issuance",
+  "TrustToken-Exp2PMB-Batch10 generate_key",
+  "TrustToken-Exp2PMB-Batch1 begin_issuance",
+  "Curve25519 arbitrary point multiplication",
+  "TrustToken-Exp2VOfPRF-Batch1 generate_key",
+  "TrustToken-Exp2VOPRF-Batch10 generate_key",
+  "TrustToken-Exp2PMB-Batch1 finish_issuance",
+  "TrustToken-Exp2PMB-Batch10 begin_issuance",
+  "TrustToken-Exp2PMB-Batch10 finish_issuance",
+  "Generate secp256k1 with EC_KEY_generate_key",
+  "TrustToken-Exp2VOfPRF-Batch1 begin_issuance",
+  "TrustToken-Exp2VOPRF-Batch10 begin_issuance",
+  "TrustToken-Exp2VOfPRF-Batch1 finish_issuance",
+  "TrustToken-Exp2VOPRF-Batch10 finish_issuance"
+ ],
+ "recorded": {
+  "path": "paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json",
+  "rows": 127,
+  "families": 51,
+  "rows_never": 18,
+  "families_never": [
+   "ECDSA P-256 verify",
+   "Ed25519 verify",
+   "HMAC-SHA256",
+   "HMAC-SHA256 init",
+   "HMAC-SHA256-OneShot",
+   "SHA-256"
+  ],
+  "tests": [
+   "AEAD-AES-128-GCM",
+   "AEAD-ChaCha20-Poly1305",
+   "AES-128",
+   "SHA-256",
+   "HMAC-SHA256",
+   "ECDSA P-256",
+   "X25519",
+   "Ed25519",
+   "ML-KEM-768",
+   "RNG"
+  ]
+ },
+ "date": "2026-09-07",
  "summary": {
   "rows": 632,
   "families": 304,
   "rows_entering": 381,
   "families_entering": 213,
+  "rows_selected_by_filters": 381,
   "families_never": [
    "MD4",
    "MD5",

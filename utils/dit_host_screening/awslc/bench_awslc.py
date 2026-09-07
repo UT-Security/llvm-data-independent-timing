@@ -25,7 +25,7 @@ is recorded per sample and flagged outside the band, never used to exclude.
   bench_awslc.py [test-filter ...]
 Env: W, PIN_CPU (9: a P-core on the 4P+6E M4, where CPUs 0-5 are the E cluster; set it EMPTY for a
      deliberately unpinned dry run with no bind gate), REPS (7), WARM (1),
-     TIMEOUT_MS (400), CHUNKS (16,256,1350,8192,16384), BENCH_ARMS, BENCH_TESTS
+     TIMEOUT_MS (400), CHUNKS (16,256,1350,8192,16384), BENCH_ARMS, BENCH_TESTS, BENCH_TESTS_FILE
 """
 import os, re, sys, json, time, subprocess, statistics as st
 
@@ -44,8 +44,22 @@ ARMS = [('A', 'rel', 0, []), ('C', 'rel', 1, []), ('B', 'dit', 0, []), ('Bs', 'd
         ('H', 'dit', 0, ['-dit']), ('Hs', 'ditsb', 0, ['-dit'])]
 if os.environ.get('BENCH_ARMS'):          # an empty value (sudo -E env passes one) means "all"
     keep = os.environ['BENCH_ARMS'].split(','); ARMS = [a for a in ARMS if a[0] in keep]
+# Which rows to run, in order of precedence: filters on the command line; BENCH_TESTS (comma-separated);
+# BENCH_TESTS_FILE (one filter per line, `#` comments), which reproduce.sh points at the census's
+# data/bracketed_filters.txt so the default run is exactly the rows that enter the DIT bracket; and,
+# with none of those, the pre-census list of ten families (127 rows, six families of which never enter).
 DEFAULT_TESTS = 'AEAD-AES-128-GCM,AEAD-ChaCha20-Poly1305,AES-128,SHA-256,HMAC-SHA256,ECDSA P-256,X25519,Ed25519,ML-KEM-768,RNG'
-TESTS = [t for t in (sys.argv[1:] or (os.environ.get('BENCH_TESTS') or DEFAULT_TESTS).split(',')) if t]
+if sys.argv[1:]:
+    TESTS, TESTS_SOURCE = [t for t in sys.argv[1:] if t], 'argv'
+elif os.environ.get('BENCH_TESTS'):
+    TESTS, TESTS_SOURCE = [t for t in os.environ['BENCH_TESTS'].split(',') if t], 'BENCH_TESTS'
+elif os.environ.get('BENCH_TESTS_FILE'):
+    TESTS = [l.strip() for l in open(os.environ['BENCH_TESTS_FILE']) if l.strip() and not l.startswith('#')]
+    TESTS_SOURCE = 'BENCH_TESTS_FILE=' + os.environ['BENCH_TESTS_FILE']
+else:
+    TESTS, TESTS_SOURCE = DEFAULT_TESTS.split(','), 'DEFAULT_TESTS (pre-census list; run `reproduce.sh census` for the bracketed rows)'
+    sys.stderr.write('note: no BENCH_TESTS or BENCH_TESTS_FILE; running the pre-census default list\n')
+if not TESTS: sys.exit('no test filters')
 OUT = f'{W}/results'; os.makedirs(OUT, exist_ok=True)
 
 def check_library():
@@ -141,7 +155,7 @@ for k in sorted(samples):
                       abs_bracket_instrs=(ins['B'] - ins['A']) if 'B' in ins else None,
                       ns_per_op_A=st.median(v[2] for v in d['A']), n=len(d['A']))
 json.dump(dict(results=results, gate=sorted(gate), failures=bad, flagged=flagged, flagged_clocks=flagged_clocks, all_clocks_mhz=[round(c) for c in clocks],
-               clock_band=[CLOCK_LO, CLOCK_HI], no_pmc_rows=nopmc, unpinned=len(unpinned), pin_cpu=PIN_CPU, arms=arms, tests=TESTS,
+               clock_band=[CLOCK_LO, CLOCK_HI], no_pmc_rows=nopmc, unpinned=len(unpinned), pin_cpu=PIN_CPU, arms=arms, tests=TESTS, tests_source=TESTS_SOURCE,
                reps=REPS, timeout_ms=TIMEOUT_MS, chunks=CHUNKS), open(f'{OUT}/speed.json', 'w'), indent=1)
 import math
 gm_all, gm_clean = {a: [] for a in arms if a != 'A'}, {a: [] for a in arms if a != 'A'}
