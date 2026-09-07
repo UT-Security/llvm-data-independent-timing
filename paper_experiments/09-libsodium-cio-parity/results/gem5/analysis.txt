@@ -1,0 +1,101 @@
+====================================================================================================
+ARMS  cycles/op, and % against `base` (the MIR round-trip control)
+====================================================================================================
+benchmark                   arm            spec cyc/op     spec %   serdit cyc/op   serdit %  switches/op
+aesni256gcm_decrypt         base                 1,077     +0.00%           1,077     +0.00%          0.0
+aesni256gcm_decrypt         blanket              1,167     +8.39%           1,167     +8.39%          0.0
+aesni256gcm_decrypt         api                  1,329    +23.43%           1,366    +26.87%          2.0
+aesni256gcm_decrypt         apiisb               1,315    +22.16%           1,357    +26.04%          2.0
+aesni256gcm_decrypt         apiisbnop            1,179     +9.50%           1,337    +24.19%          2.0
+aesni256gcm_decrypt         taint                1,177     +9.32%           1,339    +24.36%          2.0
+aesni256gcm_decrypt         taintnop             1,089     +1.11%           1,089     +1.11%          0.0
+
+aesni256gcm_encrypt         base                 1,217     +0.00%           1,217     +0.00%          0.0
+aesni256gcm_encrypt         blanket              1,222     +0.41%           1,222     +0.41%          0.0
+aesni256gcm_encrypt         api                  1,253     +2.96%           1,291     +6.08%          2.0
+aesni256gcm_encrypt         apiisb               1,242     +2.05%           1,281     +5.26%          2.0
+aesni256gcm_encrypt         apiisbnop            1,224     +0.58%           1,262     +3.70%          2.0
+aesni256gcm_encrypt         taint                1,142     -6.16%           1,258     +3.40%          2.0
+aesni256gcm_encrypt         taintnop             1,140     -6.33%           1,140     -6.33%          0.0
+
+chacha20_poly1305_decrypt   base                 2,290     +0.00%           2,290     +0.00%          0.0
+chacha20_poly1305_decrypt   blanket              2,306     +0.70%           2,306     +0.70%          0.0
+chacha20_poly1305_decrypt   api                  2,348     +2.53%           2,385     +4.14%          2.0
+chacha20_poly1305_decrypt   apiisb               2,425     +5.90%           2,466     +7.69%          2.0
+chacha20_poly1305_decrypt   apiisbnop            2,400     +4.81%           2,439     +6.52%          2.0
+chacha20_poly1305_decrypt   taint                2,443     +6.67%           3,161    +38.03%         32.0
+chacha20_poly1305_decrypt   taintnop             2,430     +6.10%           2,430     +6.10%          0.0
+
+chacha20_poly1305_encrypt   base                 2,186     +0.00%           2,186     +0.00%          0.0
+chacha20_poly1305_encrypt   blanket              2,215     +1.31%           2,216     +1.37%          0.0
+chacha20_poly1305_encrypt   api                  2,232     +2.10%           2,256     +3.21%          2.0
+chacha20_poly1305_encrypt   apiisb               2,372     +8.50%           2,412    +10.35%          2.0
+chacha20_poly1305_encrypt   apiisbnop            2,347     +7.36%           2,287     +4.63%          2.0
+chacha20_poly1305_encrypt   taint                2,270     +3.84%           3,045    +39.31%         32.0
+chacha20_poly1305_encrypt   taintnop             2,289     +4.72%           2,289     +4.72%          0.0
+
+ed25519                     base                78,790     +0.00%          78,790     +0.00%          0.0
+ed25519                     blanket             78,963     +0.22%          78,963     +0.22%          0.0
+ed25519                     api                 79,168     +0.48%          79,120     +0.42%          2.0
+ed25519                     apiisb              79,333     +0.69%          79,380     +0.75%          2.0
+ed25519                     apiisbnop           78,798     +0.01%          79,105     +0.40%          2.0
+ed25519                     taint               77,193     -2.03%          77,612     -1.50%          2.0
+ed25519                     taintnop            76,946     -2.34%          76,946     -2.34%          0.0
+
+====================================================================================================
+DECOMPOSITION  percentage points of `base`, for the shipped `taint` arm
+====================================================================================================
+benchmark                        layout    renamed  serialising      total     sw/op   wr/Mcyc    floor
+aesni256gcm_decrypt              +1.11     +8.20      +15.05    +24.36       2.0      1858    0.00%
+aesni256gcm_encrypt              -6.33     +0.16       +9.56     +3.40       2.0      1643    0.00%
+chacha20_poly1305_decrypt        +6.10     +0.57      +31.36    +38.03      32.0     13975    0.00%
+chacha20_poly1305_encrypt        +4.72     -0.87      +35.46    +39.31      32.0     14639    0.00%
+ed25519                          -2.34     +0.31       +0.53     -1.50       2.0        25    0.00%
+
+
+====================================================================================================
+PER SWITCH  cycles, from a difference between binaries that differ only
+            in whether the switch executes -- not a ratio of one measurement
+====================================================================================================
+benchmark                        renamed   serialising     ratio
+aesni256gcm_decrypt                 44.1         125.1      2.8x
+aesni256gcm_encrypt                  1.0          59.2     59.2x
+chacha20_poly1305_decrypt            0.4          22.8   ~0 base
+chacha20_poly1305_encrypt           -0.6          23.6   ~0 base
+ed25519                            123.7         332.9      2.7x
+median                               1.0          59.2     59.2x
+
+  The transferable claim is the CONSISTENCY of these columns across
+  independent benchmarks, not any single row.
+
+  NOT a closure check. rate x cost reproduces the measured total
+  identically -- rate is switches/base-cycles and cost is
+  delta-cycles/switches, so the product is delta-cycles/base-cycles
+  by algebra, whatever the numbers. Printing it as agreement would
+  be the same self-reproducing ratio experiment 09 warns about.
+
+  Independent reference points for the serialising column:
+    34.3 cyc/write  experiment 06, gem5 Neoverse-V2, mbedTLS record MAC
+    76.3 cyc/write  experiment 06, same workload at a 53x lower rate
+    ~41 cyc/switch  experiment 09, Apple M5 silicon, this library
+    ~24 cyc/switch  experiment 02, Apple M5 silicon
+====================================================================================================
+PER-POLICY LAYOUT vs SWITCHES  each policy against ITS OWN nop arm
+====================================================================================================
+  layout  = (policyNOP - base)      code layout alone, no switch executes
+  renamed = (policy - policyNOP)    the switches executing, renamed
+  serial  = (policy@serdit - policy@spec)
+  A policy with a large NEGATIVE layout term is winning on the codegen
+  lottery, not on placement. That is not a ranking of placement quality.
+
+benchmark                 policy       layout  renamed   serial    total  sw/op   dwell
+aesni256gcm_decrypt       taint        +1.11    +8.20   +15.05   +24.36      2     97%
+
+aesni256gcm_encrypt       taint        -6.33    +0.16    +9.56    +3.40      2     97%
+
+chacha20_poly1305_decrypt taint        +6.10    +0.57   +31.36   +38.03     32     93%
+
+chacha20_poly1305_encrypt taint        +4.72    -0.87   +35.46   +39.31     32     93%
+
+ed25519                   taint        -2.34    +0.31    +0.53    -1.50      2    100%
+

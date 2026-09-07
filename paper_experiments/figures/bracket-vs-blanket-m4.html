@@ -1,0 +1,317 @@
+<title>Blanket Against Function Level</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --ground:#F2F4F5; --surface:#FFFFFF; --sunk:#E9EDEF;
+  --ink:#11171C; --muted:#5A6670; --faint:#8695A0;
+  --rule:#D6DCDF; --rule-soft:#E4E9EB;
+  --blanket:#1D6FA8; --bracket:#C1121F; --null:#7C8B95;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+    --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+    --rule:#2A343B; --rule-soft:#222B31;
+    --blanket:#3F97D0; --bracket:#E4555F; --null:#77878F;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1316; --surface:#161C21; --sunk:#1D252B;
+  --ink:#E6ECEF; --muted:#9BAAB4; --faint:#6F808B;
+  --rule:#2A343B; --rule-soft:#222B31;
+  --blanket:#3F97D0; --bracket:#E4555F; --null:#77878F;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.62;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1140px;margin:0 auto;padding:0 28px 104px}
+h1,h2,h3,.eyebrow,.meta,.legend,th,.tag,.ylab,.xlab,.ytick,.panelno{
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif}
+h1{font-size:clamp(2.2rem,5.2vw,3.5rem);line-height:1.04;letter-spacing:-.03em;
+  font-weight:700;margin:0 0 .6rem;text-wrap:balance}
+h2{font-size:1.28rem;letter-spacing:-.01em;font-weight:600;margin:0}
+h3{font-size:.98rem;font-weight:600;margin:0;letter-spacing:-.005em}
+p{margin:0 0 1.05rem}
+.eyebrow{font-size:.7rem;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 1.3rem}
+.mono,code{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  font-variant-numeric:tabular-nums}
+code{background:var(--sunk);padding:.1em .38em;border-radius:3px;font-size:.86em}
+header{padding:70px 0 34px}
+.lede{font-size:1.2rem;line-height:1.5;margin:0 0 1.4rem;max-width:66ch}
+.lede b{font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:6px 24px;padding-top:18px;
+  border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--faint)}
+.meta span{white-space:nowrap}
+section{padding-top:50px}
+.sechead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;flex-wrap:wrap}
+.tag{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--faint);
+  letter-spacing:.06em}
+.sub{color:var(--muted);font-size:.95rem;margin:0 0 24px;max-width:72ch}
+.sub b{color:var(--ink);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;
+  margin:0 0 20px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:22px;height:10px;border-radius:2px;
+  margin-right:8px;vertical-align:-1px}
+.chartwrap{background:var(--surface);border:1px solid var(--rule);border-radius:4px;
+  padding:22px 26px 16px;overflow-x:auto;margin-bottom:2px}
+.panelno{font-size:.95rem;font-weight:700;color:var(--ink);display:block;
+  margin-bottom:14px}
+.chart{display:grid;grid-template-columns:24px 52px minmax(620px,1fr);
+  grid-template-rows:320px auto;gap:0 10px}
+.ylab{grid-row:1;writing-mode:vertical-rl;transform:rotate(180deg);
+  justify-self:center;align-self:center;font-size:.72rem;font-weight:700;
+  letter-spacing:.06em;color:var(--ink)}
+.ycol{grid-row:1;position:relative}
+.ytick{position:absolute;right:0;transform:translateY(50%);
+  font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--ink);
+  font-weight:600;font-variant-numeric:tabular-nums}
+.plot{grid-row:1;position:relative}
+.gline{position:absolute;left:0;right:0;height:0;border-top:1px solid var(--rule-soft)}
+.gline.zero{border-top:1px solid var(--faint)}
+.bars{position:absolute;inset:0;display:flex}
+.col{flex:1;height:100%;position:relative}
+.bar{position:absolute;width:30%;max-width:44px;min-height:2px}
+.bar.blanket{background:var(--blanket);right:52%}
+.bar.bracket{background:var(--bracket);left:52%}
+.bar.up{border-radius:3px 3px 0 0}
+.bar.down{border-radius:0 0 3px 3px}
+.v{position:absolute;font-family:"IBM Plex Mono",monospace;font-size:.66rem;
+  font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);
+  white-space:nowrap;width:46%;text-align:center;
+  transform:translateY(-5px)}
+.v.blanket{right:50%}
+.v.bracket{left:50%}
+.v.below{transform:translateY(calc(100% + 5px))}
+.xaxis{grid-row:2;grid-column:3;display:flex;padding-top:10px;
+  border-top:1px solid var(--rule)}
+.xlab{flex:1;text-align:center;font-size:.72rem;font-weight:700;color:var(--ink);
+  line-height:1.3;padding:0 3px}
+.xlab small{display:block;font-weight:600;color:var(--muted);font-size:.66rem;
+  font-family:"IBM Plex Mono",monospace;margin-top:3px}
+
+#tip{position:fixed;z-index:9;pointer-events:none;opacity:0;transition:opacity .1s;
+  background:var(--surface);border:1px solid var(--rule);border-radius:4px;
+  padding:9px 12px;box-shadow:0 6px 22px rgba(0,0,0,.16);
+  font-family:"IBM Plex Mono",monospace;font-size:.71rem;line-height:1.65;
+  color:var(--ink);font-variant-numeric:tabular-nums;width:292px}
+#tip .t{font-family:Archivo,sans-serif;font-weight:600;font-size:.72rem;
+  margin-bottom:4px;display:block}
+#tip .m{color:var(--muted)}
+#tip .sw{display:inline-block;width:9px;height:9px;border-radius:2px;
+  margin-right:5px}
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:4px;
+  background:var(--surface);margin-bottom:26px}
+table{border-collapse:collapse;width:100%;font-family:"IBM Plex Mono",monospace;
+  font-size:.74rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+th,td{padding:8px 14px;text-align:right;border-bottom:1px solid var(--rule-soft)}
+th{font-family:Archivo,sans-serif;font-size:.62rem;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
+  border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;
+  background:var(--surface)}
+tbody tr:last-child td{border-bottom:none}
+td.c{color:var(--blanket);font-weight:600}
+td.k{color:var(--bracket);font-weight:600}
+td.n{color:var(--null)}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:26px 34px}
+.note h3{margin-bottom:.32rem}
+.note p{font-size:.93rem;color:var(--muted);margin:0}
+.note p b{color:var(--ink);font-weight:600}
+footer{margin-top:58px;padding-top:20px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--faint);
+  line-height:1.8}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Experiments 09 &amp; 11 &nbsp;&middot;&nbsp; Apple M4</p>
+  <h1>Two Cost Models</h1>
+  <p class="lede">Blanket <code>PSTATE.DIT</code> and function-level DIT, <b>both against
+  the same unhardened build</b>. Blanket is a fixed per-process tax that does not care what
+  the request does. Function-level placement pays per crypto boundary crossing. Which is
+  cheaper is a property of the <b>workload</b>, not of the mitigation &mdash; and these two
+  panels are the two ends of that.</p>
+  <div class="meta"><span>Mac16,10 Apple M4</span><span>rooted, pinned cpu 9</span><span>PMC0 / PMC1</span><span>09: 15 reps, 1 region in 64</span><span>11: 100 requests per arm</span><span>2026-09-06</span></div>
+</header>
+
+<section>
+  <div class="sechead"><h2>IPC overhead against the unhardened build</h2>
+    <span class="tag">arms C and B against arm A &nbsp;&middot;&nbsp; one denominator</span></div>
+  <p class="sub">Bar height is <b>baseline IPC &divide; arm IPC &minus; 1</b>, so taller is
+  slower and the two bars in a group share a denominator. IPC itself falls under a mode
+  switch, so plotting arm&nbsp;&divide;&nbsp;baseline would draw a slowdown below zero.
+  <b>The panels have independent y scales</b> &mdash; (a) spans 115 points and (b) spans 9.</p>
+  <div class="legend">
+    <span><i style="background:var(--blanket)"></i>Blanket DIT</span>
+    <span><i style="background:var(--bracket)"></i>Function Level DIT</span>
+  </div>
+  <div id="panels"></div>
+</section>
+
+<section>
+  <div class="sechead"><h2>The numbers</h2>
+    <span class="tag">medians &middot; PMC cycles, PMC instructions</span></div>
+  <p class="sub">The <code>vs twin</code> column is experiment 11's own reading of the
+  bracket: measured against its instruction-matched NOP twin rather than the baseline,
+  because emitting the switches moves code and relinking alone moved layout 3.9% in its
+  pilot. It is the more conservative number and it is what <code>summary.txt</code> quotes.
+  The chart uses the common denominator instead, so that the two bars in a group can be read
+  against each other at all.</p>
+  <div id="tables"></div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Reading it</h2><span class="tag">and what not to claim</span></div>
+  <div class="notes">
+    <div class="note"><h3>Blanket's penalty is invariant</h3>
+    <p>On WordPress it is <b>+2.1% to +2.6% across a 600-fold change in crossings</b>. It
+    suppresses the data-dependent optimisations for the whole process whether or not a
+    secret is present, so it does not care what the request does.</p></div>
+    <div class="note"><h3>Function-level tracks crossings</h3>
+    <p><b>0.0% at 110 crossings, +1.1% at 8,230, +8.4% at 65,600</b>, in step with the
+    crossings column and with nothing else. Two different cost models &mdash; and the
+    crossover sits at 12,000&ndash;14,100 crossings per request.</p></div>
+    <div class="note"><h3>No shipped configuration reaches it</h3>
+    <p>The most crypto-dense pattern WordPress supports at stock settings is
+    application-password REST auth, which re-verifies with phpass on <b>every</b> request,
+    and it sits at 8,230. Getting to 65,600 takes raising phpass to 2<sup>16</sup> rounds
+    &mdash; a change security guidance recommends.</p></div>
+    <div class="note"><h3>Blanket adds no instructions</h3>
+    <p>Arms A and C are the <b>same binary</b>, differing only in whether an injected
+    constructor runs one <code>msr DIT, #1</code> before <code>main</code>. Its cost has no
+    instruction component, which is why an IPC reading and a cycle reading agree on it.</p></div>
+  </div>
+</section>
+
+<footer>
+  Generated by <span class="mono">paper_experiments/fig_bracket_vs_blanket.py</span> from
+  <span class="mono">09-libsodium-cio-parity/results/m4/cio.csv</span> and
+  <span class="mono">11-php-src-suite/results/m4/*.json</span>.<br>
+  Panel (b) is <span class="mono">11-php-src-suite/results/m4/summary.txt</span> TABLE 1, in
+  its order. Percentages here are computed from full-precision medians; that table computes
+  its own from the 2-decimal IPC values it prints, which differs by up to 0.25 points.
+</footer>
+</div>
+<div id="tip" role="status"></div>
+
+<script>
+const PANELS = [{"tag":"(a) libsodium primitives","rows":[{"label":"aes256-gcm","sub":"decrypt","ipc_base":5.021579719254138,"ipc_blanket":4.790725564661203,"ipc_bracket":2.3493237326067917,"ipc_twin":4.873063769865218,"ovh_blanket":0.0481877226063272,"ovh_bracket":1.1374575370599231,"ovh_bracket_twin":1.0742410687087824,"cyc_blanket":0.0481877226063272,"cyc_bracket":1.1531531531531534,"d_ins_blanket":0.0,"d_ins_bracket":0.00734312416555416,"base_cyc":298.3125,"reps":15,"worst_mad":0.03897661403158105,"res_blanket":true,"res_bracket":true},{"label":"aes256-gcm","sub":"encrypt","ipc_base":4.925789860396767,"ipc_blanket":4.99180938198064,"ipc_bracket":2.6848739495798317,"ipc_twin":4.746679095781869,"ovh_blanket":-0.01322556943423947,"ovh_bracket":0.8346447367361982,"ovh_bracket_twin":0.7679336851268934,"cyc_blanket":-0.013225569434239581,"cyc_bracket":0.8652951261327455,"d_ins_blanket":0.0,"d_ins_bracket":0.01670644391408116,"base_cyc":255.1875,"reps":15,"worst_mad":0.07131204847354929,"res_blanket":false,"res_bracket":true},{"label":"chacha20-poly1305","sub":"encrypt","ipc_base":4.6710425167051035,"ipc_blanket":4.653705667491457,"ipc_bracket":3.9554779136511105,"ipc_twin":4.672641509433962,"ovh_blanket":0.0037253858435339904,"ovh_bracket":0.18090471459452284,"ovh_bracket_twin":0.18130896226415105,"cyc_blanket":0.0037253858435337683,"cyc_bracket":0.18473183135237425,"d_ins_blanket":0.0,"d_ins_bracket":0.0032408345148875473,"base_cyc":1056.9375,"reps":15,"worst_mad":0.019618239660657476,"res_blanket":false,"res_bracket":true},{"label":"chacha20-poly1305","sub":"decrypt","ipc_base":4.4496737618996685,"ipc_blanket":4.35944458999214,"ipc_bracket":3.8229958772331654,"ipc_twin":4.399831294812316,"ovh_blanket":0.020697400791528597,"ovh_bracket":0.1639232436525806,"ovh_bracket_twin":0.1508857022353438,"cyc_blanket":0.020697400791528597,"cyc_bracket":0.16750454594074227,"d_ins_blanket":0.0,"d_ins_bracket":0.003076923076922977,"base_cyc":1168.625,"reps":15,"worst_mad":0.05359596885020614,"res_blanket":false,"res_bracket":true},{"label":"ed25519","sub":"sign","ipc_base":4.362585718470432,"ipc_blanket":4.322274198054962,"ipc_bracket":4.307305419338614,"ipc_twin":4.370144248731103,"ovh_blanket":0.009326460693680705,"ovh_bracket":0.012834079256052844,"ovh_bracket_twin":0.014588895672538182,"cyc_blanket":0.009326460693680483,"cyc_bracket":0.01290166460766451,"d_ins_blanket":0.0,"d_ins_bracket":6.67289470173138e-05,"base_cyc":34351.1875,"reps":15,"worst_mad":0.0020982613633290974,"res_blanket":true,"res_bracket":true},{"label":"argon2id","sub":"","ipc_base":3.1328421091418415,"ipc_blanket":3.165725395726851,"ipc_bracket":3.1253392603170367,"ipc_twin":3.1521393932359087,"ovh_blanket":-0.01038728331566463,"ovh_bracket":0.002400651001339238,"ovh_bracket_twin":0.008575111591614393,"cyc_blanket":-0.010783133387819999,"cyc_bracket":0.002356320190144423,"d_ins_blanket":-0.00040000503781056906,"d_ins_bracket":-4.4224643260593055e-05,"base_cyc":213094554.0,"reps":13,"worst_mad":0.05165383825992459,"res_blanket":false,"res_bracket":false}]},{"tag":"(b) WordPress 6.2","rows":[{"label":"GET /","sub":"anonymous","ipc_base":2.889702816219023,"ipc_blanket":2.817472675143702,"ipc_bracket":2.8901560900080656,"ipc_twin":2.8917374884573923,"ovh_blanket":0.025636501007640478,"ovh_bracket":-0.0001568336708905882,"ovh_bracket_twin":0.0005471671425616442,"cyc_blanket":0.023918210902840187,"cyc_bracket":0.0012418864609522462,"d_ins_blanket":-0.0016753402429731112,"d_ins_bracket":0.0013989395326652332,"base_cyc":151052456.0,"reps":100,"worst_mad":0.00802943250389785,"res_blanket":true,"res_bracket":false,"crossings":110},{"label":"GET /","sub":"logged in","ipc_base":2.914565605255849,"ipc_blanket":2.8433442208882767,"ipc_bracket":2.919334049133993,"ipc_twin":2.9253790516910394,"ovh_blanket":0.025048456618214976,"ovh_bracket":-0.001633401247643551,"ovh_bracket_twin":0.002070678605224918,"cyc_blanket":0.023423354662926332,"cyc_bracket":-0.00041511005678951385,"d_ins_blanket":-0.0015853903733000774,"d_ins_bracket":0.0012202844049233885,"base_cyc":157722028.0,"reps":100,"worst_mad":0.008251834043117929,"res_blanket":true,"res_bracket":false,"crossings":128},{"label":"wp-login","sub":"2^13","ipc_base":3.0194881493353187,"ipc_blanket":2.9586315890510053,"ipc_bracket":2.9855363622509095,"ipc_twin":3.022825871483544,"ovh_blanket":0.020569157886884293,"ovh_bracket":0.011372089623055803,"ovh_bracket_twin":0.012490053614527374,"cyc_blanket":0.018900926249931116,"cyc_bracket":0.0134936813782216,"d_ins_blanket":-0.0016346091042054312,"d_ins_bracket":0.002097736112093518,"base_cyc":132373883.0,"reps":99,"worst_mad":0.009740123737247995,"res_blanket":true,"res_bracket":true,"crossings":8226},{"label":"wp-json","sub":"2^13","ipc_base":2.891611654489247,"ipc_blanket":2.8321114217364616,"ipc_bracket":2.8594873752305654,"ipc_twin":2.8865129383632935,"ovh_blanket":0.021009142612158804,"ovh_bracket":0.011234279100844624,"ovh_bracket_twin":0.009451191625054367,"cyc_blanket":0.018902616045368248,"cyc_bracket":0.01281666778287649,"d_ins_blanket":-0.002063180904924411,"d_ins_bracket":0.0015648091789759455,"base_cyc":133562095.0,"reps":100,"worst_mad":0.008322600809758206,"res_blanket":true,"res_bracket":true,"crossings":8230},{"label":"wp-login","sub":"2^16","ipc_base":3.174803572941544,"ipc_blanket":3.1043273941662415,"ipc_bracket":2.9408481793243286,"ipc_twin":3.1853081733020043,"ovh_blanket":0.02270255995155135,"ovh_bracket":0.07955371353816965,"ovh_bracket_twin":0.08312567635975054,"cyc_blanket":0.021248692138387426,"cyc_bracket":0.08166800538318131,"d_ins_blanket":-0.0014215939903706731,"d_ins_bracket":0.001958486936312287,"base_cyc":159442519.0,"reps":99,"worst_mad":0.008456809441150388,"res_blanket":true,"res_bracket":true,"crossings":65600},{"label":"wp-json","sub":"2^16","ipc_base":3.0112702863789425,"ipc_blanket":2.9350052788747547,"ipc_bracket":2.777905418361146,"ipc_twin":3.0204998449089095,"ovh_blanket":0.025984623623377834,"ovh_bracket":0.08400749229089044,"ovh_bracket_twin":0.0873299806913097,"cyc_blanket":0.02411487779971533,"cyc_bracket":0.08561661187868697,"d_ins_blanket":-0.0018223916622251979,"d_ins_bracket":0.0014844174041601654,"base_cyc":156181612.5,"reps":98,"worst_mad":0.007285534332666838,"res_blanket":true,"res_bracket":true,"crossings":65600}]}];
+const MINUS = "−";
+const pct = v => (v >= 0 ? "+" : MINUS) + Math.abs(v * 100).toFixed(2) + "%";
+
+const host = document.getElementById("panels");
+const tables = document.getElementById("tables");
+const tip = document.getElementById("tip");
+
+PANELS.forEach((panel, pi) => {
+  const rows = panel.rows;
+  const all = rows.flatMap(d => [d.ovh_blanket * 100, d.ovh_bracket * 100]);
+  const hi = Math.max(...all, 0), lo = Math.min(...all, 0);
+  const span = hi - lo, pad = span * 0.16;
+  const top = hi + pad, bot = lo - (lo < 0 ? pad : 0);
+  const range = top - bot;
+  const y = v => (v - bot) / range * 100;
+  const zero = y(0);
+
+  const wrap = document.createElement("div");
+  wrap.className = "chartwrap";
+  wrap.innerHTML = '<span class="panelno">' + panel.tag + "</span>" +
+    '<div class="chart"><span class="ylab">IPC Overhead (%)</span>' +
+      '<div class="ycol"></div><div class="plot"><div class="bars"></div></div>' +
+      '<div class="xaxis"></div></div>';
+  host.appendChild(wrap);
+
+  const ycol = wrap.querySelector(".ycol");
+  const plot = wrap.querySelector(".plot");
+  const bars = wrap.querySelector(".bars");
+  const xaxis = wrap.querySelector(".xaxis");
+
+  const step = range > 80 ? 25 : range > 30 ? 10 : range > 12 ? 5 : 2;
+  for (let t = Math.ceil(bot / step) * step; t <= top; t += step) {
+    const p = y(t);
+    const lab = document.createElement("span");
+    lab.className = "ytick";
+    lab.style.bottom = p + "%";
+    lab.textContent = String(t).replace("-", MINUS);
+    ycol.appendChild(lab);
+    const g = document.createElement("i");
+    g.className = "gline" + (Math.abs(t) < 1e-9 ? " zero" : "");
+    g.style.bottom = p + "%";
+    plot.appendChild(g);
+  }
+
+  rows.forEach((d, i) => {
+    const col = document.createElement("div");
+    col.className = "col";
+    col.dataset.p = pi;
+    col.dataset.i = i;
+    col.innerHTML = [["blanket", d.ovh_blanket], ["bracket", d.ovh_bracket]]
+      .map(([cls, raw]) => {
+        const v = raw * 100, h = Math.abs(v) / range * 100, up = v >= 0;
+        return '<div class="bar ' + cls + " " + (up ? "up" : "down") +
+          '" style="bottom:' + (up ? zero : zero - h) + "%;height:" +
+          Math.max(h, 0.3) + '%"></div>' +
+          '<span class="v ' + cls + (up ? "" : " below") + '" style="bottom:' +
+          (up ? zero + h : zero - h) + '%">' + pct(raw) + "</span>";
+      }).join("");
+    bars.appendChild(col);
+
+    const x = document.createElement("span");
+    x.className = "xlab";
+    x.innerHTML = d.label + (d.sub ? "<small>" + d.sub + "</small>" : "");
+    xaxis.appendChild(x);
+  });
+
+  const t = document.createElement("div");
+  t.className = "tablewrap";
+  t.innerHTML = "<table><thead><tr><th>" + panel.tag +
+    "</th><th>baseline IPC</th><th>blanket IPC</th><th>fn-level IPC</th>" +
+    "<th>blanket ovh</th><th>fn-level ovh</th><th>fn-level vs twin</th>" +
+    "<th>blanket cycles</th><th>fn-level cycles</th></tr></thead><tbody>" +
+    rows.map(d =>
+      "<tr><td>" + d.label + (d.sub ? " " + d.sub : "") + "</td><td>" +
+      d.ipc_base.toFixed(3) + "</td><td>" + d.ipc_blanket.toFixed(3) + "</td><td>" +
+      d.ipc_bracket.toFixed(3) + '</td><td class="' + (d.res_blanket ? "c" : "n") +
+      '">' + pct(d.ovh_blanket) + (d.res_blanket ? "" : " *") +
+      '</td><td class="' + (d.res_bracket ? "k" : "n") + '">' + pct(d.ovh_bracket) +
+      (d.res_bracket ? "" : " *") + '</td><td class="n">' +
+      pct(d.ovh_bracket_twin) + '</td><td class="n">' + pct(d.cyc_blanket) +
+      '</td><td class="n">' + pct(d.cyc_bracket) + "</td></tr>").join("") +
+    "</tbody></table>";
+  tables.appendChild(t);
+});
+
+document.querySelectorAll(".col").forEach(col => {
+  const panel = PANELS[+col.dataset.p], d = panel.rows[+col.dataset.i];
+  const show = e => {
+    tip.innerHTML = '<span class="t">' + d.label + (d.sub ? " " + d.sub : "") +
+      "</span>" +
+      'baseline IPC ' + d.ipc_base.toFixed(3) + "<br>" +
+      '<i class="sw" style="background:var(--blanket)"></i>blanket ' +
+      d.ipc_blanket.toFixed(3) + " &nbsp;<b>" + pct(d.ovh_blanket) + "</b><br>" +
+      '<i class="sw" style="background:var(--bracket)"></i>fn-level ' +
+      d.ipc_bracket.toFixed(3) + " &nbsp;<b>" + pct(d.ovh_bracket) + "</b><br>" +
+      '<span class="m">fn-level vs its NOP twin ' + pct(d.ovh_bracket_twin) +
+      "</span><br>" +
+      '<span class="m">cycles ' + pct(d.cyc_blanket) + " / " + pct(d.cyc_bracket) +
+      "</span><br>" +
+      '<span class="m">' + d.reps + " samples &middot; noise floor " +
+      (d.worst_mad * 100).toFixed(2) + "%</span>" +
+      (d.crossings === undefined ? "" :
+        '<br><span class="m">' + d.crossings.toLocaleString("en-US") +
+        " crypto crossings/request</span>");
+    tip.style.opacity = 1;
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - 306) + "px";
+    tip.style.top = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 12) + "px";
+  };
+  col.addEventListener("mousemove", show);
+  col.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+});
+</script>

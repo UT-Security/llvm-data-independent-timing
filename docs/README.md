@@ -139,6 +139,16 @@ How the analysis is built, which bugs were found in it, and what is still open.
   switch sites at identical coverage; ed25519 and AES-GCM down to the
   hand-placed bracket's two switches per call; argon2id's 395,758 re-asserts
   after `memcpy` gone. Renamed-model cost unchanged: it was never the switches.
+- **[results/dit-layout-lottery-2026-09-06.md](results/dit-layout-lottery-2026-09-06.md)** -
+  **what the "layout term" in every hardened-vs-unhardened number actually is.**
+  It is three things, not one: the TU-wide tail-call disable (mean 1.78 points),
+  the switch slots (1.41), and the twins (3.53). A pure relink of the UNHARDENED
+  library - 4 to 256 bytes of unreachable padding - reproduces the whole range,
+  up to 7.04 points, so the term is a per-binary draw the pass does not
+  participate in and the cost model cannot price. Not a cache effect (1 L1I miss
+  per 13,831 accesses across 350 cells). Two corrections: experiment 09's `base`
+  arm is not codegen-matched to its hardened arms, and 64 B alignment works by
+  quantising code motion to whole lines, not by fixing cache placement.
 - **[results/dit-intra-block-default-2026-09-05.md](results/dit-intra-block-default-2026-09-05.md)** -
   intra-block placement as the default, measured on libsodium: switch counts
   and oracle identical (the hot code is whole twins), timing inside the layout
