@@ -364,13 +364,18 @@ per-cell spread of the clean medians has a median of 0.08% and a 90th percentile
   MTE paper's overhead tables (`latex_table_awslc.py`, run by `analyze`): `awslc_gradient.tex`
   (colour scale and the `\awsgradient` cell macro, for the preamble), `awslc_paper_rows.tex`
   (the `table` environment, ratios to A with a gradient cell colour, geomean over every cell),
-  and `awslc_standalone.tex`, a one-page document at USENIX column width to preview it
+  `awslc_all_rows_bands.tex` (the same format over every row, grouped: the geomean of all
+  rows, then the slowest 15%, the middle 50% and the fastest 15% of each column's cells;
+  `--bands 25,50,25` changes the cut and `--rank-by B` makes every column follow the AWS
+  default order instead of its own), and `awslc_standalone.tex`, a one-page document at
+  USENIX column width to preview them
   (`tectonic awslc_standalone.tex` in that directory, or any pdflatex). To use it in
   Overleaf: upload the first two files into the project, add `\input{awslc_gradient}` to the
   preamble after `\usepackage[table]{xcolor}`, `\usepackage{etoolbox}`, `\usepackage{pgf}` and
   `\usepackage{booktabs}` (the MTE paper's preamble already has all four), and put
-  `\input{awslc_paper_rows}` where the table goes; `\Cref{tab:awslc-bracket}` refers to it.
-  After a rerun, re-upload `awslc_paper_rows.tex` only.
+  `\input{awslc_paper_rows}` and `\input{awslc_all_rows_bands}` where the tables go;
+  `\Cref{tab:awslc-bracket}` and `\Cref{tab:awslc-bands}` refer to them. After a rerun,
+  re-upload the two table files only.
 - Filters are substring matches, so `AES-128` also matches every `AEAD-AES-128-*` row; those rows
   collect samples from two processes per rep and show up to twice the rep count in the sample column.
 
