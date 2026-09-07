@@ -346,9 +346,11 @@ per-cell spread of the clean medians has a median of 0.08% and a 90th percentile
   row's medians per arm, every sample's implied clock, the flags), `provenance.txt`; with
   repeated runs, `run-N/` per run and `speed.json` their per-cell mean.
 - `results-m4/summary/`: what `analyze` derives from it: `report.md`, `summary.json`,
-  `paper_table.md`, `paper_table.csv`, and the charts `paper_rows.png` (the ten rows and the
-  geometric mean, grouped bars), `all_rows.png` (every row, one panel per arm, symmetric-log
-  axis) and `geomeans.png`; suspect cells are hatched, never left out. `collect` writes to
+  `paper_table.md`, `paper_table.csv`, `hs_table.md` and `hs_table.csv` (every row where the
+  hoisted+sb arm costs at least 5% over A, largest first; `HS_MIN_PCT` sets the threshold), and
+  the charts `paper_rows.png` (the ten rows and the geometric mean, grouped bars, as the ratio
+  to A), `all_rows.png` (every row, one panel per arm, symmetric-log axis) and `geomeans.png`;
+  suspect cells are hatched, never left out. `collect` writes to
   `results-<host>/raw/`, named from the CPU brand.
 - `data/`: the build record: `switch_counts.txt`, `bracket_sites.txt`, `speed_pmc.diff`, `variants.diff`.
 - `figures/shipping-bracket.html` - the page `analyze_awslc.py` renders from `speed.json`

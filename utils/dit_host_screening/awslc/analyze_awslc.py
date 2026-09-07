@@ -157,6 +157,41 @@ def paper_table(an):
         note += " \u2020 marks a cell whose median implies a clock outside the P-core band: a majority of its samples carried the backward-counter fault; the value is kept but not to be read."
     return '\n'.join(md) + '\n\n' + note + '\n', '\n'.join(csv) + '\n', missing
 
+HS_MIN_PCT = float(os.environ.get('HS_MIN_PCT', '5'))
+
+def hs_table(an, threshold=HS_MIN_PCT):
+    """Every row whose hoisted+sb arm (Hs: the vendor's -dit hoisting with an sb after the enable) costs at
+    least `threshold` percent over A, largest first, with the other arms for the same rows. Suspect cells are
+    kept and daggered, never dropped. HS_MIN_PCT in the environment sets the threshold."""
+    arms = ('C', 'B', 'Bs', 'H', 'Hs'); dagger = '\u2020'
+    sel = [(k, r) for k, r in an['rows'].items() if r['pct'].get('Hs') is not None and r['pct']['Hs'] == r['pct']['Hs'] and r['pct']['Hs'] >= threshold]
+    sel.sort(key=lambda kr: -kr[1]['pct']['Hs'])
+    md = ["| # | row | A cyc/op | C blanket | B bracket | Bs bracket+sb | H hoisted | Hs hoisted+sb | MAD |", "|---|---|---|---|---|---|---|---|---|"]
+    csv = ["n,row,A_cycles_per_op,C_pct,B_pct,Bs_pct,H_pct,Hs_pct,MAD_pct"]
+    for i, (k, r) in enumerate(sel, 1):
+        c = r['cycles']; q = r['pct']; sus = r.get('suspect', [])
+        dg = lambda x: dagger if x in sus else ''
+        rowmark = dagger if sus else ''
+        md.append(f"| {i} | {k}{rowmark} | {c['A']:,.0f}{dg('A')} | " + ' | '.join(f"{q[x]:+.0f}%{dg(x)}" if x in q and q[x] == q[x] else 'n/a' for x in arms) + f" | {r['mad']:.2f}% |")
+        csv.append(f"{i},\"{k}\",{c['A']:.1f}," + ','.join(f"{q[x]:.2f}" if x in q and q[x] == q[x] else '' for x in arms) + f",{r['mad']:.3f}")
+    rows = [r for _, r in sel]
+    gm = {x: geomean_pct(rows, x, include_suspect=True) for x in arms}
+    gmc = {x: geomean_pct(rows, x) for x in arms}
+    if rows:
+        md.append("| | **geometric mean of the ratio to A, all cells** | | " + ' | '.join(f"**{gm[x][0]:+.0f}%**" for x in arms) + " | |")
+        if any(gmc[x][2] for x in gmc):
+            md.append("| | **geometric mean, clean cells only** | | " + ' | '.join(f"**{gmc[x][0]:+.0f}%**" for x in arms) + " | |")
+        csv.append("geomean_all,\"geometric mean of arm/A over the rows above, all cells\",," + ','.join(f"{gm[x][0]:.2f}" for x in arms) + ",")
+        csv.append("geomean_clean,\"geometric mean of arm/A over the rows above, suspect cells left out\",," + ','.join(f"{gmc[x][0]:.2f}" for x in arms) + ",")
+    note = (f"{len(sel)} of {len(an['rows'])} rows: those where the hoisted+sb arm (Hs, the vendor's `-dit` hoisting with an `sb` after the "
+            f"enable) costs at least {threshold:g}% over A, cycles per operation, largest first; the other arms are shown for the same rows. "
+            f"HS_MIN_PCT sets the threshold.")
+    if any(r.get('suspect') for r in rows):
+        note += " \u2020 marks a cell whose median implies a clock outside the P-core band: kept, not to be read."
+    an['hs_table'] = {'threshold': threshold, 'rows': [k for k, _ in sel], 'count': len(sel), 'of': len(an['rows'])}
+    an['geomeans'] = an.get('geomeans', {}); an['geomeans']['hs_over_threshold'] = {'all': {x: gm[x][0] for x in gm}, 'clean': {x: gmc[x][0] for x in gmc}, 'rows': len(rows)}
+    return '\n'.join(md) + '\n\n' + note + '\n', '\n'.join(csv) + '\n'
+
 import math
 def geomean_pct(rows, arm, include_suspect=False):
     """Geometric mean of arm/A over the given rows, as percent over A. With include_suspect=False a
@@ -338,10 +373,14 @@ HTML_TEMPLATE = r'''<title>The Shipping Bracket</title>
   <div class="tablewrap" id="anomaly-table"></div>
 
   <h2>The paper's ten rows</h2>
-  <p>The set that carries the argument: the same 156-cycle entry at three message sizes (rows 3, 6, 7), the two faces of nesting (2 and 8), the barrier's price (4 against 3, and every Hs against its H), a non-AES primitive (5), a long operation where nothing matters (9), and the row where blanket wins outright (10). Percent over the unhardened arm, cycles per operation; a hatched bar is a suspect cell, drawn capped with its true value.</p>
+  <p>The set that carries the argument: the same 156-cycle entry at three message sizes (rows 3, 6, 7), the two faces of nesting (2 and 8), the barrier's price (4 against 3, and every Hs against its H), a non-AES primitive (5), a long operation where nothing matters (9), and the row where blanket wins outright (10). Bars are cycles per operation as a ratio to the unhardened arm, drawn from 1.00x (no cost); a hatched bar is a suspect cell, drawn capped with its true value. The table below keeps the same cells as percent.</p>
   <div class="swatches" id="sw2"></div>
   <div class="chart" id="chart-paper"></div>
   <div class="tablewrap" id="paper-table"></div>
+
+  <h2 id="hs-heading">Where hoisting with the barrier still costs 5% or more</h2>
+  <p class="legend" id="hs-legend"></p>
+  <div class="tablewrap" id="hs-table"></div>
 
   <h2>Every row</h2>
   <p class="legend">Percent over A, cycles per operation. B&nbsp;&minus;&nbsp;A in absolute cycles. MAD is the spread of A's samples as a percent of its median. A dagger marks a cell whose median implies a clock outside the P-core band: a majority of that cell's samples carried the backward-counter fault, so the value is kept but not to be read.</p>
@@ -470,23 +509,27 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
     document.getElementById('sw2').innerHTML = arms.map(a => `<span style="--sw:${COL(a)}">${a}</span>`).join('');
     const groups = PR.map(([label,k]) => ({label, r: DATA.rows[k]})).filter(g => g.r);
     groups.push({label: 'geometric mean', r: {pct: Object.fromEntries(arms.map(a => [a, geomean(used, a)])), suspect: []}});
-    const clean = groups.flatMap(g => arms.filter(a => !(g.r.suspect||[]).includes(a) && g.r.pct[a] != null).map(a => g.r.pct[a]));
-    const top = Math.max(...clean) * 1.18, bottom = Math.min(0, Math.min(...clean) * 1.3);
+    // ratio to A: 1.00x is no cost; the axis is set by the clean cells and starts a little under the lowest bar
+    const ratio = p => p == null || Number.isNaN(p) ? null : p / 100 + 1;
+    const rlab = v => Math.abs(v) < 10 ? `${v.toFixed(2)}x` : Math.abs(v) < 1e3 ? `${v.toFixed(1)}x` : `${v.toPrecision(2)}x`;
+    const clean = groups.flatMap(g => arms.filter(a => !(g.r.suspect||[]).includes(a) && g.r.pct[a] != null).map(a => ratio(g.r.pct[a])));
+    const top = Math.max(...clean) * 1.12, lo = Math.min(1, Math.min(...clean)), bottom = lo - (top - lo) * 0.05;
     const W = 900, H = 420, L = 62, R = 12, T = 18, Bm = 96, gw = (W - L - R) / groups.length, bw = gw / (arms.length + 1.2);
     const Y = v => T + (1 - (v - bottom) / (top - bottom)) * (H - T - Bm);
-    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="the paper's ten rows, percent over A, five arms">`;
-    const step = top > 300 ? 100 : top > 120 ? 50 : 20;
-    for (let g = Math.ceil(bottom / step) * step; g <= top; g += step) s += `<line class="grid" x1="${L}" x2="${W-R}" y1="${Y(g)}" y2="${Y(g)}"/><text x="${L-6}" y="${Y(g)+4}" text-anchor="end">${g>0?'+':''}${g}%</text>`;
-    s += `<line class="axis" x1="${L}" x2="${W-R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="the paper's ten rows, ratio to A, five arms">`;
+    const step = top > 12 ? 2 : top > 6 ? 1 : 0.5;
+    for (let g = Math.ceil(bottom / step) * step; g <= top; g += step) s += `<line class="grid" x1="${L}" x2="${W-R}" y1="${Y(g)}" y2="${Y(g)}"/><text x="${L-6}" y="${Y(g)+4}" text-anchor="end">${Number.isInteger(g) ? g : g.toFixed(1)}x</text>`;
+    s += `<line class="axis" x1="${L}" x2="${W-R}" y1="${Y(1)}" y2="${Y(1)}"/>`;
     groups.forEach((g, i) => {
       const x0 = L + i * gw + gw * 0.1;
       arms.forEach((a, j) => {
-        const v = g.r.pct[a]; if (v == null || Number.isNaN(v)) return;
+        const v = ratio(g.r.pct[a]); if (v == null) return;
         const sus = (g.r.suspect||[]).includes(a), vd = Math.min(v, top), x = x0 + j * bw;
-        const y1 = Y(Math.max(0, vd)), y2 = Y(Math.min(0, vd));
+        const y1 = Y(Math.max(1, vd)), y2 = Y(Math.min(1, vd));
+        // a label is lifted one line when the neighbouring bar's label would overprint it
+        const prev = j ? ratio(g.r.pct[arms[j-1]]) : null, lift = prev != null && Math.abs(prev - v) < 0.04 * (top - bottom) && j % 2 ? 9 : 0;
         s += `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${(bw*0.9).toFixed(1)}" height="${Math.max(0.5, y2 - y1).toFixed(1)}" fill="${sus ? 'url(#hatch)' : COL(a)}" stroke="${sus ? COL(a) : 'none'}"/>`;
-        const lab = Math.abs(v) < 1e4 ? `${v>=0?'+':''}${v.toFixed(0)}` : `${v>=0?'+':''}${v.toExponential(1)}`;
-        s += `<text x="${(x + bw*0.45).toFixed(1)}" y="${(v >= 0 ? y1 - 3 : y2 + 10).toFixed(1)}" text-anchor="middle" font-size="8.5" ${sus ? 'fill="var(--flag)"' : ''}>${lab}${sus ? '\u2020' : ''}</text>`;
+        s += `<text x="${(x + bw*0.45).toFixed(1)}" y="${(v >= 1 ? y1 - 3 - lift : y2 + 10 + lift).toFixed(1)}" text-anchor="middle" font-size="8" ${sus ? 'fill="var(--flag)"' : ''}>${rlab(v)}${sus ? '\u2020' : ''}</text>`;
       });
       const words = g.label.replace(/ \(a TLS record\)/, '').split(', ');
       words.forEach((w, k) => { s += `<text x="${(x0 + gw*0.4).toFixed(1)}" y="${H - Bm + 14 + k*12}" text-anchor="middle" font-size="9.5">${esc(w)}</text>`; });
@@ -497,6 +540,22 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
   t += `<tr><td class="row"></td><td><b>geometric mean of the ratio to A, all cells</b></td><td></td><td></td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num"><b>${fmt(geomean(used, x, true),0)}</b></td>`).join('')}<td></td></tr>`;
   if (used.some(r => (r.suspect||[]).length)) t += `<tr><td class="row"></td><td><b>geometric mean, clean cells only</b></td><td></td><td></td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num"><b>${fmt(geomean(used, x),0)}</b></td>`).join('')}<td></td></tr>`;
   t += '</table>'; document.getElementById('paper-table').innerHTML = t;
+}
+// rows where Hs (the vendor's hoisting with an sb after the enable) costs at least the threshold, largest first
+{
+  const th = (DATA.hs_table || {}).threshold ?? 5, arms = ['C','B','Bs','H','Hs'];
+  const sel = Object.entries(DATA.rows).filter(([,r]) => r.pct.Hs != null && !Number.isNaN(r.pct.Hs) && r.pct.Hs >= th).sort((a,b) => b[1].pct.Hs - a[1].pct.Hs);
+  document.getElementById('hs-heading').textContent = `Where hoisting with the barrier still costs ${th}% or more`;
+  document.getElementById('hs-legend').textContent = `${sel.length} of ${Object.keys(DATA.rows).length} rows: the hoisted+sb arm (Hs) at least ${th}% over the unhardened build, cycles per operation, largest first, with the other arms for the same rows. A suspect cell is kept and daggered.`;
+  let t = `<table><tr><th>#</th><th>row</th><th class="num">A cyc/op</th><th class="num">C blanket</th><th class="num">B bracket</th><th class="num">Bs +sb</th><th class="num">H hoisted</th><th class="num">Hs hoisted+sb</th><th class="num">MAD</th></tr>`;
+  sel.forEach(([k,r],i) => { const dg = x => (r.suspect||[]).includes(x) ? '\u2020' : '';
+    t += `<tr><td class="row">${i+1}</td><td>${esc(k)}${(r.suspect||[]).length?'\u2020':''}</td><td class="num">${cyc(r.cycles.A)}${dg('A')}</td>${arms.map(x=>`<td class="num ${x==='Hs'?'hot':''}">${fmt(r.pct[x],0)}${dg(x)}</td>`).join('')}<td class="num">${r.mad.toFixed(2)}%</td></tr>`; });
+  const rows = sel.map(([,r]) => r);
+  if (rows.length) {
+    t += `<tr><td class="row"></td><td><b>geometric mean of the ratio to A, all cells</b></td><td></td>${arms.map(x=>`<td class="num"><b>${fmt(geomean(rows, x, true),0)}</b></td>`).join('')}<td></td></tr>`;
+    if (rows.some(r => (r.suspect||[]).length)) t += `<tr><td class="row"></td><td><b>geometric mean, clean cells only</b></td><td></td>${arms.map(x=>`<td class="num"><b>${fmt(geomean(rows, x),0)}</b></td>`).join('')}<td></td></tr>`;
+  }
+  t += '</table>'; document.getElementById('hs-table').innerHTML = t;
 }
 // full table + ipc table
 {
@@ -538,7 +597,11 @@ def main():
     an['paper_table_md'] = pt_md
     open(os.path.join(out, 'paper_table.md'), 'w').write(pt_md)
     open(os.path.join(out, 'paper_table.csv'), 'w').write(pt_csv)
-    open(os.path.join(out, 'report.md'), 'w').write(report_md(an, a.json) + "\n## The paper's ten rows\n\n" + pt_md)
+    hs_md, hs_csv = hs_table(an)
+    open(os.path.join(out, 'hs_table.md'), 'w').write(hs_md)
+    open(os.path.join(out, 'hs_table.csv'), 'w').write(hs_csv)
+    open(os.path.join(out, 'report.md'), 'w').write(report_md(an, a.json) + "\n## The paper's ten rows\n\n" + pt_md
+                                                    + f"\n## Rows where the hoisted+sb arm costs at least {an['hs_table']['threshold']:g}%\n\n" + hs_md)
     json.dump(an, open(os.path.join(out, 'summary.json'), 'w'), indent=1, default=float)
     if a.html:
         open(a.html, 'w').write(HTML_TEMPLATE.replace('__DATA__', json.dumps(an, default=float)))
@@ -546,7 +609,7 @@ def main():
     print(f"rows {len(an['rows'])}; flagged {v['flagged']} ({v['flag_mode']}); unpinned {v['unpinned']}; "
           f"one-entry prices (GCM seal 16 B): pair {p.get('changing_pair')}, read+nonchanging {p.get('read_plus_nonchanging')}, "
           f"sb after change {p.get('sb_after_changing')}, sb after nonchange {p.get('sb_after_nonchanging')}")
-    print(f"wrote {out}/report.md, {out}/summary.json, {out}/paper_table.md, {out}/paper_table.csv" + (f", {a.html}" if a.html else ''))
+    print(f"wrote {out}/report.md, {out}/summary.json, {out}/paper_table.md, {out}/paper_table.csv, {out}/hs_table.md ({an['hs_table']['count']} rows at Hs >= {an['hs_table']['threshold']:g}%)" + (f", {a.html}" if a.html else ''))
     if missing: print("paper table: rows missing from this run:", ', '.join(missing))
     print(pt_md)
 
