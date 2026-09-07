@@ -120,7 +120,7 @@ and leaves cycles per operation untouched. The first pinned run on 2026-09-06 ha
 4.04 GHz while the kept ones sat at 4.04-4.46; those were valid, the gate was wrong, and
 it is gone. Every sample's clock is saved in `speed.json`.
 
-Per sample: one `bssl speed -json -timeout_ms 50 -chunks 16,256,1350,8192,16384
+Per sample: one `bssl speed -json -timeout_ms 400 -chunks 16,256,1350,8192,16384
 -filter <test>` process, one thread, hard-bound to CPU `PIN_CPU`, under the injected
 constructor (DIT readback at exit: C must exit 1, every other arm 0; bind readback must
 name `PIN_CPU`). Arms rotate on every rep; 1 warm-up rep
@@ -155,7 +155,7 @@ other arm as percent over A, Bs - B and B - H in points of A, MAD of A.
 
 ```
 paper_experiments/14-awslc-shipping-bracket/reproduce.sh          # pmc build run collect analyze
-paper_experiments/14-awslc-shipping-bracket/reproduce.sh paper    # only the paper's ten rows, ~2 min, prints the table
+paper_experiments/14-awslc-shipping-bracket/reproduce.sh paper    # only the paper's ten rows, ~20 min, prints the table
 ```
 
 The `paper` stage restricts the run to `BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG"`
@@ -163,7 +163,7 @@ and `CHUNKS=16,1350,16384`, then collects, analyses and prints `results-<host>/p
 (a CSV beside it). Both stay overridable. It still measures about 66 rows, not ten: the tool's
 `-filter` is a substring match against each test's name, and the single-block test is named
 `AES-128`, so any filter that reaches it also reaches every other AES-128 test. The table picks
-its ten rows out of those. About two minutes.
+its ten rows out of those. About 20 minutes at the 400 ms default.
 
 The run stage rebuilds `libditctl.dylib` from `utils/cio_ditctl.c` every time and the driver
 refuses a library whose exit line lacks `pinned=`: a stale copy of the library built from an
@@ -183,15 +183,16 @@ out-of-line copies the speed tool's `-dit` path calls remain. `rel` must carry a
 patch must be in every binary. The build also writes the list of functions carrying a
 site (`data/bracket_sites.txt` after `collect`).
 
-Env: `W`, `PIN_CPU` (9), `REPS` (7), `WARM` (1), `TIMEOUT_MS` (50), `CHUNKS`, `HOST_TAG`, `BENCH_TESTS`,
+Env: `W`, `PIN_CPU` (9), `REPS` (7), `WARM` (1), `TIMEOUT_MS` (400), `CHUNKS`, `HOST_TAG`, `BENCH_TESTS`,
 `BENCH_ARMS`, `CC_BIN`/`CXX_BIN`, `JOBS`. Needs Homebrew `cmake`, `go` and `ninja`; Perl
 is in macOS. Start it as your user: the run stage asks for sudo itself, uses it only for
 the driver (the bind), and chowns the results back.
 
 ## Results
 
-Apple M4, CPU 9 hard-bound, 50 ms windows (the default since this run; the first run used
-400 and agrees), 7 measured reps after 1 warm-up, medians; `results-m4/speed.txt`,
+Apple M4, CPU 9 hard-bound, 50 ms windows (the default is 400 ms; the first run used 400 and
+agrees to the cycle, this one is kept because it is the no-drop run), 7 measured reps after 1
+warm-up, medians; `results-m4/speed.txt`,
 `results-m4/report.md`. Percent over A in cycles per operation.
 
 | row | A cyc/op | IPC A | IPC B | C blanket | B shipped | B - A cyc | Bs +sb | H hoisted | Hs | MAD |

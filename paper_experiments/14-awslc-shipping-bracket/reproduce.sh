@@ -6,16 +6,16 @@
 #   ./reproduce.sh            every stage, in order
 #   ./reproduce.sh pmc        gate: utils/cio_pmc_check.c must report PMC access available
 #   ./reproduce.sh build      AWS-LC v5.8.0 from GitHub, three bssl builds, libditctl.dylib  (~6 min)
-#   ./reproduce.sh run        six arms x ten test filters x (1 warm-up + 7 reps), 50 ms windows   (~4 min, idle machine)
+#   ./reproduce.sh run        six arms x ten test filters x (1 warm-up + 7 reps), 400 ms windows  (~40 min, idle machine)
 #                             asks for sudo: the hard bind is a kern.* sysctl write, root only; the
 #                             driver alone runs as root and the results are chowned back afterwards
 #   ./reproduce.sh collect    run results + provenance -> results-<host>/ (results-m4/ here); build diffs and counts -> data/
 #   ./reproduce.sh analyze    report.md, summary.json, paper_table.{md,csv} into results-<host>/, the page into figures/
 #   ./reproduce.sh paper      ONLY the paper's ten rows: run with BENCH_TESTS and CHUNKS restricted to what produces
-#                             them (about two minutes), then collect and analyze, and print the table
+#                             them (about 20 minutes at 400 ms), then collect and analyze, and print the table
 #
 # Env: W (work dir, default ~/Documents/dit-awslc), PIN_CPU (9, a P-core: hard bind via
-#      kern.sched_thread_bind_cpu, needs the enable_skstb=1 kernel), REPS/WARM (7/1), TIMEOUT_MS (50),
+#      kern.sched_thread_bind_cpu, needs the enable_skstb=1 kernel), REPS/WARM (7/1), TIMEOUT_MS (400),
 #      HOST_TAG (results folder suffix; default from the CPU brand, e.g. m4),
 #      CHUNKS (16,256,1350,8192,16384), BENCH_TESTS, BENCH_ARMS, CC_BIN/CXX_BIN (cc/c++), JOBS
 set -euo pipefail
@@ -54,7 +54,7 @@ if want run; then
   # one sudo session for the whole stage (the credential cache would expire during a 20-minute
   # run); the chown back to the invoking user happens inside it, so nothing root-owned is left
   sudo -E env PATH="$PATH" HOME="$HOME" W="$W" PIN_CPU="$PIN_CPU" REPO="$R" REPS="${REPS:-7}" WARM="${WARM:-1}" \
-      TIMEOUT_MS="${TIMEOUT_MS:-50}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
+      TIMEOUT_MS="${TIMEOUT_MS:-400}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
       bash -c 'mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" | tee "$W/results/speed.txt"; chown -R "$ME" "$W/results"' \
     || die "run failed"
   grep -E '^pinned|^gate' "$W/results/speed.txt"

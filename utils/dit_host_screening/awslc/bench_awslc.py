@@ -25,7 +25,7 @@ is recorded per sample and flagged outside the band, never used to exclude.
   bench_awslc.py [test-filter ...]
 Env: W, PIN_CPU (9: a P-core on the 4P+6E M4, where CPUs 0-5 are the E cluster; set it EMPTY for a
      deliberately unpinned dry run with no bind gate), REPS (7), WARM (1),
-     TIMEOUT_MS (50), CHUNKS (16,256,1350,8192,16384), BENCH_ARMS, BENCH_TESTS
+     TIMEOUT_MS (400), CHUNKS (16,256,1350,8192,16384), BENCH_ARMS, BENCH_TESTS
 """
 import os, re, sys, json, subprocess, statistics as st
 
@@ -39,7 +39,7 @@ PIN_CPU = int(os.environ['PIN_CPU']) if os.environ.get('PIN_CPU') else None   # 
 # not a bad sample because cycles per op does not depend on the clock. The count of flagged samples
 # and their values are printed and saved; the reader decides what they mean.
 CLOCK_LO, CLOCK_HI = (3000, 4700) if PIN_CPU is not None else (4000, 4700)
-TIMEOUT_MS = os.environ.get('TIMEOUT_MS', '50'); CHUNKS = os.environ.get('CHUNKS', '16,256,1350,8192,16384')
+TIMEOUT_MS = os.environ.get('TIMEOUT_MS', '400'); CHUNKS = os.environ.get('CHUNKS', '16,256,1350,8192,16384')
 ARMS = [('A', 'rel', 0, []), ('C', 'rel', 1, []), ('B', 'dit', 0, []), ('Bs', 'ditsb', 0, []),
         ('H', 'dit', 0, ['-dit']), ('Hs', 'ditsb', 0, ['-dit'])]
 if os.environ.get('BENCH_ARMS'):          # an empty value (sudo -E env passes one) means "all"
