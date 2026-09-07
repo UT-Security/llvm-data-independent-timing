@@ -30,6 +30,7 @@
 #      HOST_TAG (results folder suffix; default from the CPU brand, e.g. m4),
 #      CHUNKS (16,256,1350,8192,16384), BENCH_TESTS, BENCH_ARMS, CC_BIN/CXX_BIN (cc/c++), JOBS
 set -euo pipefail
+trap 'echo "reproduce.sh: stopped at line $LINENO (exit $?): $BASH_COMMAND" >&2' ERR
 E="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 R="$(cd "$E/../.." && pwd)"
 RIG="$R/utils/dit_host_screening/awslc"
@@ -70,17 +71,17 @@ quiet_check() {
   # current CPU use, not the load average: the load average lags by minutes and our own build stage
   # leaves it above 3 for a while after nothing is running any more
   local load busy; load=$(sysctl -n vm.loadavg | awk '{print $2}')
-  busy=$(ps -Aro pcpu= | awk '{s+=$1} END{printf "%.0f", s}')
+  busy=$(ps -Aro pcpu= | awk '{s+=$1} END{printf "%.0f", s}' || true)
   info "quiet-machine check: CPU in use now ${busy}% of one core across all processes (1-minute load $load, informational)"
   echo "    busiest processes:"; ps -Aro pcpu,comm | sed -n '2,7p' | sed -E 's|/Applications/||; s|.*/([^/]+)\.app/Contents/MacOS/.*|\1|' | sed 's/^/      /'
-  local apps; apps=$(ps -Ao comm | grep -E '\.app/Contents/MacOS/' | sed -E 's|.*/([^/]+)\.app/Contents/MacOS/.*|\1|' | sort -u \
-      | grep -E '^(Slack|Safari|Messages|Calendar|Activity Monitor|Mail|Music|Spotify|Zoom|Discord|Notes|Xcode|Google Chrome|Firefox|Photos|Preview)$' | tr '\n' ' ')
+  local apps; apps=$( (ps -Ao comm | grep -E '\.app/Contents/MacOS/' | sed -E 's|.*/([^/]+)\.app/Contents/MacOS/.*|\1|' | sort -u \
+      | grep -E '^(Slack|Safari|Messages|Calendar|Activity Monitor|Mail|Music|Spotify|Zoom|Discord|Notes|Xcode|Google Chrome|Firefox|Photos|Preview)$' | tr '\n' ' ') || true)
   [[ -n "$apps" ]] && echo "    user applications open: $apps"
-  pgrep -x htop >/dev/null && echo "    htop is running (it polls every second; quit it)"
+  if pgrep -x htop >/dev/null; then echo "    htop is running (it polls every second; quit it)"; fi
   if (( busy > 60 )); then
     [[ "${FORCE:-0}" == 1 ]] || die "other processes are using ${busy}% of a core right now: close what is running, or FORCE=1 to measure anyway"
   fi
-  echo "    spotlight: $(mdutil -s / 2>/dev/null | sed -n 2p | tr -d '\t')"
+  echo "    spotlight: $(mdutil -s / 2>/dev/null | sed -n 2p | tr -d '\t' || true)"
 }
 
 if want run; then
