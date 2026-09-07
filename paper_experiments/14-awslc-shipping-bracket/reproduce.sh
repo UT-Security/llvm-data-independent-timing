@@ -19,8 +19,8 @@
 #   ./reproduce.sh paper      ONLY the paper's ten rows: run with BENCH_TESTS and CHUNKS restricted to what produces
 #                             them (about 20 minutes at 400 ms), then collect and analyze, and print the table
 #
-# Before the run stage: a quiet-machine check (load average, the busiest processes, user-facing
-# applications still open; refuses above a 1-minute load of 2.0 unless FORCE=1), and Spotlight
+# Before the run stage: a quiet-machine check (CPU in use right now across all processes, the busiest
+# of them, user-facing applications still open; refuses above 60% of a core unless FORCE=1), and Spotlight
 # indexing is switched off for the duration inside the sudo session and switched back on after
 # (SPOTLIGHT_RESTORE=0 leaves it off).
 #
@@ -57,17 +57,28 @@ if want pmc; then
   info "pmc gate"; clang -O1 -o "$W/pmc_check" "$R/utils/cio_pmc_check.c" || die "cannot build cio_pmc_check"
   "$W/pmc_check" || die "PMC access is not available on this kernel; the speed rows would carry zero cycles"
 fi
-if want build; then info "build"; "$RIG/build_awslc.sh" all; fi
+if want build; then
+  # a full build re-copies and re-patches the trees and rebuilds everything (minutes, all cores); with the
+  # three binaries present only the gates run, unless REBUILD=1
+  if [[ "${REBUILD:-0}" != 1 && -x "$W/build-rel/tool/bssl" && -x "$W/build-dit/tool/bssl" && -x "$W/build-ditsb/tool/bssl" ]]; then
+    info "build: the three bssl binaries exist, checking gates only (REBUILD=1 to rebuild)"; "$RIG/build_awslc.sh" build
+  else
+    info "build"; "$RIG/build_awslc.sh" all
+  fi
+fi
 quiet_check() {
-  local load; load=$(sysctl -n vm.loadavg | awk '{print $2}')
-  info "quiet-machine check: 1-minute load $load"
+  # current CPU use, not the load average: the load average lags by minutes and our own build stage
+  # leaves it above 3 for a while after nothing is running any more
+  local load busy; load=$(sysctl -n vm.loadavg | awk '{print $2}')
+  busy=$(ps -Aro pcpu= | awk '{s+=$1} END{printf "%.0f", s}')
+  info "quiet-machine check: CPU in use now ${busy}% of one core across all processes (1-minute load $load, informational)"
   echo "    busiest processes:"; ps -Aro pcpu,comm | sed -n '2,7p' | sed -E 's|/Applications/||; s|.*/([^/]+)\.app/Contents/MacOS/.*|\1|' | sed 's/^/      /'
   local apps; apps=$(ps -Ao comm | grep -E '\.app/Contents/MacOS/' | sed -E 's|.*/([^/]+)\.app/Contents/MacOS/.*|\1|' | sort -u \
       | grep -E '^(Slack|Safari|Messages|Calendar|Activity Monitor|Mail|Music|Spotify|Zoom|Discord|Notes|Xcode|Google Chrome|Firefox|Photos|Preview)$' | tr '\n' ' ')
   [[ -n "$apps" ]] && echo "    user applications open: $apps"
   pgrep -x htop >/dev/null && echo "    htop is running (it polls every second; quit it)"
-  if (( $(echo "$load > 2.0" | bc -l) )); then
-    [[ "${FORCE:-0}" == 1 ]] || die "1-minute load $load is above 2.0: close what is running, or FORCE=1 to measure anyway"
+  if (( busy > 60 )); then
+    [[ "${FORCE:-0}" == 1 ]] || die "other processes are using ${busy}% of a core right now: close what is running, or FORCE=1 to measure anyway"
   fi
   echo "    spotlight: $(mdutil -s / 2>/dev/null | sed -n 2p | tr -d '\t')"
 }
