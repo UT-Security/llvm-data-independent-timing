@@ -1,0 +1,271 @@
+[1] taint-stop external-call  in=crypto_aead_chacha20poly1305_ietf_decrypt_detached src=aead_chacha20poly1305.c callee=memset line=59
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=blake2b_init_key src=blake2b-ref.c callee=__memcpy_chk line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[2] taint-stop external-call  in=blake2b_update src=blake2b-ref.c callee=memcpy line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[3] taint-stop external-call  in=blake2b_final src=blake2b-ref.c callee=memcpy line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[4] taint-stop external-call  in=blake2b_final src=blake2b-ref.c callee=memset line=59
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[5] taint-stop memory  in=blake2b_final src=blake2b-ref.c callee=<indirect> line=29
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[1] taint-stop uncovered-indirect  in=crypto_onetimeauth_poly1305 src=onetimeauth_poly1305.c callee=<indirect> line=21
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[2] taint-stop uncovered-indirect  in=crypto_onetimeauth_poly1305_verify src=onetimeauth_poly1305.c callee=<indirect> line=30
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[3] taint-stop uncovered-indirect  in=crypto_onetimeauth_poly1305_init src=onetimeauth_poly1305.c callee=<indirect> line=37
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[4] taint-stop uncovered-indirect  in=crypto_onetimeauth_poly1305_update src=onetimeauth_poly1305.c callee=<indirect> line=45
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[5] taint-stop uncovered-indirect  in=crypto_onetimeauth_poly1305_final src=onetimeauth_poly1305.c callee=<indirect> line=52
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[1] taint-stop memory  in=blake2b_long src=blake2b-long.c callee=<indirect> line=29
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[2] taint-stop external-call  in=blake2b_long src=blake2b-long.c callee=memcpy line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=crypto_pwhash_argon2id src=pwhash_argon2id.c callee=memset line=59
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop memory  in=argon2_encode_string src=argon2-encoding.c callee=strlen line=288
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `strlen,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[2] taint-stop memory  in=argon2_encode_string src=argon2-encoding.c callee=<indirect> line=29
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[3] taint-stop external-call  in=argon2_encode_string src=argon2-encoding.c callee=memcpy line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[4] taint-stop memory  in=argon2_encode_string src=argon2-encoding.c callee=strlen line=290
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `strlen,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[5] taint-stop memory  in=argon2_encode_string src=argon2-encoding.c callee=strlen line=292
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `strlen,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[6] taint-stop memory  in=argon2_encode_string src=argon2-encoding.c callee=strlen line=294
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `strlen,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[7] taint-stop external-call  in=argon2_encode_string src=argon2-encoding.c callee=strlen line=297
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[8] taint-stop external-call  in=u32_to_string src=argon2-encoding.c callee=memcpy line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=argon2_hash src=argon2.c callee=memcpy line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop uncovered-indirect  in=crypto_stream_chacha20_ietf src=stream_chacha20.c callee=<indirect> line=94
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[2] taint-stop uncovered-indirect  in=crypto_stream_chacha20_ietf_xor_ic src=stream_chacha20.c callee=<indirect> line=106
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[1] taint-stop external-call  in=poly1305_finish src=poly1305_donna.c callee=memset line=150
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=crypto_sign_ed25519 src=sign.c callee=memmove line=36
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop external-call  in=crypto_sign_ed25519 src=sign.c callee=memset line=59
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=crypto_hash_sha512_final src=hash_sha512_cp.c callee=memcpy line=186
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop external-call  in=crypto_hash_sha512_final src=hash_sha512_cp.c callee=memcpy line=182
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=argon2_finalize src=argon2-core.c callee=memcpy line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop memory  in=argon2_finalize src=argon2-core.c callee=__memcpy_chk line=29
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `__memcpy_chk,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[3] taint-stop external-call  in=argon2_finalize src=argon2-core.c callee=__memcpy_chk line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[4] taint-stop external-call  in=argon2_free_instance src=argon2-core.c callee=free line=185
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      an allocator's control flow depends on the size or pointer it is handed, which DIT does not cover; the fix is upstream
+[5] taint-stop external-call  in=argon2_free_instance src=argon2-core.c callee=munmap line=168
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[6] taint-stop external-call  in=argon2_free_instance src=argon2-core.c callee=free line=175
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      an allocator's control flow depends on the size or pointer it is handed, which DIT does not cover; the fix is upstream
+[7] taint-stop uncovered-callee  in=argon2_fill_memory_blocks src=argon2-core.c callee=argon2_fill_segment_ref line=242
+      severity  UNCOVERED
+      action    the secret is passed to a callee this build cannot see, and under the callee contract nothing covers it on the callee's behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+[8] taint-stop external-call  in=argon2_initialize src=argon2-core.c callee=malloc line=493
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      an allocator's control flow depends on the size or pointer it is handed, which DIT does not cover; the fix is upstream
+[9] taint-stop external-call  in=argon2_initialize src=argon2-core.c callee=mmap line=97
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[10] taint-stop external-call  in=argon2_initialize src=argon2-core.c callee=free line=121
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      an allocator's control flow depends on the size or pointer it is handed, which DIT does not cover; the fix is upstream
+[1] taint-stop uncovered-indirect  in=randombytes_buf src=randombytes.c callee=<indirect> line=149
+      severity  UNCOVERED
+      action    the secret is passed through a function pointer the pass cannot resolve, and under the callee contract nothing covers the target on its behalf
+      cost      the callee's secret work runs UNPROTECTED unless the build that defines it is hardened with its own seed
+      repair    seed every function this pointer can reach, on the argument that receives the secret (grep the assignments to the pointer; the pass cannot name the targets)
+[1] taint-stop external-call  in=stream_ref_ref src=chacha20_ref.c callee=memset line=59
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop external-call  in=stream_ietf_ext_ref src=chacha20_ref.c callee=memset line=59
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=sodium_memzero src=utils.c callee=__explicit_bzero_chk line=72
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      runs unprotected unless the build that defines it is hardened
+[1] taint-stop memory  in=argon2_fill_segment_ref src=argon2-fill-block-ref.c callee=<indirect> line=59
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[2] taint-stop external-call  in=argon2_fill_segment_ref src=argon2-fill-block-ref.c callee=memset line=59
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[3] taint-stop memory  in=argon2_fill_segment_ref src=argon2-fill-block-ref.c callee=<indirect> line=29
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[4] taint-stop external-call  in=argon2_fill_segment_ref src=argon2-fill-block-ref.c callee=memcpy line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[5] taint-stop memory  in=argon2_fill_segment_ref src=argon2-fill-block-ref.c callee=<indirect> line=29
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[6] taint-stop external-call  in=fill_block_with_xor src=argon2-fill-block-ref.c callee=memcpy line=29
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[7] taint-stop memory  in=fill_block_with_xor src=argon2-fill-block-ref.c callee=<indirect> line=29
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[8] taint-stop memory  in=fill_block_with_xor src=argon2-fill-block-ref.c callee=<indirect> line=29
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[1] taint-stop external-call  in=sodium_bin2base64 src=codecs.c callee=memset line=234
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop external-call  in=sodium_bin2base64 src=codecs.c callee=memset line=237
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[1] taint-stop external-call  in=crypto_aead_aes256gcm_encrypt_detached_afternm src=aead_aes256gcm_armcrypto.c callee=memset line=59
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[2] taint-stop memory  in=crypto_aead_aes256gcm_encrypt_detached_afternm src=aead_aes256gcm_armcrypto.c callee=__memcpy_chk line=29
+      severity  UNSOUND
+      action    a frame address is passed as argument 0 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `__memcpy_chk,0,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[3] taint-stop external-call  in=crypto_aead_aes256gcm_encrypt_detached_afternm src=aead_aes256gcm_armcrypto.c callee=memcpy line=574
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[4] taint-stop external-call  in=crypto_aead_aes256gcm_encrypt_detached_afternm src=aead_aes256gcm_armcrypto.c callee=memset line=579
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[5] taint-stop memory  in=crypto_aead_aes256gcm_encrypt_detached_afternm src=aead_aes256gcm_armcrypto.c callee=<indirect> line=582
+      severity  UNSOUND
+      action    a frame address is passed as argument 1 while this frame holds a secret, but the pointer register carries no pointee taint, so NOTHING is transferred and the callee is analysed clean
+      cost      if the callee reads the secret through that pointer it runs with PSTATE.DIT clear and no other record will say so - this is an UNDER-approximation, unlike every other record in this report
+      repair    seed the callee on the argument that receives the frame address, i.e. `<callee>,1,pointee`, or re-enable per-object frame provenance (docs/design/p1b-frame-provenance.md)
+[6] taint-stop external-call  in=crypto_aead_aes256gcm_encrypt_detached_afternm src=aead_aes256gcm_armcrypto.c callee=memcpy line=582
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[7] taint-stop external-call  in=crypto_aead_aes256gcm_decrypt_detached_afternm src=aead_aes256gcm_armcrypto.c callee=memcpy line=728
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them
+[8] taint-stop external-call  in=crypto_aead_aes256gcm_decrypt_detached_afternm src=aead_aes256gcm_armcrypto.c callee=memset line=59
+      severity  info
+      action    the secret is passed to code this build does not define; out of scope for the seed loop (the taint still propagates through the call)
+      cost      its loads and stores of the secret run with whatever mode libc finds; a hardened mover linked ahead of libc would cover them

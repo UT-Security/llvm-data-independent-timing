@@ -1,5 +1,3 @@
-# provenance: run 2026-09-06 on aarch64 Linux (beckham), native static build; gem5-DIT ce05d32089; clang from llvm-data-independent-timing c733b86567bb (/home/rgangar/.treehouse/llvm-data-independent-timing-7b712d/7/llvm-data-independent-timing/build); gem5.fast built 2026-09-06 13:36 ; WORK=/home/rgangar/Documents/signed_lookup-gem5-20260906
-# Pure hashed chase, q=0 (no LVP-predictable loads): blanket is free on the public lane.
 # gem5 Neoverse-V2 FDP, --eves --dmp --comp-simp, gem5.fast. Full flow (lookups + one chacha20-poly1305 AEAD encrypt of a 100-byte record),
 # CIO-parity seeds with the chacha rename patch; pass library built with -fno-optimize-sibling-calls.
 # switch=serialising is --no-speculative-dit. dit_writes is commit.ditWrites (committed mode writes).

@@ -60,6 +60,24 @@ imp("gem5_arms_off5_q0.csv", "gem5_arms_pure_hash_chase.csv",
 imp("gem5_arms_off5_q2.csv", "gem5_arms_q50.csv",
     "Full L sweep at q=0.5 (pred_q4=2).")
 
+# The CSVs carry the paper's names for the arms; the rig's JSON and run-dir names are
+# build_gem5_linux.sh's. Every arm the runner produces must appear here: the Apple
+# bracket arms (api, apinop) landed 2026-09-05 and this map did not follow them, so
+# derive died with a bare KeyError after writing six of its seven CSVs.
+ARM_NAME = {"base": "nodit", "blanket": "blanket", "taint": "pass",
+            "api": "api", "apinop": "apinop"}
+
+
+def arm_name(a):
+    if a not in ARM_NAME:
+        raise SystemExit(
+            f"derive_exp02: unknown arm {a!r} in the results JSON. Add it to ARM_NAME; "
+            f"the arms are built by gem5-DIT/benchmarks/signed_lookup/build_gem5_linux.sh "
+            f"and listed in its run_gem5.py ARMS."
+        )
+    return ARM_NAME[a]
+
+
 # ---- what the value predictor did under each arm (canonical lane, offset 0)
 rows = [r for r in csv.DictReader(l for l in (WORK / "gem5_arms_off5.csv").read_text().splitlines() if not l.startswith("#"))]
 req = {int(r["L"]): int(r["requests"]) for r in rows if r["arm"] == "nodit"}
@@ -75,7 +93,7 @@ for L in sorted(req):
                     g("aluPredictions"), g("stridePredictions"), g("vtagePredictions"), f"{g('loadPredictions') / req[L]:.1f}",
                     int(b["board.processor.cores.core.numCycles"]), int(b["board.processor.cores.core.commitStats0.numInsts"])])
 with open(DATA / "gem5_value_predictor_by_arm.csv", "w", newline="") as fh:
-    fh.write(PROV + "\n# CANONICAL lane, full flow, offset-0 run per point: what the value predictor did under each arm (renamed switch model; the counts do not depend on it). Blanket's load_predictions is 0 at every L; the pass keeps the public lane's.\n")
+    fh.write(PROV + "\n# CANONICAL lane, full flow, offset-0 run per point: what the value predictor did under the three headline arms (renamed switch model; the counts do not depend on it). Blanket's load_predictions is 0 at every L; the pass keeps the public lane's.\n")
     csv.writer(fh).writerows(out)
 print(f"  data/gem5_value_predictor_by_arm.csv  ({len(out) - 1} rows)")
 
@@ -83,7 +101,7 @@ print(f"  data/gem5_value_predictor_by_arm.csv  ({len(out) - 1} rows)")
 res = json.loads((WORK / "results_off5.json").read_text())
 out = [["L", "pred_q4", "arm", "switch", "nosecret", "offset", "argv0_extra_bytes", "cycles", "insts"]]
 for r in sorted((r for r in res if "cycles" in r), key=lambda r: (r["L"], r["q"], r["arm"], r["model"], r["nosign"], r["off"])):
-    out.append([r["L"], r["q"], {"base": "nodit", "blanket": "blanket", "taint": "pass"}[r["arm"]], r["model"], int(r["nosign"]), r["off"], r["off"], int(r["cycles"]), int(r["insts"])])
+    out.append([r["L"], r["q"], arm_name(r["arm"]), r["model"], int(r["nosign"]), r["off"], r["off"], int(r["cycles"]), int(r["insts"])])
 with open(DATA / "gem5_stack_offset_spread.csv", "w", newline="") as fh:
     fh.write(PROV + "\n# CANONICAL lane: the cycles behind every median, one row per (cell, stack offset). offset k lengthens argv[0] by k bytes; gem5 SE puts argv[0] on the initial stack, so this is the layout lottery the medians average over.\n")
     csv.writer(fh).writerows(out)
