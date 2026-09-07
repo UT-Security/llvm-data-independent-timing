@@ -43,6 +43,15 @@ callee contract, DIT twins, intra-block region placement, external-preserves -
 against the 188-line contract fixpoint seed file and the derived owned list.
 CIO's six drivers are used byte-for-byte and sha256-verified.
 
+**Which gem5 binary.** The 70 headline cells ran on `gem5.opt`, which was the
+rig's default when they ran; `3fb1898444a8` has since made `gem5.fast` the
+default, with `GEM5_BIN` to switch back. That does not invalidate anything here:
+`.fast` was verified against `.opt` before the argon2id stage and reproduces it
+exactly, same cycles and same instruction counts, on both a hardened and an
+unhardened cell. Re-running this sweep under the new default reproduces these
+numbers. The one thing `.fast` cannot do is `--debug-flags`, so the LVP trace
+behind `crypto_verify_16.txt` needs `.opt`.
+
 All 70 headline cells ran concurrently, and argon2id's 14 as a second wave. gem5
 is deterministic, so there are no repetitions: a settled region is exact and the
 15-rep median the silicon rig needs is replaced by gates. What determinism does
