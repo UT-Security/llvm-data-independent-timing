@@ -82,6 +82,7 @@ did not change the default path.
 | `apiisbnop` | `apiisb` with `HINT #0` at the barrier's address | 2 |
 | `taint` | `-ftaint-harden` at the shipped defaults | 2-32 |
 | `taintnop` | `taint` with every switch a `HINT #0` | 0 |
+| `apinop` | the bracket's INSTRUCTION-MATCHED twin: `mrs` -> `mov`, `msr` -> `HINT #0`, the barrier -> `HINT #0`, the conditional clear kept over a `HINT #0` | 0 |
 
 `apidsb` (Apple's no-FEAT_SB fallback, `dsb nsh; isb sy`) is deliberately
 absent: every M-series has FEAT_SB, so it is a path no Apple device takes.
@@ -90,6 +91,20 @@ Apple's guide specifies `sb`, the speculation barrier, "to ensure that
 subsequent instruction timing reflects the updated DIT state". gem5 does not
 implement `sb`, so `api` substitutes `isb sy`; `api_bracket.c` carries the real
 instruction behind `API_BARRIER_SB` as a raw `.inst 0xd50330ff` for silicon.
+
+`apinop` is what `apiisbnop` is not: a real twin. `apiisbnop` still executes two
+mode writes and controls only for the barrier, so before `apinop` existed the
+bracket had no instruction-matched control at all -- `api_bracket.c` had defined
+`API_NOP` since it was written and no arm was ever wired to it. Verified: zero
+`msr DIT` in the binary, and its instruction count matches `api` exactly on
+every benchmark (1,482 / 1,238 / 5,070 / 4,823 / 171,762).
+
+That control says something the pass arms do not. The bracket costs about the
+same measured against `base` as against its own twin (+26.10 vs +24.74 on
+aes-gcm decrypt, +5.31 vs +5.41 on encrypt), where ExpeDITe's two readings
+diverge wildly. The bracket adds five instructions in a wrapper and barely
+perturbs layout; the twins duplicate ~21% of `.text` and draw a new relink
+ticket. Same lottery, very different exposure to it.
 
 `apiisb` exists for a simulator-specific reason. gem5 decodes `mrs DIT` as
 `Mrs64`, `IsSerializeBefore` - a full pipeline drain - where an M5 reads it in

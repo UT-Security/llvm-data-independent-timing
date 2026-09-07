@@ -66,6 +66,7 @@ CONFIGS = {
 # lottery -- measured at 6.69% on aes256gcm_decrypt, enough to invert the
 # ranking. Pair every policy with its own nop before quoting a ranking.
 ARMS = ["base", "rt", "blanket", "api", "apidsb", "apibare", "apiisb", "apiisbnop",
+        "apinop",
         "taint", "taintnop",
         "notwin", "notwinnop",
         "taintold", "taintoldnop",
@@ -76,7 +77,7 @@ NOP_OF = {"taint": "taintnop", "taintold": "taintoldnop", "taintfn": "taintfnnop
 # Arms in which no `msr DIT` ever executes: the switch model must not move them,
 # and dwell must be exactly zero.
 INERT = ("base", "rt", "taintnop", "taintoldnop", "taintfnnop", "finenop",
-         "notwinnop", "nop")
+         "notwinnop", "nop", "apinop")
 # Arms that must commit DIT writes inside the ROI: the pass arms, and the hand
 # placement at the public API (`api`: exactly one enable and one clear per call).
 MUST_TOGGLE = tuple(NOP_OF) + ("api", "apidsb", "apibare", "apiisb", "apiisbnop")
