@@ -68,9 +68,9 @@ if want build; then
   # a full build re-copies and re-patches the trees and rebuilds everything (minutes, all cores); with the
   # three binaries present only the gates run, unless REBUILD=1
   if [[ "${REBUILD:-0}" != 1 && -x "$W/build-rel/tool/bssl" && -x "$W/build-dit/tool/bssl" && -x "$W/build-ditsb/tool/bssl" ]]; then
-    info "build: the three bssl binaries exist, checking gates only (REBUILD=1 to rebuild)"; "$RIG/build_awslc.sh" build
+    info "build: the three bssl binaries exist, checking gates only (REBUILD=1 to rebuild)"; bash "$RIG/build_awslc.sh" build
   else
-    info "build"; "$RIG/build_awslc.sh" all
+    info "build"; bash "$RIG/build_awslc.sh" all
   fi
 fi
 run_census() {
