@@ -1,0 +1,131 @@
+--- aws-lc-5.8.0/tool/speed.cc
++++ tool/speed.cc (PMC patch)
+@@ -31,6 +31,32 @@
+ #include "../third_party/jitterentropy/jitterentropy-library/jitterentropy.h"
+ #include <thread>
+ #include <sstream>
++
++// experiment 13: Apple PMC reads (PMC0 cycles, PMC1 instructions retired) from EL0, which
++// a kernel patched with PMCR0_USEREN_EN allows. Reads are isb-ordered (a bare mrs floats
++// above the code it measures), 48-bit, probed once SIGILL-safe: zero when unavailable.
++#if defined(__aarch64__) && defined(__APPLE__)
++#include <setjmp.h>
++#include <signal.h>
++static int g_pmc_ok = -1;
++static sigjmp_buf g_pmc_jb;
++static void bm_pmc_ill(int) { siglongjmp(g_pmc_jb, 1); }
++static inline uint64_t bm_pmc0(void) { uint64_t v; __asm__ volatile("isb\n\tmrs %0, S3_2_c15_c0_0" : "=r"(v) : : "memory"); return v & ((1ULL << 48) - 1); }
++static inline uint64_t bm_pmc1(void) { uint64_t v; __asm__ volatile("isb\n\tmrs %0, S3_2_c15_c1_0" : "=r"(v) : : "memory"); return v & ((1ULL << 48) - 1); }
++static void bm_pmc_probe(void) {
++  struct sigaction sa, old; memset(&sa, 0, sizeof(sa)); sa.sa_handler = bm_pmc_ill; sigaction(SIGILL, &sa, &old);
++  if (sigsetjmp(g_pmc_jb, 1) == 0) { uint64_t a = bm_pmc0(), b = bm_pmc1(); g_pmc_ok = (a != 0 || b != 0); }
++  else { g_pmc_ok = 0; }
++  sigaction(SIGILL, &old, NULL);
++}
++static inline bool bm_pmc(uint64_t *c, uint64_t *i) {
++  if (g_pmc_ok < 0) bm_pmc_probe();
++  if (!g_pmc_ok) { *c = 0; *i = 0; return false; }
++  *c = bm_pmc0(); *i = bm_pmc1(); return true;
++}
++#else
++static inline bool bm_pmc(uint64_t *c, uint64_t *i) { *c = 0; *i = 0; return false; }
++#endif
+ #elif defined(OPENSSL_IS_BORINGSSL)
+ #define BORINGSSL_BENCHMARK
+ #include "bssl_bm.h"
+@@ -126,6 +152,18 @@
+   uint64_t num_calls;
+   // us is the number of microseconds that elapsed in the time period.
+   uint64_t us;
++  // experiment 13: PMC0 cycles and PMC1 instructions over the same period (0 if unavailable).
++  // No default initialisers: speed.cc aggregate-initialises TimeResults ({num_calls, us}) and
++  // the tool is C++11, where that would stop compiling; the aggregate zero-fills these two.
++  uint64_t cycles;
++  uint64_t instrs;
++  void PrintPMC() const {
++    if (cycles && num_calls)
++      printf("  [%.1f cycles/op, %.1f instr/op, IPC %.2f]\n",
++             static_cast<double>(cycles) / static_cast<double>(num_calls),
++             static_cast<double>(instrs) / static_cast<double>(num_calls),
++             static_cast<double>(instrs) / static_cast<double>(cycles));
++  }
+ 
+   void Print(const std::string &description) const {
+     if (g_print_json) {
+@@ -135,6 +173,7 @@
+           "Did %" PRIu64 " %s operations in %" PRIu64 "us (%.1f ops/sec)\n",
+           num_calls, description.c_str(), us,
+           (static_cast<double>(num_calls) / static_cast<double>(us)) * 1000000);
++      PrintPMC();
+     }
+   }
+ 
+@@ -150,6 +189,7 @@
+           (static_cast<double>(num_calls) / static_cast<double>(us)) * 1000000,
+           static_cast<double>(bytes_per_call * num_calls) /
+               static_cast<double>(us));
++      PrintPMC();
+     }
+   }
+ 
+@@ -163,6 +203,7 @@
+           "us (%.3f ops/sec)\n",
+           num_calls, (description + PrimeLenSuffix(prime_size)).c_str(), us,
+           (static_cast<double>(num_calls) / static_cast<double>(us)) * 1000000);
++      PrintPMC();
+     }
+   }
+ 
+@@ -181,6 +222,9 @@
+       printf(", \"bytesPerCall\": %zu", bytes_per_call);
+     }
+ 
++    if (cycles) {
++      printf(", \"cycles\": %" PRIu64 ", \"instructions\": %" PRIu64, cycles, instrs);
++    }
+     printf("}");
+     first_json_printed = true;
+   }
+@@ -200,6 +244,9 @@
+       printf(", \"%s\": %zu", size_label.c_str(), size);
+     }
+ 
++    if (cycles) {
++      printf(", \"cycles\": %" PRIu64 ", \"instructions\": %" PRIu64, cycles, instrs);
++    }
+     printf("}");
+     first_json_printed = true;
+   }
+@@ -278,6 +325,8 @@
+   // |iterations_between_time_checks|
+   start = time_now();
+   uint64_t done = 0;
++  uint64_t pmc_c0, pmc_i0;
++  bm_pmc(&pmc_c0, &pmc_i0);
+   for (;;) {
+     for (unsigned i = 0; i < iterations_between_time_checks; i++) {
+       if (!func()) {
+@@ -294,6 +343,14 @@
+ 
+   results->us = now - start;
+   results->num_calls = done;
++  uint64_t pmc_c1, pmc_i1;
++  results->cycles = 0; results->instrs = 0;
++  // the PMCs are 48-bit counters: subtract modulo 2^48 so a wrap inside the window does not
++  // read as a 2^64-sized delta (the reads themselves are masked to 48 bits)
++  if (bm_pmc(&pmc_c1, &pmc_i1)) {
++    results->cycles = (pmc_c1 - pmc_c0) & ((1ULL << 48) - 1);
++    results->instrs = (pmc_i1 - pmc_i0) & ((1ULL << 48) - 1);
++  }
+   return true;
+ }
+ 
+@@ -469,7 +526,7 @@
+     }
+     const std::string description =
+         rsa_type + std::to_string(size) + std::string(" key-gen");
+-    const TimeResults results = {num_calls, us};
++    const TimeResults results = {num_calls, us, 0, 0};
+     results.Print(description);
+     const size_t n = durations.size();
+     assert(n > 0);

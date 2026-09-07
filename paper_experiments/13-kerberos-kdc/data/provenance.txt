@@ -1,0 +1,5 @@
+== 2026-09-06 00:47 CDT  host Mac16,10 Apple M4  macOS 15.7.3
+compiler: 2a379e65d04f010cadf528ddf40db5a9a90af12d +uncommitted  clang version 23.0.0git (git@github.com:UT-Security/llvm-data-independent-timing.git 2a379e65d04f010cadf528ddf40db5a9a90af12d)
+krb5: 1.22.2 from 3243ffbc8ea4d4ac...  builtin crypto, tls=no, pkinit off, db2
+bracket libk5crypto: msr DIT 64, sb 32, mrs DIT 32; NOP twin identical symbol addresses: yes
+reps/warm: 15/2  TGS_N 10000  hammer 20x60

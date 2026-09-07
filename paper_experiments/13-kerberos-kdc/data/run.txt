@@ -1,0 +1,25 @@
+
+== kdc: start-up and shut-down only, no requests (the fixed cost inside every row)   (15 reps/arm, MAD(A) 4.68%, gate ok, failures 0)
+arm    kdc cpu ms     vs A     vs C  client wall ms
+A            10.1   +0.00%   +0.92%               0
+C            10.0   -0.91%   +0.00%               0
+B            10.2   +0.63%   +1.56%               0
+Bn           10.2   +1.08%   +2.01%               0
+  executed-switch term: B-Bn -0.44 pts of A
+
+== kdc: TGS-REQ only, 10000 service-ticket requests   (15 reps/arm, MAD(A) 0.69%, gate ok, failures 0)
+arm    kdc cpu ms     vs A     vs C  client wall ms
+A          1464.2   +0.00%   +0.83%            2397
+C          1452.2   -0.82%   +0.00%            2380
+B          1469.9   +0.39%   +1.22%            2412
+Bn         1462.5   -0.12%   +0.71%            2392
+  executed-switch term: B-Bn +0.50 pts of A
+
+== kdc: kdc5_hammer, 20 principals x 60 rounds: AS-REQ + TGS-REQ 1:1   (15 reps/arm, MAD(A) 0.47%, gate ok, failures 0)
+arm    kdc cpu ms     vs A     vs C  client wall ms
+A           300.6   +0.00%   -0.74%            6359
+C           302.8   +0.74%   +0.00%            6369
+B           302.2   +0.55%   -0.19%            6371
+Bn          301.9   +0.44%   -0.30%            6348
+  executed-switch term: B-Bn +0.11 pts of A
+exit=0

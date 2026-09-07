@@ -1,0 +1,24 @@
+# Executed bracket entries per request, by libk5crypto entry point (counting build,
+# -DDIT_BRACKET_COUNT=1, entries tallied by __func__ and printed at KDC exit).
+# Solved from two runs after subtracting the idle run's 9 entries:
+#   tgs_loop 1000  = 1 AS-REQ + 1000 TGS-REQ ;  kdc5_hammer 20x5 = 100 AS-REQ + 100 TGS-REQ
+# 2026-09-06, M4, krb5 1.22.2 builtin crypto, realm DIT.TEST (aes256-cts-hmac-sha1-96 keys).
+entry_point                      per_TGS_REQ  per_AS_REQ
+krb5_c_random_to_key                    34.0        13.0
+krb5_c_prf                               8.0         0.0
+krb5_k_prf                               8.0         0.0
+krb5_c_decrypt                           6.0         3.0
+krb5_c_random_make_octets                6.0         4.0
+krb5_k_decrypt                           6.0         3.0
+krb5_k_make_checksum_iov                 4.0         2.0
+krb5_c_make_checksum_iov                 4.0         2.0
+krb5_k_make_checksum                     4.0         1.0
+krb5_c_prfplus                           4.0         0.0
+krb5_c_encrypt                           3.0         2.0
+krb5_k_encrypt                           3.0         2.0
+krb5_c_verify_checksum                   3.0         0.0
+krb5_k_verify_checksum                   3.0         0.0
+krb5_c_make_random_key                   2.0         1.0
+krb5_c_fx_cf2_simple                     2.0         0.0
+krb5_c_make_checksum                     1.0         1.0
+total                                  101.0        34.0
