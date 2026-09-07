@@ -27,7 +27,7 @@ Env: W, PIN_CPU (9: a P-core on the 4P+6E M4, where CPUs 0-5 are the E cluster; 
      deliberately unpinned dry run with no bind gate), REPS (7), WARM (1),
      TIMEOUT_MS (400), CHUNKS (16,256,1350,8192,16384), BENCH_ARMS, BENCH_TESTS
 """
-import os, re, sys, json, subprocess, statistics as st
+import os, re, sys, json, time, subprocess, statistics as st
 
 W = os.path.expanduser(os.environ.get('W', '~/Documents/dit-awslc'))
 REPS, WARM = int(os.environ.get('REPS', 7)), int(os.environ.get('WARM', 1))
@@ -76,6 +76,8 @@ def key(row):
     size = row.get('bytesPerCall') or row.get('primeSizePerCall') or 0
     return f"{row['description']}" + (f" [{size} B]" if row.get('bytesPerCall') else (f" [{size}-bit]" if row.get('primeSizePerCall') else ''))
 
+sys.stderr.write(f"driver starting {time.strftime('%F %T')}: {len(ARMS)} arms x {len(TESTS)} filters x {WARM + REPS} passes ({WARM} warm-up), "
+                 f"{TIMEOUT_MS} ms per row, chunks {CHUNKS}; pin {'CPU ' + str(PIN_CPU) if PIN_CPU is not None else 'none'}; progress follows\n")
 samples = {}   # key -> arm -> list of (cycles/op, instrs/op, ns/op)
 gate, bad, flagged, unpinned, nopmc, clocks, flagged_clocks = set(), [], 0, [], 0, [], []
 for i in range(WARM + REPS):

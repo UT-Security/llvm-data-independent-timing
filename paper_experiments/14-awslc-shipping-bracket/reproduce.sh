@@ -88,9 +88,9 @@ if want run; then
     sudo -E env PATH="$PATH" HOME="$HOME" W="$W" PIN_CPU="$PIN_CPU" REPO="$R" REPS="${REPS:-7}" WARM="${WARM:-1}" \
         TIMEOUT_MS="${TIMEOUT_MS:-400}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
         SPOTLIGHT_RESTORE="${SPOTLIGHT_RESTORE:-1}" \
-        bash -c 'mdutil -a -i off >/dev/null 2>&1 && echo "    spotlight indexing off for the run";
+        bash -c 'perl -e "alarm 60; exec @ARGV" mdutil -i off / >/dev/null 2>&1 && echo "    spotlight indexing off (root volume) for the run";
                  mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" 2> >(tee -a "$W/results/driver-stderr.log" >&2) | tee "$W/results/speed.txt"; rc=${PIPESTATUS[0]}; chown -R "$ME" "$W/results";
-                 if [[ "$SPOTLIGHT_RESTORE" == 1 ]]; then mdutil -a -i on >/dev/null 2>&1 && echo "    spotlight indexing back on"; fi; exit $rc' \
+                 if [[ "$SPOTLIGHT_RESTORE" == 1 ]]; then perl -e "alarm 60; exec @ARGV" mdutil -i on / >/dev/null 2>&1 && echo "    spotlight indexing back on"; fi; exit $rc' \
       || die "run $i failed"
     grep -E '^pinned|^gate' "$W/results/speed.txt"
     mkdir -p "$W/results/run-$i"; cp "$W/results/speed.txt" "$W/results/speed.json" "$W/results/run-$i/"
