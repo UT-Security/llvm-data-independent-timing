@@ -10,6 +10,11 @@ W="${W:-$HOME/Documents/dit-phpsuite}"
 DB_PORT="${DB_PORT:-3307}"
 export W WORDPRESS_DB_HOST="127.0.0.1:$DB_PORT"
 PHP="$W/phpf-base/sapi/cli/php"; WP="$W/apps/wordpress"; MU="$WP/wp-content/mu-plugins/phpass-rounds.php"
+# wp-cli refuses to run as root unless told, and this sweep IS run as root when
+# the rig pins php-cgi to a core (run_root.sh). Without this the very first
+# configure() dies with "rehash failed" after the other three workloads have
+# already been measured, which is an expensive place to find out.
+[[ $EUID -eq 0 ]] && export WP_CLI_ALLOW_ROOT=1
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 die()  { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 wp() { ( cd "$WP" && "$PHP" -d error_reporting=0 wp-cli.phar "$@" ); }

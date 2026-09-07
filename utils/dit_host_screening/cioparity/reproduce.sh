@@ -21,6 +21,20 @@
 #                                Only needed to reproduce the layout-spread
 #                                claim (11.46 -> 2.93 points); skip with
 #                                SKIP_ALIGN=1 and the headline is unaffected.
+#                                What 64B alignment buys is REPRODUCIBILITY
+#                                ACROSS SMALL CODE CHANGES, not insensitivity to
+#                                layout: it quantises code motion to whole cache
+#                                lines. It is not an I-cache effect - see
+#                                docs/results/dit-layout-lottery-2026-09-06.md.
+#
+# NOT RUN HERE, but run it before quoting any single A/B under ~7 points:
+#   relink_null.sh               the null control. Links the UNHARDENED library
+#                                K bytes further along in .text (unreachable
+#                                padding, identical instruction stream) and
+#                                measures the spread over K. On libsodium that
+#                                is 0.50 to 7.04 points depending on the
+#                                benchmark - the resolution limit of every
+#                                hardened-vs-unhardened figure this rig prints.
 #   data/gem5_analysis.txt       analyze.py over the above.
 #
 # WALL CLOCK, on 160 cores with 40-way concurrency: ~15 min for the headline

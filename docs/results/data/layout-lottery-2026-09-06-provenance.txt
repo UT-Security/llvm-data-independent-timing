@@ -1,0 +1,73 @@
+Provenance for docs/results/dit-layout-lottery-2026-09-06.md
+
+date            2026-09-06
+host            Neoverse-N1, aarch64 Linux, 160 cores, no FEAT_DIT
+                (nothing runs outside the simulator)
+compiler        00f86ba06b5e, all 2026-09-05 defaults (callee contract, DIT
+                twins, intra-block region placement, external-preserves).
+                The build at
+                ~/.treehouse/llvm-data-independent-timing-7b712d/6/llvm-data-independent-timing/build
+gem5            gem5-DIT master ce05d32089 (the repo's submodule pin), built
+                from those sources; gem5.fast. Verified elsewhere to reproduce
+                gem5.opt exactly.
+library         libsodium 1.0.21, --disable-asm --disable-shared --disable-pie,
+                -march=armv8.4-a, CIO's chacha20_ref rename patch
+drivers         counter-optimization/cio at ~/Documents/cio-2026-09-04,
+                byte-identical, only eval_util.h replaced
+seeds           gem5-DIT benchmarks/crypto/libsodium_secret_contract.txt
+                (the contract fixpoint, 188 lines) plus the owned-symbols list
+                derived from the base build
+libm5.a         ~/Documents/gem5-DIT/util/m5/build/arm64/out (the m5op ABI, so
+                any checkout's copy is equivalent)
+work dirs       ~/Documents/libsodium-cioparity-exp09b   (arms; rt/notwin/
+                                                          notwinnop added here,
+                                                          nothing overwritten)
+                ~/Documents/libsodium-layout-decomp-20260906
+                ~/Documents/libsodium-padsweep-20260906
+                ~/Documents/libsodium-padtaint-20260906
+                ~/Documents/libsodium-padalign-20260906
+
+FILES
+
+layout-decomp-2026-09-06.csv
+    6 arms x 5 benchmarks x 2 switch models = 60 cells. base / rt / notwinnop /
+    notwin / taintnop / taint. All gates pass. The 30 cells shared with
+    paper_experiments/09-libsodium-cio-parity/data/gem5_apple_bracket_2026-09-06.csv
+    reproduce identical to the decimal in a different work directory.
+
+layout-relink-base-2026-09-06.csv
+    The null control on the UNHARDENED library: 20 relink offsets
+    (0,4,8,12,16,24,32,48,64,96,128,256,512,1k,2k,4k,8k,16k,32k,64k bytes) x 5
+    benchmarks, spec only (no msr DIT executes, so the switch model is
+    irrelevant). Committed instruction count identical across every offset.
+
+layout-relink-taint-2026-09-06.csv
+    The same 12 small offsets on the taintnop library, so the two arms can be
+    compared as ensembles rather than as one A/B draw.
+
+layout-relink-align64-2026-09-06.csv
+    The same 12 offsets on a library built with
+    -mllvm -align-all-nofallthru-blocks=6.
+
+layout-decomp-2026-09-06-counters.csv
+layout-relink-base-2026-09-06-counters.csv
+    Per-ROI gem5 counters summed over the measured window (dumps[warm:warm+iters],
+    the same window run_cio_gem5.py uses), per operation. Cache misses, fetch,
+    branch predictor, issue queue, DIT.
+
+layout-lottery-2026-09-06-analysis.txt
+    Every table the write-up quotes, plus the re-derivation of the committed
+    11.46 -> 7.93 -> 2.93 alignment claim from
+    paper_experiments/09-libsodium-cio-parity/data/gem5_align{16,64}.csv and
+    gem5_switch_model.csv.
+
+REPRODUCE
+
+  utils/dit_host_screening/cioparity/build_arms.sh   (LIB_VARIANTS/ARMS as in
+                                                      the write-up section 9)
+  utils/dit_host_screening/cioparity/relink_null.sh  (the null control)
+  utils/dit_host_screening/cioparity/run_cio_gem5.py (both)
+
+relink_null.sh assembles each pad to a fixed object name so its output is
+byte-reproducible; the .text it produces is byte-identical to the binaries
+measured here.
