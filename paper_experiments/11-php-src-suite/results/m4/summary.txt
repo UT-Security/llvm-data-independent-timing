@@ -1,0 +1,147 @@
+Experiment 11 -- fine-grained DIT cost on Apple silicon. The table proposed for the paper.
+Derived from the raw files in this directory; nothing here is a new measurement.
+What this measurement is, and what it rests on: summary_description.txt.
+
+Host bellingham, Apple M4 (Mac16,10), macOS 15.7.3 on a PACMANPATCH development kernel.
+PMC0/PMC1 read from EL0 around the whole php-cgi process, thread pinned to core 9 (P-core),
+Spotlight off, page cache purged. 100 measured requests per arm after 50 warm-up, arms
+rotating per request. See provenance.txt.
+
+
+TABLE 1 -- WordPress 6.2 in IPC: blanket against the developer's bracket
+========================================================================
+Instructions per cycle. One application, six request types, spanning 110 to 65,600 crypto
+boundary crossings. Holding the application constant makes this a controlled sweep: the code,
+the database, the bootstrap and the response are the same, and the only variable that moves
+is how often the request enters a crypto builtin.
+
+IPC rather than percent-over-baseline because it is the physical quantity -- how fast the
+machine executes the work -- rather than a ratio against a baseline that itself varies by row.
+The arms retire near-identical instruction counts (blanket to within 0.2%), so this is the
+same information as a cycle table, stated as throughput.
+
+                                          -------- IPC --------   ---- IPC change ----
+request                          crossings  baseline  blanket  bracket   blanket    bracket
+GET /         (suite's request)        110      2.89     2.82     2.89     -2.4%      +0.0%
+GET / logged in                        128      2.91     2.84     2.92     -2.4%      -0.3%
+POST /wp-login.php  2^13 shipped     8,226      3.02     2.96     2.99     -2.0%      -1.0%
+GET /wp-json/... ?context=edit 2^13  8,230      2.89     2.83     2.86     -2.1%      -1.0%
+POST /wp-login.php  2^16            65,600      3.17     3.10     2.94     -2.2%      -7.8%
+GET /wp-json/... ?context=edit 2^16 65,600      3.01     2.94     2.78     -2.3%      -7.9%
+
+  baseline IPC   arm A, unhardened -O2
+  blanket        PSTATE.DIT set before main and never cleared, against the baseline
+  bracket        Apple's recipe written by hand at the entry of the seven PHP crypto
+                 builtins, against ITS INSTRUCTION-MATCHED NOP TWIN -- not the baseline
+
+  THE TWO COLUMNS HAVE DIFFERENT DENOMINATORS, ON PURPOSE. Blanket is the same binary as the
+  baseline with a mode bit set, so the baseline is the right comparison. The bracket is a
+  DIFFERENT binary: emitting the switches moves code, and relinking alone moved layout 3.9%
+  in the pilot -- larger than most effects in this table. It is therefore compared against a
+  twin built identically with `hint #0` in place of every `msr DIT`, which isolates the cost
+  of EXECUTING the switches from the cost of having emitted them.
+
+  So the bracket column cannot be rederived from the baseline column. On the last row the
+  bracket arm's own IPC is 2.94, which against the baseline's 3.17 would read -7.3%; against
+  its twin's 3.19 it reads -7.8%. Per-arm IPC for all six arms, including both twins, is in
+  the raw files beside this one.
+
+  "crossings" counts calls to the seven bracketed builtins, measured with a counting build
+  (-DDIT_BRACKET_COUNT=1, crypto_call_counts.txt), not estimated. Since the bracket wraps
+  exactly those seven functions, counting its entries counts crossings by construction.
+
+
+WHAT THE TABLE SAYS
+===================
+BLANKET'S PENALTY IS INVARIANT: -2.0% to -2.4% IPC across a 600-fold change in crossings.
+It does not care what the request does, because it suppresses the data-dependent
+optimisations for the whole process whether or not a secret is present.
+
+THE BRACKET'S PENALTY TRACKS CROSSINGS: 0.0 -> -0.3 -> -1.0 -> -7.9, in step with the
+crossings column and with nothing else.
+
+Those are two different cost models, and which one is cheaper is a property of the WORKLOAD,
+not of the mitigation. Blanket buys protection by making everything about 2% slower.
+The bracket makes nothing slower until the request crosses the boundary often enough.
+
+BOTH SHIPPED-CONFIGURATION ROWS GO TO THE BRACKET. At WordPress's default phpass cost, a
+login and an application-password REST request cost the bracket 1.0% IPC against blanket's
+2.0-2.1%. The crossover -- where the bracket's per-crossing cost equals blanket's fixed cost
+-- is at 12,000 to 14,100 crossings per request, and no shipped configuration reaches it. The
+most crypto-dense pattern WordPress supports at stock settings is application-password REST
+authentication, which re-verifies with phpass on EVERY request because HTTP Basic carries no
+session, and it sits at 8,230.
+
+Reaching the crossover takes one supported hardening change: raising phpass from 2^13 to
+2^16 rounds through WordPress's own pluggable hashing function. That is a change security
+guidance recommends, and it inverts which mitigation is cheaper.
+
+
+COST PER CROSSING
+=================
+From the difference between the two round counts on the same request type (57,344 extra md5
+calls), over two independent request types. Measured cycles, not nanoseconds converted at an
+assumed clock -- the achieved clock varies 3.77-4.15 GHz across these rows.
+
+  the md5 work itself     394-472 cycles   one block, plus the interpreter's call and return
+  bracket                 199-215          enable, sb drain, clear, and the overlap lost
+                                           across the boundary. About half of what it protects.
+  blanket                  15-22           md5 itself runs 3-5% slower under DIT against the
+                                           ~2% the whole request pays: crypto dwells harder
+                                           than framework code, being the code that was
+                                           benefiting most from the suppressed optimisations.
+
+  Blanket is therefore not quite free per call, which the 2026-09-05 CPU-time run reported as
+  0: fifteen cycles over 8,193 calls is under the resolution of a scheduler tick. It does not
+  change the shape -- blanket's cost is still overwhelmingly a fixed per-request term -- but
+  its curve has a slope, and the crossover above is computed with it.
+
+
+NOT IN THIS TABLE
+=================
+All present in the raw files beside this one.
+
+  THE PASS (arms P and Z). Our analysis places 97 switch sites from taint rather than seven
+  by hand, and on this suite it costs slightly MORE than the bracket -- 2.1% IPC at 2^13 and
+  11.9% at 2^16 -- because it seeds PHP_MD5Update and PHP_MD5Final separately and so enters
+  two regions per md5 where the bracket enters one. That is a placement policy, not a limit
+  of the analysis, and it is why this table is bracket-against-blanket: on a workload whose
+  crypto builtins are leaves with no public work inside them, the hand-written bracket is
+  the fair representative of fine-grained placement. The pass's advantage is in libraries
+  whose regions a developer cannot see by hand (experiments 02, 03, 10).
+
+  THE MICRO-BENCHMARK CONTRAST. Zend/bench.php contains no cryptography at all -- grep for
+  any crypto builtin returns zero hits -- and pays blanket's LARGEST penalty in the whole
+  run: -9.0% IPC, against WordPress's -2.4% on the same binary. The benchmark PHP's
+  maintainers actually watch overstates the prize four-fold. One of the paper's four
+  questions; it needs prose or a second table.
+
+  THE MECHANISM. Symfony's login verifies bcrypt at cost 13: 1.62 billion cycles of key
+  derivation behind THREE crossings, and it pays nothing under any arm. WordPress's phpass
+  login exposes 3.3 million cycles behind 8,193 crossings and pays 1.0%. A key derivation
+  written in C is one crossing whatever its cost parameter; one written in interpreted code
+  is one crossing per iteration. Fine-grained cost tracks the second and is blind to the
+  first -- which is a fact about KDFs in interpreted languages, not about WordPress.
+
+  GET /wp-json/wp/v2/posts, anonymous (38 crossings, blanket -1.8% IPC, bracket +0.2%). The
+  same endpoint as the authenticated REST rows with the credential removed, so the three REST
+  rows would read 38 -> 8,230 -> 65,600 on identical code. The cleanest single-variable
+  comparison in the experiment; worth prose if not a row.
+
+  The three WordPress login-mix rows (1 in 100 / 20 / 5): the noisiest in the run
+  (MAD 2.1-2.8%), median over three request types, and they only show dilution arithmetic.
+
+
+ONE UNEXPLAINED RESULT
+======================
+Blanket retires 0.17% FEWER instructions than baseline on both pure WordPress page rows
+(-0.168%, -0.159%), against a workload instruction MAD of 0.041% over the same 100 samples:
+four times the noise floor, same sign and size in two independent runs, and present on
+Symfony's page rows too. We have no explanation. The likeliest is that PMC1 counts micro-ops
+rather than architectural instructions, so an optimisation DIT suppresses shifts the count;
+untested.
+
+It does not threaten the result. It is an eighth of the effect it would have to explain and
+points the wrong way -- blanket retires LESS work and takes MORE cycles -- which makes the
+reading conservative rather than doubtful. Recorded because a reader checking the arithmetic
+will find it.
