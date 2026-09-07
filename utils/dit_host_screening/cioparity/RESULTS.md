@@ -208,6 +208,15 @@ cancels layout between a policy and its twin but the percentage denominator
 are resolvable; differences of 1 point (taint 30.00 vs taintfn 30.72) are not,
 and were never resolvable in this rig.
 
+**MEASURED 2026-09-06, per benchmark: 0.50 to 7.04 points on this library.**
+`utils/dit_host_screening/cioparity/relink_null.sh` links the unhardened library
+K bytes further along in `.text` - unreachable padding, identical instruction
+stream, identical committed instruction count - and reports the spread over K
+directly, in a dozen cells. On libsodium: aes-enc 0.50, aes-dec 1.94, chacha-enc
+4.53, ed25519 5.40, chacha-dec 7.04. Six unreachable NOPs move chacha-decrypt by
++6.18%. Quote that number per benchmark rather than one figure for the rig, and
+recompute it for any new workload.
+
 ### What is NOT fixed: the real cost in a shipped binary
 
 A hardened binary genuinely is slower partly because its code moved, and users
@@ -228,18 +237,31 @@ privilege:
 | **code size** | - | +0.79% | **+4.16%** |
 | **runtime, base arm** | - | - | **+0.30% to +4.83%** |
 
-That 16B does little while 64B works confirms the mechanism is **I-cache line
-placement**, not instruction-bundle alignment: 16B does not control which cache
-line a block starts in, so it merely reshuffles the lottery (the worst
-cell only moves from one benchmark to another).
+That 16B does little while 64B works was read here as confirming the mechanism
+is **I-cache line placement**, not instruction-bundle alignment, on the grounds
+that 16B does not control which cache line a block starts in.
+
+**CORRECTED 2026-09-06** (`docs/results/dit-layout-lottery-2026-09-06.md`).
+That inference does not survive the counters. Across 350 gem5 cells - every arm
+here, every arm of the 2026-09-06 Apple-bracket run, and the 220 pure-relink cells -
+the worst instruction-cache miss rate observed anywhere is **1 per 13,831
+accesses**, and L1D and L2 are the same: libsodium's hot code fits in the 64 KB
+L1I and never leaves it, so nothing in this table is a cache effect. What 64B
+alignment does instead is **quantise code motion to whole cache lines**: under
+it, relink offsets of 4, 8, 24 and 64 bytes place `crypto_hash_sha512` at the
+*same* address, because the alignment slack absorbs any code-size change smaller
+than itself - which is exactly the change inserting a handful of `msr DIT`
+makes. Distinct outcomes over 12 relink offsets go 12 -> 4. It does not bound
+the size of a draw: ed25519 still steps 7.67 points between two adjacent 64B
+buckets, worse than its unaligned spread.
 
 **Recommendation: 64B alignment ON as an evaluation flag, OFF as a shipping
 default.** It buys measurement stability by making every build up to 5% slower
 and 4% bigger, and it does not reduce the layout cost DIT actually incurs - it
-makes it uniform, which benefits the experimenter, not the binary. The blunt
-`-align-all-nofallthru-blocks` was used here; a targeted version aligning only
-hot loop heads would likely get most of the benefit for a fraction of the size
-cost, and is now worth building since the mechanism is confirmed.
+makes it *reproducible across small code changes*, which benefits the
+experimenter, not the binary. The blunt `-align-all-nofallthru-blocks` was used
+here; a targeted version aligning only hot loop heads inherits the same
+limitation and would still not bound a draw.
 
 ## Placement ranking, layout-free
 

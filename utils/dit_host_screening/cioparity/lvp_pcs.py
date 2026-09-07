@@ -12,8 +12,26 @@ d = sys.argv[1]; warm = int(sys.argv[2]) if len(sys.argv) > 2 else 2; iters = in
 nm = os.path.join(os.environ.get("LLVM_BUILD", os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "build")), "bin", "llvm-nm")
 blocks = open(f"{d}/stats.txt").read().split("---------- Begin Simulation Statistics ----------")[1:]
-ends = [int(re.search(r"^finalTick\s+(\d+)", b, re.M).group(1)) for b in blocks]
-lo, hi = ends[warm - 1] if warm else 0, ends[warm + iters - 1]
+# The window is the ROIs THEMSELVES, not the tick span from the first to the
+# last. Each dump covers [finalTick - simTicks, finalTick]; the gap before it is
+# driver code between m5_dump_reset_stats and the next m5_reset_stats -- keygen,
+# message setup, the driver's own crypto_verify_16 correctness check -- and on
+# these runs that gap is about HALF the span. Counting it inverted the
+# aes256gcm finding: encrypt reported 212 crypto_verify_16 predictions that were
+# entirely the driver's, against 0 inside its ROI.
+wins = []
+for b in blocks:
+    ft = re.search(r"^finalTick\s+(\d+)", b, re.M)
+    st = re.search(r"^simTicks\s+(\d+)", b, re.M)
+    if ft and st:
+        wins.append((int(ft.group(1)) - int(st.group(1)), int(ft.group(1))))
+wins = wins[warm:warm + iters]
+if not wins:
+    sys.exit(f"no ROI dumps: stats.txt has {len(blocks)}, need > warm={warm}")
+starts = [a for a, _ in wins]
+def in_roi(t):
+    i = bisect.bisect_right(starts, t) - 1
+    return i >= 0 and t <= wins[i][1]
 syms = []
 for l in subprocess.run([nm, "-n", f"{d}/b"], capture_output=True, text=True).stdout.splitlines():
     p = l.split()
@@ -25,7 +43,7 @@ def sym(pc):
 ok, bad, kind = collections.Counter(), collections.Counter(), {}
 for l in open(f"{d}/trace.txt", errors="replace"):
     m = re.match(r"^\s*(\d+): .*EVES validate (\w+) \[sn:\d+\] PC (0x[0-9a-f]+) (load|alu) (stride|vtage)", l)
-    if not m or not (lo < int(m.group(1)) <= hi) or m.group(4) != "load": continue
+    if not m or m.group(4) != "load" or not in_roi(int(m.group(1))): continue
     pc = int(m.group(3), 16); kind[pc] = m.group(5)
     (ok if m.group(2) == "correct" else bad)[pc] += 1
 print(f"correct load predictions in the window: {sum(ok.values())} ({sum(ok.values())/iters:.0f}/op), incorrect {sum(bad.values())}, distinct PCs {len(ok)}")
