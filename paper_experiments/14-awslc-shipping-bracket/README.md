@@ -181,15 +181,23 @@ validity section lists each run's flags and the distribution of the per-cell spr
 
 **Which rows run, and which rows enter the bracket.** The suite has 632 rows in 304 families;
 381 rows in 213 families enter the DIT bracket and 251 never do (see `benchmarks-info.md`).
-**The default run is exactly the bracketed rows**: the driver reads `data/bracketed_filters.txt`,
-145 family-name filters that select those 381 rows and no other, as `BENCH_TESTS_FILE`;
-`BENCH_TESTS=...` overrides it. The list comes from `reproduce.sh census` (about five minutes,
-no sudo; the run stage makes it first if it is missing): a fourth variant, `ditcount`, whose
-`armv8_set_dit` increments a counter, and a speed tool that reports the count over each row's
-timed loop as `ditEntries`, run once over every row of the suite at short windows,
-single-threaded. It writes `data/dit_census.md` and `.json` (bracket entries per call for every
-row, the families that never enter, the source-level census of `SET_DIT_AUTO_RESET` sites),
-`data/bracketed_filters.txt` and `benchmarks-info.md`. It is a count, not a timing. The
+**The default run is the bracketed rows**: the driver reads `data/bracketed_filters.txt` as
+`BENCH_TESTS_FILE` (`BENCH_TESTS=...` overrides it). The tool's `-filter` is matched against a
+per-benchmark selection name, not the row's description, and the rule differs per benchmark
+(`"AES-128"` selects the block, EVP, AEAD and CMAC AES-128 rows; `"ECDSA P-256"` selects signing
+and verify together; TrustToken answers only to lowercase `"trusttoken"`; `"ECDSA P-256 signing"`
+selects nothing), so the list is found by probing the tool with every prefix of every bracketed
+family and every literal the source compares against, then choosing a cover of all 381
+bracketed rows that costs the fewest row-runs. The rows that never enter the bracket but share a
+selection name with ones that do ride along as passengers, run and kept and marked by the
+census; `benchmarks-info.md` has the counts. The list comes from `reproduce.sh census` (about
+five minutes, no sudo; the run stage makes it first if it is missing): a fourth variant,
+`ditcount`, whose `armv8_set_dit` increments a counter, and a speed tool that reports the count
+over each row's timed loop as `ditEntries`, run once over every row of the suite at short
+windows, single-threaded, then once per candidate filter. It writes `data/dit_census.md` and
+`.json` (bracket entries per call for every row, the families that never enter, the source-level
+census of `SET_DIT_AUTO_RESET` sites), `data/filter_probe.json`, `data/bracketed_filters.txt` and
+`benchmarks-info.md`. It is a count, not a timing. The
 recorded run in `results-m4/` predates the census and used ten filters (127 rows, of which 18
 rows in six families never enter the bracket; they are kept, and the LaTeX band table leaves
 them out and says so).

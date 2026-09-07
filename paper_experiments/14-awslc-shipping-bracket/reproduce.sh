@@ -49,7 +49,7 @@ for a in "$@"; do if [[ "$a" =~ ^[0-9]+$ ]]; then RUNS="$a"; else ARGS+=("$a"); 
 STAGES="${ARGS[*]:-pmc build run collect analyze}"
 if [[ " $STAGES " == *" paper "* ]]; then
   # the paper stage is run+collect+analyze with the filters and sizes that yield exactly the ten rows
-  export BENCH_TESTS="${BENCH_TESTS:-AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256 signing,RNG}" CHUNKS="${CHUNKS:-16,1350,16384}"
+  export BENCH_TESTS="${BENCH_TESTS:-AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG}" CHUNKS="${CHUNKS:-16,1350,16384}"
   STAGES="${STAGES/paper/run collect analyze paper}"
 fi
 want() { [[ " $STAGES " == *" $1 "* ]]; }

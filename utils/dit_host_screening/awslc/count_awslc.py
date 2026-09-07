@@ -10,11 +10,17 @@ entries per call = ditEntries / numCalls, an integer for a deterministic path. W
                          the source-level census; the filter list
   dit_census.md          the families, entries per call across sizes, the ones that never enter the
                          bracket, and where SET_DIT_AUTO_RESET is in the source
-  bracketed_filters.txt  one `bssl speed -filter` string per line: the smallest set of family names that
-                         selects every bracket-entering row and no other (the tool's filter is a substring
-                         match on the row description; each filter is an independent run, so the set is
-                         also chosen so that no row is matched twice). bench_awslc.py reads it as
-                         BENCH_TESTS_FILE; the default run of the experiment is exactly these rows.
+  bracketed_filters.txt  one `bssl speed -filter` string per line, a set that selects every bracket-entering
+                         row, as few other rows as the tool allows, and no row twice. The tool tests a filter
+                         against a per-benchmark SELECTION name that is often shorter than the row description
+                         ("AES-128" selects the block, EVP, AEAD and CMAC AES-128 rows; "ECDSA P-256" selects
+                         signing AND verify; "ECDSA P-256 signing" selects nothing), so the selection names are
+                         found by PROBING: every space-separated prefix of every entering family is run as a
+                         filter at 1 ms and the rows it yields are recorded (filter_probe.json, cached). Rows
+                         that never enter the bracket but cannot be separated from ones that do ride along and
+                         are listed in the file's header as passengers. bench_awslc.py reads the file as
+                         BENCH_TESTS_FILE; the default run of the experiment is these rows.
+  filter_probe.json      the probe cache: filter string -> the row keys the tool produces for it
   dit_census_raw.json    the tool's own output (when the tool was run)
 
 and, with --info-md PATH, the benchmarks document: what the suite is, what enters the bracket, what the
@@ -32,6 +38,8 @@ ap.add_argument('--timeout-ms', default='20')
 ap.add_argument('--json-in', default=None, help='parse this speed JSON instead of running the tool')
 ap.add_argument('--recorded', default=None, help='a recorded run (speed.json) to check against the census')
 ap.add_argument('--info-md', default=None, help='write the benchmarks document here')
+ap.add_argument('--reprobe', action='store_true', help='ignore the probe cache and run every candidate filter again')
+ap.add_argument('--no-probe', action='store_true', help='do not run the tool to find selection names (uses cached probes only; the filter list may then be incomplete)')
 a = ap.parse_args()
 out = a.out or os.path.join(a.tree, 'results'); os.makedirs(out, exist_ok=True)
 bssl = os.path.join(a.tree, 'build-ditcount', 'tool', 'bssl')
@@ -90,22 +98,91 @@ never = [(f, xs) for f, xs in fams.items() if not any(x['ditEntries'] for x in x
 never_names = [f for f, _ in never]
 nrows_using = sum(len(xs) for _, xs in using)
 
-# the filter set: shortest family names first; a name is a filter only if no never-entering family contains
-# it, and it covers every entering family that contains it (so no row is matched by two filters)
-filters, covered = [], set()
-for f in sorted((f for f, _ in using), key=len):
-    if f in covered or any(f in n for n in never_names): continue
-    filters.append(f); covered |= {g for g, _ in using if f in g}
-uncovered = [f for f, _ in using if f not in covered]
-sel = [x for x in recs if any(fl in x['description'] for fl in filters)]
-twice = [x['description'] for x in recs if sum(1 for fl in filters if fl in x['description']) > 1]
-stray = [x['description'] for x in sel if x['family'] in never_names]
-if uncovered or twice or stray:
-    sys.stderr.write(f'filter set imperfect: uncovered {uncovered}, matched twice {twice[:5]}, never-entering selected {stray[:5]}\n')
-open(os.path.join(out, 'bracketed_filters.txt'), 'w').write(
-    f"# bssl speed -filter strings that select exactly the {len(sel)} rows of the suite that enter the DIT bracket\n"
-    f"# (census of {datetime.date.today().isoformat()}, count_awslc.py; one filter per line; bench_awslc.py reads this as BENCH_TESTS_FILE)\n"
-    + '\n'.join(filters) + '\n')
+# --- the filter set, from what the tool actually selects ---
+# Candidates: every space-separated prefix of every entering family ("AEAD-AES-128-GCM seal init" gives itself,
+# "AEAD-AES-128-GCM seal", "AEAD-AES-128-GCM"). Each is run as a filter at 1 ms and the rows it yields are
+# recorded; the cache makes a rerun free.
+entering_keys = {x['key'] for x in recs if x['ditEntries']}
+never_keys = {x['key'] for x in recs if not x['ditEntries']}
+cands = set()
+for f, _ in using:
+    w = f.split(' ')
+    for i in range(len(w), 0, -1): cands.add(' '.join(w[:i]))
+# ... plus every literal the tool itself compares the filter against (selected.find("trusttoken"), selected != "HRSS",
+# ...): some benchmarks answer only to a token that appears in no row name, lowercase "trusttoken" and "pkcs8" among them
+LITERALS = ['RSA', 'RSAKeyGen', 'SHAKE256-x4', 'Absorb', 'Squeeze', '25519', 'SPAKE2', 'scrypt', 'HRSS', 'hashtocurve', 'base64',
+            'siphash', 'trusttoken', 'self-test', 'Jitter', 'dhcheck', 'pkcs8', 'CRYPTO_refcount_inc']
+speed_cc = os.path.join(src, 'tool', 'speed.cc') if src else None
+if speed_cc and os.path.exists(speed_cc):
+    LITERALS = sorted(set(LITERALS) | set(re.findall(r'selected(?:\.find\(|\s*[!=]=\s*)"([^"]+)"', open(speed_cc).read())))
+cands |= set(LITERALS)
+probe_path = os.path.join(out, 'filter_probe.json')
+probe = {} if a.reprobe or not os.path.exists(probe_path) else json.load(open(probe_path))
+todo = [c for c in sorted(cands) if c not in probe]
+if todo and not a.no_probe:
+    if not os.access(bssl, os.X_OK): sys.exit(f'no census build at {bssl} to probe filters with')
+    sys.stderr.write(f'probing {len(todo)} candidate filters on the tool (1 ms each row)\n')
+    for i, c in enumerate(todo, 1):
+        p = subprocess.run([bssl, 'speed', '-json', '-timeout_ms', '1', '-threads', '1', '-filter', c], capture_output=True, text=True)
+        try: got = json.loads(p.stdout) if p.stdout.strip().startswith('[') else []
+        except json.JSONDecodeError: got = []
+        probe[c] = sorted(rowkey(r) for r in got)
+        if i % 40 == 0: sys.stderr.write(f'  {i}/{len(todo)}\n')
+    json.dump(probe, open(probe_path, 'w'), indent=0)
+elif todo:
+    sys.stderr.write(f'{len(todo)} candidates not in the probe cache and --no-probe given; the filter list may be incomplete\n')
+sel_of = {c: set(k) for c, k in probe.items() if c in cands and k}
+# Choose a set cover. Each filter is its own pass of the tool, so a row selected by two filters runs twice
+# (extra time and samples, nothing worse) and a never-entering row that rides along costs its time for no
+# information; both are costs, neither is forbidden. Greedy weighted set cover: at each step the filter with
+# the lowest cost per newly covered entering row, cost = every row the filter selects (each runs again under it,
+# covered or not) + 4 x the never-entering rows among them. Then any filter whose entering rows are all covered
+# by the others is dropped. Rows that never enter the
+# bracket but come along are passengers: run, kept, and marked in the census as never entering.
+def greedy_cover(start):
+    filters = list(start); selected = set().union(*(sel_of[c] for c in start)) if start else set()
+    covered_ent = selected & entering_keys
+    while covered_ent != entering_keys:
+        best = None
+        for c, k in sel_of.items():
+            gain = len((k & entering_keys) - covered_ent)
+            if not gain: continue
+            cost = len(k) + 4 * len(k & never_keys)     # every selected row runs again under this filter; passengers cost extra
+            score = (cost / gain, -gain, len(c), c)
+            if best is None or score < best[0]: best = (score, c, k)
+        if best is None: break
+        _, c, k = best; filters.append(c); selected |= k; covered_ent |= k & entering_keys
+    for c in list(filters):   # redundancy pass
+        others = set().union(*(sel_of[g] for g in filters if g != c)) if len(filters) > 1 else set()
+        if (sel_of[c] & entering_keys) <= others: filters.remove(c)
+    sel_ = set().union(*(sel_of[c] for c in filters)) if filters else set()
+    return sorted(filters), sum(len(sel_of[c]) for c in filters), len(sel_ & never_keys)
+# Two starts: empty, and "essentials first" (a filter that is the only way to reach some entering row goes in
+# before anything else, so a broad filter is not taken first and then overlapped by the narrow one that was
+# needed anyway, e.g. "EVP" before "AES-128"). Keep the cover with fewer row-runs, then fewer passengers.
+reach = collections.defaultdict(list)
+for c, k in sel_of.items():
+    for key in k & entering_keys: reach[key].append(c)
+essential = sorted({cs[0] for cs in reach.values() if len(cs) == 1})
+covers = [greedy_cover([]), greedy_cover(essential)]
+filters, row_runs_, pas_ = min(covers, key=lambda t: (t[1], t[2], len(t[0])))
+selected = set().union(*(sel_of[c] for c in filters)) if filters else set()
+uncovered = entering_keys - selected
+passengers = selected & never_keys
+sel = [x for x in recs if x['key'] in selected]
+sel_entering = [x for x in sel if x['ditEntries']]
+row_runs = sum(len(sel_of[c]) for c in filters)                      # a row selected by two filters runs twice
+twice = [x['key'] for x in recs if sum(1 for fl in filters if x['key'] in sel_of.get(fl, ())) > 1]
+if uncovered:
+    sys.stderr.write(f'filter set imperfect: {len(uncovered)} entering rows no candidate reaches {sorted(uncovered)[:5]}\n')
+passenger_fams = sorted(set(family(k) for k in passengers))
+hdr = [f"# bssl speed -filter strings for the timing run: {len(filters)} filters selecting {len(sel)} rows of the {len(recs)}-row suite,",
+       f"# every one of the {len(entering_keys)} rows that enter the DIT bracket" + (f" and {len(passengers)} passenger rows that never do but cannot be" if passengers else ""),
+       f"# separated from ones that do by the tool's filter ({', '.join(passenger_fams)})." if passengers else "# and no other.",
+       f"# The tool matches a filter against a per-benchmark selection name, so these were found by probing it (filter_probe.json)."
+       + (f" {len(twice)} rows are selected by two filters and run twice." if twice else ""),
+       f"# census of {datetime.date.today().isoformat()}, count_awslc.py; one filter per line; bench_awslc.py reads this as BENCH_TESTS_FILE"]
+open(os.path.join(out, 'bracketed_filters.txt'), 'w').write('\n'.join(hdr) + '\n' + '\n'.join(filters) + '\n')
 
 # a recorded run against the census
 rec = None
@@ -123,7 +200,7 @@ L = [f"# Which `bssl speed` rows enter AWS-LC's DIT bracket\n",
      f"{a.timeout_ms} ms, one thread. {len(recs)} rows in {len(fams)} families; **{nrows_using} rows in {len(using)} families enter the "
      f"bracket at least once per timed loop, {len(recs) - nrows_using} rows in {len(never)} families never do**. Entries per call is "
      f"ditEntries / numCalls; a range means it changes with the input size. `bracketed_filters.txt` ({len(filters)} filters) selects "
-     f"exactly the entering rows.\n",
+     f"the {len(sel)} rows the timing run covers: every entering row" + (f" plus {len(passengers)} passengers the tool cannot separate from them" if passengers else "") + ".\n",
      "## Families that enter the bracket\n", "| family | rows | bracket entries per call | sizes |", "|---|---|---|---|"]
 for f, xs in sorted(using, key=lambda fx: -max(x['entries_per_call'] for x in fx[1])):
     e = [x['entries_per_call'] for x in xs]; lo, hi = min(e), max(e)
@@ -140,9 +217,9 @@ if sites:
     for f, c in sorted(sites.items(), key=lambda fc: (-fc[1], fc[0])): L.append(f"| `{f}` | {c} |")
 open(os.path.join(out, 'dit_census.md'), 'w').write('\n'.join(L) + '\n')
 json.dump(dict(rows=recs, source_sites=sites, source_sites_by_dir=by_dir, timeout_ms=a.timeout_ms, threads=1, filters=filters,
-               recorded=rec, date=datetime.date.today().isoformat(),
+               passengers=sorted(passengers), recorded=rec, date=datetime.date.today().isoformat(),
                summary=dict(rows=len(recs), families=len(fams), rows_entering=nrows_using, families_entering=len(using),
-                            rows_selected_by_filters=len(sel), families_never=never_names)),
+                            rows_selected_by_filters=len(sel), passenger_rows=len(passengers), families_never=never_names)),
           open(os.path.join(out, 'dit_census.json'), 'w'), indent=1)
 
 if a.info_md:
@@ -190,14 +267,22 @@ if a.info_md:
           "a bracketed caller reaches them (EVP, the AEADs, the key-generation paths that draw randomness), which is what the census "
           "shows row by row.\n",
           "## What the experiment runs\n",
-          f"**Default run (`reproduce.sh`, `reproduce.sh 3`)**: the {len(filters)} filters in `data/bracketed_filters.txt`, the "
-          f"smallest set of family names that selects every bracket-entering row and no other, with no row matched twice. That is "
-          f"**{len(sel)} rows**. The driver reads the file as `BENCH_TESTS_FILE`; `BENCH_TESTS=...` overrides it. Run length: "
-          f"rows x 6 arms x 8 passes x the window, about {len(sel) * 6 * 8 * 0.4 / 3600:.1f} h per run at 400 ms and "
-          f"{len(sel) * 6 * 8 * 0.05 / 60:.0f} min at 50 ms.\n",
-          "**Paper stage (`reproduce.sh paper`)**: `BENCH_TESTS=\"AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256 signing,RNG\"` with "
-          "`CHUNKS=16,1350,16384`: the ten rows of the paper table plus the other AES-128 rows the substring reaches, all of which "
-          "enter the bracket.\n"]
+          f"**Default run (`reproduce.sh`, `reproduce.sh 3`)**: the {len(filters)} filters in `data/bracketed_filters.txt`. The tool "
+          f"matches a filter against a per-benchmark selection name, not the row description (\"AES-128\" selects the block, EVP, "
+          f"AEAD and CMAC AES-128 rows; \"ECDSA P-256\" selects signing and verify together; \"ECDSA P-256 signing\" selects nothing), "
+          f"so the list is found by probing the tool with every prefix of every entering family and every literal its source compares "
+          f"the filter against, then choosing a set cover of the entering rows that costs the fewest row-runs (a row a filter selects runs "
+          f"under it whether or not another filter already covers it; a never-entering row costs extra). It selects **{len(sel)} rows: all "
+          f"{len(sel_entering)} that enter the bracket"
+          + (f", plus {len(passengers)} passengers that never do but share a selection name with rows that do ({', '.join(passenger_fams)}); "
+             f"they are run and kept, and the census marks them, so the analysis can set them aside" if passengers else " and no other")
+          + f"**" + (f", and {len(twice)} rows the tool selects under two filters run twice" if twice else ", with no row run twice")
+          + f". The driver reads the file as `BENCH_TESTS_FILE`; `BENCH_TESTS=...` overrides it. Run length: "
+          f"row-runs x 6 arms x 8 passes x the window, {row_runs} row-runs here, about {row_runs * 6 * 8 * 0.4 / 3600:.1f} h per run at 400 ms and "
+          f"{row_runs * 6 * 8 * 0.05 / 60:.0f} min at 50 ms.\n",
+          "**Paper stage (`reproduce.sh paper`)**: `BENCH_TESTS=\"AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG\"` with "
+          "`CHUNKS=16,1350,16384`: the ten rows of the paper table plus the other rows those selection names reach (the ECDSA P-256 "
+          "verify row among them, which never enters the bracket and is not in the table).\n"]
     if rec:
         M += [f"**The recorded run in `results-m4/`** (before the census existed) used ten filters, "
               f"`{','.join(rec['tests'] or [])}`, which select {rec['rows']} rows in {rec['families']} families. "
@@ -209,5 +294,6 @@ if a.info_md:
           "```", "writes `data/dit_census.{md,json}`, `data/bracketed_filters.txt` and this file.\n"]
     open(a.info_md, 'w').write('\n'.join(M))
 print(f"{len(recs)} rows, {len(fams)} families; {nrows_using} rows / {len(using)} families enter the bracket; "
-      f"{len(recs) - nrows_using} rows / {len(never)} families never do; {len(filters)} filters select {len(sel)} rows. "
+      f"{len(recs) - nrows_using} rows / {len(never)} families never do; {len(filters)} filters select {len(sel)} rows "
+      f"({len(sel_entering)} entering + {len(passengers)} passengers; {len(twice)} run twice; {len(uncovered)} entering rows unreachable). "
       f"wrote {out}/dit_census.md, dit_census.json, bracketed_filters.txt" + (f", {a.info_md}" if a.info_md else ''))
