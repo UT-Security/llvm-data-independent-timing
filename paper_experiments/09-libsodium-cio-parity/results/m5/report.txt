@@ -1,0 +1,23 @@
+
+ARMS: A=unhardened | C=blanket DIT | B=Apple bracket (sb -- the shipped sequence) | T=Apple bracket NOPed (control for B/I) | P=pass (shipped) | Z=pass, switches NOPed (control for P)
+
+================================================================================================
+INSTRUMENT GATES (ditprobe, interleaved with every other benchmark)
+================================================================================================
+  1. DIT visible          Const 1.00 -> 2.99 cyc/hop (3.005x, Perm 2.99) PASS
+       predicted <2 cyc/hop with DIT off, and DIT on must reach Perm
+  2. negative control     Perm  1.0015x PASS (flat)
+  3. P-core residency     CoreMHz 4589-4604 PASS
+  4. mode readback        DitBit A=0.0 C=1.0 PASS
+
+READING IT
+  C/A ~ 1.00  ->  blanket DIT is FREE on this workload. Then there is no prize,
+                  and every switch a selective policy adds is pure loss. That is
+                  a property of the workload, not a refutation of the approach.
+  P vs C      ->  the question the paper asks. P > C means blanket wins.
+  T, Z        ->  each arm's NOP twin. Subtract it before believing any number:
+                  it is the same code at the same addresses with no mode switch,
+                  so whatever it shows is layout, not DIT.
+Any row marked DIT-LEAK is NOT a result: an arm ran in a mode it does not claim.
+Cycles and instructions are both PMC; nothing is converted at an assumed clock.
+FULL=1 adds the CNTVCT and whole-process tables.
