@@ -19,6 +19,11 @@
 #   ./reproduce.sh paper      ONLY the paper's ten rows: run with BENCH_TESTS and CHUNKS restricted to what produces
 #                             them (about 20 minutes at 400 ms), then collect and analyze, and print the table
 #
+# Before the run stage: a quiet-machine check (load average, the busiest processes, user-facing
+# applications still open; refuses above a 1-minute load of 2.0 unless FORCE=1), and Spotlight
+# indexing is switched off for the duration inside the sudo session and switched back on after,
+# if it was on (SPOTLIGHT_RESTORE=0 leaves it off).
+#
 # Env: RUNS (how many times the run stage repeats; a bare integer among the arguments sets it),
 #      W (work dir, default ~/Documents/dit-awslc), PIN_CPU (9, a P-core: hard bind via
 #      kern.sched_thread_bind_cpu, needs the enable_skstb=1 kernel), REPS/WARM (7/1), TIMEOUT_MS (400),
@@ -53,7 +58,22 @@ if want pmc; then
   "$W/pmc_check" || die "PMC access is not available on this kernel; the speed rows would carry zero cycles"
 fi
 if want build; then info "build"; "$RIG/build_awslc.sh" all; fi
+quiet_check() {
+  local load; load=$(sysctl -n vm.loadavg | awk '{print $2}')
+  info "quiet-machine check: 1-minute load $load"
+  echo "    busiest processes:"; ps -Aro pcpu,comm | sed -n '2,7p' | sed -E 's|/Applications/||; s|.*/([^/]+)\.app/Contents/MacOS/.*|\1|' | sed 's/^/      /'
+  local apps; apps=$(ps -Ao comm | grep -E '\.app/Contents/MacOS/' | sed -E 's|.*/([^/]+)\.app/Contents/MacOS/.*|\1|' | sort -u \
+      | grep -E '^(Slack|Safari|Messages|Calendar|Activity Monitor|Mail|Music|Spotify|Zoom|Discord|Notes|Xcode|Google Chrome|Firefox|Photos|Preview)$' | tr '\n' ' ')
+  [[ -n "$apps" ]] && echo "    user applications open: $apps"
+  pgrep -x htop >/dev/null && echo "    htop is running (it polls every second; quit it)"
+  if (( $(echo "$load > 2.0" | bc -l) )); then
+    [[ "${FORCE:-0}" == 1 ]] || die "1-minute load $load is above 2.0: close what is running, or FORCE=1 to measure anyway"
+  fi
+  echo "    spotlight: $(mdutil -s / 2>/dev/null | sed -n 2p | tr -d '\t')"
+}
+
 if want run; then
+  quiet_check
   # the injected library must match the driver's protocol (DITCTL_PIN_CPU, pinned= in the exit line):
   # rebuild it from the current source every run, a one-second compile, so a stale copy cannot
   # silently turn a pinned run into a cluster-bound one (it did once: 2026-09-07)
@@ -67,7 +87,10 @@ if want run; then
     [[ $RUNS -gt 1 ]] && info "run $i of $RUNS"
     sudo -E env PATH="$PATH" HOME="$HOME" W="$W" PIN_CPU="$PIN_CPU" REPO="$R" REPS="${REPS:-7}" WARM="${WARM:-1}" \
         TIMEOUT_MS="${TIMEOUT_MS:-400}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
-        bash -c 'mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" | tee "$W/results/speed.txt"; chown -R "$ME" "$W/results"' \
+        SPOTLIGHT_RESTORE="${SPOTLIGHT_RESTORE:-1}" \
+        bash -c 'was_on=$(mdutil -s / 2>/dev/null | grep -c "Indexing enabled"); mdutil -a -i off >/dev/null 2>&1 && echo "    spotlight indexing off for the run";
+                 mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" | tee "$W/results/speed.txt"; rc=${PIPESTATUS[0]}; chown -R "$ME" "$W/results";
+                 if [[ "$was_on" == 1 && "$SPOTLIGHT_RESTORE" == 1 ]]; then mdutil -a -i on >/dev/null 2>&1 && echo "    spotlight indexing back on"; fi; exit $rc' \
       || die "run $i failed"
     grep -E '^pinned|^gate' "$W/results/speed.txt"
     mkdir -p "$W/results/run-$i"; cp "$W/results/speed.txt" "$W/results/speed.json" "$W/results/run-$i/"
