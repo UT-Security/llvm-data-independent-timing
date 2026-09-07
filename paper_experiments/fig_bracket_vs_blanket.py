@@ -97,6 +97,17 @@ INK_L = "#11171C"
 
 MINUS, DASH = "−", "—"
 
+# The spread relink_null.sh produces by linking the UNHARDENED library at 12
+# different addresses: same instructions, same committed instruction count, only
+# the address moves. A difference under it is not a result. No ensemble exists
+# for argon2id -- one cell is ~2.5 h of host time -- so it has no entry and
+# nothing in that row is claimed to resolve.
+RELINK_FLOOR = {
+    "ed25519": 0.0540, "chacha20_poly1305_encrypt": 0.0453,
+    "chacha20_poly1305_decrypt": 0.0704, "aesni256gcm_encrypt": 0.0050,
+    "aesni256gcm_decrypt": 0.0194,
+}
+
 LIBSODIUM = [
     ("aesni256gcm_decrypt",       "aes256-gcm", "decrypt"),
     ("aesni256gcm_encrypt",       "aes256-gcm", "encrypt"),
@@ -183,6 +194,58 @@ def load_libsodium(run):
         # panel (a)'s x axis is operation length: a fixed switch cost is a large
         # fraction of a 298-cycle AEAD and a rounding error on a 34,000-cycle
         # signature, and that is the whole shape of the panel.
+        rows.append(r)
+    rows.sort(key=lambda d: -d["ovh_bracket"])
+    return rows
+
+
+def load_libsodium_gem5(run, cfg="serdit"):
+    """The gem5 rig's own CSV, not the silicon `cio.csv`.
+
+    Arms map onto the same four letters: A base, C blanket, B the Apple bracket
+    (`api`), T its instruction-matched NOP twin (`apinop` -- mrs -> mov, msr ->
+    hint #0, the barrier -> hint #0, the conditional clear kept over a hint #0).
+
+    `cfg` selects the switch model and defaults to `serdit`, the SERIALISING
+    one, because that is what real silicon does and it is what makes this panel
+    comparable to the M4 one. `spec` is the renamed counterfactual only a
+    simulator can run.
+
+    gem5 is deterministic, so there is one sample per cell and no MAD: a settled
+    region is exact. The resolution question it replaces is the relink lottery
+    (docs/results/dit-layout-lottery-2026-09-06.md) -- linking the UNHARDENED
+    library at a different address moves these benchmarks 0.50 to 7.04 points,
+    which is a floor no number of repetitions can see. `worst_mad` carries that
+    per-benchmark floor instead, so `res_*` still means "clears the noise".
+    """
+    path = run / "results.csv"
+    if not path.exists():
+        sys.exit(f"no such run: {path}")
+    per = {}
+    with open(path) as fh:
+        for r in csv.DictReader(l for l in fh if not l.startswith("#")):
+            per[(r["bench"], r["arm"], r["cfg"])] = (
+                float(r["cycles_per_op"]), float(r["insts_per_op"]))
+
+    rows = []
+    for key, label, sub in LIBSODIUM:
+        arm = {}
+        for a, name in (("A", "base"), ("C", "blanket"),
+                        ("B", "api"), ("T", "apinop")):
+            v = per.get((key, name, cfg))
+            if v is None:
+                # A benchmark whose arms are not all built is DROPPED with a
+                # note, not defaulted: argon2id's twin is two cells of ~2.5 h,
+                # so it can lag the rest, and a silently missing bar is worse
+                # than a shorter figure.
+                print(f"  skipping {key}: arm {name!r} not in {path.name}")
+                arm = None
+                break
+            arm[a] = {"cyc": v[0], "ins": v[1], "mad": 0.0, "reps": 1}
+        if arm is None:
+            continue
+        r = _row(label, sub, arm["A"], arm["C"], arm["B"], arm["T"],
+                 worst_mad=RELINK_FLOOR.get(key, 0.0))
         rows.append(r)
     rows.sort(key=lambda d: -d["ovh_bracket"])
     return rows
@@ -287,7 +350,13 @@ def png(panels, out, narrow=True):
         "axes.linewidth": 0.6,
     })
 
-    fig, axes = plt.subplots(2, 1, figsize=F["fig"])
+    # One panel or two. The gem5 run has no experiment-11 counterpart, so its
+    # figure is panel (a) alone; height scales with the panel count so a single
+    # panel is not stretched to a two-panel box.
+    n = len(panels)
+    figsize = F["fig"] if n == 2 else (F["fig"][0], F["fig"][1] * 0.56)
+    fig, axes = plt.subplots(n, 1, figsize=figsize, squeeze=False)
+    axes = [a for row in axes for a in row]
     BW = F["barw"]
 
     for ax, panel in zip(axes, panels):
@@ -361,8 +430,10 @@ def png(panels, out, narrow=True):
     leg.get_frame().set_linewidth(0.6)
     leg.get_frame().set_boxstyle("square", pad=0.35)
 
-    fig.subplots_adjust(left=F["left"], right=0.982, top=F["top"],
-                        bottom=F["bottom"], hspace=F["hspace"])
+    fig.subplots_adjust(left=F["left"], right=0.982,
+                        top=F["top"] if n == 2 else F["top"] - 0.035,
+                        bottom=F["bottom"] if n == 2 else F["bottom"] + 0.06,
+                        hspace=F["hspace"])
     for ext in ("png", "pdf"):
         p = out.with_suffix("." + ext)
         # No bbox_inches="tight" in the narrow render: it crops to the
@@ -719,19 +790,33 @@ def html(panels, out):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--machine", default="m4")
+    ap.add_argument("--machine", default="m4",
+                    help="m4 / m5 (silicon, two panels) or gem5 (one panel)")
+    ap.add_argument("--cfg", default="serdit", choices=("serdit", "spec"),
+                    help="gem5 only: serialising (default, what silicon does) "
+                         "or the renamed counterfactual")
     ap.add_argument("--wide", action="store_true",
                     help="render for a screen instead of \\columnwidth")
     ap.add_argument("--png-only", action="store_true")
     ap.add_argument("--html-only", action="store_true")
     a = ap.parse_args()
 
-    panels = [
-        {"tag": "(a) libsodium primitives",
-         "rows": load_libsodium(E09 / "results" / a.machine)},
-        {"tag": "(b) WordPress 6.2",
-         "rows": load_wordpress(E11 / "results" / a.machine)},
-    ]
+    if a.machine == "gem5":
+        # One panel: there is no experiment-11 gem5 run to pair it with. The
+        # tag names the switch model, because on this rig that is a choice and
+        # on silicon it is not.
+        model = "serialising" if a.cfg == "serdit" else "renamed"
+        panels = [
+            {"tag": f"libsodium primitives, gem5, {model} msr DIT",
+             "rows": load_libsodium_gem5(E09 / "results" / "gem5", a.cfg)},
+        ]
+    else:
+        panels = [
+            {"tag": "(a) libsodium primitives",
+             "rows": load_libsodium(E09 / "results" / a.machine)},
+            {"tag": "(b) WordPress 6.2",
+             "rows": load_wordpress(E11 / "results" / a.machine)},
+        ]
 
     for panel in panels:
         print(f"\n{panel['tag']}")
@@ -742,7 +827,8 @@ def main():
                   f"fn-level {pct(d['ovh_bracket']):>9}  "
                   f"(vs twin {pct(d['ovh_bracket_twin']):>9})")
 
-    stem = OUT / f"bracket-vs-blanket-{a.machine}"
+    stem = OUT / ("bracket-vs-blanket-gem5" + ("" if a.cfg == "serdit" else "-renamed")
+                  if a.machine == "gem5" else f"bracket-vs-blanket-{a.machine}")
     OUT.mkdir(exist_ok=True)
     if not a.html_only:
         png(panels, stem, narrow=not a.wide)

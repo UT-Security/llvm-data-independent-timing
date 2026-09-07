@@ -238,13 +238,22 @@ for b in $BENCHES; do
       # apiisb: the isb without the token read (msr DIT #1; isb; ...; msr DIT #0),
       # which separates the barrier's cost from gem5's mrs DIT drain.
       # apiisbnop: apiisb with HINT #0 in place of the isb, the layout control.
-      api|apidsb|apibare|apiisb|apiisbnop)
+      api|apidsb|apibare|apiisb|apiisbnop|apinop)
                v=base; src2="$R/api_bracket.c"
                case "$arm" in
                  apidsb)    bar="-DAPI_BARRIER_DSBISB" ;;
                  apibare)   bar="-DAPI_BARRIER_NONE -DAPI_NO_MRS" ;;
                  apiisb)    bar="-DAPI_NO_MRS" ;;
                  apiisbnop) bar="-DAPI_NO_MRS -DAPI_BARRIER_NOP" ;;
+                 # apinop: the bracket's INSTRUCTION-MATCHED twin. Every
+                 # instruction of Apple's full sequence kept and none of them
+                 # touching DIT -- mrs -> mov, msr -> hint #0, the barrier ->
+                 # hint #0, the conditional clear -> the same tbnz over a
+                 # hint #0. api_bracket.c has always defined API_NOP; nothing
+                 # wired an arm to it, so the bracket had no twin and the
+                 # figure had to borrow apiisbnop, which still executes two
+                 # real mode writes and is a BARRIER control, not a twin.
+                 apinop)    bar="-DAPI_NOP" ;;
                  *)       bar="" ;;
                esac
                case "$b" in
