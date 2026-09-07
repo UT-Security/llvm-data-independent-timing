@@ -5,7 +5,8 @@
 
 Writes into DIR (default: next to the JSON):
   paper_rows.png    the paper's ten rows, grouped bars for C, B, Bs, H, Hs as percent over A, plus
-                    the geometric mean group; a suspect cell (median known wrong) is hatched
+                    the geometric mean group (clean cells); a suspect cell (median known wrong) is
+                    hatched, capped at the axis top and labelled with its true value
   all_rows.png      every row, one panel per arm, horizontal bars in table order, symmetric-log
                     axis so a 16-byte AES block at +366% and a hash at -1% share a scale; suspect
                     cells hatched and labelled with their value
@@ -36,18 +37,27 @@ def geomean(rows, arm, include_suspect):
 def paper_chart(an, out):
     rows = [(lab, an['rows'].get(k)) for lab, k in PAPER]
     rows = [(lab, r) for lab, r in rows if r]
-    labels = [lab for lab, _ in rows] + ['geometric mean\n(all cells)']
+    labels = [lab for lab, _ in rows] + ['geometric mean\n(clean cells)']
     n, w = len(labels), 0.16
     fig, ax = plt.subplots(figsize=(14, 6.2))
+    # the axis is set by the clean cells; a suspect cell (its median corrupted by the counter fault) is drawn
+    # capped at the top, hatched, and labelled with its true value, so it is visible without flattening the rest
+    clean = [r['pct'].get(a, float('nan')) for _, r in rows for a in ARMS if a not in r.get('suspect', []) and r['pct'].get(a) == r['pct'].get(a)]
+    top = max(clean) * 1.18 if clean else 100
     for i, arm in enumerate(ARMS):
-        vals = [r['pct'].get(arm, float('nan')) for _, r in rows] + [geomean([r for _, r in rows], arm, True)]
+        vals = [r['pct'].get(arm, float('nan')) for _, r in rows] + [geomean([r for _, r in rows], arm, False)]
         sus = [arm in r.get('suspect', []) for _, r in rows] + [False]
         xs = [j + (i - 2) * w for j in range(n)]
-        bars = ax.bar(xs, vals, w, label=LABEL[arm], color=COLOR[arm], edgecolor='white', linewidth=0.5)
+        drawn = [min(v, top) if v == v else v for v in vals]
+        bars = ax.bar(xs, drawn, w, label=LABEL[arm], color=COLOR[arm], edgecolor='white', linewidth=0.5)
         for b, v, s in zip(bars, vals, sus):
             if s: b.set_hatch('////'); b.set_edgecolor('black')
-            if v == v: ax.annotate(f"{v:+.0f}", (b.get_x() + b.get_width() / 2, v), ha='center', va='bottom' if v >= 0 else 'top',
-                                   fontsize=7, xytext=(0, 2 if v >= 0 else -2), textcoords='offset points', color='#333')
+            if v == v:
+                txt = f"{v:+.0f}" if abs(v) < 1e4 else f"{v:+.3g}"
+                if s: txt += ' \u2020'
+                ax.annotate(txt, (b.get_x() + b.get_width() / 2, min(v, top)), ha='center', va='bottom' if v >= 0 else 'top',
+                            fontsize=7, xytext=(0, 2 if v >= 0 else -2), textcoords='offset points', color='#B5473A' if s else '#333')
+    ax.set_ylim(min(0, min(clean) * 1.3 if clean else 0) - 5, top * 1.06)
     ax.axhline(0, color='#888', linewidth=0.8)
     ax.set_xticks(range(n)); ax.set_xticklabels(labels, rotation=28, ha='right', fontsize=9)
     ax.yaxis.set_major_formatter(pctfmt); ax.set_ylabel('cycles per operation, percent over unhardened (A)')

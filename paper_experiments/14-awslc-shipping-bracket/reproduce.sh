@@ -113,7 +113,10 @@ fi
 if want collect; then
   info "collect -> $RES/raw (run results) and $E/data (build record)"; mkdir -p "$RES/raw" "$E/data"
   cp "$W/results/speed.json" "$RES/raw/" 2>/dev/null || die "no results to collect"
-  rm -rf "$RES"/raw/run-*; for d in "$W"/results/run-*/; do [[ -d "$d" ]] && cp -R "$d" "$RES/raw/"; done
+  # no trailing slash on the source: BSD cp -R "dir/" copies the CONTENTS into the target (and one run's
+  # speed.json then overwrote the aggregate); cp -R "dir" creates raw/run-N
+  rm -rf "$RES"/raw/run-*; for d in "$W"/results/run-*; do [[ -d "$d" ]] && cp -R "$d" "$RES/raw/"; done
+  cp "$W/results/driver-stderr.log" "$RES/raw/" 2>/dev/null || true
   cp "$W/results/run-1/speed.txt" "$RES/raw/speed.txt" 2>/dev/null || cp "$W/results/speed.txt" "$RES/raw/speed.txt" 2>/dev/null || true
   cp "$W/switch_counts.txt" "$E/data/switch_counts.txt"
   cp "$W/bracket_sites.txt" "$E/data/bracket_sites.txt" 2>/dev/null || true
