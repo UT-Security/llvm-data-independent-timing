@@ -44,7 +44,14 @@ def analyze(d):
     if ns: v['samples_per_row_A'] = dict(min=min(ns), median=st.median(ns), max=max(ns))
     for k, r in R.items():
         fam, size = parse_key(k); m = r['median_cycles_per_op']
-        row = dict(key=k, family=fam, size=size, cycles={a: m[a] for a in ARMS if a in m},
+        # suspect cells: the driver records them (cell clock outside the band); for JSON from an older
+        # driver, fall back to the shape they take: an arm's median 20x above or 20x below A's, or A's own
+        # clock (from ns_per_op_A) outside the band
+        suspect = r.get('suspect_cells')
+        if suspect is None:
+            suspect = [x for x in m if x != 'A' and (m[x] > 20 * m['A'] or m[x] < m['A'] / 20)]
+            if r.get('ns_per_op_A') and not 3000 <= m['A'] / r['ns_per_op_A'] * 1000 <= 4700: suspect.append('A')
+        row = dict(key=k, family=fam, size=size, cycles={a: m[a] for a in ARMS if a in m}, suspect=suspect,
                    pct={a: pct(m, a) for a in ARMS if a != 'A' and a in m}, mad=r['mad_pct'], n=r['n'],
                    ipc={a: r['ipc'][a] for a in ARMS if a in r.get('ipc', {})} or {'A': r.get('ipc_A')},
                    instrs={a: r['median_instrs_per_op'][a] for a in ARMS if a in r.get('median_instrs_per_op', {})},
@@ -56,6 +63,8 @@ def analyze(d):
         out['rows'][k] = row
         if 'C' in m and abs(row['pct']['C']) > 2 and r['mad_pct'] < 2:
             out['anomalies'].append(dict(key=k, C_pct=row['pct']['C'], H_pct=row['pct'].get('H'), mad=r['mad_pct'], A=m['A']))
+    v['suspect_cells'] = sum(len(row['suspect']) for row in out['rows'].values())
+    v['suspect_rows'] = [k for k, row in out['rows'].items() if row['suspect']]
     # size series per family
     fams = {}
     for k, row in out['rows'].items():
@@ -124,11 +133,15 @@ def paper_table(an):
         c = r['cycles']; a = c['A']; unit = block if isblk else pair
         entries = (c['B'] - a) / unit if unit and 'B' in c else float('nan')
         q = {x: (c[x] / a - 1) * 100 if x in c else float('nan') for x in ('C', 'B', 'Bs', 'H', 'Hs')}
-        md.append(f"| {i} | {label} | {a:,.0f} | {entries:,.0f} | " + ' | '.join(f"{q[x]:+.0f}%" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + f" | {r['mad']:.2f}% |")
+        sus = r.get('suspect', []); dg = lambda x: '\u2020' if x in sus else ''
+        rowmark = '\u2020' if sus else ''
+        md.append(f"| {i} | {label}{rowmark} | {a:,.0f}{dg('A')} | {entries:,.0f} | " + ' | '.join(f"{q[x]:+.0f}%{dg(x)}" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + f" | {r['mad']:.2f}% |")
         csv.append(f"{i},\"{label}\",{a:.1f},{entries:.1f}," + ','.join(f"{q[x]:.2f}" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + f",{r['mad']:.3f}")
     note = (f"Entries per op = (B - A) / one entry's price: {fmt_cyc(pair)} cycles for an AEAD-level entry, {fmt_cyc(block)} for a single-block AES entry "
             f"(rows 1 and 8). Run only these rows with BENCH_TESTS=\"{PAPER_TESTS}\" CHUNKS={PAPER_CHUNKS}.")
     if missing: note += " MISSING from this run: " + ', '.join(missing)
+    if any(an['rows'].get(k, {}).get('suspect') for _, k, _ in PAPER_ROWS):
+        note += " \u2020 marks a cell whose median implies a clock outside the P-core band: a majority of its samples carried the backward-counter fault; the value is kept but not to be read."
     return '\n'.join(md) + '\n\n' + note + '\n', '\n'.join(csv) + '\n', missing
 
 def fmt_pct(x): return 'n/a' if x is None or x != x else f"{x:+.1f}%"
@@ -143,7 +156,9 @@ def report_md(an, src):
     L.append(f"- failures: {v['failures']}; rows without PMC cycles: {v['no_pmc_rows']}; samples {v['flag_mode']} for implied clock outside band {v.get('clock_band')}: {v['flagged']}")
     if 'clock' in v: c = v['clock']; L.append(f"- implied clock of all samples: min {c['min']:.0f}, p10 {c['p10']:.0f}, median {c['median']:.0f}, max {c['max']:.0f} MHz ({c['n']} samples)")
     if 'samples_per_row_A' in v: s = v['samples_per_row_A']; L.append(f"- A samples per row: min {s['min']}, median {s['median']}, max {s['max']} (reps {v['reps']}, window {v['timeout_ms']} ms)")
-    L.append(f"- DIT readback gate: {v['gate']}\n")
+    L.append(f"- DIT readback gate: {v['gate']}")
+    L.append(f"- SUSPECT cells (a cell whose median implies a clock outside the band, i.e. a majority of its samples was flagged; kept, marked with a dagger): {v.get('suspect_cells', 0)}"
+             + (f" in rows: {', '.join(v['suspect_rows'])}" if v.get('suspect_rows') else '') + "\n")
     p = an['prices']
     if p.get('gcm_seal_16'):
         g = p['gcm_seal_16']; L.append("## The three prices (one bracket entry per op: AEAD-AES-128-GCM seal, 16 B)\n")
@@ -178,7 +193,9 @@ def report_md(an, src):
     L.append("| row | A cyc/op | IPC A | C | B | B-A cyc | Bs | H | Hs | MAD |\n|---|---|---|---|---|---|---|---|---|---|")
     for k in sorted(an['rows']):
         r = an['rows'][k]; c = r['cycles']; q = r['pct']
-        L.append(f"| {k} | {fmt_cyc(c['A'])} | {r['ipc'].get('A', float('nan')):.2f} | {fmt_pct(q.get('C'))} | {fmt_pct(q.get('B'))} | {fmt_cyc(r.get('B_minus_A_cyc'))} | {fmt_pct(q.get('Bs'))} | {fmt_pct(q.get('H'))} | {fmt_pct(q.get('Hs'))} | {r['mad']:.2f}% |")
+        dg = lambda a: '\u2020' if a in r.get('suspect', []) else ''
+        rowmark = '\u2020' if r.get('suspect') else ''
+        L.append(f"| {k}{rowmark} | {fmt_cyc(c['A'])}{dg('A')} | {r['ipc'].get('A', float('nan')):.2f} | {fmt_pct(q.get('C'))}{dg('C')} | {fmt_pct(q.get('B'))}{dg('B')} | {fmt_cyc(r.get('B_minus_A_cyc'))} | {fmt_pct(q.get('Bs'))}{dg('Bs')} | {fmt_pct(q.get('H'))}{dg('H')} | {fmt_pct(q.get('Hs'))}{dg('Hs')} | {r['mad']:.2f}% |")
     if any(len(r['ipc']) > 1 for r in an['rows'].values()):
         L.append("\n## IPC and instructions per op, every arm\n")
         L.append("| row | instr/op A | " + ' | '.join(f"IPC {a}" for a in ARMS) + " | B-A instr |\n|---|---|" + '---|' * len(ARMS) + "---|")
@@ -288,7 +305,7 @@ HTML_TEMPLATE = r'''<title>The Shipping Bracket</title>
   <div class="tablewrap" id="paper-table"></div>
 
   <h2>Every row</h2>
-  <p class="legend">Percent over A, cycles per operation. B&nbsp;&minus;&nbsp;A in absolute cycles. MAD is the spread of A's samples as a percent of its median.</p>
+  <p class="legend">Percent over A, cycles per operation. B&nbsp;&minus;&nbsp;A in absolute cycles. MAD is the spread of A's samples as a percent of its median. A dagger marks a cell whose median implies a clock outside the P-core band: a majority of that cell's samples carried the backward-counter fault, so the value is kept but not to be read.</p>
   <div class="tablewrap" id="full-table"></div>
 
   <h2>Instructions and IPC, every arm</h2>
@@ -322,6 +339,7 @@ const V = DATA.validity;
   if (V.clock) cells.push(['implied clock, all samples', `${Math.round(V.clock.min)} – ${Math.round(V.clock.max)} MHz`, '']);
   if (V.samples_per_row_A) cells.push(['A samples per row', `${V.samples_per_row_A.min} – ${V.samples_per_row_A.max} of ${V.reps}`, '']);
   cells.push(['window per row', `${V.timeout_ms} ms`, '']);
+  cells.push(['suspect cells (majority of samples flagged; marked \u2020)', V.suspect_cells ?? 0, (V.suspect_cells??0)===0?'ok':'flag']);
   document.getElementById('status').innerHTML = cells.map(([k,v,c]) => `<div class="${c}">${esc(k)}<b>${esc(v)}</b></div>`).join('');
 }
 // series chart: GCM seal
@@ -402,7 +420,8 @@ const V = DATA.validity;
   let t = `<table><tr><th>#</th><th>op</th><th class="num">A cyc/op</th><th class="num">entries/op</th><th class="num">C blanket</th><th class="num">B bracket</th><th class="num">Bs +sb</th><th class="num">H hoisted</th><th class="num">Hs hoisted+sb</th><th class="num">MAD</th></tr>`;
   PR.forEach(([label,key,isblk],i) => { const r = DATA.rows[key]; if (!r) { t += `<tr><td class="row">${i+1}</td><td>${esc(label)}</td><td colspan="8" class="legend">not in this run</td></tr>`; return; }
     const a = r.cycles.A, unit = isblk ? block : pair, e = (r.cycles.B - a) / unit;
-    t += `<tr><td class="row">${i+1}</td><td>${esc(label)}</td><td class="num">${cyc(a)}</td><td class="num">${cyc(e)}</td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num ${x==='B'?'hot':''}">${fmt(r.pct[x],0)}</td>`).join('')}<td class="num">${r.mad.toFixed(2)}%</td></tr>`; });
+    const dg = x => (r.suspect||[]).includes(x) ? '\u2020' : '';
+    t += `<tr><td class="row">${i+1}</td><td>${esc(label)}${(r.suspect||[]).length?'\u2020':''}</td><td class="num">${cyc(a)}${dg('A')}</td><td class="num">${cyc(e)}</td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num ${x==='B'?'hot':''}">${fmt(r.pct[x],0)}${dg(x)}</td>`).join('')}<td class="num">${r.mad.toFixed(2)}%</td></tr>`; });
   t += '</table>'; document.getElementById('paper-table').innerHTML = t;
 }
 // full table + ipc table
@@ -410,7 +429,8 @@ const V = DATA.validity;
   const keys = Object.keys(DATA.rows).sort();
   let t = `<table><tr><th>row</th><th class="num">A cyc/op</th><th class="num">IPC A</th>${ARMS.slice(1).map(a=>`<th class="num">${a}</th>`).join('')}<th class="num">B − A cyc</th><th class="num">MAD</th></tr>`;
   for (const k of keys) { const r = DATA.rows[k];
-    t += `<tr><td class="row">${esc(k)}</td><td class="num">${cyc(r.cycles.A)}</td><td class="num">${(r.ipc.A??NaN).toFixed(2)}</td>${ARMS.slice(1).map(a=>`<td class="num">${fmt(r.pct[a])}</td>`).join('')}<td class="num">${cyc(r.B_minus_A_cyc)}</td><td class="num">${r.mad.toFixed(2)}%</td></tr>`; }
+    const dg = x => (r.suspect||[]).includes(x) ? '\u2020' : '';
+    t += `<tr><td class="row">${esc(k)}${(r.suspect||[]).length?'\u2020':''}</td><td class="num">${cyc(r.cycles.A)}${dg('A')}</td><td class="num">${(r.ipc.A??NaN).toFixed(2)}</td>${ARMS.slice(1).map(a=>`<td class="num">${fmt(r.pct[a])}${dg(a)}</td>`).join('')}<td class="num">${cyc(r.B_minus_A_cyc)}</td><td class="num">${r.mad.toFixed(2)}%</td></tr>`; }
   t += '</table>'; document.getElementById('full-table').innerHTML = t;
   const hasAll = keys.some(k => Object.keys(DATA.rows[k].ipc).length > 1);
   if (hasAll) {
