@@ -4,6 +4,10 @@
 # sysctl (enable_skstb=1). Root is used for one thing: the run stage's driver, for the bind.
 #
 #   ./reproduce.sh            every stage, in order
+#   ./reproduce.sh 3          the same, with the run stage repeated 3 times: each run's JSON is kept in
+#                             results-<host>/raw/run-N/, and raw/speed.json becomes the per-cell MEAN across
+#                             runs (aggregate_awslc.py), which collect, analyze and the charts then use
+#   ./reproduce.sh 3 paper    three runs of the paper stage
 #   ./reproduce.sh pmc        gate: utils/cio_pmc_check.c must report PMC access available
 #   ./reproduce.sh build      AWS-LC v5.8.0 from GitHub, three bssl builds, libditctl.dylib  (~6 min)
 #   ./reproduce.sh run        six arms x ten test filters x (1 warm-up + 7 reps), 400 ms windows  (~40 min, idle machine)
@@ -15,7 +19,8 @@
 #   ./reproduce.sh paper      ONLY the paper's ten rows: run with BENCH_TESTS and CHUNKS restricted to what produces
 #                             them (about 20 minutes at 400 ms), then collect and analyze, and print the table
 #
-# Env: W (work dir, default ~/Documents/dit-awslc), PIN_CPU (9, a P-core: hard bind via
+# Env: RUNS (how many times the run stage repeats; a bare integer among the arguments sets it),
+#      W (work dir, default ~/Documents/dit-awslc), PIN_CPU (9, a P-core: hard bind via
 #      kern.sched_thread_bind_cpu, needs the enable_skstb=1 kernel), REPS/WARM (7/1), TIMEOUT_MS (400),
 #      HOST_TAG (results folder suffix; default from the CPU brand, e.g. m4),
 #      CHUNKS (16,256,1350,8192,16384), BENCH_TESTS, BENCH_ARMS, CC_BIN/CXX_BIN (cc/c++), JOBS
@@ -26,7 +31,10 @@ RIG="$R/utils/dit_host_screening/awslc"
 export W="${W:-$HOME/Documents/dit-awslc}" PIN_CPU="${PIN_CPU:-9}"   # -> DITCTL_PIN_CPU for utils/cio_ditctl.c
 HOST_TAG="${HOST_TAG:-$(sysctl -n machdep.cpu.brand_string 2>/dev/null | tr 'A-Z ' 'a-z-' | sed 's/^apple-//')}"
 RES="$E/results-${HOST_TAG:-unknown}"
-STAGES="${*:-pmc build run collect analyze}"
+# a bare integer among the arguments is the run count; the rest are stages
+RUNS="${RUNS:-1}"; ARGS=()
+for a in "$@"; do if [[ "$a" =~ ^[0-9]+$ ]]; then RUNS="$a"; else ARGS+=("$a"); fi; done
+STAGES="${ARGS[*]:-pmc build run collect analyze}"
 if [[ " $STAGES " == *" paper "* ]]; then
   # the paper stage is run+collect+analyze with the filters and sizes that yield exactly the ten rows
   export BENCH_TESTS="${BENCH_TESTS:-AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG}" CHUNKS="${CHUNKS:-16,1350,16384}"
@@ -54,15 +62,24 @@ if want run; then
   mkdir -p "$W/results" 2>/dev/null || true
   # one sudo session for the whole stage (the credential cache would expire during a 20-minute
   # run); the chown back to the invoking user happens inside it, so nothing root-owned is left
-  sudo -E env PATH="$PATH" HOME="$HOME" W="$W" PIN_CPU="$PIN_CPU" REPO="$R" REPS="${REPS:-7}" WARM="${WARM:-1}" \
-      TIMEOUT_MS="${TIMEOUT_MS:-400}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
-      bash -c 'mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" | tee "$W/results/speed.txt"; chown -R "$ME" "$W/results"' \
-    || die "run failed"
-  grep -E '^pinned|^gate' "$W/results/speed.txt"
+  rm -rf "$W/results/run-"*
+  for ((i = 1; i <= RUNS; i++)); do
+    [[ $RUNS -gt 1 ]] && info "run $i of $RUNS"
+    sudo -E env PATH="$PATH" HOME="$HOME" W="$W" PIN_CPU="$PIN_CPU" REPO="$R" REPS="${REPS:-7}" WARM="${WARM:-1}" \
+        TIMEOUT_MS="${TIMEOUT_MS:-400}" CHUNKS="${CHUNKS:-16,256,1350,8192,16384}" ${BENCH_TESTS:+BENCH_TESTS="$BENCH_TESTS"} ${BENCH_ARMS:+BENCH_ARMS="$BENCH_ARMS"} PY="$(command -v python3)" RIG="$RIG" ME="$(id -un)" \
+        bash -c 'mkdir -p "$W/results"; "$PY" "$RIG/bench_awslc.py" | tee "$W/results/speed.txt"; chown -R "$ME" "$W/results"' \
+      || die "run $i failed"
+    grep -E '^pinned|^gate' "$W/results/speed.txt"
+    mkdir -p "$W/results/run-$i"; cp "$W/results/speed.txt" "$W/results/speed.json" "$W/results/run-$i/"
+  done
+  # raw/speed.json is the per-cell mean across runs (for one run: that run, with the run record attached)
+  python3 "$RIG/aggregate_awslc.py" "$W/results/speed.json" "$W"/results/run-*/speed.json || die "aggregation failed"
 fi
 if want collect; then
   info "collect -> $RES/raw (run results) and $E/data (build record)"; mkdir -p "$RES/raw" "$E/data"
-  cp "$W/results/speed.txt" "$W/results/speed.json" "$RES/raw/" 2>/dev/null || die "no results to collect"
+  cp "$W/results/speed.json" "$RES/raw/" 2>/dev/null || die "no results to collect"
+  rm -rf "$RES"/raw/run-*; for d in "$W"/results/run-*/; do [[ -d "$d" ]] && cp -R "$d" "$RES/raw/"; done
+  cp "$W/results/run-1/speed.txt" "$RES/raw/speed.txt" 2>/dev/null || cp "$W/results/speed.txt" "$RES/raw/speed.txt" 2>/dev/null || true
   cp "$W/switch_counts.txt" "$E/data/switch_counts.txt"
   cp "$W/bracket_sites.txt" "$E/data/bracket_sites.txt" 2>/dev/null || true
   diff -u "$W/src/aws-lc-5.8.0/tool/speed.cc" "$W/tree-rel/tool/speed.cc" | sed '1s|.*|--- aws-lc-5.8.0/tool/speed.cc|; 2s|.*|+++ tool/speed.cc (PMC patch)|' > "$E/data/speed_pmc.diff" || true
@@ -75,6 +92,7 @@ if want collect; then
     echo "aws-lc: v5.8.0 from $(shasum -a 256 "$W/src/aws-lc-v5.8.0.tar.gz" | cut -c1-16)...  builds: $(tr '\n' ';' < "$W/switch_counts.txt")"
     echo "pmc: $("$W/pmc_check" 2>/dev/null | grep -E 'VERDICT|read cost' | tr '\n' ' ')"
     # reps, window and chunks come from the run's own JSON, not from this shell's environment
+    echo "runs: $(python3 -c "import json;d=json.load(open('$W/results/speed.json'));print(d.get('runs_count', 1))") (per-cell mean across runs in raw/speed.json; each run in raw/run-N/)"
     echo "pin_cpu: $(python3 -c "import json;d=json.load(open('$W/results/speed.json'));print(d.get('pin_cpu'))") (kern.sched_thread_bind_cpu; boot-args: $(sysctl -n kern.bootargs 2>/dev/null | tr ' ' '\n' | grep skstb))  $(python3 -c "import json;d=json.load(open('$W/results/speed.json'));print(f\"reps {d.get('reps')}  timeout_ms {d.get('timeout_ms')}  chunks {d.get('chunks')}  flagged {d.get('flagged')}  unpinned {d.get('unpinned')}\")")"
   } >> "$RES/raw/provenance.txt"
   tail -5 "$RES/raw/provenance.txt"

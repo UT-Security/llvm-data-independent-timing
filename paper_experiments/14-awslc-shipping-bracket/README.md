@@ -157,7 +157,18 @@ other arm as percent over A, Bs - B and B - H in points of A, MAD of A.
 ```
 paper_experiments/14-awslc-shipping-bracket/reproduce.sh          # pmc build run collect analyze
 paper_experiments/14-awslc-shipping-bracket/reproduce.sh paper    # only the paper's ten rows, ~20 min, prints the table
+paper_experiments/14-awslc-shipping-bracket/reproduce.sh 3        # the full run three times, averaged
+paper_experiments/14-awslc-shipping-bracket/reproduce.sh 3 paper  # the paper stage three times, averaged
 ```
+
+**Repeated runs.** A bare integer among the arguments (or `RUNS=<n>`) repeats the run stage
+that many times. Every run's own output is kept, `results-<host>/raw/run-N/speed.{txt,json}`,
+and `raw/speed.json` becomes their combination by `aggregate_awslc.py`: per cell, the
+arithmetic mean across runs of each run's median, with the per-run values and the spread
+across runs ((max - min) / mean) carried beside it; a cell suspect in any run stays marked
+with the number of runs that marked it; the flagged samples of every run are concatenated.
+Collect, analyze and the charts then read the combination, and the report's validity
+section lists each run's flags and the distribution of the per-cell spread.
 
 The `paper` stage restricts the run to `BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG"`
 and `CHUNKS=16,1350,16384`, then collects, analyses and prints `results-<host>/paper_table.md`
@@ -319,7 +330,8 @@ core runs 4.0 to 4.2 GHz under sustained load, below its 4.4 boost.
 - `reproduce.sh`; rig in `utils/dit_host_screening/awslc/` (`build_awslc.sh`,
   `patch_speed_pmc.py`, `patch_bracket_variant.py`, `bench_awslc.py`).
 - `results-m4/raw/`: this host's run as the driver wrote it: `speed.txt`, `speed.json` (every
-  row's medians per arm, every sample's implied clock, the flags), `provenance.txt`.
+  row's medians per arm, every sample's implied clock, the flags), `provenance.txt`; with
+  repeated runs, `run-N/` per run and `speed.json` their per-cell mean.
 - `results-m4/summary/`: what `analyze` derives from it: `report.md`, `summary.json`,
   `paper_table.md`, `paper_table.csv`, and the charts `paper_rows.png` (the ten rows and the
   geometric mean, grouped bars), `all_rows.png` (every row, one panel per arm, symmetric-log
