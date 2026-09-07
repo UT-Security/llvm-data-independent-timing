@@ -1,11 +1,12 @@
 # 14 - AWS-LC: the bracket Amazon ships, on Amazon's own benchmark
 
-**Status: complete, silicon.** The recorded result is the mean of three full runs made on
+**Status: complete, silicon.** The recorded result combines three full runs made on
 2026-09-07 on the M4 (Mac16,10), CPU 9 hard-bound, 400 ms windows, nothing dropped:
 19,782 windows, 2,781 flagged and kept, every process reporting the bind, no failures
-(`results-m4/raw/run-{1,2,3}/` hold the runs, `raw/speed.json` their per-cell mean). Three
+(`results-m4/raw/run-{1,2,3}/` hold the runs, `raw/speed.json` their per-cell MEDIAN, with
+the mean and the three values stored beside every cell). Three
 earlier single runs (400 ms with the old dropping driver, 50 ms, 400 ms) agree with it to
-the cycle on every price below; the per-cell spread across the three averaged runs has a
+the cycle on every price below; the per-cell spread across the three combined runs has a
 median of 0.08% and a 90th percentile of 1.5%. `data/` is the build record (diffs, switch
 counts, bracketed functions); the page is
 https://claude.ai/code/artifact/a0c00df1-15d7-49bd-b8a2-79c940614a85 (source
@@ -158,18 +159,21 @@ other arm as percent over A, Bs - B and B - H in points of A, MAD of A.
 ```
 paper_experiments/14-awslc-shipping-bracket/reproduce.sh          # pmc build run collect analyze
 paper_experiments/14-awslc-shipping-bracket/reproduce.sh paper    # only the paper's ten rows, ~20 min, prints the table
-paper_experiments/14-awslc-shipping-bracket/reproduce.sh 3        # the full run three times, averaged
-paper_experiments/14-awslc-shipping-bracket/reproduce.sh 3 paper  # the paper stage three times, averaged
+paper_experiments/14-awslc-shipping-bracket/reproduce.sh 3        # the full run three times, combined per cell
+paper_experiments/14-awslc-shipping-bracket/reproduce.sh 3 paper  # the paper stage three times, combined per cell
 ```
 
 **Repeated runs.** A bare integer among the arguments (or `RUNS=<n>`) repeats the run stage
 that many times. Every run's own output is kept, `results-<host>/raw/run-N/speed.{txt,json}`,
 and `raw/speed.json` becomes their combination by `aggregate_awslc.py`: per cell, the
-arithmetic mean across runs of each run's median, with the per-run values and the spread
-across runs ((max - min) / mean) carried beside it; a cell suspect in any run stays marked
-with the number of runs that marked it; the flagged samples of every run are concatenated.
-Collect, analyze and the charts then read the combination, and the report's validity
-section lists each run's flags and the distribution of the per-cell spread.
+MEDIAN across runs of each run's median (`AGGREGATE=mean` for the arithmetic mean), with
+both combinations, the per-run values and the spread across runs ((max - min) / mean)
+carried beside it; a cell is suspect when its combined value implies a clock outside the
+band (and, under the mean, when any run marked it, with the count); the flagged samples of
+every run are concatenated. The median is the default because the counter fault below
+corrupts a cell in one run at a time, and a mean of three inherits that run while a median
+does not. Collect, analyze and the charts then read the combination, and the report's
+validity section lists each run's flags and the distribution of the per-cell spread.
 
 The `paper` stage restricts the run to `BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG"`
 and `CHUNKS=16,1350,16384`, then collects, analyses and prints `results-<host>/paper_table.md`
@@ -205,54 +209,53 @@ the driver (the bind), and chowns the results back.
 ## Results
 
 Apple M4, CPU 9 hard-bound, 400 ms windows, 7 measured reps after 1 warm-up, medians, nothing
-dropped, three runs averaged (2026-09-07); `results-m4/speed.txt`,
+dropped, three runs combined by the per-cell median (2026-09-07); `results-m4/speed.txt`,
 `results-m4/report.md`. Percent over A in cycles per operation.
 
 | row | A cyc/op | IPC A | IPC B | C blanket | B shipped | B - A cyc | Bs +sb | H hoisted | Hs | MAD |
 |---|---|---|---|---|---|---|---|---|---|---|
-| AEAD AES-128-GCM seal, 16 B | 191 | 4.14 | 2.33 | -0.2% | +81.8% | +156 | +83.1% | +9.6% | +44.1% | 0.11% |
-| AEAD AES-128-GCM seal, 1350 B | 718 | 5.32 | 4.39 | -0.5% | +21.6% | +155 | +21.5% | +2.1% | +11.7% | 0.04% |
+| AEAD AES-128-GCM seal, 16 B | 191 | 4.14 | 2.33 | -0.2% | +81.9% | +156 | +82.7% | +9.6% | +44.2% | 0.11% |
+| AEAD AES-128-GCM seal, 1350 B | 718 | 5.32 | 4.39 | -0.5% | +21.6% | +155 | +21.5% | +2.1% | +11.8% | 0.04% |
 | AEAD AES-128-GCM seal, 16 KB | 5,795 | 6.17 | 5.99 | -0.0% | +3.0% | +176 | +3.2% | +0.7% | +2.0% | 0.02% |
-| AEAD AES-128-GCM open, 16 B | 205 | 4.08 | 2.29 | +0.3% | +88.3% | +181 | +113.1% | +20.4% | +77.1% | 0.02% |
-| AEAD ChaCha20-Poly1305 seal, 16 B† | 598† | 2.48 | 1.79 | -3.1% | +40.0% | +239 | +43.4% | +6.16e+06%† | +31.2% | 2.97% |
-| EVP AES-128-GCM encrypt, 16 B | 173 | 5.42 | 1.46 | +0.1% | +302.8% | +523 | +348.5% | +0.7% | +173.5% | 0.06% |
+| AEAD AES-128-GCM open, 16 B | 205 | 4.08 | 2.29 | +0.3% | +88.3% | +181 | +113.2% | +20.5% | +77.0% | 0.02% |
+| AEAD ChaCha20-Poly1305 seal, 16 B | 579 | 2.55 | 1.79 | +0.0% | +44.4% | +258 | +48.0% | +21.8% | +35.4% | 2.97% |
+| EVP AES-128-GCM encrypt, 16 B | 173 | 5.42 | 1.46 | +0.1% | +302.6% | +523 | +348.1% | +0.7% | +173.5% | 0.06% |
 | EVP AES-128-GCM encrypt, 16 KB | 5,765 | 6.23 | 5.70 | -0.0% | +9.5% | +546 | +11.0% | +0.5% | +5.8% | 0.03% |
-| AES-128 single block encrypt | 34 | 1.93 | 0.74 | -0.2% | +276.8% | +94 | +364.8% | -2.7% | +143.3% | 0.15% |
-| CMAC-AES-128, 16 KB | 40,800 | 2.47 | 0.85 | -1.0% | +236.1% | +96,338 | +286.3% | -3.8% | +126.1% | 0.10% |
-| ECDSA P-256 sign | 42,748 | 3.64 | 3.58 | -3.8% | +1.8% | +755 | +2.1% | -3.5% | -2.9% | 0.11% |
-| ECDH X25519 | 63,554 | 4.97 | 4.95 | +0.1% | +0.5% | +289 | +0.7% | -0.1% | +0.4% | 0.01% |
+| AES-128 single block encrypt | 34 | 1.94 | 0.74 | -0.1% | +277.4% | +94 | +365.9% | -2.6% | +143.6% | 0.15% |
+| CMAC-AES-128, 16 KB | 40,796 | 2.47 | 0.85 | -1.0% | +236.0% | +96,282 | +286.1% | -3.8% | +126.6% | 0.10% |
+| ECDSA P-256 sign | 42,742 | 3.64 | 3.58 | -3.8% | +1.7% | +747 | +2.1% | -3.4% | -2.9% | 0.11% |
+| ECDH X25519 | 63,553 | 4.97 | 4.95 | +0.1% | +0.5% | +287 | +0.7% | -0.1% | +0.4% | 0.01% |
 | Ed25519 sign | 16,035 | 4.62 | 4.59 | +0.1% | +0.8% | +121 | +1.0% | +0.1% | +0.5% | 0.03% |
 | ML-KEM-768 decaps | 33,173 | 4.19 | 4.16 | +0.2% | +0.7% | +224 | +0.8% | +0.3% | +0.6% | 0.13% |
-| RNG, 16 B | 6,794 | 2.25 | 2.11 | -25.4% | +7.0% | +475 | +8.4% | -25.4% | -21.5% | 0.14% |
-| SHA-256, 16 B (not bracketed) | 115 | 4.04 | 4.03 | -0.7% | +0.1% | +0 | +0.0% | -0.5% | -0.6% | 0.08% |
+| RNG, 16 B | 6,795 | 2.25 | 2.11 | -25.4% | +7.0% | +474 | +8.3% | -25.4% | -21.2% | 0.14% |
+| SHA-256, 16 B (not bracketed) | 115 | 4.04 | 4.04 | -0.7% | +0.0% | +0 | +0.0% | -0.5% | -0.6% | 0.08% |
 
 **The paper's ten rows** (`results-m4/paper_table.md`; entries per op = (B - A) over one
 entry's price, 154 cycles for an AEAD-level entry and 94 for a single-block AES entry):
 
 | # | op | A cyc/op | entries/op | C blanket | B bracket | Bs +sb | H hoisted | Hs hoisted+sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | AES-128 single block | 34 | 1 | -0% | +277% | +365% | -3% | +143% | 0.15% |
-| 2 | EVP AES-GCM encrypt, 16 B | 173 | 3 | +0% | +303% | +349% | +1% | +173% | 0.06% |
+| 1 | AES-128 single block | 34 | 1 | -0% | +277% | +366% | -3% | +144% | 0.15% |
+| 2 | EVP AES-GCM encrypt, 16 B | 173 | 3 | +0% | +303% | +348% | +1% | +173% | 0.06% |
 | 3 | AEAD AES-GCM seal, 16 B | 191 | 1 | -0% | +82% | +83% | +10% | +44% | 0.11% |
 | 4 | AEAD AES-GCM open, 16 B | 205 | 1 | +0% | +88% | +113% | +20% | +77% | 0.02% |
-| 5 | AEAD ChaCha20-Poly1305 seal, 16 B† | 598† | 2 | -3% | +40% | +43% | +6161232%† | +31% | 2.97% |
+| 5 | AEAD ChaCha20-Poly1305 seal, 16 B | 579 | 2 | +0% | +44% | +48% | +22% | +35% | 2.97% |
 | 6 | AEAD AES-GCM seal, 1350 B (a TLS record) | 718 | 1 | -0% | +22% | +22% | +2% | +12% | 0.04% |
 | 7 | AEAD AES-GCM seal, 16 KB | 5,795 | 1 | -0% | +3% | +3% | +1% | +2% | 0.02% |
-| 8 | CMAC-AES-128, 16 KB | 40,800 | 1,029 | -1% | +236% | +286% | -4% | +126% | 0.10% |
-| 9 | ECDSA P-256 sign | 42,748 | 5 | -4% | +2% | +2% | -3% | -3% | 0.11% |
-| 10 | RNG, 16 B | 6,794 | 3 | -25% | +7% | +8% | -25% | -21% | 0.14% |
-| | **geometric mean of the ratio to A, all cells** | | | **-4%** | **+79%** | **+90%** | **+199%** | **+46%** | |
-| | **geometric mean, clean cells only** | | | **-4%** | **+84%** | **+96%** | **-1%** | **+48%** | |
+| 8 | CMAC-AES-128, 16 KB | 40,796 | 1,028 | -1% | +236% | +286% | -4% | +127% | 0.10% |
+| 9 | ECDSA P-256 sign | 42,742 | 5 | -4% | +2% | +2% | -3% | -3% | 0.11% |
+| 10 | RNG, 16 B | 6,795 | 3 | -25% | +7% | +8% | -25% | -21% | 0.14% |
+| | **geometric mean of the ratio to A, all cells** | | | **-3%** | **+79%** | **+91%** | **+1%** | **+46%** | |
 
 Rows 3, 6 and 7 are the same 154-cycle entry at three sizes; 2 and 8 the two faces of
 nesting; Hs against H the barrier's price after a non-serialising write, which undoes most
-of what hoisting bought. Row 5's hoisted cell carries a dagger: in one of the three runs the
-counter fault hit a majority of that cell's seven windows, its median is off by six orders
-of magnitude, and the mean across runs inherits it (the other two runs read +4% and +22%; the
-cell is noisy across runs even when clean, and its hoisted value should not be quoted). The
-geometric mean of the ratio to A over the ten rows is given both ways: every cell, C -4%,
-B +79%, Bs +90%, H +199% (that one corrupted cell), Hs +46%; clean cells only, C -4%, B +84%,
-Bs +96%, H -1%, Hs +48%. Over all 127 rows both are in `summary/report.md`. A geometric mean
+of what hoisting bought. No cell of this table is suspect under the median combination. In
+one of the three runs the counter fault hit a majority of the seven windows of row 5's
+hoisted cell and that run's median is off by six orders of magnitude; the median across
+runs is unmoved by it (the clean runs read +4% and +22%, so the cell is noisy on its own
+terms and its hoisted value is the least stable number in the table). The geometric mean of
+the ratio to A over the ten rows is C -3%, B +79%, Bs +91%, H +1%, Hs +46%. Over all 127
+rows it is in `summary/report.md`, both ways. A geometric mean
 over the tool's rows weights each row once and says nothing about any application's mix of
 them; it is a summary of this table, not a cost model.
 
@@ -304,10 +307,12 @@ the window than at the start, by seconds to hours of cycles in hundreds of disti
 amounts. The 50 ms run had 1.8% of them; eight times the window, eight times the flags,
 so the fault arrives at a fixed rate of about one every three seconds on the pinned core,
 independent of what runs. Every sample is kept. Where the fault hit a majority of a cell's
-seven samples in a run, that run's median is wrong and the three-run mean inherits it; the
-analysis detects that from the cell's implied clock and marks it with a dagger: 16 cells
-in 13 of 127 rows (6, 9 and 1 in the individual runs), one of them in the paper's ten
-rows (row 5, hoisted). With a hard bind this pattern should be impossible, and the
+seven samples in a run, that run's median is wrong: 6, 9 and 1 such cells in the three
+runs, 15 cells corrupted in exactly one run and 1 in two, none in all three, and the clean
+runs of a corrupted cell agree to a fraction of a point. Combining the runs by the per-cell
+median leaves one suspect cell in the whole table (the unhardened EVP-AES-CTR decrypt at
+16 bytes, corrupted in two runs), marked with a dagger; the mean would have carried 16 and
+is stored beside it. With a hard bind this pattern should be impossible, and the
 distinct jump sizes look like other cores' counters, not a reset; it is recorded, not
 explained. `clock_probe.c` run pinned under sudo is the way to see it directly. The
 unflagged windows sit at 3,996 to 4,459 MHz implied clock, median 4,182: the pinned core

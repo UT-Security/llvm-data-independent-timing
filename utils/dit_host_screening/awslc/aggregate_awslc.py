@@ -3,10 +3,10 @@
 
   aggregate_awslc.py OUT.json run-1/speed.json run-2/speed.json ...
 
-Per cell (row x arm) the aggregate's headline value is, by default, the arithmetic MEAN across runs
-of each run's median (cycles/op, instructions/op, ns/op); AGGREGATE=median uses the MEDIAN across
-runs instead, which a single corrupted run cannot move (the counter fault corrupts one run's median
-in about one cell in fifty). Both are always stored per cell (mean_across_runs, median_across_runs);
+Per cell (row x arm) the aggregate's headline value is, by default, the MEDIAN across runs of each
+run's median (cycles/op, instructions/op, ns/op), which a single corrupted run cannot move (the
+counter fault corrupts one run's median in about one cell in fifty); AGGREGATE=mean uses the
+arithmetic mean instead. Both are always stored per cell (mean_across_runs, median_across_runs);
 analyze_awslc.py reads the headline unchanged. Nothing is dropped either way. It also carries,
 per cell, the per-run values and the spread across runs ((max - min) / mean, as percent), and
 at the top level the per-run validity records. Nothing is dropped: a cell marked suspect in
@@ -17,7 +17,7 @@ import json, os, sys, statistics as st
 
 def main():
     out, paths = sys.argv[1], sys.argv[2:]
-    how = os.environ.get('AGGREGATE', 'mean').lower()
+    how = os.environ.get('AGGREGATE', 'median').lower()
     if how not in ('mean', 'median'): raise SystemExit("AGGREGATE must be mean or median")
     if not paths: raise SystemExit(__doc__)
     runs = [json.load(open(p)) for p in paths]

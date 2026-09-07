@@ -25,7 +25,7 @@
 # (SPOTLIGHT_RESTORE=0 leaves it off).
 #
 # Env: RUNS (how many times the run stage repeats; a bare integer among the arguments sets it),
-#      AGGREGATE (mean, the default, or median: how a cell's value is combined across runs; the
+#      AGGREGATE (median, the default, or mean: how a cell's value is combined across runs; the
 #      per-run values and both combinations are stored in raw/speed.json either way),
 #      W (work dir, default ~/Documents/dit-awslc), PIN_CPU (9, a P-core: hard bind via
 #      kern.sched_thread_bind_cpu, needs the enable_skstb=1 kernel), REPS/WARM (7/1), TIMEOUT_MS (400),
@@ -110,7 +110,7 @@ if want run; then
     mkdir -p "$W/results/run-$i"; cp "$W/results/speed.txt" "$W/results/speed.json" "$W/results/run-$i/"
   done
   # raw/speed.json is the per-cell mean across runs (for one run: that run, with the run record attached)
-  AGGREGATE="${AGGREGATE:-mean}" python3 "$RIG/aggregate_awslc.py" "$W/results/speed.json" "$W"/results/run-*/speed.json || die "aggregation failed"
+  AGGREGATE="${AGGREGATE:-median}" python3 "$RIG/aggregate_awslc.py" "$W/results/speed.json" "$W"/results/run-*/speed.json || die "aggregation failed"
 fi
 if want collect; then
   info "collect -> $RES/raw (run results) and $E/data (build record)"; mkdir -p "$RES/raw" "$E/data"

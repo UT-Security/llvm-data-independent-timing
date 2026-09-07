@@ -338,7 +338,9 @@ HTML_TEMPLATE = r'''<title>The Shipping Bracket</title>
   <div class="tablewrap" id="anomaly-table"></div>
 
   <h2>The paper's ten rows</h2>
-  <p>The set that carries the argument: the same 154-cycle entry at three message sizes (rows 3, 6, 7), the two faces of nesting (2 and 8), the barrier's price (4 against 3, and every Hs against its H), a non-AES primitive (5), a long operation where nothing matters (9), and the row where blanket wins outright (10). A run restricted to these rows takes about two minutes.</p>
+  <p>The set that carries the argument: the same 156-cycle entry at three message sizes (rows 3, 6, 7), the two faces of nesting (2 and 8), the barrier's price (4 against 3, and every Hs against its H), a non-AES primitive (5), a long operation where nothing matters (9), and the row where blanket wins outright (10). Percent over the unhardened arm, cycles per operation; a hatched bar is a suspect cell, drawn capped with its true value.</p>
+  <div class="swatches" id="sw2"></div>
+  <div class="chart" id="chart-paper"></div>
   <div class="tablewrap" id="paper-table"></div>
 
   <h2>Every row</h2>
@@ -462,6 +464,36 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
     const dg = x => (r.suspect||[]).includes(x) ? '\u2020' : '';
     t += `<tr><td class="row">${i+1}</td><td>${esc(label)}${(r.suspect||[]).length?'\u2020':''}</td><td class="num">${cyc(a)}${dg('A')}</td><td class="num">${cyc(e)}</td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num ${x==='B'?'hot':''}">${fmt(r.pct[x],0)}${dg(x)}</td>`).join('')}<td class="num">${r.mad.toFixed(2)}%</td></tr>`; });
   const used = PR.map(([,k]) => DATA.rows[k]).filter(Boolean);
+  // one grouped bar chart of the ten rows: five arms per row, plus the geometric mean of the clean cells
+  try {
+    const arms = ['C','B','Bs','H','Hs'];
+    document.getElementById('sw2').innerHTML = arms.map(a => `<span style="--sw:${COL(a)}">${a}</span>`).join('');
+    const groups = PR.map(([label,k]) => ({label, r: DATA.rows[k]})).filter(g => g.r);
+    groups.push({label: 'geometric mean', r: {pct: Object.fromEntries(arms.map(a => [a, geomean(used, a)])), suspect: []}});
+    const clean = groups.flatMap(g => arms.filter(a => !(g.r.suspect||[]).includes(a) && g.r.pct[a] != null).map(a => g.r.pct[a]));
+    const top = Math.max(...clean) * 1.18, bottom = Math.min(0, Math.min(...clean) * 1.3);
+    const W = 900, H = 420, L = 62, R = 12, T = 18, Bm = 96, gw = (W - L - R) / groups.length, bw = gw / (arms.length + 1.2);
+    const Y = v => T + (1 - (v - bottom) / (top - bottom)) * (H - T - Bm);
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="the paper's ten rows, percent over A, five arms">`;
+    const step = top > 300 ? 100 : top > 120 ? 50 : 20;
+    for (let g = Math.ceil(bottom / step) * step; g <= top; g += step) s += `<line class="grid" x1="${L}" x2="${W-R}" y1="${Y(g)}" y2="${Y(g)}"/><text x="${L-6}" y="${Y(g)+4}" text-anchor="end">${g>0?'+':''}${g}%</text>`;
+    s += `<line class="axis" x1="${L}" x2="${W-R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
+    groups.forEach((g, i) => {
+      const x0 = L + i * gw + gw * 0.1;
+      arms.forEach((a, j) => {
+        const v = g.r.pct[a]; if (v == null || Number.isNaN(v)) return;
+        const sus = (g.r.suspect||[]).includes(a), vd = Math.min(v, top), x = x0 + j * bw;
+        const y1 = Y(Math.max(0, vd)), y2 = Y(Math.min(0, vd));
+        s += `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${(bw*0.9).toFixed(1)}" height="${Math.max(0.5, y2 - y1).toFixed(1)}" fill="${sus ? 'url(#hatch)' : COL(a)}" stroke="${sus ? COL(a) : 'none'}"/>`;
+        const lab = Math.abs(v) < 1e4 ? `${v>=0?'+':''}${v.toFixed(0)}` : `${v>=0?'+':''}${v.toExponential(1)}`;
+        s += `<text x="${(x + bw*0.45).toFixed(1)}" y="${(v >= 0 ? y1 - 3 : y2 + 10).toFixed(1)}" text-anchor="middle" font-size="8.5" ${sus ? 'fill="var(--flag)"' : ''}>${lab}${sus ? '\u2020' : ''}</text>`;
+      });
+      const words = g.label.replace(/ \(a TLS record\)/, '').split(', ');
+      words.forEach((w, k) => { s += `<text x="${(x0 + gw*0.4).toFixed(1)}" y="${H - Bm + 14 + k*12}" text-anchor="middle" font-size="9.5">${esc(w)}</text>`; });
+    });
+    s = s.replace('<svg ', '<svg><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--surface)"/><line x1="0" y1="0" x2="0" y2="6" stroke="var(--flag)" stroke-width="2"/></pattern></defs><svg ').replace('</svg>', '</svg></svg>');
+    document.getElementById('chart-paper').innerHTML = s;
+  } catch (e) { document.getElementById('chart-paper').innerHTML = `<p class="legend">chart failed: ${esc(String(e))}</p>`; }
   t += `<tr><td class="row"></td><td><b>geometric mean of the ratio to A, all cells</b></td><td></td><td></td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num"><b>${fmt(geomean(used, x, true),0)}</b></td>`).join('')}<td></td></tr>`;
   if (used.some(r => (r.suspect||[]).length)) t += `<tr><td class="row"></td><td><b>geometric mean, clean cells only</b></td><td></td><td></td>${['C','B','Bs','H','Hs'].map(x=>`<td class="num"><b>${fmt(geomean(used, x),0)}</b></td>`).join('')}<td></td></tr>`;
   t += '</table>'; document.getElementById('paper-table').innerHTML = t;
