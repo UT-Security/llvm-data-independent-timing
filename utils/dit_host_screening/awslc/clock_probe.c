@@ -5,7 +5,7 @@
  * injected constructor (root for the bind, PMC reads need the patched kernel):
  *
  *   clang -O2 -o clock_probe clock_probe.c
- *   sudo PIN_CPU=9 DYLD_INSERT_LIBRARIES=<W>/libditctl.dylib ./clock_probe 100 300
+ *   sudo DITCTL_PIN_CPU=9 DYLD_INSERT_LIBRARIES=<W>/libditctl.dylib ./clock_probe 100 300
  *
  * args: interval_ms (default 100), samples (default 200). If the printed clock dips
  * below 4000 MHz while the loop is running, that is DVFS on a pinned core, not a

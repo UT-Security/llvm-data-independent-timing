@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Experiment 13: the bracket variants, patched into AWS-LC's own DIT set/restore.
+"""Experiment 14: the bracket variants, patched into AWS-LC's own DIT set/restore.
 
 crypto/fipsmodule/cpucap/cpu_aarch64.c is where SET_DIT_AUTO_RESET does its work:
   armv8_get_dit:      mrs %0, s3_3_c4_c2_5        (read DIT)
@@ -20,6 +20,6 @@ if v == 'ditsb':
     s = s.replace(SET, '".inst 0xd503415f\\n\\t.inst 0xd50330ff"')          # msr dit,#1 ; sb
 else:
     raise SystemExit('variant: ditsb')
-s = s.replace('// Encoding of "msr dit, #1"', f'// experiment 13 variant {v}; was: Encoding of "msr dit, #1"', 1)
+s = s.replace('// Encoding of "msr dit, #1"', f'// experiment 14 variant {v}; was: Encoding of "msr dit, #1"', 1)
 open(p, 'w').write(s)
 print(f'cpu_aarch64.c: variant {v}')

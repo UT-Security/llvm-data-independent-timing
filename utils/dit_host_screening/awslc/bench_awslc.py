@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Experiment 13: `bssl speed` under six arms, PMC cycles and instructions per operation.
+"""Experiment 14: `bssl speed` under six arms, PMC cycles and instructions per operation.
 
 Each sample is one `bssl speed -json` process for one filter; the patched tool reports
 PMC0 cycles and PMC1 retired instructions over its own timed loop, so every row yields
@@ -7,12 +7,12 @@ cycles/op, instructions/op and IPC without kperf. Arms rotate on every rep. The 
 constructor pins QoS and reads PSTATE.DIT back at exit (C must exit 1, the rest 0).
 NO SAMPLE IS EVER DROPPED: anything suspicious is flagged, counted and saved with its value.
 
-Single core, hard-pinned: `bssl speed` runs its timed loop on one thread, and the constructor
-binds that thread to logical CPU PIN_CPU through kern.sched_thread_bind_cpu, a development
-sysctl this kernel exposes (boot-arg enable_skstb=1) and a root-only write, so the driver runs
-under sudo (reproduce.sh does that for this stage alone). The constructor's exit line reports the
-tier it reached (pin=cpu:N) and the bind read back at exit (bound=N); a process whose line does
-not say both is counted and the run is reported as not pinned. The PMC-implied clock (cycles/us)
+Single core, hard-pinned: `bssl speed` runs its timed loop on one thread, and the injected
+utils/cio_ditctl.c binds that thread to logical CPU DITCTL_PIN_CPU (= PIN_CPU here) through
+kern.sched_thread_bind_cpu, a development sysctl this kernel exposes (boot-arg enable_skstb=1)
+and a root-only write, so the driver runs under sudo (reproduce.sh does that for this stage
+alone). The library's exit line reports pinned=<cpu> (or -1); a process whose line does not
+name PIN_CPU is counted and the run is reported as not pinned. The PMC-implied clock (cycles/us)
 is recorded per sample and flagged outside the band, never used to exclude.
 
   A    rel                            unhardened
@@ -51,12 +51,13 @@ OUT = f'{W}/results'; os.makedirs(OUT, exist_ok=True)
 def run(arm, test):
     env = {k: os.environ[k] for k in ('PATH', 'HOME') if k in os.environ}
     env.update(DYLD_INSERT_LIBRARIES=f'{W}/libditctl.dylib', ENABLE_DIT=str(arm[2]))
-    if PIN_CPU is not None: env['PIN_CPU'] = str(PIN_CPU)
+    if PIN_CPU is not None: env['DITCTL_PIN_CPU'] = str(PIN_CPU)     # utils/cio_ditctl.c: bind via kern.sched_thread_bind_cpu (root)
+    else: env['DITCTL_PIN'] = '0'                                      # deliberately unpinned dry run
     cmd = [f'{W}/build-{arm[1]}/tool/bssl', 'speed', '-json', '-timeout_ms', TIMEOUT_MS, '-chunks', CHUNKS, '-filter', test] + arm[3]
     p = subprocess.run(cmd, env=env, capture_output=True, text=True)
     m = re.search(r'dit=([01])', p.stderr); dit = m.group(1) if m else '?'
-    mp = re.search(r'pin=(\S+) bound=(-?\d+)', p.stderr)
-    pinned = PIN_CPU is None or (bool(mp) and mp.group(1) == f'cpu:{PIN_CPU}' and int(mp.group(2)) == PIN_CPU)
+    mp = re.search(r'pinned=(-?\d+)', p.stderr)                          # the library reports the CPU it bound, -1 if it could not
+    pinned = PIN_CPU is None or (bool(mp) and int(mp.group(1)) == PIN_CPU)
     out = p.stdout; i, j = out.find('['), out.rfind(']')
     rows = json.loads(out[i:j + 1]) if i >= 0 and j > i else []
     return rows, dit, p.returncode, pinned, (mp.group(0) if mp else p.stderr[-120:])

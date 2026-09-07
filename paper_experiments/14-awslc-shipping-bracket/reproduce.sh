@@ -1,5 +1,5 @@
 #!/bin/bash
-# Reproduce experiment 13 (AWS-LC: the bracket Amazon ships, on Amazon's own benchmark) on an
+# Reproduce experiment 14 (AWS-LC: the bracket Amazon ships, on Amazon's own benchmark) on an
 # Apple Silicon Mac whose kernel exposes the PMCs to user mode (pmc stage) and the thread-bind
 # sysctl (enable_skstb=1). Root is used for one thing: the run stage's driver, for the bind.
 #
@@ -20,14 +20,14 @@ set -euo pipefail
 E="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 R="$(cd "$E/../.." && pwd)"
 RIG="$R/utils/dit_host_screening/awslc"
-export W="${W:-$HOME/Documents/dit-awslc}" PIN_CPU="${PIN_CPU:-9}"
+export W="${W:-$HOME/Documents/dit-awslc}" PIN_CPU="${PIN_CPU:-9}"   # -> DITCTL_PIN_CPU for utils/cio_ditctl.c
 HOST_TAG="${HOST_TAG:-$(sysctl -n machdep.cpu.brand_string 2>/dev/null | tr 'A-Z ' 'a-z-' | sed 's/^apple-//')}"
 RES="$E/results-${HOST_TAG:-unknown}"
 STAGES="${*:-pmc build run collect analyze}"
 want() { [[ " $STAGES " == *" $1 "* ]]; }
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 die()  { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
-[[ "$(uname -s)/$(uname -m)" == Darwin/arm64 ]] || die "experiment 13 runs on Apple Silicon (PSTATE.DIT, macOS)"
+[[ "$(uname -s)/$(uname -m)" == Darwin/arm64 ]] || die "experiment 14 runs on Apple Silicon (PSTATE.DIT, macOS)"
 [[ $EUID -ne 0 ]] || die "run this as your user: only the driver needs root, and the run stage takes sudo itself"
 [[ "$(sysctl -n kern.sched_thread_bind_cpu 2>/dev/null)" != "" ]] || die "kern.sched_thread_bind_cpu is absent: this kernel cannot hard-pin (needs enable_skstb=1)"
 mkdir -p "$W"

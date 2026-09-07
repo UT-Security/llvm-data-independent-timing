@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Experiment 13: AWS-LC v5.8.0, the bracket Amazon ships, in three builds of `bssl speed`.
+# Experiment 14: AWS-LC v5.8.0, the bracket Amazon ships, in three builds of `bssl speed`.
 #
 #   rel        -DENABLE_DATA_INDEPENDENT_TIMING=OFF        arm A;  arm C = A run with DIT set before main
 #   dit        ...=ON, as shipped (mrs; msr dit,#1 ... msr dit,#0 per bracketed entry point)   arm B;  arm H  = B  run with `-dit`

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Experiment 13: make `bssl speed` report Apple PMC cycles and retired instructions.
+"""Experiment 14: make `bssl speed` report Apple PMC cycles and retired instructions.
 
 tool/speed.cc times each function with gettimeofday. This adds an isb-ordered read of
 PMC0 (cycles) and PMC1 (instructions retired) around the same measured loop, SIGILL-probed
@@ -22,7 +22,7 @@ def sub(a, b, count=1):
 
 sub('#include <sstream>\n', '''#include <sstream>
 
-// experiment 13: Apple PMC reads (PMC0 cycles, PMC1 instructions retired) from EL0, which
+// experiment 14: Apple PMC reads (PMC0 cycles, PMC1 instructions retired) from EL0, which
 // a kernel patched with PMCR0_USEREN_EN allows. Reads are isb-ordered (a bare mrs floats
 // above the code it measures), 48-bit, probed once SIGILL-safe: zero when unavailable.
 #if defined(__aarch64__) && defined(__APPLE__)
@@ -53,7 +53,7 @@ sub('''  // us is the number of microseconds that elapsed in the time period.
   uint64_t us;
 ''', '''  // us is the number of microseconds that elapsed in the time period.
   uint64_t us;
-  // experiment 13: PMC0 cycles and PMC1 instructions over the same period (0 if unavailable).
+  // experiment 14: PMC0 cycles and PMC1 instructions over the same period (0 if unavailable).
   // No default initialisers: speed.cc aggregate-initialises TimeResults ({num_calls, us}) and
   // the tool is C++11, where that would stop compiling; the aggregate zero-fills these two.
   uint64_t cycles;

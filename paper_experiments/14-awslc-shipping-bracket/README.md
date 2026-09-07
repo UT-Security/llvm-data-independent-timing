@@ -1,4 +1,4 @@
-# 13 - AWS-LC: the bracket Amazon ships, on Amazon's own benchmark
+# 14 - AWS-LC: the bracket Amazon ships, on Amazon's own benchmark
 
 **Status: complete, silicon.** Run twice on 2026-09-06 on the M4 (Mac16,10), CPU 9
 hard-bound, PMC cycles per operation: once with 400 ms windows under a driver that still
@@ -102,17 +102,17 @@ injected constructor binds that thread to one logical CPU through
 `kern.sched_thread_bind_cpu`. Stock macOS has no affinity call (the Mach affinity policy
 returns "not supported" on Apple silicon), but this M4 boots a development kernel with
 `enable_skstb=1`, which exposes that sysctl; it is the same mechanism the SPEC and gapbs
-studies' `cpupin.c` uses. The constructor walks the ladder hard bind, then P-cluster bind,
-then QoS, and reports the tier it reached and the bind read back at exit
-(`pin=cpu:9 bound=9`). The write is a `kern.*` sysctl, so it needs root: as an ordinary
-user it fails with "Operation not permitted" and the library falls through to QoS, which
-is what an unpinned run looks like. The run stage therefore takes sudo for the driver
-alone and hands the results back to the user afterwards.
+studies' `cpupin.c` uses, and `utils/cio_ditctl.c` does it for every silicon rig when
+`DITCTL_PIN_CPU` is set (the driver passes `PIN_CPU` through as that). The library's exit
+line reports the core it bound (`pinned=9`) or `-1`. The write is a `kern.*` sysctl, so it
+needs root: as an ordinary user it fails with "Operation not permitted" and the process
+stays on QoS alone, which is what an unpinned run looks like. The run stage therefore
+takes sudo for the driver alone and hands the results back to the user afterwards.
 
 **Nothing is dropped.** Every sample enters the medians. Two things are checked and
 reported next to the numbers, never used to discard: whether every process reported the
-hard bind to `PIN_CPU` (default 9; CPUs 0-5 are the E cluster on this part, 6-9 the P
-cluster), and each sample's implied clock, PMC cycles over the tool's microseconds. On a
+bind, `pinned=` equal to `PIN_CPU` (default 9; CPUs 0-5 are the E cluster on this part, 6-9
+the P cluster), and each sample's implied clock, PMC cycles over the tool's microseconds. On a
 pinned run only a clock no single P-core can produce, under 3.0 GHz (the E-core ceiling)
 or over 4.7, means anything; a dip below the 4.4 GHz boost is DVFS under sustained load
 and leaves cycles per operation untouched. The first pinned run on 2026-09-06 had a
@@ -154,7 +154,7 @@ other arm as percent over A, Bs - B and B - H in points of A, MAD of A.
 ## How to run
 
 ```
-paper_experiments/13-awslc-shipping-bracket/reproduce.sh          # pmc build run collect
+paper_experiments/14-awslc-shipping-bracket/reproduce.sh          # pmc build run collect
 ```
 
 Stages: `pmc` (gate: the kernel must expose the PMCs, otherwise every row's cycles would
@@ -260,8 +260,8 @@ directly. The other 6,475 windows sit at 3,879 to 4,461 MHz implied clock, media
   DIT build's layout term. The constancy of B - A in cycles across chunk sizes is the
   check on it; a layout term would not scale with the mode writes either, so the two are
   separable only by the switch-count argument, not by a control arm.
-- The hard pin depends on a development kernel (`enable_skstb=1`). On a stock kernel the
-  constructor falls back to the P-cluster bind or QoS and says so, and the driver reports
+- The hard pin depends on a development kernel (`enable_skstb=1`) and on root. Otherwise
+  the library reports `pinned=-1`, the process stays on QoS alone, and the driver reports
   the run as not pinned while keeping every sample; `PIN_CPU=` (empty) is the deliberate
   unpinned dry run, labelled as such.
 - The PMCs are read inside the benchmark process, once per timed loop; the read cost is

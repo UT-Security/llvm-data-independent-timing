@@ -56,7 +56,7 @@
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 <main>
-  <div class="eyebrow">Experiment 13 &middot; Apple M4 &middot; PMC cycles per operation</div>
+  <div class="eyebrow">Experiment 14 &middot; Apple M4 &middot; PMC cycles per operation</div>
   <h1>The Shipping Bracket</h1>
   <p class="lede">AWS-LC ships the developer's DIT bracket as a build option and has never published what it costs. This is what it costs, on the vendor's own benchmark, one hard-pinned core, cycles counted by the hardware.</p>
   <div class="status" id="status"></div>
@@ -107,7 +107,7 @@
     <li>AWS-LC v5.8.0, built three ways with the platform compiler; <code>tool/speed.cc</code> patched to read PMC0 (cycles) and PMC1 (instructions retired), <code>isb</code>-ordered, around its own timed loop, and print both per JSON row. One thread, hard-bound to a P-core through <code>kern.sched_thread_bind_cpu</code>; the constructor reports the bind at exit and the driver checks it.</li>
     <li>Each row: the operation is called in a loop for a fixed window; cycles and instructions are the window totals divided by the call count. Arms rotate on every rep; the first rep is warm-up; medians over the rest.</li>
     <li>Nothing is dropped. Samples whose implied clock (cycles over microseconds) falls outside the P-core band are flagged and counted, never excluded; the count is in the status strip.</li>
-    <li>Sources and the rig: <code>paper_experiments/13-awslc-shipping-bracket</code>, <code>utils/dit_host_screening/awslc</code>.</li>
+    <li>Sources and the rig: <code>paper_experiments/14-awslc-shipping-bracket</code>, <code>utils/dit_host_screening/awslc</code>.</li>
   </ul>
   <p class="legend" id="prov"></p>
 </main>

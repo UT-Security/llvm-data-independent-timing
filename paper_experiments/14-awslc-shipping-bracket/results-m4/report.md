@@ -1,6 +1,6 @@
-# Experiment 13 analysis: AWS-LC's shipped DIT bracket on `bssl speed`
+# Experiment 14 analysis: AWS-LC's shipped DIT bracket on `bssl speed`
 
-Source `/Users/rgangar/.treehouse/llvm-data-independent-timing-7b712d/1/llvm-data-independent-timing/paper_experiments/13-awslc-shipping-bracket/results-m4/speed.json`, analysed 2026-09-06. Arms: A = release, no DIT, C = blanket (DIT set before main), B = shipped bracket, Bs = bracket + sb, H = vendor hoisting (-dit), Hs = hoisting + sb.
+Source `/Users/rgangar/.treehouse/llvm-data-independent-timing-7b712d/1/llvm-data-independent-timing/paper_experiments/14-awslc-shipping-bracket/results-m4/speed.json`, analysed 2026-09-06. Arms: A = release, no DIT, C = blanket (DIT set before main), B = shipped bracket, Bs = bracket + sb, H = vendor hoisting (-dit), Hs = hoisting + sb.
 
 ## Validity
 
