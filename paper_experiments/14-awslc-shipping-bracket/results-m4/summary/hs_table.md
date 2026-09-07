@@ -1,4 +1,4 @@
-| # | row | A cyc/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
+| # | row | unhardened cyc/op | Coarse | AWS default | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|
 | 1 | AES-128 encrypt setup | 40 | -0% | +481% | +506% | +5% | +334% | 0.05% |
 | 2 | EVP-AES-128-CBC decrypt [16 B] | 103 | +1% | +325% | +531% | +23% | +323% | 2.04% |

@@ -18,7 +18,7 @@ ARMS = ['A', 'C', 'B', 'Bs', 'H', 'Hs']
 # H AWS hoist (the vendor's -dit), Hs AWS hoist + sb. "hoist", never "hoisted".
 ARM_NAME = {'A': 'unhardened (release, no DIT)', 'C': 'coarse (DIT set before main)', 'B': 'AWS default (the bracket as shipped)',
             'Bs': 'AWS default + sb', 'H': 'AWS hoist (-dit)', 'Hs': 'AWS hoist + sb'}
-ARM_LABEL = {'A': 'A unhardened', 'C': 'C coarse', 'B': 'B AWS default', 'Bs': 'Bs AWS default + sb', 'H': 'H AWS hoist', 'Hs': 'Hs AWS hoist + sb'}
+ARM_LABEL = {'A': 'unhardened', 'C': 'Coarse', 'B': 'AWS default', 'Bs': 'AWS default + sb', 'H': 'AWS hoist', 'Hs': 'AWS hoist + sb'}   # names only, no letters
 SIZES = [16, 256, 1350, 8192, 16384]
 
 def load(path):
@@ -132,7 +132,7 @@ PAPER_CHUNKS = "16,1350,16384"
 
 def paper_table(an):
     p = an['prices']; pair = p.get('pair_price_cycles'); block = p.get('block_entry_price_cycles') or pair
-    hdr = "| # | op | A cyc/op | entries/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |"
+    hdr = "| # | op | unhardened cyc/op | entries/op | Coarse | AWS default | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |"
     md = [hdr, "|---|---|---|---|---|---|---|---|---|---|"]; csv = ["n,op,A_cycles_per_op,entries_per_op,C_pct,B_pct,Bs_pct,H_pct,Hs_pct,MAD_pct"]
     missing = []
     for i, (label, key, isblk) in enumerate(PAPER_ROWS, 1):
@@ -154,7 +154,7 @@ def paper_table(an):
     csv.append("geomean_all,\"geometric mean of arm/A over the rows above, all cells\",,," + ','.join(f"{gm[x][0]:.2f}" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + ",")
     csv.append("geomean_clean,\"geometric mean of arm/A over the rows above, suspect cells left out\",,," + ','.join(f"{gmc[x][0]:.2f}" for x in ('C', 'B', 'Bs', 'H', 'Hs')) + ",")
     an['geomeans'] = an.get('geomeans', {}); an['geomeans']['paper'] = {'all': {x: gm[x][0] for x in gm}, 'clean': {x: gmc[x][0] for x in gmc}, 'rows': len(rows_used)}
-    note = (f"Entries per op = (B - A) / one entry's price: {fmt_cyc(pair)} cycles for an AEAD-level entry, {fmt_cyc(block)} for a single-block AES entry "
+    note = (f"Entries per op = (AWS default - unhardened) / one entry's price: {fmt_cyc(pair)} cycles for an AEAD-level entry, {fmt_cyc(block)} for a single-block AES entry "
             f"(rows 1 and 8). Run only these rows with BENCH_TESTS=\"{PAPER_TESTS}\" CHUNKS={PAPER_CHUNKS}.")
     if missing: note += " MISSING from this run: " + ', '.join(missing)
     if any(an['rows'].get(k, {}).get('suspect') for _, k, _ in PAPER_ROWS):
@@ -170,7 +170,7 @@ def hs_table(an, threshold=HS_MIN_PCT):
     arms = ('C', 'B', 'Bs', 'H', 'Hs'); dagger = '\u2020'
     sel = [(k, r) for k, r in an['rows'].items() if r['pct'].get('Hs') is not None and r['pct']['Hs'] == r['pct']['Hs'] and r['pct']['Hs'] >= threshold]
     sel.sort(key=lambda kr: -kr[1]['pct']['Hs'])
-    md = ["| # | row | A cyc/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |", "|---|---|---|---|---|---|---|---|---|"]
+    md = ["| # | row | unhardened cyc/op | Coarse | AWS default | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |", "|---|---|---|---|---|---|---|---|---|"]
     csv = ["n,row,A_cycles_per_op,C_pct,B_pct,Bs_pct,H_pct,Hs_pct,MAD_pct"]
     for i, (k, r) in enumerate(sel, 1):
         c = r['cycles']; q = r['pct']; sus = r.get('suspect', [])
@@ -215,7 +215,7 @@ def fmt_cyc(x): return 'n/a' if x is None or x != x else f"{x:,.0f}"
 def report_md(an, src):
     v = an['validity']; L = []
     L.append(f"# Experiment 14 analysis: AWS-LC's DIT bracket on `bssl speed`\n")
-    L.append(f"Source `{src}`, analysed {datetime.date.today().isoformat()}. Arms: " + ', '.join(f"{a} = {ARM_NAME[a]}" for a in v['arms']) + ".\n")
+    L.append(f"Source `{src}`, analysed {datetime.date.today().isoformat()}. Arms: " + ', '.join(ARM_NAME[a] for a in v['arms']) + ".\n")
     L.append("## Validity\n")
     if v['runs_count'] > 1:
         L.append(f"- {v['runs_count']} runs, each cell the {(v.get('aggregate') or 'mean').upper()} across runs of that run's median; per-cell spread across runs (max-min)/mean: median {v['run_spread_pct']['median']:.2f}%, p90 {v['run_spread_pct']['p90']:.2f}%, max {v['run_spread_pct']['max']:.1f}%"
@@ -231,14 +231,14 @@ def report_md(an, src):
     if p.get('gcm_seal_16'):
         g = p['gcm_seal_16']; L.append("## The three prices (one bracket entry per op: AEAD-AES-128-GCM seal, 16 B)\n")
         L.append("| what | cycles |\n|---|---|")
-        L.append(f"| two mode-changing writes (B - A) | {fmt_cyc(g['changing_pair'])} |")
-        L.append(f"| read + one non-changing write (H - A) | {fmt_cyc(g['read_plus_nonchanging'])} |")
-        L.append(f"| sb after a changing write (Bs - B) | {fmt_cyc(g['sb_after_changing'])} |")
-        L.append(f"| sb after a non-changing write (Hs - H) | {fmt_cyc(g['sb_after_nonchanging'])} |")
+        L.append(f"| two mode-changing writes (AWS default - unhardened) | {fmt_cyc(g['changing_pair'])} |")
+        L.append(f"| read + one non-changing write (AWS hoist - unhardened) | {fmt_cyc(g['read_plus_nonchanging'])} |")
+        L.append(f"| sb after a changing write (AWS default + sb - AWS default) | {fmt_cyc(g['sb_after_changing'])} |")
+        L.append(f"| sb after a non-changing write (AWS hoist + sb - AWS hoist) | {fmt_cyc(g['sb_after_nonchanging'])} |")
         if p.get('aes_block'):
             b = p['aes_block']; L.append(f"| same four, from the single-block AES row | {fmt_cyc(b['changing_pair'])} / {fmt_cyc(b['read_plus_nonchanging'])} / {fmt_cyc(b['sb_after_changing'])} / {fmt_cyc(b['sb_after_nonchanging'])} |")
         L.append("")
-    L.append("## Is the cost constant across sizes? (absolute B - A cycles per op)\n")
+    L.append("## Is the cost constant across sizes? (absolute AWS default - unhardened cycles per op)\n")
     L.append("| family | 16 B | 256 B | 1350 B | 8 KB | 16 KB | max/min |\n|---|---|---|---|---|---|---|")
     for fam, s in sorted(an['series'].items()):
         cells = {x['size']: x['B_minus_A'] for x in s['points']}
@@ -246,19 +246,19 @@ def report_md(an, src):
     L.append("")
     if an['density']:
         L.append("## Density: how many bracket entries an operation pays for\n")
-        L.append(f"One AEAD-level entry (two changing writes) costs {fmt_cyc(p.get('pair_price_cycles'))} cycles on the seal row and one single-block AES entry {fmt_cyc(p.get('block_entry_price_cycles'))}; B - A divided by the applicable price is the entries per op.\n")
-        L.append("| row | B - A cycles | unit price | implied entries/op | B vs A |\n|---|---|---|---|---|")
+        L.append(f"One AEAD-level entry (two changing writes) costs {fmt_cyc(p.get('pair_price_cycles'))} cycles on the seal row and one single-block AES entry {fmt_cyc(p.get('block_entry_price_cycles'))}; AWS default - unhardened divided by the applicable price is the entries per op.\n")
+        L.append("| row | AWS default - unhardened cycles | unit price | implied entries/op | AWS default vs unhardened |\n|---|---|---|---|---|")
         for k, dd in an['density'].items():
             L.append(f"| {k} | {fmt_cyc(dd['B_minus_A'])} | {fmt_cyc(dd['unit_price'])} ({dd['unit']}) | {dd['implied_entries']:.0f}{' (' + str(dd['blocks']) + ' AES blocks)' if dd['blocks'] else ''} | {fmt_pct(dd['pct_B'])} |")
         L.append("")
     if an['anomalies']:
         L.append("## Coarse DIT moving a row by more than 2% (C vs A, rows with MAD < 2%)\n")
-        L.append("| row | A cyc/op | C | H | MAD |\n|---|---|---|---|---|")
+        L.append("| row | unhardened cyc/op | Coarse | AWS hoist | MAD |\n|---|---|---|---|---|")
         for x in sorted(an['anomalies'], key=lambda x: x['C_pct']):
             L.append(f"| {x['key']} | {fmt_cyc(x['A'])} | {fmt_pct(x['C_pct'])} | {fmt_pct(x['H_pct'])} | {x['mad']:.2f}% |")
         L.append("")
     L.append("## Every row (percent over A, cycles per op)\n")
-    L.append("| row | A cyc/op | IPC A | C coarse | B AWS default | B-A cyc | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |\n|---|---|---|---|---|---|---|---|---|---|")
+    L.append("| row | unhardened cyc/op | IPC unhardened | Coarse | AWS default | AWS default - unhardened cyc | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |\n|---|---|---|---|---|---|---|---|---|---|")
     for k in sorted(an['rows']):
         r = an['rows'][k]; c = r['cycles']; q = r['pct']
         dg = lambda a: '\u2020' if a in r.get('suspect', []) else ''
@@ -274,7 +274,7 @@ def report_md(an, src):
     an['geomeans'] = an.get('geomeans', {}); an['geomeans']['all_rows'] = {'all': {x: gma[x][0] for x in gma}, 'clean': {x: gmc[x][0] for x in gmc}, 'rows': gma['B'][1], 'suspect_left_out': max(g[2] for g in gmc.values())}
     if any(len(r['ipc']) > 1 for r in an['rows'].values()):
         L.append("\n## IPC and instructions per op, every arm\n")
-        L.append("| row | instr/op A | " + ' | '.join(f"IPC {a}" for a in ARMS) + " | B-A instr |\n|---|---|" + '---|' * len(ARMS) + "---|")
+        L.append("| row | instr/op unhardened | " + ' | '.join(f"IPC {ARM_LABEL[a]}" for a in ARMS) + " | AWS default - unhardened instr |\n|---|---|" + '---|' * len(ARMS) + "---|")
         for k in sorted(an['rows']):
             r = an['rows'][k]; ins = r['instrs']; ipc = r['ipc']
             L.append(f"| {k} | {fmt_cyc(ins.get('A'))} | " + ' | '.join(f"{ipc[a]:.2f}" if a in ipc else 'n/a' for a in ARMS) + f" | {fmt_cyc((ins['B'] - ins['A']) if 'B' in ins and 'A' in ins else None)} |")
@@ -346,16 +346,16 @@ HTML_TEMPLATE = r'''<title>The Shipping Bracket</title>
   <h2>What the arms are</h2>
   <div class="tablewrap"><table>
     <tr><th>arm</th><th>binary</th><th>run</th><th>per bracketed entry point</th></tr>
-    <tr><td class="row">A unhardened</td><td>release, DIT option off</td><td></td><td>nothing</td></tr>
-    <tr><td class="row">C coarse</td><td>release</td><td>DIT set before <code>main</code> by the injected constructor</td><td>nothing: DIT is on for the whole process</td></tr>
-    <tr><td class="row">B AWS default</td><td><code>ENABLE_DATA_INDEPENDENT_TIMING=ON</code>, as shipped</td><td></td><td><code>mrs DIT</code>; <code>msr dit,#1</code>; <code>msr dit,#0</code> at exit when it was off</td></tr>
-    <tr><td class="row">Bs AWS default + sb</td><td>the same with <code>sb</code> after the enable</td><td></td><td>Apple's recipe</td></tr>
-    <tr><td class="row">H AWS hoist</td><td>the shipped build</td><td><code>-dit</code>: the vendor's hoisting, DIT set once for the run</td><td>read and enable still execute; the enable changes nothing; clear skipped</td></tr>
-    <tr><td class="row">Hs AWS hoist + sb</td><td>the <code>sb</code> build</td><td><code>-dit</code></td><td>read, enable and <code>sb</code> still execute; clear skipped</td></tr>
+    <tr><td class="row">unhardened</td><td>release, DIT option off</td><td></td><td>nothing</td></tr>
+    <tr><td class="row">Coarse</td><td>release</td><td>DIT set before <code>main</code> by the injected constructor</td><td>nothing: DIT is on for the whole process</td></tr>
+    <tr><td class="row">AWS default</td><td><code>ENABLE_DATA_INDEPENDENT_TIMING=ON</code>, as shipped</td><td></td><td><code>mrs DIT</code>; <code>msr dit,#1</code>; <code>msr dit,#0</code> at exit when it was off</td></tr>
+    <tr><td class="row">AWS default + sb</td><td>the same with <code>sb</code> after the enable</td><td></td><td>Apple's recipe</td></tr>
+    <tr><td class="row">AWS hoist</td><td>the shipped build</td><td><code>-dit</code>: the vendor's hoisting, DIT set once for the run</td><td>read and enable still execute; the enable changes nothing; clear skipped</td></tr>
+    <tr><td class="row">AWS hoist + sb</td><td>the <code>sb</code> build</td><td><code>-dit</code></td><td>read, enable and <code>sb</code> still execute; clear skipped</td></tr>
   </table></div>
 
   <h2>One bracket entry costs the same at every message size</h2>
-  <p>AEAD-AES-128-GCM seal enters exactly one bracketed function per call. Cycles per operation for the six arms, against message size. The gap between B and A does not move as the message grows from 16 bytes to 16 KB: it is the price of the two mode-changing writes, and nothing else.</p>
+  <p>AEAD-AES-128-GCM seal enters exactly one bracketed function per call. Cycles per operation for the six arms, against message size. The gap between AWS default and unhardened does not move as the message grows from 16 bytes to 16 KB: it is the price of the two mode-changing writes, and nothing else.</p>
   <div class="swatches" id="sw1"></div>
   <div class="chart" id="chart-series"></div>
   <div class="tablewrap" id="series-table"></div>
@@ -366,18 +366,18 @@ HTML_TEMPLATE = r'''<title>The Shipping Bracket</title>
   <div class="tablewrap" id="prices-table"></div>
 
   <h2>Nesting multiplies it</h2>
-  <p>Dividing each row's B&nbsp;&minus;&nbsp;A by the price of one entry gives the number of bracketed entries an operation pays for. Two unit prices apply: an entry into an AEAD-level function (154 cycles on the seal row) and an entry into the single-block AES call (94 cycles; less is in flight to drain). The EVP cipher layer pays for several AEAD-level entries per call. CMAC calls the bracketed single-block AES once per 16 bytes and pays for 1,024 block entries per 16 KB.</p>
+  <p>Dividing each row's AWS default&nbsp;&minus;&nbsp;unhardened by the price of one entry gives the number of bracketed entries an operation pays for. Two unit prices apply: an entry into an AEAD-level function (154 cycles on the seal row) and an entry into the single-block AES call (94 cycles; less is in flight to drain). The EVP cipher layer pays for several AEAD-level entries per call. CMAC calls the bracketed single-block AES once per 16 bytes and pays for 1,024 block entries per 16 KB.</p>
   <div class="tablewrap" id="density-table"></div>
 
   <h2>The vendor's claim</h2>
   <p id="claim"></p>
 
   <h2>Where coarse DIT changed the speed</h2>
-  <p>Coarse DIT (arm C) costs nothing on the crypto. On several rows it is <em>faster</em> than unhardened, and the AWS hoist arm, which also holds DIT on throughout, moves with it. The rows share one feature: fresh random bytes. On this core DIT disables the data-dependent prefetcher, and random words look like pointers to it. A hypothesis, stated as one.</p>
+  <p>Coarse DIT costs nothing on the crypto. On several rows it is <em>faster</em> than unhardened, and the AWS hoist arm, which also holds DIT on throughout, moves with it. The rows share one feature: fresh random bytes. On this core DIT disables the data-dependent prefetcher, and random words look like pointers to it. A hypothesis, stated as one.</p>
   <div class="tablewrap" id="anomaly-table"></div>
 
   <h2>The paper's ten rows</h2>
-  <p>The set that carries the argument: the same 156-cycle entry at three message sizes (rows 3, 6, 7), the two faces of nesting (2 and 8), the barrier's price (4 against 3, and every Hs against its H), a non-AES primitive (5), a long operation where nothing matters (9), and the row where coarse wins outright (10). Bars are cycles per operation as a ratio to the unhardened arm, drawn from 1.00x (no cost); a hatched bar is a suspect cell, drawn capped with its true value. The table below keeps the same cells as percent.</p>
+  <p>The set that carries the argument: the same 156-cycle entry at three message sizes (rows 3, 6, 7), the two faces of nesting (2 and 8), the barrier's price (4 against 3, and every + sb column against its base), a non-AES primitive (5), a long operation where nothing matters (9), and the row where coarse wins outright (10). Bars are cycles per operation as a ratio to the unhardened arm, drawn from 1.00x (no cost); a hatched bar is a suspect cell, drawn capped with its true value. The table below keeps the same cells as percent.</p>
   <div class="swatches" id="sw2"></div>
   <div class="chart" id="chart-paper"></div>
   <div class="tablewrap" id="paper-table"></div>
@@ -387,7 +387,7 @@ HTML_TEMPLATE = r'''<title>The Shipping Bracket</title>
   <div class="tablewrap" id="hs-table"></div>
 
   <h2>Every row</h2>
-  <p class="legend">Percent over A, cycles per operation. B&nbsp;&minus;&nbsp;A in absolute cycles. MAD is the spread of A's samples as a percent of its median. A dagger marks a cell whose median implies a clock outside the P-core band: a majority of that cell's samples carried the backward-counter fault, so the value is kept but not to be read.</p>
+  <p class="legend">Percent over A, cycles per operation. AWS default&nbsp;&minus;&nbsp;unhardened in absolute cycles. MAD is the spread of A's samples as a percent of its median. A dagger marks a cell whose median implies a clock outside the P-core band: a majority of that cell's samples carried the backward-counter fault, so the value is kept but not to be read.</p>
   <div class="tablewrap" id="full-table"></div>
 
   <h2>Instructions and IPC, every arm</h2>
@@ -406,7 +406,7 @@ HTML_TEMPLATE = r'''<title>The Shipping Bracket</title>
 <script>
 const DATA = __DATA__;
 const ARMS = ['A','C','B','Bs','H','Hs'];
-const NAME = {A:'A unhardened', C:'C coarse', B:'B AWS default', Bs:'Bs AWS default + sb', H:'H AWS hoist', Hs:'Hs AWS hoist + sb'};
+const NAME = {A:'unhardened', C:'Coarse', B:'AWS default', Bs:'AWS default + sb', H:'AWS hoist', Hs:'AWS hoist + sb'};   // names only, no letters
 const COL = a => `var(--arm-${a})`;
 const fmt = (x, d=1) => (x==null || Number.isNaN(x)) ? 'n/a' : (x>=0?'+':'') + x.toFixed(d) + '%';
 const cyc = x => (x==null || Number.isNaN(x)) ? 'n/a' : Math.round(x).toLocaleString();
@@ -451,7 +451,7 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
     }
     s += '</svg>';
     document.getElementById('chart-series').innerHTML = s;
-    let t = `<table><tr><th>size</th><th class="num">A cyc/op</th>${ARMS.slice(1).map(a=>`<th class="num">${a}</th>`).join('')}<th class="num">B − A cyc</th><th class="num">Bs − B</th><th class="num">H − A</th><th class="num">Hs − H</th></tr>`;
+    let t = `<table><tr><th>size</th><th class="num">unhardened cyc/op</th>${ARMS.slice(1).map(a=>`<th class="num">${NAME[a]}</th>`).join('')}<th class="num">AWS default − unhardened, cyc</th><th class="num">+ sb − AWS default</th><th class="num">AWS hoist − unhardened</th><th class="num">+ sb − AWS hoist</th></tr>`;
     for (const p of pts) t += `<tr><td class="row">${p.size} B</td><td class="num">${cyc(p.A)}</td>${ARMS.slice(1).map(a=>`<td class="num">${fmt(p.pct[a])}</td>`).join('')}<td class="num hot">${cyc(p.B_minus_A)}</td><td class="num">${cyc(p.Bs_minus_B)}</td><td class="num">${cyc(p.H_minus_A)}</td><td class="num">${cyc(p.Hs_minus_H)}</td></tr>`;
     t += `</table>`; document.getElementById('series-table').innerHTML = t;
   }
@@ -459,7 +459,7 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
 // prices chart
 {
   const P = DATA.prices; const rows = [['gcm_seal_16','AEAD-GCM seal, 16 B'],['aes_block','AES-128 single block']].filter(([k])=>P[k]);
-  const items = [['changing_pair','two mode-changing writes (B − A)'],['read_plus_nonchanging','read + non-changing write (H − A)'],['sb_after_changing','sb after a changing write (Bs − B)'],['sb_after_nonchanging','sb after a non-changing write (Hs − H)']];
+  const items = [['changing_pair','two mode-changing writes (AWS default − unhardened)'],['read_plus_nonchanging','read + non-changing write (AWS hoist − unhardened)'],['sb_after_changing','sb after a changing write (AWS default + sb − AWS default)'],['sb_after_nonchanging','sb after a non-changing write (AWS hoist + sb − AWS hoist)']];
   const W=720, H=40+items.length*34, L=300, R=60;
   const vmax = Math.max(...rows.flatMap(([k]) => items.map(([f]) => P[k][f] ?? 0)));
   const X = v => L + Math.max(0,v)/vmax*(W-L-R);
@@ -477,7 +477,7 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
 }
 // density
 {
-  const D = DATA.density; let t = `<table><tr><th>row</th><th class="num">B − A cyc</th><th class="num">unit price</th><th class="num">implied entries / op</th><th class="num">B vs A</th></tr>`;
+  const D = DATA.density; let t = `<table><tr><th>row</th><th class="num">AWS default − unhardened, cyc</th><th class="num">unit price</th><th class="num">implied entries / op</th><th class="num">B vs A</th></tr>`;
   for (const [k,d] of Object.entries(D)) t += `<tr><td class="row">${esc(k)}</td><td class="num">${cyc(d.B_minus_A)}</td><td class="num">${cyc(d.unit_price)} <span class="legend">${esc(d.unit)}</span></td><td class="num">${d.implied_entries.toFixed(0)}${d.blocks?` (${d.blocks} AES blocks)`:''}</td><td class="num hot">${fmt(d.pct_B)}</td></tr>`;
   t += '</table>'; document.getElementById('density-table').innerHTML = t;
 }
@@ -486,13 +486,13 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
   const S = DATA.series['AEAD-AES-128-GCM seal']; const O = DATA.series['AEAD-AES-128-GCM open'];
   if (S) {
     const p16 = S.points[0], pK = S.points[S.points.length-1];
-    document.getElementById('claim').innerHTML = `AWS-LC's build guide says that hoisting the enable into the caller's scope gives "benchmarks that are close to the release build". Measured: the AWS hoist arm (H) costs <b>${fmt(p16.pct.H)}</b> on a 16-byte AES-GCM seal and <b>${fmt(pK.pct.H)}</b> at 16 KB${O?`, and <b>${fmt(O.points[0].pct.H)}</b> on a 16-byte open`:''}. The claim holds for long messages and not for short ones, because every entry still executes a read and an enable; the enable no longer changes the mode, so it costs ${cyc(p16.H_minus_A)} cycles instead of ${cyc(p16.B_minus_A)}. Add the barrier Apple's recipe calls for and the AWS hoist + sb arm costs <b>${fmt(p16.pct.Hs)}</b> on the 16-byte seal.`;
+    document.getElementById('claim').innerHTML = `AWS-LC's build guide says that hoisting the enable into the caller's scope gives "benchmarks that are close to the release build". Measured: the AWS hoist arm costs <b>${fmt(p16.pct.H)}</b> on a 16-byte AES-GCM seal and <b>${fmt(pK.pct.H)}</b> at 16 KB${O?`, and <b>${fmt(O.points[0].pct.H)}</b> on a 16-byte open`:''}. The claim holds for long messages and not for short ones, because every entry still executes a read and an enable; the enable no longer changes the mode, so it costs ${cyc(p16.H_minus_A)} cycles instead of ${cyc(p16.B_minus_A)}. Add the barrier Apple's recipe calls for and the AWS hoist + sb arm costs <b>${fmt(p16.pct.Hs)}</b> on the 16-byte seal.`;
   }
 }
 // anomalies
 {
   const A = DATA.anomalies.slice().sort((a,b)=>a.C_pct-b.C_pct);
-  let t = `<table><tr><th>row</th><th class="num">A cyc/op</th><th class="num">C coarse</th><th class="num">H AWS hoist</th><th class="num">MAD</th></tr>`;
+  let t = `<table><tr><th>row</th><th class="num">unhardened cyc/op</th><th class="num">Coarse</th><th class="num">AWS hoist</th><th class="num">MAD</th></tr>`;
   for (const x of A) t += `<tr><td class="row">${esc(x.key)}</td><td class="num">${cyc(x.A)}</td><td class="num ${x.C_pct<0?'cold':'hot'}">${fmt(x.C_pct)}</td><td class="num">${fmt(x.H_pct)}</td><td class="num">${x.mad.toFixed(2)}%</td></tr>`;
   t += '</table>'; document.getElementById('anomaly-table').innerHTML = A.length ? t : '<p class="legend">none beyond 2%</p>';
 }
@@ -502,7 +502,7 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
     ["AEAD AES-GCM open, 16 B","AEAD-AES-128-GCM open [16 B]",false],["AEAD ChaCha20-Poly1305 seal, 16 B","AEAD-ChaCha20-Poly1305 seal [16 B]",false],["AEAD AES-GCM seal, 1350 B (a TLS record)","AEAD-AES-128-GCM seal [1350 B]",false],
     ["AEAD AES-GCM seal, 16 KB","AEAD-AES-128-GCM seal [16384 B]",false],["CMAC-AES-128, 16 KB","CMAC-AES-128-CBC [16384 B]",true],["ECDSA P-256 sign","ECDSA P-256 signing",false],["RNG, 16 B","RNG [16 B]",false]];
   const pair = DATA.prices.pair_price_cycles, block = DATA.prices.block_entry_price_cycles || pair;
-  let t = `<table><tr><th>#</th><th>op</th><th class="num">A cyc/op</th><th class="num">entries/op</th><th class="num">C coarse</th><th class="num">B AWS default</th><th class="num">Bs AWS default + sb</th><th class="num">H AWS hoist</th><th class="num">Hs AWS hoist + sb</th><th class="num">MAD</th></tr>`;
+  let t = `<table><tr><th>#</th><th>op</th><th class="num">unhardened cyc/op</th><th class="num">entries/op</th><th class="num">Coarse</th><th class="num">AWS default</th><th class="num">AWS default + sb</th><th class="num">AWS hoist</th><th class="num">AWS hoist + sb</th><th class="num">MAD</th></tr>`;
   PR.forEach(([label,key,isblk],i) => { const r = DATA.rows[key]; if (!r) { t += `<tr><td class="row">${i+1}</td><td>${esc(label)}</td><td colspan="8" class="legend">not in this run</td></tr>`; return; }
     const a = r.cycles.A, unit = isblk ? block : pair, e = (r.cycles.B - a) / unit;
     const dg = x => (r.suspect||[]).includes(x) ? '\u2020' : '';
@@ -552,7 +552,7 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
   const sel = Object.entries(DATA.rows).filter(([,r]) => r.pct.Hs != null && !Number.isNaN(r.pct.Hs) && r.pct.Hs >= th).sort((a,b) => b[1].pct.Hs - a[1].pct.Hs);
   document.getElementById('hs-heading').textContent = `Where AWS hoist + sb still costs ${th}% or more`;
   document.getElementById('hs-legend').textContent = `${sel.length} of ${Object.keys(DATA.rows).length} rows: the AWS hoist + sb arm (Hs) at least ${th}% over the unhardened build, cycles per operation, largest first, with the other arms for the same rows. A suspect cell is kept and daggered.`;
-  let t = `<table><tr><th>#</th><th>row</th><th class="num">A cyc/op</th><th class="num">C coarse</th><th class="num">B AWS default</th><th class="num">Bs AWS default + sb</th><th class="num">H AWS hoist</th><th class="num">Hs AWS hoist + sb</th><th class="num">MAD</th></tr>`;
+  let t = `<table><tr><th>#</th><th>row</th><th class="num">unhardened cyc/op</th><th class="num">Coarse</th><th class="num">AWS default</th><th class="num">AWS default + sb</th><th class="num">AWS hoist</th><th class="num">AWS hoist + sb</th><th class="num">MAD</th></tr>`;
   sel.forEach(([k,r],i) => { const dg = x => (r.suspect||[]).includes(x) ? '\u2020' : '';
     t += `<tr><td class="row">${i+1}</td><td>${esc(k)}${(r.suspect||[]).length?'\u2020':''}</td><td class="num">${cyc(r.cycles.A)}${dg('A')}</td>${arms.map(x=>`<td class="num ${x==='Hs'?'hot':''}">${fmt(r.pct[x],0)}${dg(x)}</td>`).join('')}<td class="num">${r.mad.toFixed(2)}%</td></tr>`; });
   const rows = sel.map(([,r]) => r);
@@ -565,7 +565,7 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
 // full table + ipc table
 {
   const keys = Object.keys(DATA.rows).sort();
-  let t = `<table><tr><th>row</th><th class="num">A cyc/op</th><th class="num">IPC A</th>${ARMS.slice(1).map(a=>`<th class="num">${NAME[a]}</th>`).join('')}<th class="num">B − A cyc</th><th class="num">MAD</th></tr>`;
+  let t = `<table><tr><th>row</th><th class="num">unhardened cyc/op</th><th class="num">IPC unhardened</th>${ARMS.slice(1).map(a=>`<th class="num">${NAME[a]}</th>`).join('')}<th class="num">AWS default − unhardened, cyc</th><th class="num">MAD</th></tr>`;
   for (const k of keys) { const r = DATA.rows[k];
     const dg = x => (r.suspect||[]).includes(x) ? '\u2020' : '';
     t += `<tr><td class="row">${esc(k)}${(r.suspect||[]).length?'\u2020':''}</td><td class="num">${cyc(r.cycles.A)}${dg('A')}</td><td class="num">${(r.ipc.A??NaN).toFixed(2)}</td>${ARMS.slice(1).map(a=>`<td class="num">${fmt(r.pct[a])}${dg(a)}</td>`).join('')}<td class="num">${cyc(r.B_minus_A_cyc)}</td><td class="num">${r.mad.toFixed(2)}%</td></tr>`; }
@@ -575,11 +575,11 @@ const geomean = (rows, arm, all=false) => { const l = rows.filter(r => r.cycles[
   t += '</table>'; document.getElementById('full-table').innerHTML = t;
   const hasAll = keys.some(k => Object.keys(DATA.rows[k].ipc).length > 1);
   if (hasAll) {
-    let u = `<table><tr><th>row</th><th class="num">instr/op A</th>${ARMS.map(a=>`<th class="num">IPC ${a}</th>`).join('')}<th class="num">B − A instr</th></tr>`;
+    let u = `<table><tr><th>row</th><th class="num">instr/op unhardened</th>${ARMS.map(a=>`<th class="num">IPC ${NAME[a]}</th>`).join('')}<th class="num">AWS default − unhardened, instr</th></tr>`;
     for (const k of keys) { const r = DATA.rows[k];
       u += `<tr><td class="row">${esc(k)}</td><td class="num">${cyc(r.instrs.A)}</td>${ARMS.map(a=>`<td class="num">${r.ipc[a]!=null?r.ipc[a].toFixed(2):'n/a'}</td>`).join('')}<td class="num">${(r.instrs.B!=null&&r.instrs.A!=null)?cyc(r.instrs.B-r.instrs.A):'n/a'}</td></tr>`; }
     u += '</table>'; document.getElementById('ipc-table').innerHTML = u;
-  } else document.getElementById('ipc-table').innerHTML = '<p class="legend">this run recorded IPC for arm A only; rerun with the current driver for every arm</p>';
+  } else document.getElementById('ipc-table').innerHTML = '<p class="legend">this run recorded IPC for the unhardened arm only; rerun with the current driver for every arm</p>';
 }
 document.getElementById('prov').textContent = DATA.provenance || '';
 </script>

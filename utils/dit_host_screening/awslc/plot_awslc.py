@@ -21,7 +21,7 @@ from matplotlib.ticker import FuncFormatter
 
 ARMS = ['C', 'B', 'Bs', 'H', 'Hs']
 # the arm names used in every figure (the user's terminology): "hoist", never "hoisted"
-LABEL = {'C': 'C coarse', 'B': 'B AWS default', 'Bs': 'Bs AWS default + sb', 'H': 'H AWS hoist', 'Hs': 'Hs AWS hoist + sb'}
+LABEL = {'C': 'Coarse', 'B': 'AWS default', 'Bs': 'AWS default + sb', 'H': 'AWS hoist', 'Hs': 'AWS hoist + sb'}   # names only, no letters
 COLOR = {'C': '#0F6E74', 'B': '#B5473A', 'Bs': '#7A2E24', 'H': '#C58A1E', 'Hs': '#7D5A12'}
 PAPER = [("AES-128 single block", "AES-128 encrypt"), ("EVP AES-GCM encrypt, 16 B", "EVP-AES-128-GCM encrypt [16 B]"),
          ("AEAD AES-GCM seal, 16 B", "AEAD-AES-128-GCM seal [16 B]"), ("AEAD AES-GCM open, 16 B", "AEAD-AES-128-GCM open [16 B]"),

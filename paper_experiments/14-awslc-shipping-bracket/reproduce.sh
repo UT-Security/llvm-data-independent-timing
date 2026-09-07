@@ -15,7 +15,7 @@
 #                             driver alone runs as root and the results are chowned back afterwards
 #   ./reproduce.sh collect    raw run results + provenance -> results-<host>/raw/ (results-m4/ here); build diffs and counts -> data/
 #   ./reproduce.sh analyze    report.md, summary.json, paper_table.{md,csv}, geomeans and the bar charts into
-#                             results-<host>/summary/, the page into figures/
+#                             results-<host>/summary/, the page into figures/, the LaTeX table into figures/latex/
 #   ./reproduce.sh paper      ONLY the paper's ten rows: run with BENCH_TESTS and CHUNKS restricted to what produces
 #                             them (about 20 minutes at 400 ms), then collect and analyze, and print the table
 #
@@ -141,6 +141,7 @@ if want analyze; then
   info "analyze -> $RES/summary/, $E/figures/shipping-bracket.html"; mkdir -p "$E/figures" "$RES/summary"
   python3 "$RIG/analyze_awslc.py" "$RES/raw/speed.json" --out "$RES/summary" --html "$E/figures/shipping-bracket.html" --provenance "$RES/raw/provenance.txt"
   "${MPL:-python3}" "$RIG/plot_awslc.py" "$RES/summary/summary.json" --out "$RES/summary" && cp "$RES/summary/paper_rows.png" "$E/figures/paper_rows.png"
+  python3 "$RIG/latex_table_awslc.py" "$RES/summary/summary.json" --out "$E/figures/latex"   # the paper chart as a LaTeX table (MTE-paper style)
 fi
 if want paper; then info "the paper's ten rows"; cat "$RES/summary/paper_table.md"; fi
 info "done: $STAGES"

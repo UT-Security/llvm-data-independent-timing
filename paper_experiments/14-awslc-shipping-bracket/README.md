@@ -75,13 +75,13 @@ speed-tool patch; two of them are also run in the vendor's hoisted mode:
 | arm | build | run | executes per bracketed entry point |
 |---|---|---|---|
 | A | `rel`: DIT option OFF (the macro is empty) | | nothing |
-| C **coarse** | `rel` | `ENABLE_DIT=1`: the injected constructor sets DIT before `main` and nothing in the library ever touches it | nothing; DIT is on for the whole process |
-| B **AWS default** | `dit`: DIT option ON, as shipped | | `mrs` DIT, `msr dit,#1`; `msr dit,#0` at exit when it was off on entry |
-| Bs **AWS default + sb** | `ditsb`: B with `sb` after the enable | | Apple's recipe |
-| H **AWS hoist** | `dit` | `-dit`: the vendor's mitigation, DIT set once around the whole run | `mrs` and `msr dit,#1` still execute at every entry; only the clear is skipped |
-| Hs **AWS hoist + sb** | `ditsb` | `-dit` | `mrs`, `msr dit,#1` and `sb` still execute at every entry; only the clear is skipped |
+| **Coarse** (`C`) | `rel` | `ENABLE_DIT=1`: the injected constructor sets DIT before `main` and nothing in the library ever touches it | nothing; DIT is on for the whole process |
+| **AWS default** (`B`) | `dit`: DIT option ON, as shipped | | `mrs` DIT, `msr dit,#1`; `msr dit,#0` at exit when it was off on entry |
+| **AWS default + sb** (`Bs`) | `ditsb`: B with `sb` after the enable | | Apple's recipe |
+| **AWS hoist** (`H`) | `dit` | `-dit`: the vendor's mitigation, DIT set once around the whole run | `mrs` and `msr dit,#1` still execute at every entry; only the clear is skipped |
+| **AWS hoist + sb** (`Hs`) | `ditsb` | `-dit` | `mrs`, `msr dit,#1` and `sb` still execute at every entry; only the clear is skipped |
 
-The bold names are the ones every table, figure and the page use: coarse for the
+The bold names are the ones every table, figure and the page use (the letters in code font are the `BENCH_ARMS` keys and never appear as labels): coarse for the
 whole-process arm, AWS default for the bracket as shipped, AWS hoist for the vendor's `-dit`
 hoisting, and "+ sb" for the variants with the barrier after the enable.
 
@@ -216,7 +216,7 @@ Apple M4, CPU 9 hard-bound, 400 ms windows, 7 measured reps after 1 warm-up, med
 dropped, three runs combined by the per-cell median (2026-09-07); `results-m4/speed.txt`,
 `results-m4/report.md`. Percent over A in cycles per operation.
 
-| row | A cyc/op | IPC A | IPC B | C coarse | B AWS default | B - A cyc | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
+| row | unhardened cyc/op | IPC unhardened | IPC AWS default | Coarse | AWS default | AWS default - unhardened cyc | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|---|
 | AEAD AES-128-GCM seal, 16 B | 191 | 4.14 | 2.33 | -0.2% | +81.9% | +156 | +82.7% | +9.6% | +44.2% | 0.11% |
 | AEAD AES-128-GCM seal, 1350 B | 718 | 5.32 | 4.39 | -0.5% | +21.6% | +155 | +21.5% | +2.1% | +11.8% | 0.04% |
@@ -237,7 +237,7 @@ dropped, three runs combined by the per-cell median (2026-09-07); `results-m4/sp
 **The paper's ten rows** (`results-m4/paper_table.md`; entries per op = (B - A) over one
 entry's price, 154 cycles for an AEAD-level entry and 94 for a single-block AES entry):
 
-| # | op | A cyc/op | entries/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
+| # | op | unhardened cyc/op | entries/op | Coarse | AWS default | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | AES-128 single block | 34 | 1 | -0% | +277% | +366% | -3% | +144% | 0.15% |
 | 2 | EVP AES-GCM encrypt, 16 B | 173 | 3 | +0% | +303% | +348% | +1% | +173% | 0.06% |
@@ -360,7 +360,17 @@ per-cell spread of the clean medians has a median of 0.08% and a 90th percentile
 - `figures/shipping-bracket.html` - the page `analyze_awslc.py` renders from `speed.json`
   (validity strip, the size-series chart, the three prices, density, the vendor's claim, the
   paper's ten rows, every row, IPC per arm); `figures/paper_rows.png` - the paper chart,
-  `plot_awslc.py`.
+  `plot_awslc.py`; `figures/latex/` - the same ten rows as a LaTeX table in the style of the
+  MTE paper's overhead tables (`latex_table_awslc.py`, run by `analyze`): `awslc_gradient.tex`
+  (colour scale and the `\awsgradient` cell macro, for the preamble), `awslc_paper_rows.tex`
+  (the `table` environment, ratios to A with a gradient cell colour, geomean over every cell),
+  and `awslc_standalone.tex`, a one-page document at USENIX column width to preview it
+  (`tectonic awslc_standalone.tex` in that directory, or any pdflatex). To use it in
+  Overleaf: upload the first two files into the project, add `\input{awslc_gradient}` to the
+  preamble after `\usepackage[table]{xcolor}`, `\usepackage{etoolbox}`, `\usepackage{pgf}` and
+  `\usepackage{booktabs}` (the MTE paper's preamble already has all four), and put
+  `\input{awslc_paper_rows}` where the table goes; `\Cref{tab:awslc-bracket}` refers to it.
+  After a rerun, re-upload `awslc_paper_rows.tex` only.
 - Filters are substring matches, so `AES-128` also matches every `AEAD-AES-128-*` row; those rows
   collect samples from two processes per rep and show up to twice the rep count in the sample column.
 

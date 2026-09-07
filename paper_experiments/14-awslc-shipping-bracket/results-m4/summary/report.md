@@ -1,6 +1,6 @@
 # Experiment 14 analysis: AWS-LC's DIT bracket on `bssl speed`
 
-Source `paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, analysed 2026-09-07. Arms: A = unhardened (release, no DIT), C = coarse (DIT set before main), B = AWS default (the bracket as shipped), Bs = AWS default + sb, H = AWS hoist (-dit), Hs = AWS hoist + sb.
+Source `paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, analysed 2026-09-07. Arms: unhardened (release, no DIT), coarse (DIT set before main), AWS default (the bracket as shipped), AWS default + sb, AWS hoist (-dit), AWS hoist + sb.
 
 ## Validity
 
@@ -19,13 +19,13 @@ Source `paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, 
 
 | what | cycles |
 |---|---|
-| two mode-changing writes (B - A) | 156 |
-| read + one non-changing write (H - A) | 18 |
-| sb after a changing write (Bs - B) | 2 |
-| sb after a non-changing write (Hs - H) | 66 |
+| two mode-changing writes (AWS default - unhardened) | 156 |
+| read + one non-changing write (AWS hoist - unhardened) | 18 |
+| sb after a changing write (AWS default + sb - AWS default) | 2 |
+| sb after a non-changing write (AWS hoist + sb - AWS hoist) | 66 |
 | same four, from the single-block AES row | 94 / -1 / 30 / 49 |
 
-## Is the cost constant across sizes? (absolute B - A cycles per op)
+## Is the cost constant across sizes? (absolute AWS default - unhardened cycles per op)
 
 | family | 16 B | 256 B | 1350 B | 8 KB | 16 KB | max/min |
 |---|---|---|---|---|---|---|
@@ -51,9 +51,9 @@ Source `paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, 
 
 ## Density: how many bracket entries an operation pays for
 
-One AEAD-level entry (two changing writes) costs 156 cycles on the seal row and one single-block AES entry 94; B - A divided by the applicable price is the entries per op.
+One AEAD-level entry (two changing writes) costs 156 cycles on the seal row and one single-block AES entry 94; AWS default - unhardened divided by the applicable price is the entries per op.
 
-| row | B - A cycles | unit price | implied entries/op | B vs A |
+| row | AWS default - unhardened cycles | unit price | implied entries/op | AWS default vs unhardened |
 |---|---|---|---|---|
 | CMAC-AES-128-CBC [16384 B] | 96,282 | 94 (single-block AES entry) | 1028 (1024 AES blocks) | +236.0% |
 | CMAC-AES-128-CBC [16 B] | 224 | 94 (single-block AES entry) | 2 (1 AES blocks) | +398.8% |
@@ -64,7 +64,7 @@ One AEAD-level entry (two changing writes) costs 156 cycles on the seal row and 
 
 ## Coarse DIT moving a row by more than 2% (C vs A, rows with MAD < 2%)
 
-| row | A cyc/op | C | H | MAD |
+| row | unhardened cyc/op | Coarse | AWS hoist | MAD |
 |---|---|---|---|---|
 | RNG [16 B] | 6,795 | -25.4% | -25.4% | 0.14% |
 | RNG [256 B] | 6,844 | -25.3% | -25.0% | 0.13% |
@@ -91,7 +91,7 @@ One AEAD-level entry (two changing writes) costs 156 cycles on the seal row and 
 
 ## Every row (percent over A, cycles per op)
 
-| row | A cyc/op | IPC A | C coarse | B AWS default | B-A cyc | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
+| row | unhardened cyc/op | IPC unhardened | Coarse | AWS default | AWS default - unhardened cyc | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
 | AEAD-AES-128-CBC-SHA1 open [1350 B] | 4,470 | 4.24 | +0.1% | +3.3% | 147 | +8.8% | +0.2% | +7.0% | 0.14% |
 | AEAD-AES-128-CBC-SHA1 open [16 B] | 1,218 | 4.87 | -0.0% | +11.8% | 144 | +32.6% | +0.8% | +26.8% | 0.14% |
@@ -227,7 +227,7 @@ Both means count each of the tool's rows once, so they summarise this table, not
 
 ## IPC and instructions per op, every arm
 
-| row | instr/op A | IPC A | IPC C | IPC B | IPC Bs | IPC H | IPC Hs | B-A instr |
+| row | instr/op unhardened | IPC unhardened | IPC Coarse | IPC AWS default | IPC AWS default + sb | IPC AWS hoist | IPC AWS hoist + sb | AWS default - unhardened instr |
 |---|---|---|---|---|---|---|---|---|
 | AEAD-AES-128-CBC-SHA1 open [1350 B] | 18,972 | 4.24 | 4.24 | 4.13 | 3.92 | 4.25 | 3.98 | 78 |
 | AEAD-AES-128-CBC-SHA1 open [16 B] | 5,937 | 4.87 | 4.88 | 4.42 | 3.73 | 4.89 | 3.89 | 78 |
@@ -359,7 +359,7 @@ Both means count each of the tool's rows once, so they summarise this table, not
 
 ## The paper's ten rows
 
-| # | op | A cyc/op | entries/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
+| # | op | unhardened cyc/op | entries/op | Coarse | AWS default | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | AES-128 single block | 34 | 1 | -0% | +277% | +366% | -3% | +144% | 0.15% |
 | 2 | EVP AES-GCM encrypt, 16 B | 173 | 3 | +0% | +303% | +348% | +1% | +173% | 0.06% |
@@ -373,11 +373,11 @@ Both means count each of the tool's rows once, so they summarise this table, not
 | 10 | RNG, 16 B | 6,795 | 3 | -25% | +7% | +8% | -25% | -21% | 0.14% |
 | | **geometric mean of the ratio to A, all cells** | | | **-3%** | **+79%** | **+91%** | **+1%** | **+46%** | |
 
-Entries per op = (B - A) / one entry's price: 156 cycles for an AEAD-level entry, 94 for a single-block AES entry (rows 1 and 8). Run only these rows with BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG" CHUNKS=16,1350,16384.
+Entries per op = (AWS default - unhardened) / one entry's price: 156 cycles for an AEAD-level entry, 94 for a single-block AES entry (rows 1 and 8). Run only these rows with BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG" CHUNKS=16,1350,16384.
 
 ## Rows where AWS hoist + sb costs at least 5%
 
-| # | row | A cyc/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
+| # | row | unhardened cyc/op | Coarse | AWS default | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|
 | 1 | AES-128 encrypt setup | 40 | -0% | +481% | +506% | +5% | +334% | 0.05% |
 | 2 | EVP-AES-128-CBC decrypt [16 B] | 103 | +1% | +325% | +531% | +23% | +323% | 2.04% |
