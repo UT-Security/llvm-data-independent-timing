@@ -142,12 +142,15 @@ json.dump(dict(results=results, gate=sorted(gate), failures=bad, flagged=flagged
                clock_band=[CLOCK_LO, CLOCK_HI], no_pmc_rows=nopmc, unpinned=len(unpinned), pin_cpu=PIN_CPU, arms=arms, tests=TESTS,
                reps=REPS, timeout_ms=TIMEOUT_MS, chunks=CHUNKS), open(f'{OUT}/speed.json', 'w'), indent=1)
 import math
-gm_logs = {a: [] for a in arms if a != 'A'}
+gm_all, gm_clean = {a: [] for a in arms if a != 'A'}, {a: [] for a in arms if a != 'A'}
 for k, r in results.items():
-    for a in gm_logs:
-        if a in r['median_cycles_per_op'] and a not in r['suspect_cells'] and 'A' not in r['suspect_cells']:
-            gm_logs[a].append(math.log(r['median_cycles_per_op'][a] / r['median_cycles_per_op']['A']))
-print(f"{'geometric mean of the ratio to A, clean cells':44s}{'':>10s}{'':>6s}" + ''.join(f"{(math.exp(sum(v)/len(v))-1)*100 if v else float('nan'):>+7.1f}%" for v in gm_logs.values()))
+    for a in gm_all:
+        if a in r['median_cycles_per_op']:
+            lg = math.log(r['median_cycles_per_op'][a] / r['median_cycles_per_op']['A']); gm_all[a].append(lg)
+            if a not in r['suspect_cells'] and 'A' not in r['suspect_cells']: gm_clean[a].append(lg)
+gm = lambda v: (math.exp(sum(v)/len(v))-1)*100 if v else float('nan')
+print(f"{'geometric mean of the ratio to A, every cell':44s}{'':>10s}{'':>6s}" + ''.join(f"{gm(v):>+7.1f}%" for v in gm_all.values()))
+print(f"{'geometric mean, suspect cells left out':44s}{'':>10s}{'':>6s}" + ''.join(f"{gm(v):>+7.1f}%" for v in gm_clean.values()))
 print(f"\nBs-B is the barrier's price per op, B-H the per-call clear (and the DIT-off gaps it opens), in points of A; "
       f"abs cycles per op in {OUT}/speed.json")
 # second table: both counters for every arm. cycles = instructions / IPC, so the bracket's cost splits into

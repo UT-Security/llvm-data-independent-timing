@@ -161,7 +161,8 @@ paper_experiments/14-awslc-shipping-bracket/reproduce.sh paper    # only the pap
 
 The `paper` stage restricts the run to `BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG"`
 and `CHUNKS=16,1350,16384`, then collects, analyses and prints `results-<host>/paper_table.md`
-(a CSV beside it). Both stay overridable. It still measures about 66 rows, not ten: the tool's
+(a CSV beside it; the charts are in `results-<host>/summary/`). Both stay overridable. It still
+measures about 66 rows, not ten: the tool's
 `-filter` is a substring match against each test's name, and the single-block test is named
 `AES-128`, so any filter that reaches it also reaches every other AES-128 test. The table picks
 its ten rows out of those. About 20 minutes at the 400 ms default.
@@ -233,10 +234,11 @@ entry's price, 154 cycles for an AEAD-level entry and 94 for a single-block AES 
 Rows 3, 6 and 7 are the same 154-cycle entry at three sizes; 2 and 8 the two faces of
 nesting; Hs against H the barrier's price after a non-serialising write, which undoes most
 of what hoisting bought. The geometric mean of the ratio to A over these ten rows is C -3%,
-B +80%, Bs +91%, H +1%, Hs +46%; over all 121 rows without a suspect cell it is C -1.8%,
-B +46.7%, Bs +57.0%, H +0.3%, Hs +33.4%. A geometric mean over the tool's rows weights each
-row once and says nothing about any application's mix of them; it is a summary of this table,
-not a cost model.
+B +80%, Bs +91%, H +1%, Hs +46% (no suspect cell among them). Over all 127 rows it is given
+both ways in `summary/report.md`: every cell included, and the 9 suspect cells left out
+(C -1.8%, B +46.7%, Bs +57.0%, H +0.3%, Hs +33.4% for the latter). A geometric mean over the
+tool's rows weights each row once and says nothing about any application's mix of them; it is
+a summary of this table, not a cost model.
 
 **The three prices**, from the two rows that enter exactly one bracketed function per
 operation (the AEAD seal calls `EVP_AEAD_CTX_seal_scatter` directly; the single-block
@@ -316,11 +318,18 @@ core runs 4.0 to 4.2 GHz under sustained load, below its 4.4 boost.
 
 - `reproduce.sh`; rig in `utils/dit_host_screening/awslc/` (`build_awslc.sh`,
   `patch_speed_pmc.py`, `patch_bracket_variant.py`, `bench_awslc.py`).
-- `results-m4/`: this host's run: `speed.txt`, `speed.json`, `provenance.txt`, and from `analyze`
-  `report.md`, `summary.json`, `paper_table.md`, `paper_table.csv`. `collect` writes to `results-<host>/`, named from the CPU brand.
+- `results-m4/raw/`: this host's run as the driver wrote it: `speed.txt`, `speed.json` (every
+  row's medians per arm, every sample's implied clock, the flags), `provenance.txt`.
+- `results-m4/summary/`: what `analyze` derives from it: `report.md`, `summary.json`,
+  `paper_table.md`, `paper_table.csv`, and the charts `paper_rows.png` (the ten rows and the
+  geometric mean, grouped bars), `all_rows.png` (every row, one panel per arm, symmetric-log
+  axis) and `geomeans.png`; suspect cells are hatched, never left out. `collect` writes to
+  `results-<host>/raw/`, named from the CPU brand.
 - `data/`: the build record: `switch_counts.txt`, `bracket_sites.txt`, `speed_pmc.diff`, `variants.diff`.
 - `figures/shipping-bracket.html` - the page `analyze_awslc.py` renders from `speed.json`
-  (validity strip, the size-series chart, the three prices, density, the vendor's claim, every row).
+  (validity strip, the size-series chart, the three prices, density, the vendor's claim, the
+  paper's ten rows, every row, IPC per arm); `figures/paper_rows.png` - the paper chart,
+  `plot_awslc.py`.
 - Filters are substring matches, so `AES-128` also matches every `AEAD-AES-128-*` row; those rows
   collect samples from two processes per rep and show up to twice the rep count in the sample column.
 

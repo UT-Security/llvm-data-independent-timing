@@ -1,6 +1,6 @@
 # Experiment 14 analysis: AWS-LC's shipped DIT bracket on `bssl speed`
 
-Source `paper_experiments/14-awslc-shipping-bracket/results-m4/speed.json`, analysed 2026-09-07. Arms: A = release, no DIT, C = blanket (DIT set before main), B = shipped bracket, Bs = bracket + sb, H = vendor hoisting (-dit), Hs = hoisting + sb.
+Source `/Users/rgangar/.treehouse/llvm-data-independent-timing-7b712d/1/llvm-data-independent-timing/paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, analysed 2026-09-07. Arms: A = release, no DIT, C = blanket (DIT set before main), B = shipped bracket, Bs = bracket + sb, H = vendor hoisting (-dit), Hs = hoisting + sb.
 
 ## Validity
 
@@ -219,9 +219,10 @@ One AEAD-level entry (two changing writes) costs 157 cycles on the seal row and 
 | SHA-256 [16384 B] | 21,324 | 1.41 | -0.1% | -0.0% | -4 | -0.0% | -0.1% | -0.1% | 0.12% |
 | SHA-256 [256 B] | 403 | 2.30 | -0.3% | +0.2% | 1 | +0.0% | +0.4% | +0.0% | 0.09% |
 | SHA-256 [8192 B] | 10,693 | 1.43 | -0.1% | +0.0% | 1 | +0.0% | -0.1% | -0.1% | 0.00% |
-| **geometric mean of the ratio to A, all 121 clean rows** | | | **-1.8%** | **+46.7%** |  | **+57.0%** | **+0.3%** | **+33.4%** | |
+| **geometric mean of the ratio to A, all 127 rows, every cell** | | | **+30.4%** | **+161.5%** |  | **+57.0%** | **+0.3%** | **+33.4%** | |
+| **geometric mean, suspect cells left out (6 at most in a column)** | | | **-1.8%** | **+46.7%** |  | **+57.0%** | **+0.3%** | **+33.4%** | |
 
-The geometric mean leaves out cells marked suspect (6 at most in any column); every other row counts once, so it is a summary over the tool's rows, not over any application's mix of them.
+Both means count each of the tool's rows once, so they summarise this table, not any application's mix of operations. The first includes the cells whose medians the backward-counter fault corrupted; the second leaves them out.
 
 ## IPC and instructions per op, every arm
 
@@ -369,6 +370,6 @@ The geometric mean leaves out cells marked suspect (6 at most in any column); ev
 | 8 | CMAC-AES-128, 16 KB | 40,774 | 1,014 | -1% | +236% | +286% | -4% | +125% | 0.01% |
 | 9 | ECDSA P-256 sign | 42,710 | 5 | -4% | +2% | +2% | -3% | -3% | 0.03% |
 | 10 | RNG, 16 B | 6,781 | 3 | -25% | +7% | +9% | -25% | -22% | 0.06% |
-| | **geometric mean of the ratio to A** | | | **-3%** | **+80%** | **+91%** | **+1%** | **+46%** | |
+| | **geometric mean of the ratio to A, all cells** | | | **-3%** | **+80%** | **+91%** | **+1%** | **+46%** | |
 
 Entries per op = (B - A) / one entry's price: 157 cycles for an AEAD-level entry, 95 for a single-block AES entry (rows 1 and 8). Run only these rows with BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG" CHUNKS=16,1350,16384.

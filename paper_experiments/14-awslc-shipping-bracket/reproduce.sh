@@ -9,8 +9,9 @@
 #   ./reproduce.sh run        six arms x ten test filters x (1 warm-up + 7 reps), 400 ms windows  (~40 min, idle machine)
 #                             asks for sudo: the hard bind is a kern.* sysctl write, root only; the
 #                             driver alone runs as root and the results are chowned back afterwards
-#   ./reproduce.sh collect    run results + provenance -> results-<host>/ (results-m4/ here); build diffs and counts -> data/
-#   ./reproduce.sh analyze    report.md, summary.json, paper_table.{md,csv} into results-<host>/, the page into figures/
+#   ./reproduce.sh collect    raw run results + provenance -> results-<host>/raw/ (results-m4/ here); build diffs and counts -> data/
+#   ./reproduce.sh analyze    report.md, summary.json, paper_table.{md,csv}, geomeans and the bar charts into
+#                             results-<host>/summary/, the page into figures/
 #   ./reproduce.sh paper      ONLY the paper's ten rows: run with BENCH_TESTS and CHUNKS restricted to what produces
 #                             them (about 20 minutes at 400 ms), then collect and analyze, and print the table
 #
@@ -60,8 +61,8 @@ if want run; then
   grep -E '^pinned|^gate' "$W/results/speed.txt"
 fi
 if want collect; then
-  info "collect -> $RES (run results) and $E/data (build record)"; mkdir -p "$RES" "$E/data"
-  cp "$W/results/speed.txt" "$W/results/speed.json" "$RES/" 2>/dev/null || die "no results to collect"
+  info "collect -> $RES/raw (run results) and $E/data (build record)"; mkdir -p "$RES/raw" "$E/data"
+  cp "$W/results/speed.txt" "$W/results/speed.json" "$RES/raw/" 2>/dev/null || die "no results to collect"
   cp "$W/switch_counts.txt" "$E/data/switch_counts.txt"
   cp "$W/bracket_sites.txt" "$E/data/bracket_sites.txt" 2>/dev/null || true
   diff -u "$W/src/aws-lc-5.8.0/tool/speed.cc" "$W/tree-rel/tool/speed.cc" | sed '1s|.*|--- aws-lc-5.8.0/tool/speed.cc|; 2s|.*|+++ tool/speed.cc (PMC patch)|' > "$E/data/speed_pmc.diff" || true
@@ -75,12 +76,13 @@ if want collect; then
     echo "pmc: $("$W/pmc_check" 2>/dev/null | grep -E 'VERDICT|read cost' | tr '\n' ' ')"
     # reps, window and chunks come from the run's own JSON, not from this shell's environment
     echo "pin_cpu: $(python3 -c "import json;d=json.load(open('$W/results/speed.json'));print(d.get('pin_cpu'))") (kern.sched_thread_bind_cpu; boot-args: $(sysctl -n kern.bootargs 2>/dev/null | tr ' ' '\n' | grep skstb))  $(python3 -c "import json;d=json.load(open('$W/results/speed.json'));print(f\"reps {d.get('reps')}  timeout_ms {d.get('timeout_ms')}  chunks {d.get('chunks')}  flagged {d.get('flagged')}  unpinned {d.get('unpinned')}\")")"
-  } >> "$RES/provenance.txt"
-  tail -5 "$RES/provenance.txt"
+  } >> "$RES/raw/provenance.txt"
+  tail -5 "$RES/raw/provenance.txt"
 fi
 if want analyze; then
-  info "analyze -> $RES/report.md, $E/figures/shipping-bracket.html"; mkdir -p "$E/figures"
-  python3 "$RIG/analyze_awslc.py" "$RES/speed.json" --out "$RES" --html "$E/figures/shipping-bracket.html" --provenance "$RES/provenance.txt"
+  info "analyze -> $RES/summary/, $E/figures/shipping-bracket.html"; mkdir -p "$E/figures" "$RES/summary"
+  python3 "$RIG/analyze_awslc.py" "$RES/raw/speed.json" --out "$RES/summary" --html "$E/figures/shipping-bracket.html" --provenance "$RES/raw/provenance.txt"
+  "${MPL:-python3}" "$RIG/plot_awslc.py" "$RES/summary/summary.json" --out "$RES/summary" && cp "$RES/summary/paper_rows.png" "$E/figures/paper_rows.png"
 fi
-if want paper; then info "the paper's ten rows"; cat "$RES/paper_table.md"; fi
+if want paper; then info "the paper's ten rows"; cat "$RES/summary/paper_table.md"; fi
 info "done: $STAGES"

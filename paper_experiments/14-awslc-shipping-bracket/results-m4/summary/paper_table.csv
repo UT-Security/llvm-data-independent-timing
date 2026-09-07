@@ -9,4 +9,5 @@ n,op,A_cycles_per_op,entries_per_op,C_pct,B_pct,Bs_pct,H_pct,Hs_pct,MAD_pct
 8,"CMAC-AES-128, 16 KB",40774.4,1014.2,-1.10,235.50,285.81,-3.82,124.86,0.007
 9,"ECDSA P-256 sign",42710.0,4.8,-3.62,1.77,2.01,-3.48,-2.71,0.030
 10,"RNG, 16 B",6781.1,3.1,-25.48,7.17,8.54,-24.61,-22.09,0.062
-geomean,"geometric mean of arm/A over the rows above",,,-3.42,79.50,90.87,1.25,46.18,
+geomean_all,"geometric mean of arm/A over the rows above, all cells",,,-3.42,79.50,90.87,1.25,46.18,
+geomean_clean,"geometric mean of arm/A over the rows above, suspect cells left out",,,-3.42,79.50,90.87,1.25,46.18,
