@@ -365,9 +365,10 @@ per-cell spread of the clean medians has a median of 0.08% and a 90th percentile
   (colour scale and the `\awsgradient` cell macro, for the preamble), `awslc_paper_rows.tex`
   (the `table` environment, ratios to A with a gradient cell colour, geomean over every cell),
   `awslc_all_rows_bands.tex` (the same format over every row, grouped: the geomean of all
-  rows, then the slowest 15%, the middle 50% and the fastest 15% of each column's cells;
-  `--bands 25,50,25` changes the cut and `--rank-by B` makes every column follow the AWS
-  default order instead of its own), and `awslc_standalone.tex`, a one-page document at
+  rows, then the slowest 25%, the middle 50% and the fastest 25% of each column's cells, the
+  four AWS columns only; `--bands 15,50,15` changes the cut, `--band-arms C,B,Bs,H,Hs` puts
+  Coarse back, and `--rank-by B` makes every column follow the AWS default order instead of
+  its own), and `awslc_standalone.tex`, a one-page document at
   USENIX column width to preview them
   (`tectonic awslc_standalone.tex` in that directory, or any pdflatex). To use it in
   Overleaf: upload the first two files into the project, add `\input{awslc_gradient}` to the
