@@ -16,6 +16,8 @@
 #   ./reproduce.sh collect    raw run results + provenance -> results-<host>/raw/ (results-m4/ here); build diffs and counts -> data/
 #   ./reproduce.sh analyze    report.md, summary.json, paper_table.{md,csv}, geomeans and the bar charts into
 #                             results-<host>/summary/, the page into figures/, the LaTeX table into figures/latex/
+#   census   (not in the default list) build the counting variant and run every row of the suite once:
+#            which benchmarks enter the bracket, and how many entries per call -> data/dit_census.{md,json}
 #   ./reproduce.sh paper      ONLY the paper's ten rows: run with BENCH_TESTS and CHUNKS restricted to what produces
 #                             them (about 20 minutes at 400 ms), then collect and analyze, and print the table
 #
@@ -142,6 +144,14 @@ if want analyze; then
   python3 "$RIG/analyze_awslc.py" "$RES/raw/speed.json" --out "$RES/summary" --html "$E/figures/shipping-bracket.html" --provenance "$RES/raw/provenance.txt"
   "${MPL:-python3}" "$RIG/plot_awslc.py" "$RES/summary/summary.json" --out "$RES/summary" && cp "$RES/summary/paper_rows.png" "$E/figures/paper_rows.png"
   python3 "$RIG/latex_table_awslc.py" "$RES/summary/summary.json" --out "$E/figures/latex"   # the paper chart as a LaTeX table (MTE-paper style)
+fi
+if want census; then
+  # which rows of the whole suite enter the bracket, and how often per call: a fourth build whose bracket
+  # counts its entries, run once over every row at short windows (a count, not a timing; no pin, no sudo)
+  info "census: the ditcount build and every row of the suite -> $E/data/dit_census.{md,json}"
+  if [[ ! -x "$W/build-ditcount/tool/bssl" || "${REBUILD:-0}" == 1 ]]; then bash "$RIG/build_awslc.sh" count || die "census build failed"; fi
+  python3 "$RIG/count_awslc.py" --tree "$W" --out "$E/data" --timeout-ms "${CENSUS_MS:-20}" || die "census failed"
+  grep -E '^\*\*|rows in' "$E/data/dit_census.md" | head -3
 fi
 if want paper; then info "the paper's ten rows"; cat "$RES/summary/paper_table.md"; fi
 info "done: $STAGES"

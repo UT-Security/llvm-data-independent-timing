@@ -64,9 +64,28 @@ do_build() {
   info "    bracket sites in $(wc -l < "$W/bracket_sites.txt" | tr -d ' ') functions ($W/bracket_sites.txt)"
   [[ $(count "$W/build-rel/tool/bssl" 's3_2_c15_c[01]_0') -ge 2 ]] || die "speed.cc PMC patch missing from the binary"
 }
+# The census build: the shipped bracket plus a counter of its entries, and a speed tool that reports
+# the count per benchmark row ("ditEntries" in the JSON). Not a timing build; count_awslc.py runs it
+# over every row of the suite to say which benchmarks enter the bracket, and how often per call.
+do_count() {
+  v=ditcount
+  info "tree-$v"; rm -rf "$W/tree-$v"; cp -R "$SRC" "$W/tree-$v"
+  python3 "$RIG/patch_speed_pmc.py" "$W/tree-$v" || die "speed patch failed ($v)"
+  python3 "$RIG/patch_bracket_variant.py" "$W/tree-$v" "$v" || die "variant patch failed ($v)"
+  python3 "$RIG/patch_speed_ditcount.py" "$W/tree-$v" || die "census patch failed ($v)"
+  info "build-$v (ENABLE_DATA_INDEPENDENT_TIMING=ON, counting)"
+  cmake -G Ninja -S "$W/tree-$v" -B "$W/build-$v" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_TOOL=ON \
+      -DENABLE_DATA_INDEPENDENT_TIMING=ON -DCMAKE_C_COMPILER="$CC_BIN" -DCMAKE_CXX_COMPILER="$CXX_BIN" > "$W/cmake-$v.log" 2>&1 \
+    || { tail -20 "$W/cmake-$v.log"; die "cmake failed ($v)"; }
+  ninja -C "$W/build-$v" -j"$JOBS" bssl > "$W/ninja-$v.log" 2>&1 || { tail -20 "$W/ninja-$v.log"; die "build failed ($v)"; }
+  b="$W/build-$v/tool/bssl"; [[ -x "$b" ]] || die "no bssl for $v"
+  [[ $(count "$b" 'mrs\s+x[0-9]+,\s*dit') -ge 50 ]] || die "ditcount carries too few bracket sites"
+  # every bracket site must carry the increment: the counter's page-relative load appears once per site
+  echo "$v mrs_dit=$(count "$b" 'mrs\s+x[0-9]+,\s*dit') msr_dit=$(count "$b" 'msr\s+dit,') counter_refs=$(count "$b" 'OPENSSL_dit_entries')" | tee -a "$W/switch_counts.txt"
+}
 case "${1:-all}" in
-  fetch) do_fetch ;; prep) do_prep ;; build) do_build ;;
+  fetch) do_fetch ;; prep) do_prep ;; build) do_build ;; count) do_fetch && do_count ;;
   all) do_fetch && do_prep && do_build ;;
-  *) die "usage: $0 fetch|prep|build|all" ;;
+  *) die "usage: $0 fetch|prep|build|all|count" ;;
 esac
 info "done ($1)"

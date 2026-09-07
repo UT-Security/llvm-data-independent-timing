@@ -179,6 +179,14 @@ corrupts a cell in one run at a time, and a mean of three inherits that run whil
 does not. Collect, analyze and the charts then read the combination, and the report's
 validity section lists each run's flags and the distribution of the per-cell spread.
 
+**Which rows enter the bracket.** `reproduce.sh census` (not in the default list; about five
+minutes, no sudo) builds a fourth variant, `ditcount`, whose `armv8_set_dit` increments a
+counter, and a speed tool that reports the count over each row's timed loop as `ditEntries`;
+it then runs every row of the suite once at short windows, single-threaded, and writes
+`data/dit_census.md` and `.json`: bracket entries per call for every row, the families that
+never enter the bracket, and the source-level census of `SET_DIT_AUTO_RESET` sites. It is a
+count, not a timing.
+
 The `paper` stage restricts the run to `BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG"`
 and `CHUNKS=16,1350,16384`, then collects, analyses and prints `results-<host>/paper_table.md`
 (a CSV beside it; the charts are in `results-<host>/summary/`). Both stay overridable. It still
@@ -356,7 +364,9 @@ per-cell spread of the clean medians has a median of 0.08% and a 90th percentile
   to A), `all_rows.png` (every row, one panel per arm, symmetric-log axis) and `geomeans.png`;
   suspect cells are hatched, never left out. `collect` writes to
   `results-<host>/raw/`, named from the CPU brand.
-- `data/`: the build record: `switch_counts.txt`, `bracket_sites.txt`, `speed_pmc.diff`, `variants.diff`.
+- `data/`: the build record: `switch_counts.txt`, `bracket_sites.txt`, `speed_pmc.diff`, `variants.diff`;
+  and the census, `dit_census.md` / `dit_census.json` (`reproduce.sh census`): for every row of
+  the suite, how many times its timed loop enters the bracket per call, and which families never do.
 - `figures/shipping-bracket.html` - the page `analyze_awslc.py` renders from `speed.json`
   (validity strip, the size-series chart, the three prices, density, the vendor's claim, the
   paper's ten rows, every row, IPC per arm); `figures/paper_rows.png` - the paper chart,

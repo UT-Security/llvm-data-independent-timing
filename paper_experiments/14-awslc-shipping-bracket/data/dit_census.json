@@ -1,0 +1,5183 @@
+{
+ "rows": [
+  {
+   "description": "AES-128 encrypt setup",
+   "family": "AES-128 encrypt setup",
+   "size": null,
+   "numCalls": 341750,
+   "ditEntries": 341750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-128 encrypt",
+   "family": "AES-128 encrypt",
+   "size": null,
+   "numCalls": 600750,
+   "ditEntries": 600750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-128 decrypt setup",
+   "family": "AES-128 decrypt setup",
+   "size": null,
+   "numCalls": 340250,
+   "ditEntries": 340250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-128 decrypt",
+   "family": "AES-128 decrypt",
+   "size": null,
+   "numCalls": 587000,
+   "ditEntries": 587000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-192 encrypt setup",
+   "family": "AES-192 encrypt setup",
+   "size": null,
+   "numCalls": 359500,
+   "ditEntries": 359500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-192 encrypt",
+   "family": "AES-192 encrypt",
+   "size": null,
+   "numCalls": 546750,
+   "ditEntries": 546750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-192 decrypt setup",
+   "family": "AES-192 decrypt setup",
+   "size": null,
+   "numCalls": 334000,
+   "ditEntries": 334000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-192 decrypt",
+   "family": "AES-192 decrypt",
+   "size": null,
+   "numCalls": 545250,
+   "ditEntries": 545250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-256 encrypt setup",
+   "family": "AES-256 encrypt setup",
+   "size": null,
+   "numCalls": 356000,
+   "ditEntries": 356000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-256 encrypt",
+   "family": "AES-256 encrypt",
+   "size": null,
+   "numCalls": 537000,
+   "ditEntries": 537000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-256 decrypt setup",
+   "family": "AES-256 decrypt setup",
+   "size": null,
+   "numCalls": 332250,
+   "ditEntries": 332250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AES-256 decrypt",
+   "family": "AES-256 decrypt",
+   "size": null,
+   "numCalls": 535250,
+   "ditEntries": 535250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-128-GCM encrypt init",
+   "family": "EVP-AES-128-GCM encrypt init",
+   "size": null,
+   "numCalls": 146000,
+   "ditEntries": 146000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-128-GCM encrypt",
+   "family": "EVP-AES-128-GCM encrypt",
+   "size": 16,
+   "numCalls": 117000,
+   "ditEntries": 468000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-GCM encrypt",
+   "family": "EVP-AES-128-GCM encrypt",
+   "size": 256,
+   "numCalls": 103500,
+   "ditEntries": 414000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-GCM encrypt",
+   "family": "EVP-AES-128-GCM encrypt",
+   "size": 1350,
+   "numCalls": 69000,
+   "ditEntries": 276000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-GCM encrypt",
+   "family": "EVP-AES-128-GCM encrypt",
+   "size": 8192,
+   "numCalls": 25000,
+   "ditEntries": 100000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-GCM encrypt",
+   "family": "EVP-AES-128-GCM encrypt",
+   "size": 16384,
+   "numCalls": 14000,
+   "ditEntries": 56000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-GCM decrypt init",
+   "family": "EVP-AES-128-GCM decrypt init",
+   "size": null,
+   "numCalls": 156500,
+   "ditEntries": 156500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-128-GCM decrypt",
+   "family": "EVP-AES-128-GCM decrypt",
+   "size": 16,
+   "numCalls": 115250,
+   "ditEntries": 461000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-GCM decrypt",
+   "family": "EVP-AES-128-GCM decrypt",
+   "size": 256,
+   "numCalls": 103000,
+   "ditEntries": 412000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-GCM decrypt",
+   "family": "EVP-AES-128-GCM decrypt",
+   "size": 1350,
+   "numCalls": 70000,
+   "ditEntries": 280000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-GCM decrypt",
+   "family": "EVP-AES-128-GCM decrypt",
+   "size": 8192,
+   "numCalls": 25000,
+   "ditEntries": 100000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-GCM decrypt",
+   "family": "EVP-AES-128-GCM decrypt",
+   "size": 16384,
+   "numCalls": 14000,
+   "ditEntries": 56000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM encrypt init",
+   "family": "EVP-AES-192-GCM encrypt init",
+   "size": null,
+   "numCalls": 156000,
+   "ditEntries": 156000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-192-GCM encrypt",
+   "family": "EVP-AES-192-GCM encrypt",
+   "size": 16,
+   "numCalls": 113750,
+   "ditEntries": 455000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM encrypt",
+   "family": "EVP-AES-192-GCM encrypt",
+   "size": 256,
+   "numCalls": 102500,
+   "ditEntries": 410000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM encrypt",
+   "family": "EVP-AES-192-GCM encrypt",
+   "size": 1350,
+   "numCalls": 66500,
+   "ditEntries": 266000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM encrypt",
+   "family": "EVP-AES-192-GCM encrypt",
+   "size": 8192,
+   "numCalls": 24000,
+   "ditEntries": 96000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM encrypt",
+   "family": "EVP-AES-192-GCM encrypt",
+   "size": 16384,
+   "numCalls": 13000,
+   "ditEntries": 52000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM decrypt init",
+   "family": "EVP-AES-192-GCM decrypt init",
+   "size": null,
+   "numCalls": 148000,
+   "ditEntries": 148000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-192-GCM decrypt",
+   "family": "EVP-AES-192-GCM decrypt",
+   "size": 16,
+   "numCalls": 111750,
+   "ditEntries": 447000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM decrypt",
+   "family": "EVP-AES-192-GCM decrypt",
+   "size": 256,
+   "numCalls": 98500,
+   "ditEntries": 394000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM decrypt",
+   "family": "EVP-AES-192-GCM decrypt",
+   "size": 1350,
+   "numCalls": 65250,
+   "ditEntries": 261000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM decrypt",
+   "family": "EVP-AES-192-GCM decrypt",
+   "size": 8192,
+   "numCalls": 24000,
+   "ditEntries": 96000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-GCM decrypt",
+   "family": "EVP-AES-192-GCM decrypt",
+   "size": 16384,
+   "numCalls": 13000,
+   "ditEntries": 52000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM encrypt init",
+   "family": "EVP-AES-256-GCM encrypt init",
+   "size": null,
+   "numCalls": 150500,
+   "ditEntries": 150500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-256-GCM encrypt",
+   "family": "EVP-AES-256-GCM encrypt",
+   "size": 16,
+   "numCalls": 110000,
+   "ditEntries": 440000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM encrypt",
+   "family": "EVP-AES-256-GCM encrypt",
+   "size": 256,
+   "numCalls": 97250,
+   "ditEntries": 389000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM encrypt",
+   "family": "EVP-AES-256-GCM encrypt",
+   "size": 1350,
+   "numCalls": 63000,
+   "ditEntries": 252000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM encrypt",
+   "family": "EVP-AES-256-GCM encrypt",
+   "size": 8192,
+   "numCalls": 22000,
+   "ditEntries": 88000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM encrypt",
+   "family": "EVP-AES-256-GCM encrypt",
+   "size": 16384,
+   "numCalls": 12000,
+   "ditEntries": 48000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM decrypt init",
+   "family": "EVP-AES-256-GCM decrypt init",
+   "size": null,
+   "numCalls": 156250,
+   "ditEntries": 156250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-256-GCM decrypt",
+   "family": "EVP-AES-256-GCM decrypt",
+   "size": 16,
+   "numCalls": 113000,
+   "ditEntries": 452000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM decrypt",
+   "family": "EVP-AES-256-GCM decrypt",
+   "size": 256,
+   "numCalls": 98750,
+   "ditEntries": 395000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM decrypt",
+   "family": "EVP-AES-256-GCM decrypt",
+   "size": 1350,
+   "numCalls": 65000,
+   "ditEntries": 260000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM decrypt",
+   "family": "EVP-AES-256-GCM decrypt",
+   "size": 8192,
+   "numCalls": 22000,
+   "ditEntries": 88000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-GCM decrypt",
+   "family": "EVP-AES-256-GCM decrypt",
+   "size": 16384,
+   "numCalls": 12000,
+   "ditEntries": 48000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-CTR encrypt init",
+   "family": "EVP-AES-128-CTR encrypt init",
+   "size": null,
+   "numCalls": 227000,
+   "ditEntries": 227000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-128-CTR encrypt",
+   "family": "EVP-AES-128-CTR encrypt",
+   "size": 16,
+   "numCalls": 208250,
+   "ditEntries": 624750,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CTR encrypt",
+   "family": "EVP-AES-128-CTR encrypt",
+   "size": 256,
+   "numCalls": 182750,
+   "ditEntries": 548250,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CTR encrypt",
+   "family": "EVP-AES-128-CTR encrypt",
+   "size": 1350,
+   "numCalls": 116000,
+   "ditEntries": 348000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CTR encrypt",
+   "family": "EVP-AES-128-CTR encrypt",
+   "size": 8192,
+   "numCalls": 37500,
+   "ditEntries": 112500,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CTR encrypt",
+   "family": "EVP-AES-128-CTR encrypt",
+   "size": 16384,
+   "numCalls": 21000,
+   "ditEntries": 63000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CTR decrypt init",
+   "family": "EVP-AES-128-CTR decrypt init",
+   "size": null,
+   "numCalls": 227500,
+   "ditEntries": 227500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-128-CTR decrypt",
+   "family": "EVP-AES-128-CTR decrypt",
+   "size": 16,
+   "numCalls": 209000,
+   "ditEntries": 836000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-CTR decrypt",
+   "family": "EVP-AES-128-CTR decrypt",
+   "size": 256,
+   "numCalls": 181750,
+   "ditEntries": 727000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-CTR decrypt",
+   "family": "EVP-AES-128-CTR decrypt",
+   "size": 1350,
+   "numCalls": 117000,
+   "ditEntries": 468000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-CTR decrypt",
+   "family": "EVP-AES-128-CTR decrypt",
+   "size": 8192,
+   "numCalls": 37000,
+   "ditEntries": 148000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-CTR decrypt",
+   "family": "EVP-AES-128-CTR decrypt",
+   "size": 16384,
+   "numCalls": 21000,
+   "ditEntries": 84000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-CTR encrypt init",
+   "family": "EVP-AES-192-CTR encrypt init",
+   "size": null,
+   "numCalls": 229750,
+   "ditEntries": 229750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-192-CTR encrypt",
+   "family": "EVP-AES-192-CTR encrypt",
+   "size": 16,
+   "numCalls": 203500,
+   "ditEntries": 610500,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CTR encrypt",
+   "family": "EVP-AES-192-CTR encrypt",
+   "size": 256,
+   "numCalls": 178250,
+   "ditEntries": 534750,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CTR encrypt",
+   "family": "EVP-AES-192-CTR encrypt",
+   "size": 1350,
+   "numCalls": 108250,
+   "ditEntries": 324750,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CTR encrypt",
+   "family": "EVP-AES-192-CTR encrypt",
+   "size": 8192,
+   "numCalls": 34000,
+   "ditEntries": 102000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CTR encrypt",
+   "family": "EVP-AES-192-CTR encrypt",
+   "size": 16384,
+   "numCalls": 18000,
+   "ditEntries": 54000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CTR decrypt init",
+   "family": "EVP-AES-192-CTR decrypt init",
+   "size": null,
+   "numCalls": 211750,
+   "ditEntries": 211750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-192-CTR decrypt",
+   "family": "EVP-AES-192-CTR decrypt",
+   "size": 16,
+   "numCalls": 205500,
+   "ditEntries": 822000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-CTR decrypt",
+   "family": "EVP-AES-192-CTR decrypt",
+   "size": 256,
+   "numCalls": 179000,
+   "ditEntries": 716000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-CTR decrypt",
+   "family": "EVP-AES-192-CTR decrypt",
+   "size": 1350,
+   "numCalls": 108750,
+   "ditEntries": 435000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-CTR decrypt",
+   "family": "EVP-AES-192-CTR decrypt",
+   "size": 8192,
+   "numCalls": 33000,
+   "ditEntries": 132000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-192-CTR decrypt",
+   "family": "EVP-AES-192-CTR decrypt",
+   "size": 16384,
+   "numCalls": 18000,
+   "ditEntries": 72000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-CTR encrypt init",
+   "family": "EVP-AES-256-CTR encrypt init",
+   "size": null,
+   "numCalls": 209000,
+   "ditEntries": 209000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-256-CTR encrypt",
+   "family": "EVP-AES-256-CTR encrypt",
+   "size": 16,
+   "numCalls": 203500,
+   "ditEntries": 610500,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CTR encrypt",
+   "family": "EVP-AES-256-CTR encrypt",
+   "size": 256,
+   "numCalls": 173000,
+   "ditEntries": 519000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CTR encrypt",
+   "family": "EVP-AES-256-CTR encrypt",
+   "size": 1350,
+   "numCalls": 99500,
+   "ditEntries": 298500,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CTR encrypt",
+   "family": "EVP-AES-256-CTR encrypt",
+   "size": 8192,
+   "numCalls": 28000,
+   "ditEntries": 84000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CTR encrypt",
+   "family": "EVP-AES-256-CTR encrypt",
+   "size": 16384,
+   "numCalls": 16000,
+   "ditEntries": 48000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CTR decrypt init",
+   "family": "EVP-AES-256-CTR decrypt init",
+   "size": null,
+   "numCalls": 222000,
+   "ditEntries": 222000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-256-CTR decrypt",
+   "family": "EVP-AES-256-CTR decrypt",
+   "size": 16,
+   "numCalls": 196750,
+   "ditEntries": 787000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-CTR decrypt",
+   "family": "EVP-AES-256-CTR decrypt",
+   "size": 256,
+   "numCalls": 167250,
+   "ditEntries": 669000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-CTR decrypt",
+   "family": "EVP-AES-256-CTR decrypt",
+   "size": 1350,
+   "numCalls": 100000,
+   "ditEntries": 400000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-CTR decrypt",
+   "family": "EVP-AES-256-CTR decrypt",
+   "size": 8192,
+   "numCalls": 28500,
+   "ditEntries": 114000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-256-CTR decrypt",
+   "family": "EVP-AES-256-CTR decrypt",
+   "size": 16384,
+   "numCalls": 15000,
+   "ditEntries": 60000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-AES-128-CBC encrypt init",
+   "family": "EVP-AES-128-CBC encrypt init",
+   "size": null,
+   "numCalls": 217500,
+   "ditEntries": 217500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-128-CBC encrypt",
+   "family": "EVP-AES-128-CBC encrypt",
+   "size": 16,
+   "numCalls": 179250,
+   "ditEntries": 537750,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CBC encrypt",
+   "family": "EVP-AES-128-CBC encrypt",
+   "size": 256,
+   "numCalls": 106000,
+   "ditEntries": 318000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CBC encrypt",
+   "family": "EVP-AES-128-CBC encrypt",
+   "size": 1350,
+   "numCalls": 38000,
+   "ditEntries": 114000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CBC encrypt",
+   "family": "EVP-AES-128-CBC encrypt",
+   "size": 8192,
+   "numCalls": 8000,
+   "ditEntries": 24000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CBC encrypt",
+   "family": "EVP-AES-128-CBC encrypt",
+   "size": 16384,
+   "numCalls": 4000,
+   "ditEntries": 12000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-128-CBC decrypt init",
+   "family": "EVP-AES-128-CBC decrypt init",
+   "size": null,
+   "numCalls": 226750,
+   "ditEntries": 226750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-128-CBC decrypt",
+   "family": "EVP-AES-128-CBC decrypt",
+   "size": 16,
+   "numCalls": 176000,
+   "ditEntries": 880000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-128-CBC decrypt",
+   "family": "EVP-AES-128-CBC decrypt",
+   "size": 256,
+   "numCalls": 164000,
+   "ditEntries": 820000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-128-CBC decrypt",
+   "family": "EVP-AES-128-CBC decrypt",
+   "size": 1350,
+   "numCalls": 116750,
+   "ditEntries": 583750,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-128-CBC decrypt",
+   "family": "EVP-AES-128-CBC decrypt",
+   "size": 8192,
+   "numCalls": 41500,
+   "ditEntries": 207500,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-128-CBC decrypt",
+   "family": "EVP-AES-128-CBC decrypt",
+   "size": 16384,
+   "numCalls": 24000,
+   "ditEntries": 120000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-192-CBC encrypt init",
+   "family": "EVP-AES-192-CBC encrypt init",
+   "size": null,
+   "numCalls": 227000,
+   "ditEntries": 227000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-192-CBC encrypt",
+   "family": "EVP-AES-192-CBC encrypt",
+   "size": 16,
+   "numCalls": 181500,
+   "ditEntries": 544500,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CBC encrypt",
+   "family": "EVP-AES-192-CBC encrypt",
+   "size": 256,
+   "numCalls": 97500,
+   "ditEntries": 292500,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CBC encrypt",
+   "family": "EVP-AES-192-CBC encrypt",
+   "size": 1350,
+   "numCalls": 32500,
+   "ditEntries": 97500,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CBC encrypt",
+   "family": "EVP-AES-192-CBC encrypt",
+   "size": 8192,
+   "numCalls": 7000,
+   "ditEntries": 21000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CBC encrypt",
+   "family": "EVP-AES-192-CBC encrypt",
+   "size": 16384,
+   "numCalls": 4000,
+   "ditEntries": 12000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-192-CBC decrypt init",
+   "family": "EVP-AES-192-CBC decrypt init",
+   "size": null,
+   "numCalls": 227750,
+   "ditEntries": 227750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-192-CBC decrypt",
+   "family": "EVP-AES-192-CBC decrypt",
+   "size": 16,
+   "numCalls": 177000,
+   "ditEntries": 885000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-192-CBC decrypt",
+   "family": "EVP-AES-192-CBC decrypt",
+   "size": 256,
+   "numCalls": 159000,
+   "ditEntries": 795000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-192-CBC decrypt",
+   "family": "EVP-AES-192-CBC decrypt",
+   "size": 1350,
+   "numCalls": 108250,
+   "ditEntries": 541250,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-192-CBC decrypt",
+   "family": "EVP-AES-192-CBC decrypt",
+   "size": 8192,
+   "numCalls": 36000,
+   "ditEntries": 180000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-192-CBC decrypt",
+   "family": "EVP-AES-192-CBC decrypt",
+   "size": 16384,
+   "numCalls": 20000,
+   "ditEntries": 100000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-256-CBC encrypt init",
+   "family": "EVP-AES-256-CBC encrypt init",
+   "size": null,
+   "numCalls": 222250,
+   "ditEntries": 222250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-256-CBC encrypt",
+   "family": "EVP-AES-256-CBC encrypt",
+   "size": 16,
+   "numCalls": 178750,
+   "ditEntries": 536250,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CBC encrypt",
+   "family": "EVP-AES-256-CBC encrypt",
+   "size": 256,
+   "numCalls": 91000,
+   "ditEntries": 273000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CBC encrypt",
+   "family": "EVP-AES-256-CBC encrypt",
+   "size": 1350,
+   "numCalls": 29000,
+   "ditEntries": 87000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CBC encrypt",
+   "family": "EVP-AES-256-CBC encrypt",
+   "size": 8192,
+   "numCalls": 6000,
+   "ditEntries": 18000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CBC encrypt",
+   "family": "EVP-AES-256-CBC encrypt",
+   "size": 16384,
+   "numCalls": 3000,
+   "ditEntries": 9000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-AES-256-CBC decrypt init",
+   "family": "EVP-AES-256-CBC decrypt init",
+   "size": null,
+   "numCalls": 223750,
+   "ditEntries": 223750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-AES-256-CBC decrypt",
+   "family": "EVP-AES-256-CBC decrypt",
+   "size": 16,
+   "numCalls": 177750,
+   "ditEntries": 888750,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-256-CBC decrypt",
+   "family": "EVP-AES-256-CBC decrypt",
+   "size": 256,
+   "numCalls": 155500,
+   "ditEntries": 777500,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-256-CBC decrypt",
+   "family": "EVP-AES-256-CBC decrypt",
+   "size": 1350,
+   "numCalls": 101250,
+   "ditEntries": 506250,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-256-CBC decrypt",
+   "family": "EVP-AES-256-CBC decrypt",
+   "size": 8192,
+   "numCalls": 32000,
+   "ditEntries": 160000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "EVP-AES-256-CBC decrypt",
+   "family": "EVP-AES-256-CBC decrypt",
+   "size": 16384,
+   "numCalls": 18000,
+   "ditEntries": 90000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AES-256-XTS encrypt init",
+   "family": "AES-256-XTS encrypt init",
+   "size": null,
+   "numCalls": 196000,
+   "ditEntries": 588000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "AES-256-XTS encrypt",
+   "family": "AES-256-XTS encrypt",
+   "size": 16,
+   "numCalls": 243000,
+   "ditEntries": 486000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AES-256-XTS encrypt",
+   "family": "AES-256-XTS encrypt",
+   "size": 256,
+   "numCalls": 204000,
+   "ditEntries": 408000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AES-256-XTS encrypt",
+   "family": "AES-256-XTS encrypt",
+   "size": 1350,
+   "numCalls": 110500,
+   "ditEntries": 221000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AES-256-XTS encrypt",
+   "family": "AES-256-XTS encrypt",
+   "size": 8192,
+   "numCalls": 31250,
+   "ditEntries": 62500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AES-256-XTS encrypt",
+   "family": "AES-256-XTS encrypt",
+   "size": 16384,
+   "numCalls": 17000,
+   "ditEntries": 34000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AES-256-XTS decrypt init",
+   "family": "AES-256-XTS decrypt init",
+   "size": null,
+   "numCalls": 184000,
+   "ditEntries": 552000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "AES-256-XTS decrypt",
+   "family": "AES-256-XTS decrypt",
+   "size": 16,
+   "numCalls": 244000,
+   "ditEntries": 732000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "AES-256-XTS decrypt",
+   "family": "AES-256-XTS decrypt",
+   "size": 256,
+   "numCalls": 200250,
+   "ditEntries": 600750,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "AES-256-XTS decrypt",
+   "family": "AES-256-XTS decrypt",
+   "size": 1350,
+   "numCalls": 104250,
+   "ditEntries": 312750,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "AES-256-XTS decrypt",
+   "family": "AES-256-XTS decrypt",
+   "size": 8192,
+   "numCalls": 31000,
+   "ditEntries": 93000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "AES-256-XTS decrypt",
+   "family": "AES-256-XTS decrypt",
+   "size": 16384,
+   "numCalls": 17000,
+   "ditEntries": 51000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-RC4 encrypt init",
+   "family": "EVP-RC4 encrypt init",
+   "size": null,
+   "numCalls": 49000,
+   "ditEntries": 49000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-RC4 encrypt",
+   "family": "EVP-RC4 encrypt",
+   "size": 16,
+   "numCalls": 196250,
+   "ditEntries": 588750,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-RC4 encrypt",
+   "family": "EVP-RC4 encrypt",
+   "size": 256,
+   "numCalls": 73250,
+   "ditEntries": 219750,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-RC4 encrypt",
+   "family": "EVP-RC4 encrypt",
+   "size": 1350,
+   "numCalls": 19000,
+   "ditEntries": 57000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-RC4 encrypt",
+   "family": "EVP-RC4 encrypt",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 12000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-RC4 encrypt",
+   "family": "EVP-RC4 encrypt",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 6000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EVP-RC4 decrypt init",
+   "family": "EVP-RC4 decrypt init",
+   "size": null,
+   "numCalls": 48500,
+   "ditEntries": 48500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-RC4 decrypt",
+   "family": "EVP-RC4 decrypt",
+   "size": 16,
+   "numCalls": 200500,
+   "ditEntries": 802000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-RC4 decrypt",
+   "family": "EVP-RC4 decrypt",
+   "size": 256,
+   "numCalls": 73750,
+   "ditEntries": 295000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-RC4 decrypt",
+   "family": "EVP-RC4 decrypt",
+   "size": 1350,
+   "numCalls": 20000,
+   "ditEntries": 80000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-RC4 decrypt",
+   "family": "EVP-RC4 decrypt",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 16000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-RC4 decrypt",
+   "family": "EVP-RC4 decrypt",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 8000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "MD4",
+   "family": "MD4",
+   "size": 16,
+   "numCalls": 570750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD4",
+   "family": "MD4",
+   "size": 256,
+   "numCalls": 102000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD4",
+   "family": "MD4",
+   "size": 1350,
+   "numCalls": 22750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD4",
+   "family": "MD4",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD4",
+   "family": "MD4",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5",
+   "family": "MD5",
+   "size": 16,
+   "numCalls": 351250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5",
+   "family": "MD5",
+   "size": 256,
+   "numCalls": 64000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5",
+   "family": "MD5",
+   "size": 1350,
+   "numCalls": 14000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5",
+   "family": "MD5",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5",
+   "family": "MD5",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-1",
+   "family": "SHA-1",
+   "size": 16,
+   "numCalls": 820000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-1",
+   "family": "SHA-1",
+   "size": 256,
+   "numCalls": 209000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-1",
+   "family": "SHA-1",
+   "size": 1350,
+   "numCalls": 48000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-1",
+   "family": "SHA-1",
+   "size": 8192,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-1",
+   "family": "SHA-1",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-224",
+   "family": "SHA-224",
+   "size": 16,
+   "numCalls": 769500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-224",
+   "family": "SHA-224",
+   "size": 256,
+   "numCalls": 219500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-224",
+   "family": "SHA-224",
+   "size": 1350,
+   "numCalls": 49000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-224",
+   "family": "SHA-224",
+   "size": 8192,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-224",
+   "family": "SHA-224",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-256",
+   "family": "SHA-256",
+   "size": 16,
+   "numCalls": 757500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-256",
+   "family": "SHA-256",
+   "size": 256,
+   "numCalls": 218500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-256",
+   "family": "SHA-256",
+   "size": 1350,
+   "numCalls": 49000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-256",
+   "family": "SHA-256",
+   "size": 8192,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-256",
+   "family": "SHA-256",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-384",
+   "family": "SHA-384",
+   "size": 16,
+   "numCalls": 268000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-384",
+   "family": "SHA-384",
+   "size": 256,
+   "numCalls": 103000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-384",
+   "family": "SHA-384",
+   "size": 1350,
+   "numCalls": 28000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-384",
+   "family": "SHA-384",
+   "size": 8192,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-384",
+   "family": "SHA-384",
+   "size": 16384,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-512",
+   "family": "SHA-512",
+   "size": 16,
+   "numCalls": 264500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-512",
+   "family": "SHA-512",
+   "size": 256,
+   "numCalls": 102500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-512",
+   "family": "SHA-512",
+   "size": 1350,
+   "numCalls": 27500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-512",
+   "family": "SHA-512",
+   "size": 8192,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA-512",
+   "family": "SHA-512",
+   "size": 16384,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-224",
+   "family": "SHA3-224",
+   "size": 16,
+   "numCalls": 141000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-224",
+   "family": "SHA3-224",
+   "size": 256,
+   "numCalls": 77500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-224",
+   "family": "SHA3-224",
+   "size": 1350,
+   "numCalls": 17000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-224",
+   "family": "SHA3-224",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-224",
+   "family": "SHA3-224",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-256",
+   "family": "SHA3-256",
+   "size": 16,
+   "numCalls": 139750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-256",
+   "family": "SHA3-256",
+   "size": 256,
+   "numCalls": 77500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-256",
+   "family": "SHA3-256",
+   "size": 1350,
+   "numCalls": 17000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-256",
+   "family": "SHA3-256",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-256",
+   "family": "SHA3-256",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-384",
+   "family": "SHA3-384",
+   "size": 16,
+   "numCalls": 138250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-384",
+   "family": "SHA3-384",
+   "size": 256,
+   "numCalls": 52500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-384",
+   "family": "SHA3-384",
+   "size": 1350,
+   "numCalls": 13000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-384",
+   "family": "SHA3-384",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-384",
+   "family": "SHA3-384",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-512",
+   "family": "SHA3-512",
+   "size": 16,
+   "numCalls": 136000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-512",
+   "family": "SHA3-512",
+   "size": 256,
+   "numCalls": 40000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-512",
+   "family": "SHA3-512",
+   "size": 1350,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-512",
+   "family": "SHA3-512",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHA3-512",
+   "family": "SHA3-512",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "KECCAK-256",
+   "family": "KECCAK-256",
+   "size": 16,
+   "numCalls": 140500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "KECCAK-256",
+   "family": "KECCAK-256",
+   "size": 256,
+   "numCalls": 78000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "KECCAK-256",
+   "family": "KECCAK-256",
+   "size": 1350,
+   "numCalls": 17000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "KECCAK-256",
+   "family": "KECCAK-256",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "KECCAK-256",
+   "family": "KECCAK-256",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-128",
+   "family": "SHAKE-128",
+   "size": 16,
+   "numCalls": 117500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-128",
+   "family": "SHAKE-128",
+   "size": 256,
+   "numCalls": 70000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-128",
+   "family": "SHAKE-128",
+   "size": 1350,
+   "numCalls": 18000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-128",
+   "family": "SHAKE-128",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-128",
+   "family": "SHAKE-128",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-256",
+   "family": "SHAKE-256",
+   "size": 16,
+   "numCalls": 115750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-256",
+   "family": "SHAKE-256",
+   "size": 256,
+   "numCalls": 69500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-256",
+   "family": "SHAKE-256",
+   "size": 1350,
+   "numCalls": 16000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-256",
+   "family": "SHAKE-256",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE-256",
+   "family": "SHAKE-256",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Absorb)",
+   "family": "SHAKE256-x4 (Absorb)",
+   "size": 16,
+   "numCalls": 57250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Absorb)",
+   "family": "SHAKE256-x4 (Absorb)",
+   "size": 256,
+   "numCalls": 34000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Absorb)",
+   "family": "SHAKE256-x4 (Absorb)",
+   "size": 1350,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Absorb)",
+   "family": "SHAKE256-x4 (Absorb)",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Absorb)",
+   "family": "SHAKE256-x4 (Absorb)",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Squeeze)",
+   "family": "SHAKE256-x4 (Squeeze)",
+   "size": 16,
+   "numCalls": 59000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Squeeze)",
+   "family": "SHAKE256-x4 (Squeeze)",
+   "size": 256,
+   "numCalls": 32000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Squeeze)",
+   "family": "SHAKE256-x4 (Squeeze)",
+   "size": 1350,
+   "numCalls": 7000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Squeeze)",
+   "family": "SHAKE256-x4 (Squeeze)",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SHAKE256-x4 (Squeeze)",
+   "family": "SHAKE256-x4 (Squeeze)",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "RIPEMD-160",
+   "family": "RIPEMD-160",
+   "size": 16,
+   "numCalls": 188500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "RIPEMD-160",
+   "family": "RIPEMD-160",
+   "size": 256,
+   "numCalls": 39000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "RIPEMD-160",
+   "family": "RIPEMD-160",
+   "size": 1350,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "RIPEMD-160",
+   "family": "RIPEMD-160",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "RIPEMD-160",
+   "family": "RIPEMD-160",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5-SHA-1",
+   "family": "MD5-SHA-1",
+   "size": 16,
+   "numCalls": 260500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5-SHA-1",
+   "family": "MD5-SHA-1",
+   "size": 256,
+   "numCalls": 54250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5-SHA-1",
+   "family": "MD5-SHA-1",
+   "size": 1350,
+   "numCalls": 12000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5-SHA-1",
+   "family": "MD5-SHA-1",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "MD5-SHA-1",
+   "family": "MD5-SHA-1",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5 init",
+   "family": "HMAC-MD5 init",
+   "size": null,
+   "numCalls": 155000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5",
+   "family": "HMAC-MD5",
+   "size": 16,
+   "numCalls": 140000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5",
+   "family": "HMAC-MD5",
+   "size": 256,
+   "numCalls": 51500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5",
+   "family": "HMAC-MD5",
+   "size": 1350,
+   "numCalls": 14000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5",
+   "family": "HMAC-MD5",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5",
+   "family": "HMAC-MD5",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1 init",
+   "family": "HMAC-SHA1 init",
+   "size": null,
+   "numCalls": 405750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1",
+   "family": "HMAC-SHA1",
+   "size": 16,
+   "numCalls": 363750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1",
+   "family": "HMAC-SHA1",
+   "size": 256,
+   "numCalls": 161750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1",
+   "family": "HMAC-SHA1",
+   "size": 1350,
+   "numCalls": 45000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1",
+   "family": "HMAC-SHA1",
+   "size": 8192,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1",
+   "family": "HMAC-SHA1",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256 init",
+   "family": "HMAC-SHA256 init",
+   "size": null,
+   "numCalls": 322000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256",
+   "family": "HMAC-SHA256",
+   "size": 16,
+   "numCalls": 348000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256",
+   "family": "HMAC-SHA256",
+   "size": 256,
+   "numCalls": 163000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256",
+   "family": "HMAC-SHA256",
+   "size": 1350,
+   "numCalls": 46000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256",
+   "family": "HMAC-SHA256",
+   "size": 8192,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256",
+   "family": "HMAC-SHA256",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384 init",
+   "family": "HMAC-SHA384 init",
+   "size": null,
+   "numCalls": 144250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384",
+   "family": "HMAC-SHA384",
+   "size": 16,
+   "numCalls": 130750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384",
+   "family": "HMAC-SHA384",
+   "size": 256,
+   "numCalls": 70500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384",
+   "family": "HMAC-SHA384",
+   "size": 1350,
+   "numCalls": 25000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384",
+   "family": "HMAC-SHA384",
+   "size": 8192,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384",
+   "family": "HMAC-SHA384",
+   "size": 16384,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512 init",
+   "family": "HMAC-SHA512 init",
+   "size": null,
+   "numCalls": 146750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512",
+   "family": "HMAC-SHA512",
+   "size": 16,
+   "numCalls": 130000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512",
+   "family": "HMAC-SHA512",
+   "size": 256,
+   "numCalls": 69500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512",
+   "family": "HMAC-SHA512",
+   "size": 1350,
+   "numCalls": 25000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512",
+   "family": "HMAC-SHA512",
+   "size": 8192,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512",
+   "family": "HMAC-SHA512",
+   "size": 16384,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224 init",
+   "family": "HMAC-SHA3-224 init",
+   "size": null,
+   "numCalls": 78000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224",
+   "family": "HMAC-SHA3-224",
+   "size": 16,
+   "numCalls": 74250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224",
+   "family": "HMAC-SHA3-224",
+   "size": 256,
+   "numCalls": 52000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224",
+   "family": "HMAC-SHA3-224",
+   "size": 1350,
+   "numCalls": 15000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224",
+   "family": "HMAC-SHA3-224",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224",
+   "family": "HMAC-SHA3-224",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256 init",
+   "family": "HMAC-SHA3-256 init",
+   "size": null,
+   "numCalls": 78250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256",
+   "family": "HMAC-SHA3-256",
+   "size": 16,
+   "numCalls": 73750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256",
+   "family": "HMAC-SHA3-256",
+   "size": 256,
+   "numCalls": 52000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256",
+   "family": "HMAC-SHA3-256",
+   "size": 1350,
+   "numCalls": 15000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256",
+   "family": "HMAC-SHA3-256",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256",
+   "family": "HMAC-SHA3-256",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384 init",
+   "family": "HMAC-SHA3-384 init",
+   "size": null,
+   "numCalls": 77750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384",
+   "family": "HMAC-SHA3-384",
+   "size": 16,
+   "numCalls": 72000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384",
+   "family": "HMAC-SHA3-384",
+   "size": 256,
+   "numCalls": 40000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384",
+   "family": "HMAC-SHA3-384",
+   "size": 1350,
+   "numCalls": 12000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384",
+   "family": "HMAC-SHA3-384",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384",
+   "family": "HMAC-SHA3-384",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512 init",
+   "family": "HMAC-SHA3-512 init",
+   "size": null,
+   "numCalls": 80000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512",
+   "family": "HMAC-SHA3-512",
+   "size": 16,
+   "numCalls": 69750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512",
+   "family": "HMAC-SHA3-512",
+   "size": 256,
+   "numCalls": 31000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512",
+   "family": "HMAC-SHA3-512",
+   "size": 1350,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512",
+   "family": "HMAC-SHA3-512",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512",
+   "family": "HMAC-SHA3-512",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5-OneShot",
+   "family": "HMAC-MD5-OneShot",
+   "size": 16,
+   "numCalls": 68000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5-OneShot",
+   "family": "HMAC-MD5-OneShot",
+   "size": 256,
+   "numCalls": 37000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5-OneShot",
+   "family": "HMAC-MD5-OneShot",
+   "size": 1350,
+   "numCalls": 13000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5-OneShot",
+   "family": "HMAC-MD5-OneShot",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-MD5-OneShot",
+   "family": "HMAC-MD5-OneShot",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1-OneShot",
+   "family": "HMAC-SHA1-OneShot",
+   "size": 16,
+   "numCalls": 160750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1-OneShot",
+   "family": "HMAC-SHA1-OneShot",
+   "size": 256,
+   "numCalls": 103250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1-OneShot",
+   "family": "HMAC-SHA1-OneShot",
+   "size": 1350,
+   "numCalls": 39000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1-OneShot",
+   "family": "HMAC-SHA1-OneShot",
+   "size": 8192,
+   "numCalls": 8000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA1-OneShot",
+   "family": "HMAC-SHA1-OneShot",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256-OneShot",
+   "family": "HMAC-SHA256-OneShot",
+   "size": 16,
+   "numCalls": 152250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256-OneShot",
+   "family": "HMAC-SHA256-OneShot",
+   "size": 256,
+   "numCalls": 101250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256-OneShot",
+   "family": "HMAC-SHA256-OneShot",
+   "size": 1350,
+   "numCalls": 38500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256-OneShot",
+   "family": "HMAC-SHA256-OneShot",
+   "size": 8192,
+   "numCalls": 8000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA256-OneShot",
+   "family": "HMAC-SHA256-OneShot",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384-OneShot",
+   "family": "HMAC-SHA384-OneShot",
+   "size": 16,
+   "numCalls": 65000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384-OneShot",
+   "family": "HMAC-SHA384-OneShot",
+   "size": 256,
+   "numCalls": 46500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384-OneShot",
+   "family": "HMAC-SHA384-OneShot",
+   "size": 1350,
+   "numCalls": 21000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384-OneShot",
+   "family": "HMAC-SHA384-OneShot",
+   "size": 8192,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA384-OneShot",
+   "family": "HMAC-SHA384-OneShot",
+   "size": 16384,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512-OneShot",
+   "family": "HMAC-SHA512-OneShot",
+   "size": 16,
+   "numCalls": 64750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512-OneShot",
+   "family": "HMAC-SHA512-OneShot",
+   "size": 256,
+   "numCalls": 47000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512-OneShot",
+   "family": "HMAC-SHA512-OneShot",
+   "size": 1350,
+   "numCalls": 21000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512-OneShot",
+   "family": "HMAC-SHA512-OneShot",
+   "size": 8192,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA512-OneShot",
+   "family": "HMAC-SHA512-OneShot",
+   "size": 16384,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224-OneShot",
+   "family": "HMAC-SHA3-224-OneShot",
+   "size": 16,
+   "numCalls": 37000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224-OneShot",
+   "family": "HMAC-SHA3-224-OneShot",
+   "size": 256,
+   "numCalls": 30250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224-OneShot",
+   "family": "HMAC-SHA3-224-OneShot",
+   "size": 1350,
+   "numCalls": 13000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224-OneShot",
+   "family": "HMAC-SHA3-224-OneShot",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-224-OneShot",
+   "family": "HMAC-SHA3-224-OneShot",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256-OneShot",
+   "family": "HMAC-SHA3-256-OneShot",
+   "size": 16,
+   "numCalls": 37000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256-OneShot",
+   "family": "HMAC-SHA3-256-OneShot",
+   "size": 256,
+   "numCalls": 30250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256-OneShot",
+   "family": "HMAC-SHA3-256-OneShot",
+   "size": 1350,
+   "numCalls": 13000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256-OneShot",
+   "family": "HMAC-SHA3-256-OneShot",
+   "size": 8192,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-256-OneShot",
+   "family": "HMAC-SHA3-256-OneShot",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384-OneShot",
+   "family": "HMAC-SHA3-384-OneShot",
+   "size": 16,
+   "numCalls": 36000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384-OneShot",
+   "family": "HMAC-SHA3-384-OneShot",
+   "size": 256,
+   "numCalls": 25250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384-OneShot",
+   "family": "HMAC-SHA3-384-OneShot",
+   "size": 1350,
+   "numCalls": 10000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384-OneShot",
+   "family": "HMAC-SHA3-384-OneShot",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-384-OneShot",
+   "family": "HMAC-SHA3-384-OneShot",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512-OneShot",
+   "family": "HMAC-SHA3-512-OneShot",
+   "size": 16,
+   "numCalls": 36000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512-OneShot",
+   "family": "HMAC-SHA3-512-OneShot",
+   "size": 256,
+   "numCalls": 22000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512-OneShot",
+   "family": "HMAC-SHA3-512-OneShot",
+   "size": 1350,
+   "numCalls": 8000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512-OneShot",
+   "family": "HMAC-SHA3-512-OneShot",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HMAC-SHA3-512-OneShot",
+   "family": "HMAC-SHA3-512-OneShot",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "CMAC-AES-128-CBC init",
+   "family": "CMAC-AES-128-CBC init",
+   "size": null,
+   "numCalls": 128750,
+   "ditEntries": 386250,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "CMAC-AES-128-CBC",
+   "family": "CMAC-AES-128-CBC",
+   "size": 16,
+   "numCalls": 275500,
+   "ditEntries": 551000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "CMAC-AES-128-CBC",
+   "family": "CMAC-AES-128-CBC",
+   "size": 256,
+   "numCalls": 32750,
+   "ditEntries": 556750,
+   "entries_per_call": 17.0
+  },
+  {
+   "description": "CMAC-AES-128-CBC",
+   "family": "CMAC-AES-128-CBC",
+   "size": 1350,
+   "numCalls": 7000,
+   "ditEntries": 602000,
+   "entries_per_call": 86.0
+  },
+  {
+   "description": "CMAC-AES-128-CBC",
+   "family": "CMAC-AES-128-CBC",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 1026000,
+   "entries_per_call": 513.0
+  },
+  {
+   "description": "CMAC-AES-128-CBC",
+   "family": "CMAC-AES-128-CBC",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 1025000,
+   "entries_per_call": 1025.0
+  },
+  {
+   "description": "CMAC-AES-256-CBC init",
+   "family": "CMAC-AES-256-CBC init",
+   "size": null,
+   "numCalls": 128000,
+   "ditEntries": 384000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "CMAC-AES-256-CBC",
+   "family": "CMAC-AES-256-CBC",
+   "size": 16,
+   "numCalls": 263000,
+   "ditEntries": 526000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "CMAC-AES-256-CBC",
+   "family": "CMAC-AES-256-CBC",
+   "size": 256,
+   "numCalls": 30500,
+   "ditEntries": 518500,
+   "entries_per_call": 17.0
+  },
+  {
+   "description": "CMAC-AES-256-CBC",
+   "family": "CMAC-AES-256-CBC",
+   "size": 1350,
+   "numCalls": 7000,
+   "ditEntries": 602000,
+   "entries_per_call": 86.0
+  },
+  {
+   "description": "CMAC-AES-256-CBC",
+   "family": "CMAC-AES-256-CBC",
+   "size": 8192,
+   "numCalls": 2000,
+   "ditEntries": 1026000,
+   "entries_per_call": 513.0
+  },
+  {
+   "description": "CMAC-AES-256-CBC",
+   "family": "CMAC-AES-256-CBC",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 1025000,
+   "entries_per_call": 1025.0
+  },
+  {
+   "description": "RNG",
+   "family": "RNG",
+   "size": 16,
+   "numCalls": 13000,
+   "ditEntries": 39000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "RNG",
+   "family": "RNG",
+   "size": 256,
+   "numCalls": 12000,
+   "ditEntries": 36000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "RNG",
+   "family": "RNG",
+   "size": 1350,
+   "numCalls": 12000,
+   "ditEntries": 36000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "RNG",
+   "family": "RNG",
+   "size": 8192,
+   "numCalls": 9000,
+   "ditEntries": 27000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "RNG",
+   "family": "RNG",
+   "size": 16384,
+   "numCalls": 7000,
+   "ditEntries": 21000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "ECDH P-224",
+   "family": "ECDH P-224",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 6000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "ECDH P-256",
+   "family": "ECDH P-256",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 6000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "ECDH P-384",
+   "family": "ECDH P-384",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 6000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "ECDH P-521",
+   "family": "ECDH P-521",
+   "size": null,
+   "numCalls": 806,
+   "ditEntries": 4836,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "ECDH secp256k1",
+   "family": "ECDH secp256k1",
+   "size": null,
+   "numCalls": 636,
+   "ditEntries": 3816,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "ECDSA P-224 signing",
+   "family": "ECDSA P-224 signing",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 8000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "ECDSA P-224 verify",
+   "family": "ECDSA P-224 verify",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "ECDSA P-256 signing",
+   "family": "ECDSA P-256 signing",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 12000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "ECDSA P-256 verify",
+   "family": "ECDSA P-256 verify",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "ECDSA P-384 signing",
+   "family": "ECDSA P-384 signing",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "ECDSA P-384 verify",
+   "family": "ECDSA P-384 verify",
+   "size": null,
+   "numCalls": 952,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "ECDSA P-521 signing",
+   "family": "ECDSA P-521 signing",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "ECDSA P-521 verify",
+   "family": "ECDSA P-521 verify",
+   "size": null,
+   "numCalls": 662,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "ECDSA secp256k1 signing",
+   "family": "ECDSA secp256k1 signing",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "ECDSA secp256k1 verify",
+   "family": "ECDSA secp256k1 verify",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Generate P-224 with EVP_PKEY_keygen",
+   "family": "Generate P-224 with EVP_PKEY_keygen",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 18000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "Generate P-256 with EVP_PKEY_keygen",
+   "family": "Generate P-256 with EVP_PKEY_keygen",
+   "size": null,
+   "numCalls": 4000,
+   "ditEntries": 24000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "Generate P-384 with EVP_PKEY_keygen",
+   "family": "Generate P-384 with EVP_PKEY_keygen",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 6000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "Generate P-521 with EVP_PKEY_keygen",
+   "family": "Generate P-521 with EVP_PKEY_keygen",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 6000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "Generate secp256k1 with EVP_PKEY_keygen",
+   "family": "Generate secp256k1 with EVP_PKEY_keygen",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 6000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "Generate P-224 with EC_KEY_generate_key",
+   "family": "Generate P-224 with EC_KEY_generate_key",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 12000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "Generate P-256 with EC_KEY_generate_key",
+   "family": "Generate P-256 with EC_KEY_generate_key",
+   "size": null,
+   "numCalls": 4000,
+   "ditEntries": 16000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "Generate P-384 with EC_KEY_generate_key",
+   "family": "Generate P-384 with EC_KEY_generate_key",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "Generate P-521 with EC_KEY_generate_key",
+   "family": "Generate P-521 with EC_KEY_generate_key",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "Generate secp256k1 with EC_KEY_generate_key",
+   "family": "Generate secp256k1 with EC_KEY_generate_key",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP ECDH P-224",
+   "family": "EVP ECDH P-224",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 35000,
+   "entries_per_call": 35.0
+  },
+  {
+   "description": "EVP ECDH P-256",
+   "family": "EVP ECDH P-256",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 35000,
+   "entries_per_call": 35.0
+  },
+  {
+   "description": "EVP ECDH P-384",
+   "family": "EVP ECDH P-384",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 35000,
+   "entries_per_call": 35.0
+  },
+  {
+   "description": "EVP ECDH P-521",
+   "family": "EVP ECDH P-521",
+   "size": null,
+   "numCalls": 763,
+   "ditEntries": 26705,
+   "entries_per_call": 35.0
+  },
+  {
+   "description": "EVP ECDH secp256k1",
+   "family": "EVP ECDH secp256k1",
+   "size": null,
+   "numCalls": 628,
+   "ditEntries": 21980,
+   "entries_per_call": 35.0
+  },
+  {
+   "description": "EVP ECDH X25519",
+   "family": "EVP ECDH X25519",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 50000,
+   "entries_per_call": 25.0
+  },
+  {
+   "description": "EC POINT P-224 dbl",
+   "family": "EC POINT P-224 dbl",
+   "size": null,
+   "numCalls": 385250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT P-224 add",
+   "family": "EC POINT P-224 add",
+   "size": null,
+   "numCalls": 179250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT P-224 mul",
+   "family": "EC POINT P-224 mul",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 4000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT P-224 mul base",
+   "family": "EC POINT P-224 mul base",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 6000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT P-224 mul public",
+   "family": "EC POINT P-224 mul public",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 3000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EC POINT P-256 dbl",
+   "family": "EC POINT P-256 dbl",
+   "size": null,
+   "numCalls": 357750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT P-256 add",
+   "family": "EC POINT P-256 add",
+   "size": null,
+   "numCalls": 199250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT P-256 mul",
+   "family": "EC POINT P-256 mul",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 4000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT P-256 mul base",
+   "family": "EC POINT P-256 mul base",
+   "size": null,
+   "numCalls": 6000,
+   "ditEntries": 12000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT P-256 mul public",
+   "family": "EC POINT P-256 mul public",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 3000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EC POINT P-384 dbl",
+   "family": "EC POINT P-384 dbl",
+   "size": null,
+   "numCalls": 106250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT P-384 add",
+   "family": "EC POINT P-384 add",
+   "size": null,
+   "numCalls": 51500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT P-384 mul",
+   "family": "EC POINT P-384 mul",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 2000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT P-384 mul base",
+   "family": "EC POINT P-384 mul base",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 2000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT P-384 mul public",
+   "family": "EC POINT P-384 mul public",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 3000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EC POINT P-521 dbl",
+   "family": "EC POINT P-521 dbl",
+   "size": null,
+   "numCalls": 104750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT P-521 add",
+   "family": "EC POINT P-521 add",
+   "size": null,
+   "numCalls": 48500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT P-521 mul",
+   "family": "EC POINT P-521 mul",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 2000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT P-521 mul base",
+   "family": "EC POINT P-521 mul base",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 2000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT P-521 mul public",
+   "family": "EC POINT P-521 mul public",
+   "size": null,
+   "numCalls": 714,
+   "ditEntries": 2142,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "EC POINT secp256k1 dbl",
+   "family": "EC POINT secp256k1 dbl",
+   "size": null,
+   "numCalls": 107500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT secp256k1 add",
+   "family": "EC POINT secp256k1 add",
+   "size": null,
+   "numCalls": 82750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EC POINT secp256k1 mul",
+   "family": "EC POINT secp256k1 mul",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 2000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT secp256k1 mul base",
+   "family": "EC POINT secp256k1 mul base",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 2000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "EC POINT secp256k1 mul public",
+   "family": "EC POINT secp256k1 mul public",
+   "size": null,
+   "numCalls": 649,
+   "ditEntries": 1947,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "scrypt (N = 1024, r = 8, p = 16)",
+   "family": "scrypt (N = 1024, r = 8, p = 16)",
+   "size": null,
+   "numCalls": 7,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "scrypt (N = 16384, r = 8, p = 1)",
+   "family": "scrypt (N = 16384, r = 8, p = 1)",
+   "size": null,
+   "numCalls": 7,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 encrypt init",
+   "family": "EVP-ChaCha20-Poly1305 encrypt init",
+   "size": null,
+   "numCalls": 252250,
+   "ditEntries": 252250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 encrypt",
+   "family": "EVP-ChaCha20-Poly1305 encrypt",
+   "size": 16,
+   "numCalls": 68000,
+   "ditEntries": 272000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 encrypt",
+   "family": "EVP-ChaCha20-Poly1305 encrypt",
+   "size": 256,
+   "numCalls": 46250,
+   "ditEntries": 185000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 encrypt",
+   "family": "EVP-ChaCha20-Poly1305 encrypt",
+   "size": 1350,
+   "numCalls": 16000,
+   "ditEntries": 64000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 encrypt",
+   "family": "EVP-ChaCha20-Poly1305 encrypt",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 16000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 encrypt",
+   "family": "EVP-ChaCha20-Poly1305 encrypt",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 8000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 decrypt init",
+   "family": "EVP-ChaCha20-Poly1305 decrypt init",
+   "size": null,
+   "numCalls": 260750,
+   "ditEntries": 260750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 decrypt",
+   "family": "EVP-ChaCha20-Poly1305 decrypt",
+   "size": 16,
+   "numCalls": 67000,
+   "ditEntries": 268000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 decrypt",
+   "family": "EVP-ChaCha20-Poly1305 decrypt",
+   "size": 256,
+   "numCalls": 45000,
+   "ditEntries": 180000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 decrypt",
+   "family": "EVP-ChaCha20-Poly1305 decrypt",
+   "size": 1350,
+   "numCalls": 16000,
+   "ditEntries": 64000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 decrypt",
+   "family": "EVP-ChaCha20-Poly1305 decrypt",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 16000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "EVP-ChaCha20-Poly1305 decrypt",
+   "family": "EVP-ChaCha20-Poly1305 decrypt",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 8000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "FFDH 2048",
+   "family": "FFDH 2048",
+   "size": null,
+   "numCalls": 38,
+   "ditEntries": 304,
+   "entries_per_call": 8.0
+  },
+  {
+   "description": "FFDH 4096",
+   "family": "FFDH 4096",
+   "size": null,
+   "numCalls": 5,
+   "ditEntries": 40,
+   "entries_per_call": 8.0
+  },
+  {
+   "description": "RSA 2048 signing",
+   "family": "RSA 2048 signing",
+   "size": null,
+   "numCalls": 393,
+   "ditEntries": 1668,
+   "entries_per_call": 4.244274809160306
+  },
+  {
+   "description": "RSA 2048 verify (same key)",
+   "family": "RSA 2048 verify (same key)",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 12000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "RSA 2048 verify (fresh key)",
+   "family": "RSA 2048 verify (fresh key)",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 21000,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "RSA 2048 private key parse",
+   "family": "RSA 2048 private key parse",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "RSA 3072 signing",
+   "family": "RSA 3072 signing",
+   "size": null,
+   "numCalls": 113,
+   "ditEntries": 473,
+   "entries_per_call": 4.185840707964601
+  },
+  {
+   "description": "RSA 3072 verify (same key)",
+   "family": "RSA 3072 verify (same key)",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 8000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "RSA 3072 verify (fresh key)",
+   "family": "RSA 3072 verify (fresh key)",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 14000,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "RSA 3072 private key parse",
+   "family": "RSA 3072 private key parse",
+   "size": null,
+   "numCalls": 662,
+   "ditEntries": 2648,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "RSA 4096 signing",
+   "family": "RSA 4096 signing",
+   "size": null,
+   "numCalls": 55,
+   "ditEntries": 226,
+   "entries_per_call": 4.109090909090909
+  },
+  {
+   "description": "RSA 4096 verify (same key)",
+   "family": "RSA 4096 verify (same key)",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "RSA 4096 verify (fresh key)",
+   "family": "RSA 4096 verify (fresh key)",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 7000,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "RSA 4096 private key parse",
+   "family": "RSA 4096 private key parse",
+   "size": null,
+   "numCalls": 420,
+   "ditEntries": 1680,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "RSA 8192 signing",
+   "family": "RSA 8192 signing",
+   "size": null,
+   "numCalls": 7,
+   "ditEntries": 28,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "RSA 8192 verify (same key)",
+   "family": "RSA 8192 verify (same key)",
+   "size": null,
+   "numCalls": 909,
+   "ditEntries": 3636,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "RSA 8192 verify (fresh key)",
+   "family": "RSA 8192 verify (fresh key)",
+   "size": null,
+   "numCalls": 877,
+   "ditEntries": 6139,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "RSA 8192 private key parse",
+   "family": "RSA 8192 private key parse",
+   "size": null,
+   "numCalls": 126,
+   "ditEntries": 504,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "RSA 2048 key-gen",
+   "family": "RSA 2048 key-gen",
+   "size": null,
+   "numCalls": 904,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "RSA 3072 key-gen",
+   "family": "RSA 3072 key-gen",
+   "size": null,
+   "numCalls": 247,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "RSA 4096 key-gen",
+   "family": "RSA 4096 key-gen",
+   "size": null,
+   "numCalls": 102,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "ML-KEM-512 keygen",
+   "family": "ML-KEM-512 keygen",
+   "size": null,
+   "numCalls": 5000,
+   "ditEntries": 25000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "ML-KEM-512 encaps",
+   "family": "ML-KEM-512 encaps",
+   "size": null,
+   "numCalls": 4000,
+   "ditEntries": 16000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "ML-KEM-512 decaps",
+   "family": "ML-KEM-512 decaps",
+   "size": null,
+   "numCalls": 4000,
+   "ditEntries": 4000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "ML-KEM-768 keygen",
+   "family": "ML-KEM-768 keygen",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 15000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "ML-KEM-768 encaps",
+   "family": "ML-KEM-768 encaps",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 12000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "ML-KEM-768 decaps",
+   "family": "ML-KEM-768 decaps",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 3000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "ML-KEM-1024 keygen",
+   "family": "ML-KEM-1024 keygen",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 15000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "ML-KEM-1024 encaps",
+   "family": "ML-KEM-1024 encaps",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 12000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "ML-KEM-1024 decaps",
+   "family": "ML-KEM-1024 decaps",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 2000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "MLDSA44 keygen",
+   "family": "MLDSA44 keygen",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 12000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "MLDSA44 signing",
+   "family": "MLDSA44 signing",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "MLDSA44 verify",
+   "family": "MLDSA44 verify",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 2000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "MLDSA65 keygen",
+   "family": "MLDSA65 keygen",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 6000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "MLDSA65 signing",
+   "family": "MLDSA65 signing",
+   "size": null,
+   "numCalls": 862,
+   "ditEntries": 3448,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "MLDSA65 verify",
+   "family": "MLDSA65 verify",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 1000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "MLDSA87 keygen",
+   "family": "MLDSA87 keygen",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 6000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "MLDSA87 signing",
+   "family": "MLDSA87 signing",
+   "size": null,
+   "numCalls": 917,
+   "ditEntries": 3668,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "MLDSA87 verify",
+   "family": "MLDSA87 verify",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 1000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM seal init",
+   "family": "AEAD-AES-128-GCM seal init",
+   "size": null,
+   "numCalls": 211000,
+   "ditEntries": 211000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM seal",
+   "family": "AEAD-AES-128-GCM seal",
+   "size": 16,
+   "numCalls": 233500,
+   "ditEntries": 233500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM seal",
+   "family": "AEAD-AES-128-GCM seal",
+   "size": 256,
+   "numCalls": 182750,
+   "ditEntries": 182750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM seal",
+   "family": "AEAD-AES-128-GCM seal",
+   "size": 1350,
+   "numCalls": 97000,
+   "ditEntries": 97000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM seal",
+   "family": "AEAD-AES-128-GCM seal",
+   "size": 8192,
+   "numCalls": 27000,
+   "ditEntries": 27000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM seal",
+   "family": "AEAD-AES-128-GCM seal",
+   "size": 16384,
+   "numCalls": 15000,
+   "ditEntries": 15000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM open init",
+   "family": "AEAD-AES-128-GCM open init",
+   "size": null,
+   "numCalls": 214000,
+   "ditEntries": 214000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM open",
+   "family": "AEAD-AES-128-GCM open",
+   "size": 16,
+   "numCalls": 215250,
+   "ditEntries": 430500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM open",
+   "family": "AEAD-AES-128-GCM open",
+   "size": 256,
+   "numCalls": 176250,
+   "ditEntries": 352500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM open",
+   "family": "AEAD-AES-128-GCM open",
+   "size": 1350,
+   "numCalls": 96000,
+   "ditEntries": 192000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM open",
+   "family": "AEAD-AES-128-GCM open",
+   "size": 8192,
+   "numCalls": 27000,
+   "ditEntries": 54000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM open",
+   "family": "AEAD-AES-128-GCM open",
+   "size": 16384,
+   "numCalls": 15000,
+   "ditEntries": 30000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM seal init",
+   "family": "AEAD-AES-256-GCM seal init",
+   "size": null,
+   "numCalls": 209750,
+   "ditEntries": 209750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM seal",
+   "family": "AEAD-AES-256-GCM seal",
+   "size": 16,
+   "numCalls": 224500,
+   "ditEntries": 224500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM seal",
+   "family": "AEAD-AES-256-GCM seal",
+   "size": 256,
+   "numCalls": 177250,
+   "ditEntries": 177250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM seal",
+   "family": "AEAD-AES-256-GCM seal",
+   "size": 1350,
+   "numCalls": 87500,
+   "ditEntries": 87500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM seal",
+   "family": "AEAD-AES-256-GCM seal",
+   "size": 8192,
+   "numCalls": 23000,
+   "ditEntries": 23000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM seal",
+   "family": "AEAD-AES-256-GCM seal",
+   "size": 16384,
+   "numCalls": 12000,
+   "ditEntries": 12000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM open init",
+   "family": "AEAD-AES-256-GCM open init",
+   "size": null,
+   "numCalls": 210250,
+   "ditEntries": 210250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM open",
+   "family": "AEAD-AES-256-GCM open",
+   "size": 16,
+   "numCalls": 211250,
+   "ditEntries": 422500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM open",
+   "family": "AEAD-AES-256-GCM open",
+   "size": 256,
+   "numCalls": 171250,
+   "ditEntries": 342500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM open",
+   "family": "AEAD-AES-256-GCM open",
+   "size": 1350,
+   "numCalls": 86250,
+   "ditEntries": 172500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM open",
+   "family": "AEAD-AES-256-GCM open",
+   "size": 8192,
+   "numCalls": 23000,
+   "ditEntries": 46000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM open",
+   "family": "AEAD-AES-256-GCM open",
+   "size": 16384,
+   "numCalls": 13000,
+   "ditEntries": 26000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-ChaCha20-Poly1305 seal init",
+   "family": "AEAD-ChaCha20-Poly1305 seal init",
+   "size": null,
+   "numCalls": 566750,
+   "ditEntries": 566750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-ChaCha20-Poly1305 seal",
+   "family": "AEAD-ChaCha20-Poly1305 seal",
+   "size": 16,
+   "numCalls": 103750,
+   "ditEntries": 103750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-ChaCha20-Poly1305 seal",
+   "family": "AEAD-ChaCha20-Poly1305 seal",
+   "size": 256,
+   "numCalls": 86250,
+   "ditEntries": 86250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-ChaCha20-Poly1305 seal",
+   "family": "AEAD-ChaCha20-Poly1305 seal",
+   "size": 1350,
+   "numCalls": 27000,
+   "ditEntries": 27000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-ChaCha20-Poly1305 seal",
+   "family": "AEAD-ChaCha20-Poly1305 seal",
+   "size": 8192,
+   "numCalls": 6000,
+   "ditEntries": 6000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-ChaCha20-Poly1305 seal",
+   "family": "AEAD-ChaCha20-Poly1305 seal",
+   "size": 16384,
+   "numCalls": 3000,
+   "ditEntries": 3000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-DES-EDE3-CBC-SHA1 seal init",
+   "family": "AEAD-DES-EDE3-CBC-SHA1 seal init",
+   "size": null,
+   "numCalls": 63500,
+   "ditEntries": 127000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "size": 16,
+   "numCalls": 21000,
+   "ditEntries": 126000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "size": 256,
+   "numCalls": 4000,
+   "ditEntries": 24000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "size": 1350,
+   "numCalls": 1000,
+   "ditEntries": 7000,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "size": 8192,
+   "numCalls": 552,
+   "ditEntries": 3312,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "family": "AEAD-DES-EDE3-CBC-SHA1 seal",
+   "size": 16384,
+   "numCalls": 277,
+   "ditEntries": 1662,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 seal init",
+   "family": "AEAD-AES-128-CBC-SHA1 seal init",
+   "size": null,
+   "numCalls": 104750,
+   "ditEntries": 209500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 seal",
+   "family": "AEAD-AES-128-CBC-SHA1 seal",
+   "size": 16,
+   "numCalls": 128000,
+   "ditEntries": 768000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 seal",
+   "family": "AEAD-AES-128-CBC-SHA1 seal",
+   "size": 256,
+   "numCalls": 69000,
+   "ditEntries": 414000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 seal",
+   "family": "AEAD-AES-128-CBC-SHA1 seal",
+   "size": 1350,
+   "numCalls": 21000,
+   "ditEntries": 147000,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 seal",
+   "family": "AEAD-AES-128-CBC-SHA1 seal",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 24000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 seal",
+   "family": "AEAD-AES-128-CBC-SHA1 seal",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 12000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 seal init",
+   "family": "AEAD-AES-256-CBC-SHA1 seal init",
+   "size": null,
+   "numCalls": 105500,
+   "ditEntries": 211000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 seal",
+   "family": "AEAD-AES-256-CBC-SHA1 seal",
+   "size": 16,
+   "numCalls": 127500,
+   "ditEntries": 765000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 seal",
+   "family": "AEAD-AES-256-CBC-SHA1 seal",
+   "size": 256,
+   "numCalls": 61500,
+   "ditEntries": 369000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 seal",
+   "family": "AEAD-AES-256-CBC-SHA1 seal",
+   "size": 1350,
+   "numCalls": 18000,
+   "ditEntries": 126000,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 seal",
+   "family": "AEAD-AES-256-CBC-SHA1 seal",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 24000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 seal",
+   "family": "AEAD-AES-256-CBC-SHA1 seal",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 12000,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 open init",
+   "family": "AEAD-AES-128-CBC-SHA1 open init",
+   "size": null,
+   "numCalls": 106250,
+   "ditEntries": 212500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 open",
+   "family": "AEAD-AES-128-CBC-SHA1 open",
+   "size": 16,
+   "numCalls": 63000,
+   "ditEntries": 315000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 open",
+   "family": "AEAD-AES-128-CBC-SHA1 open",
+   "size": 256,
+   "numCalls": 28000,
+   "ditEntries": 140000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 open",
+   "family": "AEAD-AES-128-CBC-SHA1 open",
+   "size": 1350,
+   "numCalls": 19000,
+   "ditEntries": 95000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 open",
+   "family": "AEAD-AES-128-CBC-SHA1 open",
+   "size": 8192,
+   "numCalls": 6000,
+   "ditEntries": 30000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-128-CBC-SHA1 open",
+   "family": "AEAD-AES-128-CBC-SHA1 open",
+   "size": 16384,
+   "numCalls": 4000,
+   "ditEntries": 20000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 open init",
+   "family": "AEAD-AES-256-CBC-SHA1 open init",
+   "size": null,
+   "numCalls": 105000,
+   "ditEntries": 210000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 open",
+   "family": "AEAD-AES-256-CBC-SHA1 open",
+   "size": 16,
+   "numCalls": 62250,
+   "ditEntries": 311250,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 open",
+   "family": "AEAD-AES-256-CBC-SHA1 open",
+   "size": 256,
+   "numCalls": 27500,
+   "ditEntries": 137500,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 open",
+   "family": "AEAD-AES-256-CBC-SHA1 open",
+   "size": 1350,
+   "numCalls": 19000,
+   "ditEntries": 95000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 open",
+   "family": "AEAD-AES-256-CBC-SHA1 open",
+   "size": 8192,
+   "numCalls": 6000,
+   "ditEntries": 30000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-256-CBC-SHA1 open",
+   "family": "AEAD-AES-256-CBC-SHA1 open",
+   "size": 16384,
+   "numCalls": 4000,
+   "ditEntries": 20000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV seal init",
+   "family": "AEAD-AES-128-GCM-SIV seal init",
+   "size": null,
+   "numCalls": 306750,
+   "ditEntries": 306750,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV seal",
+   "family": "AEAD-AES-128-GCM-SIV seal",
+   "size": 16,
+   "numCalls": 154250,
+   "ditEntries": 154250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV seal",
+   "family": "AEAD-AES-128-GCM-SIV seal",
+   "size": 256,
+   "numCalls": 111250,
+   "ditEntries": 111250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV seal",
+   "family": "AEAD-AES-128-GCM-SIV seal",
+   "size": 1350,
+   "numCalls": 43500,
+   "ditEntries": 43500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV seal",
+   "family": "AEAD-AES-128-GCM-SIV seal",
+   "size": 8192,
+   "numCalls": 10000,
+   "ditEntries": 10000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV seal",
+   "family": "AEAD-AES-128-GCM-SIV seal",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 5000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV seal init",
+   "family": "AEAD-AES-256-GCM-SIV seal init",
+   "size": null,
+   "numCalls": 317000,
+   "ditEntries": 317000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV seal",
+   "family": "AEAD-AES-256-GCM-SIV seal",
+   "size": 16,
+   "numCalls": 138000,
+   "ditEntries": 138000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV seal",
+   "family": "AEAD-AES-256-GCM-SIV seal",
+   "size": 256,
+   "numCalls": 102500,
+   "ditEntries": 102500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV seal",
+   "family": "AEAD-AES-256-GCM-SIV seal",
+   "size": 1350,
+   "numCalls": 39000,
+   "ditEntries": 39000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV seal",
+   "family": "AEAD-AES-256-GCM-SIV seal",
+   "size": 8192,
+   "numCalls": 9000,
+   "ditEntries": 9000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV seal",
+   "family": "AEAD-AES-256-GCM-SIV seal",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 5000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV open init",
+   "family": "AEAD-AES-128-GCM-SIV open init",
+   "size": null,
+   "numCalls": 307000,
+   "ditEntries": 307000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV open",
+   "family": "AEAD-AES-128-GCM-SIV open",
+   "size": 16,
+   "numCalls": 139750,
+   "ditEntries": 279500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV open",
+   "family": "AEAD-AES-128-GCM-SIV open",
+   "size": 256,
+   "numCalls": 102000,
+   "ditEntries": 204000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV open",
+   "family": "AEAD-AES-128-GCM-SIV open",
+   "size": 1350,
+   "numCalls": 41000,
+   "ditEntries": 82000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV open",
+   "family": "AEAD-AES-128-GCM-SIV open",
+   "size": 8192,
+   "numCalls": 10000,
+   "ditEntries": 20000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-GCM-SIV open",
+   "family": "AEAD-AES-128-GCM-SIV open",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 10000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV open init",
+   "family": "AEAD-AES-256-GCM-SIV open init",
+   "size": null,
+   "numCalls": 310250,
+   "ditEntries": 310250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV open",
+   "family": "AEAD-AES-256-GCM-SIV open",
+   "size": 16,
+   "numCalls": 136000,
+   "ditEntries": 272000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV open",
+   "family": "AEAD-AES-256-GCM-SIV open",
+   "size": 256,
+   "numCalls": 92250,
+   "ditEntries": 184500,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV open",
+   "family": "AEAD-AES-256-GCM-SIV open",
+   "size": 1350,
+   "numCalls": 37000,
+   "ditEntries": 74000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV open",
+   "family": "AEAD-AES-256-GCM-SIV open",
+   "size": 8192,
+   "numCalls": 9000,
+   "ditEntries": 18000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-256-GCM-SIV open",
+   "family": "AEAD-AES-256-GCM-SIV open",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 10000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "AEAD-AES-128-CCM-Bluetooth seal init",
+   "family": "AEAD-AES-128-CCM-Bluetooth seal init",
+   "size": null,
+   "numCalls": 296250,
+   "ditEntries": 296250,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-CCM-Bluetooth seal",
+   "family": "AEAD-AES-128-CCM-Bluetooth seal",
+   "size": 16,
+   "numCalls": 256500,
+   "ditEntries": 256500,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-CCM-Bluetooth seal",
+   "family": "AEAD-AES-128-CCM-Bluetooth seal",
+   "size": 256,
+   "numCalls": 89000,
+   "ditEntries": 89000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-CCM-Bluetooth seal",
+   "family": "AEAD-AES-128-CCM-Bluetooth seal",
+   "size": 1350,
+   "numCalls": 22000,
+   "ditEntries": 22000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-CCM-Bluetooth seal",
+   "family": "AEAD-AES-128-CCM-Bluetooth seal",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 4000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "AEAD-AES-128-CCM-Bluetooth seal",
+   "family": "AEAD-AES-128-CCM-Bluetooth seal",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 2000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "Ed25519 key generation",
+   "family": "Ed25519 key generation",
+   "size": null,
+   "numCalls": 5000,
+   "ditEntries": 20000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "Ed25519 signing",
+   "family": "Ed25519 signing",
+   "size": null,
+   "numCalls": 6000,
+   "ditEntries": 6000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "Ed25519 verify",
+   "family": "Ed25519 verify",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Curve25519 base-point multiplication",
+   "family": "Curve25519 base-point multiplication",
+   "size": null,
+   "numCalls": 6000,
+   "ditEntries": 6000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "Curve25519 arbitrary point multiplication",
+   "family": "Curve25519 arbitrary point multiplication",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 2000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "ECDH X25519",
+   "family": "ECDH X25519",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 4000,
+   "entries_per_call": 2.0
+  },
+  {
+   "description": "SPAKE2 over Ed25519",
+   "family": "SPAKE2 over Ed25519",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 3000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "RSA FIPS 2048 key-gen",
+   "family": "RSA FIPS 2048 key-gen",
+   "size": null,
+   "numCalls": 849,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "RSA FIPS 3072 key-gen",
+   "family": "RSA FIPS 3072 key-gen",
+   "size": null,
+   "numCalls": 224,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "RSA FIPS 4096 key-gen",
+   "family": "RSA FIPS 4096 key-gen",
+   "size": null,
+   "numCalls": 99,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "HRSS generate",
+   "family": "HRSS generate",
+   "size": null,
+   "numCalls": 877,
+   "ditEntries": 2631,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "HRSS encap",
+   "family": "HRSS encap",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 9000,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "HRSS decap",
+   "family": "HRSS decap",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "BLAKE2b-256",
+   "family": "BLAKE2b-256",
+   "size": 16,
+   "numCalls": 216500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "BLAKE2b-256",
+   "family": "BLAKE2b-256",
+   "size": 256,
+   "numCalls": 112750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "BLAKE2b-256",
+   "family": "BLAKE2b-256",
+   "size": 1350,
+   "numCalls": 21000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "BLAKE2b-256",
+   "family": "BLAKE2b-256",
+   "size": 8192,
+   "numCalls": 4000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "BLAKE2b-256",
+   "family": "BLAKE2b-256",
+   "size": 16384,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Generate P-224 with EC_KEY_generate_key_fips",
+   "family": "Generate P-224 with EC_KEY_generate_key_fips",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 10000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "Generate P-256 with EC_KEY_generate_key_fips",
+   "family": "Generate P-256 with EC_KEY_generate_key_fips",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 10000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "Generate P-384 with EC_KEY_generate_key_fips",
+   "family": "Generate P-384 with EC_KEY_generate_key_fips",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 5000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "Generate P-521 with EC_KEY_generate_key_fips",
+   "family": "Generate P-521 with EC_KEY_generate_key_fips",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 5000,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "Generate secp256k1 with EC_KEY_generate_key_fips",
+   "family": "Generate secp256k1 with EC_KEY_generate_key_fips",
+   "size": null,
+   "numCalls": 625,
+   "ditEntries": 3125,
+   "entries_per_call": 5.0
+  },
+  {
+   "description": "CRYPTO_refcount_inc 1000 iterations with 1 threads",
+   "family": "CRYPTO_refcount_inc 1000 iterations with 1 threads",
+   "size": null,
+   "numCalls": 2000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "CRYPTO_sysrand",
+   "family": "CRYPTO_sysrand",
+   "size": 16,
+   "numCalls": 30000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "CRYPTO_sysrand",
+   "family": "CRYPTO_sysrand",
+   "size": 256,
+   "numCalls": 29000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "CRYPTO_sysrand",
+   "family": "CRYPTO_sysrand",
+   "size": 1350,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "CRYPTO_sysrand",
+   "family": "CRYPTO_sysrand",
+   "size": 8192,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "CRYPTO_sysrand",
+   "family": "CRYPTO_sysrand",
+   "size": 16384,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "hash-to-curve P256_XMD:SHA-256_SSWU_RO_",
+   "family": "hash-to-curve P256_XMD:SHA-256_SSWU_RO_",
+   "size": null,
+   "numCalls": 3000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "hash-to-curve P384_XMD:SHA-384_SSWU_RO_",
+   "family": "hash-to-curve P384_XMD:SHA-384_SSWU_RO_",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "hash-to-scalar P384_XMD:SHA-512",
+   "family": "hash-to-scalar P384_XMD:SHA-512",
+   "size": null,
+   "numCalls": 48000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch1 generate_key",
+   "family": "TrustToken-Exp1-Batch1 generate_key",
+   "size": null,
+   "numCalls": 241,
+   "ditEntries": 4338,
+   "entries_per_call": 18.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch1 begin_issuance",
+   "family": "TrustToken-Exp1-Batch1 begin_issuance",
+   "size": null,
+   "numCalls": 869,
+   "ditEntries": 6083,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch1 issue",
+   "family": "TrustToken-Exp1-Batch1 issue",
+   "size": null,
+   "numCalls": 38,
+   "ditEntries": 912,
+   "entries_per_call": 24.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch1 finish_issuance",
+   "family": "TrustToken-Exp1-Batch1 finish_issuance",
+   "size": null,
+   "numCalls": 39,
+   "ditEntries": 117,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch1 begin_redemption",
+   "family": "TrustToken-Exp1-Batch1 begin_redemption",
+   "size": null,
+   "numCalls": 147250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch1 redeem",
+   "family": "TrustToken-Exp1-Batch1 redeem",
+   "size": null,
+   "numCalls": 136,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch10 generate_key",
+   "family": "TrustToken-Exp1-Batch10 generate_key",
+   "size": null,
+   "numCalls": 225,
+   "ditEntries": 4050,
+   "entries_per_call": 18.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch10 begin_issuance",
+   "family": "TrustToken-Exp1-Batch10 begin_issuance",
+   "size": null,
+   "numCalls": 79,
+   "ditEntries": 5530,
+   "entries_per_call": 70.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch10 issue",
+   "family": "TrustToken-Exp1-Batch10 issue",
+   "size": null,
+   "numCalls": 10,
+   "ditEntries": 510,
+   "entries_per_call": 51.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch10 finish_issuance",
+   "family": "TrustToken-Exp1-Batch10 finish_issuance",
+   "size": null,
+   "numCalls": 15,
+   "ditEntries": 450,
+   "entries_per_call": 30.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch10 begin_redemption",
+   "family": "TrustToken-Exp1-Batch10 begin_redemption",
+   "size": null,
+   "numCalls": 140500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp1-Batch10 redeem",
+   "family": "TrustToken-Exp1-Batch10 redeem",
+   "size": null,
+   "numCalls": 137,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp2VOfPRF-Batch1 generate_key",
+   "family": "TrustToken-Exp2VOfPRF-Batch1 generate_key",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "TrustToken-Exp2VOfPRF-Batch1 begin_issuance",
+   "family": "TrustToken-Exp2VOfPRF-Batch1 begin_issuance",
+   "size": null,
+   "numCalls": 877,
+   "ditEntries": 6139,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "TrustToken-Exp2VOfPRF-Batch1 issue",
+   "family": "TrustToken-Exp2VOfPRF-Batch1 issue",
+   "size": null,
+   "numCalls": 189,
+   "ditEntries": 1134,
+   "entries_per_call": 6.0
+  },
+  {
+   "description": "TrustToken-Exp2VOfPRF-Batch1 finish_issuance",
+   "family": "TrustToken-Exp2VOfPRF-Batch1 finish_issuance",
+   "size": null,
+   "numCalls": 135,
+   "ditEntries": 135,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "TrustToken-Exp2VOfPRF-Batch1 begin_redemption",
+   "family": "TrustToken-Exp2VOfPRF-Batch1 begin_redemption",
+   "size": null,
+   "numCalls": 203000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp2VOfPRF-Batch1 redeem",
+   "family": "TrustToken-Exp2VOfPRF-Batch1 redeem",
+   "size": null,
+   "numCalls": 934,
+   "ditEntries": 934,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "TrustToken-Exp2VOPRF-Batch10 generate_key",
+   "family": "TrustToken-Exp2VOPRF-Batch10 generate_key",
+   "size": null,
+   "numCalls": 1000,
+   "ditEntries": 4000,
+   "entries_per_call": 4.0
+  },
+  {
+   "description": "TrustToken-Exp2VOPRF-Batch10 begin_issuance",
+   "family": "TrustToken-Exp2VOPRF-Batch10 begin_issuance",
+   "size": null,
+   "numCalls": 81,
+   "ditEntries": 5670,
+   "entries_per_call": 70.0
+  },
+  {
+   "description": "TrustToken-Exp2VOPRF-Batch10 issue",
+   "family": "TrustToken-Exp2VOPRF-Batch10 issue",
+   "size": null,
+   "numCalls": 49,
+   "ditEntries": 735,
+   "entries_per_call": 15.0
+  },
+  {
+   "description": "TrustToken-Exp2VOPRF-Batch10 finish_issuance",
+   "family": "TrustToken-Exp2VOPRF-Batch10 finish_issuance",
+   "size": null,
+   "numCalls": 45,
+   "ditEntries": 450,
+   "entries_per_call": 10.0
+  },
+  {
+   "description": "TrustToken-Exp2VOPRF-Batch10 begin_redemption",
+   "family": "TrustToken-Exp2VOPRF-Batch10 begin_redemption",
+   "size": null,
+   "numCalls": 210500,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp2VOPRF-Batch10 redeem",
+   "family": "TrustToken-Exp2VOPRF-Batch10 redeem",
+   "size": null,
+   "numCalls": 990,
+   "ditEntries": 990,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch1 generate_key",
+   "family": "TrustToken-Exp2PMB-Batch1 generate_key",
+   "size": null,
+   "numCalls": 227,
+   "ditEntries": 4086,
+   "entries_per_call": 18.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch1 begin_issuance",
+   "family": "TrustToken-Exp2PMB-Batch1 begin_issuance",
+   "size": null,
+   "numCalls": 793,
+   "ditEntries": 5551,
+   "entries_per_call": 7.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch1 issue",
+   "family": "TrustToken-Exp2PMB-Batch1 issue",
+   "size": null,
+   "numCalls": 38,
+   "ditEntries": 912,
+   "entries_per_call": 24.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch1 finish_issuance",
+   "family": "TrustToken-Exp2PMB-Batch1 finish_issuance",
+   "size": null,
+   "numCalls": 38,
+   "ditEntries": 114,
+   "entries_per_call": 3.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch1 begin_redemption",
+   "family": "TrustToken-Exp2PMB-Batch1 begin_redemption",
+   "size": null,
+   "numCalls": 138250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch1 redeem",
+   "family": "TrustToken-Exp2PMB-Batch1 redeem",
+   "size": null,
+   "numCalls": 131,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch10 generate_key",
+   "family": "TrustToken-Exp2PMB-Batch10 generate_key",
+   "size": null,
+   "numCalls": 225,
+   "ditEntries": 4050,
+   "entries_per_call": 18.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch10 begin_issuance",
+   "family": "TrustToken-Exp2PMB-Batch10 begin_issuance",
+   "size": null,
+   "numCalls": 80,
+   "ditEntries": 5600,
+   "entries_per_call": 70.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch10 issue",
+   "family": "TrustToken-Exp2PMB-Batch10 issue",
+   "size": null,
+   "numCalls": 10,
+   "ditEntries": 510,
+   "entries_per_call": 51.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch10 finish_issuance",
+   "family": "TrustToken-Exp2PMB-Batch10 finish_issuance",
+   "size": null,
+   "numCalls": 15,
+   "ditEntries": 450,
+   "entries_per_call": 30.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch10 begin_redemption",
+   "family": "TrustToken-Exp2PMB-Batch10 begin_redemption",
+   "size": null,
+   "numCalls": 149000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "TrustToken-Exp2PMB-Batch10 redeem",
+   "family": "TrustToken-Exp2PMB-Batch10 redeem",
+   "size": null,
+   "numCalls": 130,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Ed25519 PKCS#8 v1 encode",
+   "family": "Ed25519 PKCS#8 v1 encode",
+   "size": null,
+   "numCalls": 271250,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Ed25519 PKCS#8 v1 decode",
+   "family": "Ed25519 PKCS#8 v1 decode",
+   "size": null,
+   "numCalls": 6000,
+   "ditEntries": 6000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "Ed25519 PKCS#8 v2 encode",
+   "family": "Ed25519 PKCS#8 v2 encode",
+   "size": null,
+   "numCalls": 227750,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Ed25519 PKCS#8 v2 decode",
+   "family": "Ed25519 PKCS#8 v2 decode",
+   "size": null,
+   "numCalls": 6000,
+   "ditEntries": 6000,
+   "entries_per_call": 1.0
+  },
+  {
+   "description": "base64 decode",
+   "family": "base64 decode",
+   "size": 1272,
+   "numCalls": 12000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SipHash-2-4",
+   "family": "SipHash-2-4",
+   "size": 16,
+   "numCalls": 2326000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SipHash-2-4",
+   "family": "SipHash-2-4",
+   "size": 256,
+   "numCalls": 251000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SipHash-2-4",
+   "family": "SipHash-2-4",
+   "size": 1350,
+   "numCalls": 49000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SipHash-2-4",
+   "family": "SipHash-2-4",
+   "size": 8192,
+   "numCalls": 9000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "SipHash-2-4",
+   "family": "SipHash-2-4",
+   "size": 16384,
+   "numCalls": 5000,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Jitter",
+   "family": "Jitter",
+   "size": 16,
+   "numCalls": 22,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Jitter",
+   "family": "Jitter",
+   "size": 256,
+   "numCalls": 2,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Jitter",
+   "family": "Jitter",
+   "size": 1350,
+   "numCalls": 1,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Jitter",
+   "family": "Jitter",
+   "size": 8192,
+   "numCalls": 1,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  },
+  {
+   "description": "Jitter",
+   "family": "Jitter",
+   "size": 16384,
+   "numCalls": 1,
+   "ditEntries": 0,
+   "entries_per_call": 0.0
+  }
+ ],
+ "source_sites": {
+  "crypto/fipsmodule/kdf/sskdf.c": 2,
+  "crypto/fipsmodule/kdf/kbkdf.c": 1,
+  "crypto/fipsmodule/dh/dh.c": 20,
+  "crypto/fipsmodule/rsa/rsa.c": 46,
+  "crypto/fipsmodule/rsa/rsa_impl.c": 1,
+  "crypto/fipsmodule/ec/ec.c": 3,
+  "crypto/fipsmodule/cipher/aead.c": 6,
+  "crypto/fipsmodule/cipher/cipher.c": 7,
+  "crypto/fipsmodule/hkdf/hkdf.c": 2,
+  "crypto/fipsmodule/tls/kdf.c": 2,
+  "crypto/fipsmodule/sshkdf/sshkdf.c": 1,
+  "crypto/fipsmodule/evp/evp.c": 37,
+  "crypto/fipsmodule/evp/digestsign.c": 10,
+  "crypto/fipsmodule/evp/p_hkdf.c": 1,
+  "crypto/fipsmodule/evp/evp_ctx.c": 23,
+  "crypto/fipsmodule/rand/ctrdrbg.c": 5,
+  "crypto/fipsmodule/curve25519/curve25519.c": 5,
+  "crypto/fipsmodule/aes/aes.c": 4,
+  "crypto/evp_extra/evp_asn1.c": 1,
+  "crypto/evp_extra/p_dh_asn1.c": 4
+ },
+ "timeout_ms": "20",
+ "threads": 1,
+ "summary": {
+  "rows": 632,
+  "families": 304,
+  "rows_entering": 381,
+  "families_entering": 213,
+  "families_never": [
+   "MD4",
+   "MD5",
+   "SHA-1",
+   "SHA-224",
+   "SHA-256",
+   "SHA-384",
+   "SHA-512",
+   "SHA3-224",
+   "SHA3-256",
+   "SHA3-384",
+   "SHA3-512",
+   "KECCAK-256",
+   "SHAKE-128",
+   "SHAKE-256",
+   "SHAKE256-x4 (Absorb)",
+   "SHAKE256-x4 (Squeeze)",
+   "RIPEMD-160",
+   "MD5-SHA-1",
+   "HMAC-MD5 init",
+   "HMAC-MD5",
+   "HMAC-SHA1 init",
+   "HMAC-SHA1",
+   "HMAC-SHA256 init",
+   "HMAC-SHA256",
+   "HMAC-SHA384 init",
+   "HMAC-SHA384",
+   "HMAC-SHA512 init",
+   "HMAC-SHA512",
+   "HMAC-SHA3-224 init",
+   "HMAC-SHA3-224",
+   "HMAC-SHA3-256 init",
+   "HMAC-SHA3-256",
+   "HMAC-SHA3-384 init",
+   "HMAC-SHA3-384",
+   "HMAC-SHA3-512 init",
+   "HMAC-SHA3-512",
+   "HMAC-MD5-OneShot",
+   "HMAC-SHA1-OneShot",
+   "HMAC-SHA256-OneShot",
+   "HMAC-SHA384-OneShot",
+   "HMAC-SHA512-OneShot",
+   "HMAC-SHA3-224-OneShot",
+   "HMAC-SHA3-256-OneShot",
+   "HMAC-SHA3-384-OneShot",
+   "HMAC-SHA3-512-OneShot",
+   "ECDSA P-224 verify",
+   "ECDSA P-256 verify",
+   "ECDSA P-384 verify",
+   "ECDSA P-521 verify",
+   "ECDSA secp256k1 verify",
+   "EC POINT P-224 dbl",
+   "EC POINT P-224 add",
+   "EC POINT P-256 dbl",
+   "EC POINT P-256 add",
+   "EC POINT P-384 dbl",
+   "EC POINT P-384 add",
+   "EC POINT P-521 dbl",
+   "EC POINT P-521 add",
+   "EC POINT secp256k1 dbl",
+   "EC POINT secp256k1 add",
+   "scrypt (N = 1024, r = 8, p = 16)",
+   "scrypt (N = 16384, r = 8, p = 1)",
+   "RSA 2048 key-gen",
+   "RSA 3072 key-gen",
+   "RSA 4096 key-gen",
+   "Ed25519 verify",
+   "RSA FIPS 2048 key-gen",
+   "RSA FIPS 3072 key-gen",
+   "RSA FIPS 4096 key-gen",
+   "HRSS decap",
+   "BLAKE2b-256",
+   "CRYPTO_refcount_inc 1000 iterations with 1 threads",
+   "CRYPTO_sysrand",
+   "hash-to-curve P256_XMD:SHA-256_SSWU_RO_",
+   "hash-to-curve P384_XMD:SHA-384_SSWU_RO_",
+   "hash-to-scalar P384_XMD:SHA-512",
+   "TrustToken-Exp1-Batch1 begin_redemption",
+   "TrustToken-Exp1-Batch1 redeem",
+   "TrustToken-Exp1-Batch10 begin_redemption",
+   "TrustToken-Exp1-Batch10 redeem",
+   "TrustToken-Exp2VOfPRF-Batch1 begin_redemption",
+   "TrustToken-Exp2VOPRF-Batch10 begin_redemption",
+   "TrustToken-Exp2PMB-Batch1 begin_redemption",
+   "TrustToken-Exp2PMB-Batch1 redeem",
+   "TrustToken-Exp2PMB-Batch10 begin_redemption",
+   "TrustToken-Exp2PMB-Batch10 redeem",
+   "Ed25519 PKCS#8 v1 encode",
+   "Ed25519 PKCS#8 v2 encode",
+   "base64 decode",
+   "SipHash-2-4",
+   "Jitter"
+  ]
+ }
+}
