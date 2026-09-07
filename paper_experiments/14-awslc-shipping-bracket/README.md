@@ -214,11 +214,11 @@ AES call is its own entry point). Both runs, 400 ms and 50 ms windows:
 path 524 to 553. The cost is the writes and nothing else; it reads as 81% on a 16-byte
 seal and 3% at 16 KB because the denominator moves.
 
-**Nesting.** Dividing B - A by the one-entry price: the AEAD open path pays for 1.2
-entries (its inner entry finds the bit already set and pays only the read), the EVP
-cipher layer for 3.4 to 3.6, and CMAC at 16 KB for 1,024 (one bracketed single-block AES
-call per 16 bytes), which is +237% at every size: the phpass shape, in a shipping
-library.
+**Nesting.** Dividing B - A by the price of one entry: the AEAD open path pays for 1.2
+AEAD-level entries (its inner entry finds the bit already set and pays only the read),
+the EVP cipher layer for 3.4 to 3.6, and CMAC at 16 KB for 1,029 single-block entries at
+94 cycles each (one bracketed `AES_encrypt` per 16 bytes, plus the setup), which is +237%
+at every size: the phpass shape, in a shipping library.
 
 **The vendor's claim.** "Close to the release build" under hoisting is true above a
 kilobyte and false below: H costs 10% on a 16-byte seal and 21% on a 16-byte open,

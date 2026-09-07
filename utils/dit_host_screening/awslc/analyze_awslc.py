@@ -80,16 +80,20 @@ def analyze(d):
     out['prices']['gcm_seal_16384'] = price_from('AEAD-AES-128-GCM seal [16384 B]')
     out['prices']['aes_block'] = price_from('AES-128 encrypt')
     out['prices']['gcm_open_16'] = price_from('AEAD-AES-128-GCM open [16 B]', entries=2)
-    # density: entries implied per op = (B-A) / one-entry pair price
-    pair = None
-    if out['prices']['gcm_seal_16'] and out['prices']['gcm_seal_16']['changing_pair']:
-        pair = out['prices']['gcm_seal_16']['changing_pair']
-    out['prices']['pair_price_cycles'] = pair
+    # density: entries implied per op = (B-A) / the price of ONE entry. Two unit prices exist: an
+    # entry into an AEAD/EVP-level function (the GCM seal row) and an entry into the single-block
+    # AES call (the AES-128 encrypt row), which is cheaper because there is less in flight to drain.
+    # Rows built from per-block AES calls (CMAC) are priced with the block entry.
+    pair = out['prices']['gcm_seal_16']['changing_pair'] if out['prices'].get('gcm_seal_16') else None
+    block = out['prices']['aes_block']['changing_pair'] if out['prices'].get('aes_block') else pair
+    out['prices']['pair_price_cycles'] = pair; out['prices']['block_entry_price_cycles'] = block
     for key, blocks in [('CMAC-AES-128-CBC [16384 B]', 1024), ('CMAC-AES-128-CBC [16 B]', 1), ('EVP-AES-128-GCM encrypt [16 B]', None),
                         ('EVP-AES-128-GCM encrypt [16384 B]', None), ('EVP-AES-128-CBC decrypt [16 B]', None), ('AEAD-AES-128-GCM open [16 B]', None)]:
         r = out['rows'].get(key)
-        if r and pair:
-            out['density'][key] = dict(B_minus_A=r['B_minus_A_cyc'], implied_entries=r['B_minus_A_cyc'] / pair, blocks=blocks, pct_B=r['pct'].get('B'))
+        unit = block if (blocks and block) else pair
+        if r and unit:
+            out['density'][key] = dict(B_minus_A=r['B_minus_A_cyc'], implied_entries=r['B_minus_A_cyc'] / unit, unit_price=unit,
+                                       unit='single-block AES entry' if unit == block and blocks else 'AEAD-level entry', blocks=blocks, pct_B=r['pct'].get('B'))
     return out
 
 def fmt_pct(x): return 'n/a' if x is None or x != x else f"{x:+.1f}%"
@@ -124,10 +128,10 @@ def report_md(an, src):
     L.append("")
     if an['density']:
         L.append("## Density: how many bracket entries an operation pays for\n")
-        L.append(f"One entry (two changing writes) costs {fmt_cyc(p.get('pair_price_cycles'))} cycles on the seal row; B - A divided by that is the entries per op.\n")
-        L.append("| row | B - A cycles | implied entries/op | B vs A |\n|---|---|---|---|")
+        L.append(f"One AEAD-level entry (two changing writes) costs {fmt_cyc(p.get('pair_price_cycles'))} cycles on the seal row and one single-block AES entry {fmt_cyc(p.get('block_entry_price_cycles'))}; B - A divided by the applicable price is the entries per op.\n")
+        L.append("| row | B - A cycles | unit price | implied entries/op | B vs A |\n|---|---|---|---|---|")
         for k, dd in an['density'].items():
-            L.append(f"| {k} | {fmt_cyc(dd['B_minus_A'])} | {dd['implied_entries']:.1f}{' (' + str(dd['blocks']) + ' AES blocks)' if dd['blocks'] else ''} | {fmt_pct(dd['pct_B'])} |")
+            L.append(f"| {k} | {fmt_cyc(dd['B_minus_A'])} | {fmt_cyc(dd['unit_price'])} ({dd['unit']}) | {dd['implied_entries']:.0f}{' (' + str(dd['blocks']) + ' AES blocks)' if dd['blocks'] else ''} | {fmt_pct(dd['pct_B'])} |")
         L.append("")
     if an['anomalies']:
         L.append("## Blanket DIT moving a row by more than 2% (C vs A, rows with MAD < 2%)\n")
@@ -234,7 +238,7 @@ HTML_TEMPLATE = r'''<title>The Shipping Bracket</title>
   <div class="tablewrap" id="prices-table"></div>
 
   <h2>Nesting multiplies it</h2>
-  <p>Dividing each row's B&nbsp;&minus;&nbsp;A by the one-entry price gives the number of bracketed entries an operation pays for. The EVP cipher layer pays for several per call. CMAC calls the bracketed single-block AES once per 16 bytes and pays for a thousand entries per 16 KB.</p>
+  <p>Dividing each row's B&nbsp;&minus;&nbsp;A by the price of one entry gives the number of bracketed entries an operation pays for. Two unit prices apply: an entry into an AEAD-level function (154 cycles on the seal row) and an entry into the single-block AES call (94 cycles; less is in flight to drain). The EVP cipher layer pays for several AEAD-level entries per call. CMAC calls the bracketed single-block AES once per 16 bytes and pays for 1,024 block entries per 16 KB.</p>
   <div class="tablewrap" id="density-table"></div>
 
   <h2>The vendor's claim</h2>
@@ -331,8 +335,8 @@ const V = DATA.validity;
 }
 // density
 {
-  const D = DATA.density; let t = `<table><tr><th>row</th><th class="num">B − A cyc</th><th class="num">implied entries / op</th><th class="num">B vs A</th></tr>`;
-  for (const [k,d] of Object.entries(D)) t += `<tr><td class="row">${esc(k)}</td><td class="num">${cyc(d.B_minus_A)}</td><td class="num">${d.implied_entries.toFixed(1)}${d.blocks?` (${d.blocks} AES blocks)`:''}</td><td class="num hot">${fmt(d.pct_B)}</td></tr>`;
+  const D = DATA.density; let t = `<table><tr><th>row</th><th class="num">B − A cyc</th><th class="num">unit price</th><th class="num">implied entries / op</th><th class="num">B vs A</th></tr>`;
+  for (const [k,d] of Object.entries(D)) t += `<tr><td class="row">${esc(k)}</td><td class="num">${cyc(d.B_minus_A)}</td><td class="num">${cyc(d.unit_price)} <span class="legend">${esc(d.unit)}</span></td><td class="num">${d.implied_entries.toFixed(0)}${d.blocks?` (${d.blocks} AES blocks)`:''}</td><td class="num hot">${fmt(d.pct_B)}</td></tr>`;
   t += '</table>'; document.getElementById('density-table').innerHTML = t;
 }
 // claim
