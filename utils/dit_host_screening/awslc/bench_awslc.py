@@ -16,8 +16,8 @@ name PIN_CPU is counted and the run is reported as not pinned. The PMC-implied c
 is recorded per sample and flagged outside the band, never used to exclude.
 
   A    rel                            unhardened
-  C    rel, ENABLE_DIT=1              blanket: DIT set before main by the constructor, library never touches it
-  B    dit                            AWS-LC's bracket as shipped: mrs; msr dit,#1 ... msr dit,#0 per entry point
+  C    rel, ENABLE_DIT=1              coarse: DIT set before main by the constructor, library never touches it
+  B    dit                            AWS default, the bracket as shipped: mrs; msr dit,#1 ... msr dit,#0 per entry point
   Bs   ditsb                          B with `sb` after the enable (Apple's recipe)
   H    dit, `-dit`                    AWS's mitigation: DIT set once for the run; each entry still mrs + msr dit,#1
   Hs   ditsb, `-dit`                  the same on the sb build: each entry still mrs + msr dit,#1 + sb

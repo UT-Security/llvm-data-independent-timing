@@ -1,4 +1,4 @@
-| # | op | A cyc/op | entries/op | C blanket | B bracket | Bs bracket+sb | H hoisted | Hs hoisted+sb | MAD |
+| # | op | A cyc/op | entries/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | AES-128 single block | 34 | 1 | -0% | +277% | +366% | -3% | +144% | 0.15% |
 | 2 | EVP AES-GCM encrypt, 16 B | 173 | 3 | +0% | +303% | +348% | +1% | +173% | 0.06% |

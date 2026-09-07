@@ -1,6 +1,6 @@
-# Experiment 14 analysis: AWS-LC's shipped DIT bracket on `bssl speed`
+# Experiment 14 analysis: AWS-LC's DIT bracket on `bssl speed`
 
-Source `paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, analysed 2026-09-07. Arms: A = release, no DIT, C = blanket (DIT set before main), B = shipped bracket, Bs = bracket + sb, H = vendor hoisting (-dit), Hs = hoisting + sb.
+Source `paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, analysed 2026-09-07. Arms: A = unhardened (release, no DIT), C = coarse (DIT set before main), B = AWS default (the bracket as shipped), Bs = AWS default + sb, H = AWS hoist (-dit), Hs = AWS hoist + sb.
 
 ## Validity
 
@@ -62,7 +62,7 @@ One AEAD-level entry (two changing writes) costs 156 cycles on the seal row and 
 | EVP-AES-128-CBC decrypt [16 B] | 336 | 156 (AEAD-level entry) | 2 | +325.1% |
 | AEAD-AES-128-GCM open [16 B] | 181 | 156 (AEAD-level entry) | 1 | +88.3% |
 
-## Blanket DIT moving a row by more than 2% (C vs A, rows with MAD < 2%)
+## Coarse DIT moving a row by more than 2% (C vs A, rows with MAD < 2%)
 
 | row | A cyc/op | C | H | MAD |
 |---|---|---|---|---|
@@ -91,7 +91,7 @@ One AEAD-level entry (two changing writes) costs 156 cycles on the seal row and 
 
 ## Every row (percent over A, cycles per op)
 
-| row | A cyc/op | IPC A | C | B | B-A cyc | Bs | H | Hs | MAD |
+| row | A cyc/op | IPC A | C coarse | B AWS default | B-A cyc | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
 | AEAD-AES-128-CBC-SHA1 open [1350 B] | 4,470 | 4.24 | +0.1% | +3.3% | 147 | +8.8% | +0.2% | +7.0% | 0.14% |
 | AEAD-AES-128-CBC-SHA1 open [16 B] | 1,218 | 4.87 | -0.0% | +11.8% | 144 | +32.6% | +0.8% | +26.8% | 0.14% |
@@ -359,7 +359,7 @@ Both means count each of the tool's rows once, so they summarise this table, not
 
 ## The paper's ten rows
 
-| # | op | A cyc/op | entries/op | C blanket | B bracket | Bs bracket+sb | H hoisted | Hs hoisted+sb | MAD |
+| # | op | A cyc/op | entries/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | AES-128 single block | 34 | 1 | -0% | +277% | +366% | -3% | +144% | 0.15% |
 | 2 | EVP AES-GCM encrypt, 16 B | 173 | 3 | +0% | +303% | +348% | +1% | +173% | 0.06% |
@@ -375,9 +375,9 @@ Both means count each of the tool's rows once, so they summarise this table, not
 
 Entries per op = (B - A) / one entry's price: 156 cycles for an AEAD-level entry, 94 for a single-block AES entry (rows 1 and 8). Run only these rows with BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG" CHUNKS=16,1350,16384.
 
-## Rows where the hoisted+sb arm costs at least 5%
+## Rows where AWS hoist + sb costs at least 5%
 
-| # | row | A cyc/op | C blanket | B bracket | Bs bracket+sb | H hoisted | Hs hoisted+sb | MAD |
+| # | row | A cyc/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|
 | 1 | AES-128 encrypt setup | 40 | -0% | +481% | +506% | +5% | +334% | 0.05% |
 | 2 | EVP-AES-128-CBC decrypt [16 B] | 103 | +1% | +325% | +531% | +23% | +323% | 2.04% |
@@ -455,4 +455,4 @@ Entries per op = (B - A) / one entry's price: 156 cycles for an AEAD-level entry
 | | **geometric mean of the ratio to A, all cells** | | **-1%** | **+95%** | **+116%** | **+2%** | **+68%** | |
 | | **geometric mean, clean cells only** | | **-0%** | **+94%** | **+114%** | **+3%** | **+67%** | |
 
-73 of 127 rows: those where the hoisted+sb arm (Hs, the vendor's `-dit` hoisting with an `sb` after the enable) costs at least 5% over A, cycles per operation, largest first; the other arms are shown for the same rows. HS_MIN_PCT sets the threshold. † marks a cell whose median implies a clock outside the P-core band: kept, not to be read.
+73 of 127 rows: those where the AWS hoist + sb arm (Hs, the vendor's `-dit` hoisting with an `sb` after the enable) costs at least 5% over A, cycles per operation, largest first; the other arms are shown for the same rows. HS_MIN_PCT sets the threshold. † marks a cell whose median implies a clock outside the P-core band: kept, not to be read.

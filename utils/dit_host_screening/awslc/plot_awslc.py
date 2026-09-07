@@ -20,7 +20,8 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
 ARMS = ['C', 'B', 'Bs', 'H', 'Hs']
-LABEL = {'C': 'C blanket', 'B': 'B shipped bracket', 'Bs': 'Bs bracket + sb', 'H': 'H hoisted', 'Hs': 'Hs hoisted + sb'}
+# the arm names used in every figure (the user's terminology): "hoist", never "hoisted"
+LABEL = {'C': 'C coarse', 'B': 'B AWS default', 'Bs': 'Bs AWS default + sb', 'H': 'H AWS hoist', 'Hs': 'Hs AWS hoist + sb'}
 COLOR = {'C': '#0F6E74', 'B': '#B5473A', 'Bs': '#7A2E24', 'H': '#C58A1E', 'Hs': '#7D5A12'}
 PAPER = [("AES-128 single block", "AES-128 encrypt"), ("EVP AES-GCM encrypt, 16 B", "EVP-AES-128-GCM encrypt [16 B]"),
          ("AEAD AES-GCM seal, 16 B", "AEAD-AES-128-GCM seal [16 B]"), ("AEAD AES-GCM open, 16 B", "AEAD-AES-128-GCM open [16 B]"),
@@ -74,7 +75,7 @@ def paper_chart(an, out):
     ax.set_xticks(range(n)); ax.set_xticklabels(labels, rotation=28, ha='right', fontsize=9)
     ax.yaxis.set_major_formatter(ratfmt); ax.set_ylabel('cycles per operation, ratio to unhardened (A); 1.00x = no cost')
     v = an['validity']
-    ax.set_title(f"AWS-LC's shipped DIT bracket on `bssl speed`: Apple M4, CPU {v.get('pin_cpu')} hard-bound, {v.get('timeout_ms')} ms windows, medians of {v.get('reps')} reps", fontsize=11)
+    ax.set_title(f"AWS-LC's DIT bracket on `bssl speed`: Apple M4, CPU {v.get('pin_cpu')} hard-bound, {v.get('timeout_ms')} ms windows, medians of {v.get('reps')} reps", fontsize=11)
     ax.legend(ncol=5, fontsize=9, frameon=False, loc='upper right')
     ax.grid(axis='y', color='#ddd', linewidth=0.6); ax.set_axisbelow(True)
     for s in ('top', 'right'): ax.spines[s].set_visible(False)

@@ -75,11 +75,15 @@ speed-tool patch; two of them are also run in the vendor's hoisted mode:
 | arm | build | run | executes per bracketed entry point |
 |---|---|---|---|
 | A | `rel`: DIT option OFF (the macro is empty) | | nothing |
-| C | `rel` | `ENABLE_DIT=1`: the injected constructor sets DIT before `main` and nothing in the library ever touches it | nothing; a true blanket |
-| B | `dit`: DIT option ON, as shipped | | `mrs` DIT, `msr dit,#1`; `msr dit,#0` at exit when it was off on entry |
-| Bs | `ditsb`: B with `sb` after the enable | | Apple's recipe |
-| H | `dit` | `-dit`: the vendor's mitigation, DIT set once around the whole run | `mrs` and `msr dit,#1` still execute at every entry; only the clear is skipped |
-| Hs | `ditsb` | `-dit` | `mrs`, `msr dit,#1` and `sb` still execute at every entry; only the clear is skipped |
+| C **coarse** | `rel` | `ENABLE_DIT=1`: the injected constructor sets DIT before `main` and nothing in the library ever touches it | nothing; DIT is on for the whole process |
+| B **AWS default** | `dit`: DIT option ON, as shipped | | `mrs` DIT, `msr dit,#1`; `msr dit,#0` at exit when it was off on entry |
+| Bs **AWS default + sb** | `ditsb`: B with `sb` after the enable | | Apple's recipe |
+| H **AWS hoist** | `dit` | `-dit`: the vendor's mitigation, DIT set once around the whole run | `mrs` and `msr dit,#1` still execute at every entry; only the clear is skipped |
+| Hs **AWS hoist + sb** | `ditsb` | `-dit` | `mrs`, `msr dit,#1` and `sb` still execute at every entry; only the clear is skipped |
+
+The bold names are the ones every table, figure and the page use: coarse for the
+whole-process arm, AWS default for the bracket as shipped, AWS hoist for the vendor's `-dit`
+hoisting, and "+ sb" for the variants with the barrier after the enable.
 
 C against A is the dwell of DIT over the crypto with no switches at all. B against A is
 the shipped bracket (and carries the layout difference of the DIT build, which has no
@@ -136,7 +140,7 @@ other arm as percent over A, Bs - B and B - H in points of A, MAD of A.
 
 - **C on every row** is the dwell: DIT over assembly crypto with zero switches. Experiment
   09 says to expect 0-2%; anything larger would be new.
-- **B on the 16-byte AEAD rows and on AES-128 block** is the shipped bracket at its most
+- **B on the 16-byte AEAD rows and on AES-128 block** is AWS default at its most
   expensive: two or more serialising writes on an operation of a few hundred cycles. At
   the M4's 26-41 cycles per write, one write pair should read as 15-30% on a 16-byte seal
   and as noise on a 16 KB one. If the per-op absolute cost (B - A in cycles) is constant
@@ -212,7 +216,7 @@ Apple M4, CPU 9 hard-bound, 400 ms windows, 7 measured reps after 1 warm-up, med
 dropped, three runs combined by the per-cell median (2026-09-07); `results-m4/speed.txt`,
 `results-m4/report.md`. Percent over A in cycles per operation.
 
-| row | A cyc/op | IPC A | IPC B | C blanket | B shipped | B - A cyc | Bs +sb | H hoisted | Hs | MAD |
+| row | A cyc/op | IPC A | IPC B | C coarse | B AWS default | B - A cyc | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|---|
 | AEAD AES-128-GCM seal, 16 B | 191 | 4.14 | 2.33 | -0.2% | +81.9% | +156 | +82.7% | +9.6% | +44.2% | 0.11% |
 | AEAD AES-128-GCM seal, 1350 B | 718 | 5.32 | 4.39 | -0.5% | +21.6% | +155 | +21.5% | +2.1% | +11.8% | 0.04% |
@@ -233,7 +237,7 @@ dropped, three runs combined by the per-cell median (2026-09-07); `results-m4/sp
 **The paper's ten rows** (`results-m4/paper_table.md`; entries per op = (B - A) over one
 entry's price, 154 cycles for an AEAD-level entry and 94 for a single-block AES entry):
 
-| # | op | A cyc/op | entries/op | C blanket | B bracket | Bs +sb | H hoisted | Hs hoisted+sb | MAD |
+| # | op | A cyc/op | entries/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | AES-128 single block | 34 | 1 | -0% | +277% | +366% | -3% | +144% | 0.15% |
 | 2 | EVP AES-GCM encrypt, 16 B | 173 | 3 | +0% | +303% | +348% | +1% | +173% | 0.06% |
@@ -346,8 +350,8 @@ per-cell spread of the clean medians has a median of 0.08% and a 90th percentile
   row's medians per arm, every sample's implied clock, the flags), `provenance.txt`; with
   repeated runs, `run-N/` per run and `speed.json` their per-cell mean.
 - `results-m4/summary/`: what `analyze` derives from it: `report.md`, `summary.json`,
-  `paper_table.md`, `paper_table.csv`, `hs_table.md` and `hs_table.csv` (every row where the
-  hoisted+sb arm costs at least 5% over A, largest first; `HS_MIN_PCT` sets the threshold), and
+  `paper_table.md`, `paper_table.csv`, `hs_table.md` and `hs_table.csv` (every row where
+  AWS hoist + sb costs at least 5% over A, largest first; `HS_MIN_PCT` sets the threshold), and
   the charts `paper_rows.png` (the ten rows and the geometric mean, grouped bars, as the ratio
   to A), `all_rows.png` (every row, one panel per arm, symmetric-log axis) and `geomeans.png`;
   suspect cells are hatched, never left out. `collect` writes to

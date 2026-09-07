@@ -1,4 +1,4 @@
-| # | row | A cyc/op | C blanket | B bracket | Bs bracket+sb | H hoisted | Hs hoisted+sb | MAD |
+| # | row | A cyc/op | C coarse | B AWS default | Bs AWS default + sb | H AWS hoist | Hs AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|
 | 1 | AES-128 encrypt setup | 40 | -0% | +481% | +506% | +5% | +334% | 0.05% |
 | 2 | EVP-AES-128-CBC decrypt [16 B] | 103 | +1% | +325% | +531% | +23% | +323% | 2.04% |
@@ -76,4 +76,4 @@
 | | **geometric mean of the ratio to A, all cells** | | **-1%** | **+95%** | **+116%** | **+2%** | **+68%** | |
 | | **geometric mean, clean cells only** | | **-0%** | **+94%** | **+114%** | **+3%** | **+67%** | |
 
-73 of 127 rows: those where the hoisted+sb arm (Hs, the vendor's `-dit` hoisting with an `sb` after the enable) costs at least 5% over A, cycles per operation, largest first; the other arms are shown for the same rows. HS_MIN_PCT sets the threshold. † marks a cell whose median implies a clock outside the P-core band: kept, not to be read.
+73 of 127 rows: those where the AWS hoist + sb arm (Hs, the vendor's `-dit` hoisting with an `sb` after the enable) costs at least 5% over A, cycles per operation, largest first; the other arms are shown for the same rows. HS_MIN_PCT sets the threshold. † marks a cell whose median implies a clock outside the P-core band: kept, not to be read.
