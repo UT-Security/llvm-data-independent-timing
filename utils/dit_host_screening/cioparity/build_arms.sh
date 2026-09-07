@@ -104,6 +104,16 @@ lib_cflags() {
     # the twin-narrowing knobs), so an A/B differs from the default by them alone.
     taint)      echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED ${TAINT_EXTRA:-}" ;;
     taintnop)   echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED ${TAINT_EXTRA:-} -mllvm -taint-dit-nop-switches" ;;
+    # The shipped defaults MINUS the twins, and its own NOP layout control.
+    # These exist to SPLIT the term the rig used to call "layout": (rt - base)
+    # is the codegen `-ftaint-harden` costs before a single switch is placed
+    # (chiefly the TU-wide tail-call disable, which is a hardening decision and
+    # not a lottery); (notwinnop - rt) is the pure address shift of the switch
+    # slots; (taintnop - notwinnop) is what duplicating the reached set into
+    # `.dit` twins costs the front end. Without them all three land in one
+    # number and the number looks like an unattributable lottery.
+    notwin)      echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED ${TAINT_EXTRA:-} -mllvm -taint-dit-clone-seeded=0" ;;
+    notwinnop)   echo "-O2 -ftaint-harden=$SEEDS -mllvm -taint-owned-symbols=$OWNED ${TAINT_EXTRA:-} -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-nop-switches" ;;
     # The pre-2026-09-05 compiler: inherit contract, no twins, the CIO seeds.
     taintold)    echo "-O2 -ftaint-harden=$SEEDS_OLD -mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0" ;;
     taintoldnop) echo "-O2 -ftaint-harden=$SEEDS_OLD -mllvm -taint-dit-contract=inherit -mllvm -taint-dit-clone-seeded=0 -mllvm -taint-dit-nop-switches" ;;

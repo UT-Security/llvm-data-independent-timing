@@ -1,0 +1,178 @@
+Where aes256gcm-decrypt's DIT cost comes from: crypto_verify_16
+================================================================================
+2026-09-06. gem5 = worktree submodule at master ce05d32089; compiler 00f86ba06b5e.
+
+blanket costs +8.39% on aes256gcm-decrypt and +0.41% on encrypt. blanket executes
+no mode switches, so that is pure dwell -- the mode being on. This file is the
+evidence for which DIT-gated optimisation the mode suppresses, and where.
+
+1. WHICH OPTIMISATION -- ROI counters, base vs blanket, serialising
+--------------------------------------------------------------------------------
+benchmark                  counter                            base      blanket        delta
+ed25519                    EVES stride predictions          76,047       51,484      -24,563
+ed25519                    EVES predictions total           91,906       54,805      -37,101
+ed25519                    comp-simp ditSuppressed               0    1,287,849   +1,287,849
+ed25519                    comp-simp simplified             21,992            0      -21,992
+ed25519                    cycles                        1,575,799    1,579,254       +3,455
+
+chacha20_poly1305_encrypt  EVES stride predictions           2,375          989       -1,386
+chacha20_poly1305_encrypt  EVES predictions total            5,863        1,023       -4,840
+chacha20_poly1305_encrypt  comp-simp ditSuppressed               0       13,001      +13,001
+chacha20_poly1305_encrypt  cycles                          109,293      110,796       +1,503
+
+chacha20_poly1305_decrypt  EVES stride predictions           3,653        1,067       -2,586
+chacha20_poly1305_decrypt  EVES predictions total            7,700        1,119       -6,581
+chacha20_poly1305_decrypt  comp-simp ditSuppressed               0       13,150      +13,150
+chacha20_poly1305_decrypt  cycles                          114,491      115,297         +806
+
+aesni256gcm_encrypt        EVES stride predictions              80          426         +346
+aesni256gcm_encrypt        EVES predictions total            1,365          469         -896
+aesni256gcm_encrypt        cycles                           60,852       61,100         +248
+
+aesni256gcm_decrypt        EVES stride predictions           3,787          226       -3,561
+aesni256gcm_decrypt        EVES predictions total            4,824          234       -4,590
+aesni256gcm_decrypt        cycles                           53,837       58,350       +4,513
+
+
+comp-simp is INERT on both AES rows (compSimplifier.ditSuppressed = 0), which is
+what the sweep's four gate notes report. The L1D prefetcher moves 2,127 -> 2,555
+pfIssued with pfUseful 0 in both arms. So the whole +8.39% is EVES, the value
+predictor, and on aes-decrypt the arithmetic is nearly 1:1 -- 4,590 predictions
+lost, 4,513 cycles gained, 0.98 cycles per lost prediction.
+
+It is NOT the volume of suppressed optimisation. ed25519 gives up 37,101
+predictions AND all 21,992 comp-simp simplifications and pays 0.22%. What matters
+is whether the predictions sat on the critical path.
+
+2. WHICH CODE -- LVP trace, ROI only
+--------------------------------------------------------------------------------
+utils/dit_host_screening/cioparity/lvp_pcs.py over a --debug-flags=LVP run,
+warm=2 iters=4:
+
+  aes256gcm-DECRYPT
+  correct load predictions in the window: 174 (44/op), incorrect 0, distinct PCs 5
+    0x40c6fc     74  stride  crypto_verify_16+0x14
+    0x40c70c     49  stride  crypto_verify_16+0x24
+    0x40c704     35  stride  crypto_verify_16+0x1c
+    0x4002b4      8  vtage   _init+0x3c
+    0x4002d4      8  vtage   _init+0x5c
+
+  aes256gcm-ENCRYPT
+  correct load predictions in the window: 19 (5/op), incorrect 0, distinct PCs 2
+    0x4002d4     11  vtage   _init+0x5c
+    0x4002b4      8  vtage   _init+0x3c
+
+Decrypt verifies the GCM tag inside the timed region; encrypt has no tag to check,
+and crypto_verify_16 contributes ZERO to its ROI. That is the entire asymmetry.
+
+TOOL BUG FIXED TO GET THIS. lvp_pcs.py took its window as the tick span from the
+first measured dump to the last, but only ~51% of that span is inside the ROIs;
+the rest is driver code between m5_dump_reset_stats and the next m5_reset_stats
+(keygen, message setup, and the driver's OWN crypto_verify_16 check). The old code
+reported 212 crypto_verify_16 predictions on ENCRYPT that were entirely the
+driver's -- it would have said both benchmarks look the same, which is backwards.
+It now filters per dump on [finalTick - simTicks, finalTick]. Outside the ROI the
+top PCs are classify_object_over_fdes (the libgcc unwinder), which has nothing to
+do with the benchmark.
+
+3. WHY THOSE LOADS ARE PREDICTABLE
+--------------------------------------------------------------------------------
+libsodium's generic crypto_verify_n (src/libsodium/crypto_verify/verify.c):
+
+    const volatile unsigned char *volatile x = (...) x_;
+    const volatile unsigned char *volatile y = (...) y_;
+    volatile uint16_t d = 0U;
+    for (i = 0; i < n; i++) { d |= x[i] ^ y[i]; }
+
+Both pointers are volatile AND volatile-qualified, and so is the accumulator, so
+every iteration is forced through memory: three stack reloads per byte compared.
+libsodium's constant-time idiom is what creates the value-predictable loads. The
+volatile stops the COMPILER from breaking constant-timeness and in doing so hands
+the MICROARCHITECTURE three perfectly stride-predictable reloads.
+
+d is stride-predicted because on a successful verify it stays 0 every iteration,
+so a stride-0 predictor is always right; on a FAILING verify it goes nonzero and
+the prediction breaks. That is a value-dependent timing difference between "tag
+matched" and "tag did not", i.e. the MAC-forgery channel this function exists to
+close. Suppressing it is DIT doing its job.
+
+4. THE ASSEMBLY, WITH THE PASS'S OWN CLASSIFICATION
+--------------------------------------------------------------------------------
+Right column is -taint-output (the pass's per-instruction verdict), not a reading
+of the disassembly. Binary: bin/eval_aesni256gcm_decrypt.taint.
+
+000000000041301c <crypto_verify_16>:
+  41301c: sub   sp, sp, #0x20                 public   frame setup
+  413020: mov   x8, xzr                       public   i = 0
+  413024: str   x0, [sp, #0x18]               public   spill pointer x
+  413028: str   x1, [sp, #0x10]               public   spill pointer y
+  41302c: strh  wzr, [sp, #0xc]               public   d = 0
+  413030: msr   DIT, #0x1                 <== ENABLE
+  413034: ldr   x9, [sp, #0x18]               public   reload pointer x   <- 74 value predictions
+  413038: ldrb  w9, [x9, x8]                  SECRET   x[i]
+  41303c: ldr   x10, [sp, #0x10]              public   reload pointer y   <- 35 value predictions
+  413040: ldrb  w10, [x10, x8]                SECRET   y[i]
+  413044: ldrh  w11, [sp, #0xc]               SECRET   reload d           <- 49 value predictions
+  413048: add   x8, x8, #0x1                  public   i++
+  41304c: cmp   x8, #0x10                     public   i != 16
+  413050: eor   w9, w10, w9                   SECRET   x[i] ^ y[i]
+  413054: and   w9, w9, #0xff                 SECRET
+  413058: orr   w9, w11, w9                   SECRET   d |= ...
+  41305c: strh  w9, [sp, #0xc]                SECRET   store d
+  413060: b.ne  0x413034                      public   loop
+  413064: ldrh  w8, [sp, #0xc]                SECRET
+  413068: strh  w8, [sp, #0xc]                SECRET   asm volatile("" : "+r"(d))
+  41306c: ldrh  w8, [sp, #0xc]                SECRET
+  413070: sub   w8, w8, #0x1                  SECRET   d--
+  413074: strh  w8, [sp, #0xc]                SECRET
+  413078: adrp  x8, optblocker_u16            public
+  41307c: ldrh  w9, [sp, #0xc]                SECRET   reload d
+  413080: ldrh  w8, [x8, #0x428]              public   load optblocker_u16
+  413084: lsr   w8, w8, #2                    public
+  413088: eor   w8, w8, w9, lsr #15           SECRET   the optblocker tail
+  41308c: strh  w8, [sp, #0xc]                SECRET
+  413090: ldrh  w8, [sp, #0xc]                SECRET
+  413094: sub   w0, w8, #0x1                  SECRET   return value
+  413098: msr   DIT, #0x0                 <== CLEAR
+  41309c: add   sp, sp, #0x20                 public   frame teardown
+  4130a0: ret                                 public
+
+PLACEMENT. The enable sinks past the whole five-instruction preamble to the first
+Need; the clear hoists up past the last Need, ahead of the epilogue. Both boundary
+instructions on each side are public and stay DIT-off. That is intra-block region
+placement (-taint-dit-sub-block, default since 2026-09-05) behaving as documented.
+
+NO HOLE IS CUT INSIDE, correctly: -taint-dit-sub-block-min-run is 8 and the longest
+public run inside the covered region is 2 (add/cmp).
+
+PRECISION. 25 instructions covered, 17 secret and 8 public -> 32% static
+collateral. The loop runs 16 times, so dynamically 205 covered instructions per
+call, 122 secret and 83 public -> 40% collateral. No finer placement improves it:
+the public pointer reloads sit one instruction from the secret accumulator.
+
+OF THE SUPPRESSED PREDICTIONS, 49 of 158 (31%) are on d -- genuinely secret, the
+forgery channel. 109 of 158 (69%) are the two pointer reloads, which are public
+addresses: collateral, buying no security, unavoidable at any granularity. The tag
+BYTES (413038, 413040) are marked secret but were never value-predicted.
+
+TWIN. crypto_verify_16.dit exists with identical taint classification and emits
+ZERO msr DIT -- entered DIT-on by construction.
+
+5. THE MEASURED COST IS THIS ONE FUNCTION
+--------------------------------------------------------------------------------
+aesni256gcm_decrypt/taint commits 100 DIT writes over 50 operations = 2 per op,
+which is exactly this function's single enable and single clear. The entire
+executed DIT cost of AES-GCM decrypt under ExpeDITe is the tag comparison.
+
+And taint's renamed cost after subtracting its own layout twin (+8.20 points) is
+essentially blanket's (+8.39), because it is paying the same dwell on the same
+loop. That is the correct outcome, not a placement failure.
+
+6. A RECORDED EXPLANATION THAT IS WRONG
+--------------------------------------------------------------------------------
+build_arms.sh's VARY_INPUT comment says CIO's drivers reuse one fixed 100-byte
+message, which makes the kernel's loads predictable at their ceiling, "which is
+the whole of blanket's cost on aes256-gcm decrypt". That arm was actually run:
+../../data/gem5_api_bracket_vary_analysis.txt has blanket on aes-decrypt at +8.09%
+against +8.39% here. Varying the message changes nothing. The cost is the tag
+compare, which runs whatever the message is.
