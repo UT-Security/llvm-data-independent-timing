@@ -95,6 +95,19 @@ BLANKET_L, BRACKET_L = "#1D6FA8", "#C1121F"
 BLANKET_D, BRACKET_D = "#3F97D0", "#E4555F"
 INK_L = "#11171C"
 
+# The summary figure carries four series, so hue alone cannot separate them for
+# a colour-vision-deficient reader. Two hues plus lightness plus one hatch:
+# blanket keeps its blue, the two ExpeDITe modes are one red family light and
+# dark (same arm, different switch model, which is exactly what the pair means),
+# and the NOP control is neutral AND hatched so it reads as a control in
+# greyscale and in print. scripts/validate_palette.js is referenced above but is
+# not in the tree, so this pair was not machine-checked -- the hatch is there so
+# the figure does not depend on that check.
+SUM_BLANKET = "#1D6FA8"
+SUM_SER     = "#C1121F"
+SUM_REN     = "#E5919B"
+SUM_NOP     = "#8C99A0"
+
 MINUS, DASH = "−", "—"
 
 # The spread relink_null.sh produces by linking the UNHARDENED library at 12
@@ -251,6 +264,52 @@ def load_libsodium_gem5(run, cfg="serdit"):
     return rows
 
 
+def load_summary_gem5(run):
+    """The five rows of results/gem5/summary.txt, as a figure.
+
+    baseline is the zero line, not a bar: every value here is already an
+    overhead against it. The other four are blanket, ExpeDITe under each switch
+    model, and ExpeDITe's NOP twin.
+
+    y is CYCLE overhead, not IPC overhead as the bracket figure uses, because
+    these are summary.txt's own numbers and that table is cycles. On gem5 the
+    two agree to a fraction of a point anyway -- the arms execute within 1,563
+    instructions of each other on a 620-million-instruction benchmark -- but
+    they are not the same quantity and the axis says which one this is.
+
+    The NOP twin has one value, not two: no `msr DIT` executes in it, so the
+    switch model cannot move it, and the gates require exactly that.
+    """
+    path = run / "results.csv"
+    if not path.exists():
+        sys.exit(f"no such run: {path}")
+    per = {}
+    with open(path) as fh:
+        for r in csv.DictReader(l for l in fh if not l.startswith("#")):
+            per[(r["bench"], r["arm"], r["cfg"])] = float(r["cycles_per_op"])
+
+    rows = []
+    for key, label, sub in LIBSODIUM:
+        need = [("base", "serdit"), ("base", "spec"), ("blanket", "serdit"),
+                ("taint", "serdit"), ("taint", "spec"), ("taintnop", "serdit")]
+        if any((key, a, c) not in per for a, c in need):
+            print(f"  skipping {key}: not all arms present in {path.name}")
+            continue
+        bs, bp = per[(key, "base", "serdit")], per[(key, "base", "spec")]
+        rows.append({
+            "label": label, "sub": sub,
+            "blanket":  per[(key, "blanket",  "serdit")] / bs - 1,
+            "ser":      per[(key, "taint",    "serdit")] / bs - 1,
+            "ren":      per[(key, "taint",    "spec")]   / bp - 1,
+            "nop":      per[(key, "taintnop", "serdit")] / bs - 1,
+            "base_cyc": bs,
+            "floor":    RELINK_FLOOR.get(key),
+        })
+    # Tallest first, so the legend sits over the short groups on the right.
+    rows.sort(key=lambda d: -d["ser"])
+    return rows
+
+
 def load_wordpress(run):
     cache, rows = {}, []
     for fname, key, label, sub, crossings in WORDPRESS:
@@ -286,7 +345,7 @@ def pct(v):
 # --------------------------------------------------------------------------- #
 # the paper figure
 # --------------------------------------------------------------------------- #
-def tick_label(d, narrow):
+def tick_label(d, narrow, wrap=12):
     """Benchmark name only, wrapped so it fits its own group.
 
     At \\columnwidth the six groups get about 0.48 in each, which is roughly
@@ -294,9 +353,18 @@ def tick_label(d, narrow):
     their own hyphen rather than abbreviated: `chacha20-poly1305` is the
     primitive's name and a reader looking for it in the text should find the
     same string.
+
+    `wrap` is that character budget. It is a parameter because the budget is a
+    property of the FONT, not of the figure: Arial is not installed on every
+    machine that runs this, matplotlib falls back to DejaVu Sans, and DejaVu is
+    wide enough that `aes256-gcm` at ten characters collides with its
+    neighbours where Arial at twelve does not. The summary figure passes a
+    tighter budget for that reason. Check what you actually got:
+      python -c "import matplotlib.font_manager as f; print({x.name for x in
+                 f.fontManager.ttflist} & {'Arial','Helvetica'})"
     """
     parts = [d["label"]]
-    if narrow and len(d["label"]) > 12 and "-" in d["label"]:
+    if narrow and len(d["label"]) > wrap and "-" in d["label"]:
         head, _, tail = d["label"].partition("-")
         parts = [head + "-", tail]
     if d["sub"]:
@@ -317,6 +385,122 @@ def value_label(v, narrow):
             t = t[1:]
         return t.replace("-", MINUS)
     return f"{v:+.2f}%".replace("-", MINUS)
+
+
+def png_summary(rows, out, narrow=True):
+    """summary.txt's rows, in the same design language as png().
+
+    Same page width, same type scale, same grid and spine treatment. Two things
+    differ, both forced by carrying four series instead of two:
+
+    VALUE LABELS ARE DROPPED IN THE NARROW RENDER. Six groups of four bars is 24
+    labels across 3.35 in; the pair in png() already needed rounding and a
+    dropped sign to fit twelve. The y axis and the gridlines carry it instead,
+    and `--wide` prints every value for reading on screen.
+
+    THE BARS ARE NARROWER AND THE FIGURE IS TALLER. A four-series group at
+    png()'s bar width would overflow its slot, and the extra height is where the
+    legend goes without covering the tallest bar.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    F = dict(fig=(3.35, 2.55), tick=5.4, val=4.4, ylab=6.4, ytick=5.4,
+             legend=5.2, barw=0.20, left=0.145, bottom=0.175, top=0.955)
+    if not narrow:
+        F = dict(fig=(10.2, 5.4), tick=8.4, val=7.0, ylab=11, ytick=9,
+                 legend=9.0, barw=0.20, left=0.075, bottom=0.135, top=0.965)
+
+    plt.rcParams.update({
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Arial", "DejaVu Sans", "Helvetica"],
+        "font.size": F["tick"],
+        "axes.edgecolor": "#D6DCDF",
+        "text.color": INK_L, "axes.labelcolor": INK_L,
+        "xtick.color": INK_L, "ytick.color": INK_L,
+        "figure.facecolor": "none", "axes.facecolor": "none",
+        "axes.linewidth": 0.6,
+    })
+
+    fig, ax = plt.subplots(1, 1, figsize=F["fig"])
+    BW = F["barw"]
+    x = range(len(rows))
+    series = [
+        ("blanket", "Blanket DIT",          SUM_BLANKET, None),
+        ("ser",     "ExpeDITe, serialising", SUM_SER,    None),
+        ("ren",     "ExpeDITe, renamed",     SUM_REN,    None),
+        ("nop",     "ExpeDITe, NOP",         SUM_NOP,    "////"),
+    ]
+    offs = [(i - (len(series) - 1) / 2) * BW for i in range(len(series))]
+
+    vals = {k: [d[k] * 100 for d in rows] for k, *_ in series}
+    for (key, label, colour, hatch), off in zip(series, offs):
+        ax.bar([i + off for i in x], vals[key], width=BW, color=colour,
+               zorder=3, label=label, hatch=hatch,
+               edgecolor=INK_L if hatch else "none",
+               linewidth=0.35 if hatch else 0)
+
+    flat = [v for k, *_ in series for v in vals[k]]
+    hi, lo = max(max(flat), 0), min(min(flat), 0)
+    span = hi - lo
+    pad = span * 0.13
+    ax.set_ylim(lo - span * 0.075 if lo < 0 else 0, hi + pad)
+    ax.set_xlim(-0.62, len(rows) - 0.38)
+
+    if not narrow:
+        for i in x:
+            for (key, *_), off in zip(series, offs):
+                v = vals[key][i]
+                up = v >= 0
+                ax.text(i + off, v + (span * 0.02 if up else -span * 0.02),
+                        value_label(v, narrow), ha="center",
+                        va="bottom" if up else "top", rotation=90,
+                        fontsize=F["val"], fontweight="bold", color=INK_L,
+                        zorder=5)
+
+    ax.axhline(0, color="#8695A0", lw=0.7, zorder=4)
+    step = tick_step(ax.get_ylim()[1] - ax.get_ylim()[0])
+    first = -(int(-min(lo, 0) // step)) * step
+    ticks, t = [], first
+    while t <= hi + pad:
+        ticks.append(t)
+        t += step
+    ax.set_yticks(ticks)
+    ax.set_xticks(list(x))
+    # 9, not tick_label's default 12: six groups leave ~33 pt each and a
+    # DejaVu fallback puts `aes256-gcm` right at that width.
+    ax.set_xticklabels([tick_label(d, narrow, wrap=9) for d in rows],
+                       fontsize=F["tick"], fontweight="bold")
+    ax.tick_params(axis="x", length=0, pad=2.5 if narrow else 7)
+    ax.tick_params(axis="y", labelsize=F["ytick"], length=2, pad=2)
+    ax.set_ylabel("Slowdown (%)", fontsize=F["ylab"], fontweight="bold",
+                  labelpad=5 if narrow else 10, color=INK_L)
+    ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}".replace("-", MINUS))
+    for lab in ax.get_yticklabels():
+        lab.set_fontweight("bold")
+    ax.grid(axis="y", color="#E4E9EB", lw=0.6, zorder=0)
+    ax.set_axisbelow(True)
+    for sp in ("top", "right", "left", "bottom"):
+        ax.spines[sp].set_visible(False)
+
+    leg = ax.legend(loc="upper right", frameon=True,
+                    prop={"weight": "bold", "size": F["legend"]},
+                    handletextpad=.6, labelspacing=.34, borderpad=.42,
+                    handlelength=1.3, borderaxespad=.3,
+                    bbox_to_anchor=(1.0, 1.0),
+                    facecolor="none", edgecolor=INK_L)
+    leg.get_frame().set_linewidth(0.6)
+    leg.get_frame().set_boxstyle("square", pad=0.32)
+
+    fig.subplots_adjust(left=F["left"], right=0.982, top=F["top"],
+                        bottom=F["bottom"])
+    for ext in ("png", "pdf"):
+        pth = out.with_suffix("." + ext)
+        fig.savefig(pth, dpi=400 if ext == "png" else None, transparent=True,
+                    **({} if narrow else dict(bbox_inches="tight",
+                                              pad_inches=0.24)))
+        print(f"wrote figures/{pth.name}")
 
 
 def png(panels, out, narrow=True):
@@ -797,9 +981,30 @@ def main():
                          "or the renamed counterfactual")
     ap.add_argument("--wide", action="store_true",
                     help="render for a screen instead of \\columnwidth")
+    ap.add_argument("--figure", default="bracket", choices=("bracket", "summary"),
+                    help="bracket: blanket against function-level DIT (the paper "
+                         "figure). summary: results/gem5/summary.txt's rows -- "
+                         "blanket, ExpeDITe under both switch models, and its "
+                         "NOP twin. gem5 only.")
     ap.add_argument("--png-only", action="store_true")
     ap.add_argument("--html-only", action="store_true")
     a = ap.parse_args()
+
+    if a.figure == "summary":
+        if a.machine != "gem5":
+            sys.exit("--figure summary reads results/gem5/summary.txt's arms; "
+                     "pass --machine gem5")
+        rows = load_summary_gem5(E09 / "results" / "gem5")
+        print("\nlibsodium primitives, gem5 -- summary.txt")
+        for d in rows:
+            name = (d["label"] + " " + d["sub"]).strip()
+            floor = f"floor {d['floor']*100:.2f}" if d["floor"] else "no floor"
+            print(f"  {name:<28} blanket {pct(d['blanket']):>8}  "
+                  f"ser {pct(d['ser']):>8}  ren {pct(d['ren']):>8}  "
+                  f"nop {pct(d['nop']):>8}   ({floor})")
+        OUT.mkdir(exist_ok=True)
+        png_summary(rows, OUT / "dit-overhead-gem5", narrow=not a.wide)
+        return
 
     if a.machine == "gem5":
         # One panel: there is no experiment-11 gem5 run to pair it with. The
