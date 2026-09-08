@@ -5,6 +5,10 @@
                             and same two arms: x = secret fraction of the
                             request, y = IPC overhead vs unhardened. Both
                             machines cross; they cross in different places.
+                            The orange arm is THE PASS. `ExpeDITe` is the gem5
+                            Neoverse-V2 model's name, not the pass's, so it sits
+                            in the left panel's title; the right panel is
+                            hardware and has no ExpeDITe in it.
   predictability-gem5-vs-m4 why. Blanket's cost to the PUBLIC lane against q,
                             the fraction of iterations that read the record
                             header, for gem5 and for both Apple lanes.
@@ -111,14 +115,14 @@ mf, mblanket = m4("narrow", "blanket")
 _mf2, mpass = m4("narrow", "pass")
 
 # ============================================================ fig 1: the headline
-fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.5), dpi=300)
+fig, axes = plt.subplots(1, 2, figsize=(8.2, 3.7), dpi=300)
 fig.patch.set_facecolor(SURF)
 
 for ax, title, xs, blank, ser, ren in [
-    (axes[0], "gem5 Neoverse-V2 FDP  (EVES + VTAGE)",
+    (axes[0], "gem5 Neoverse-V2 FDP — the ExpeDITe model\nEVES + VTAGE: predicts the 62-bit header",
      [gf[L] for L in gL], gipc("blanket", "-"), gipc("pass", "serialising"),
      gipc("pass", "renamed")),
-    (axes[1], "Apple M4  (load value predictor, 36-bit)",
+    (axes[1], "Apple M4 — shipping silicon\nload value predictor: 36 bits, measured",
      mf, mblanket, mpass, None),
 ]:
     style(ax)
@@ -129,7 +133,12 @@ for ax, title, xs, blank, ser, ren in [
                 mfc=SURF, mec=ORANGE, mew=1.4, zorder=3)
     ax.axhline(0, color=BASE, lw=0.9, zorder=2)
     secret_axis(ax)
-    ax.set_title(title, fontsize=9, color=INK, pad=7, fontweight="bold")
+    # Two lines: the machine, then what its value predictor is. The second line
+    # is the whole reason the two panels differ, so it is on the figure.
+    head, _, sub = title.partition("\n")
+    ax.set_title(head, fontsize=9, color=INK, pad=16, fontweight="bold")
+    ax.annotate(sub, xy=(0.5, 1.015), xycoords="axes fraction", fontsize=7.6,
+                color=MUTED, ha="center", va="bottom")
     ax.set_xlabel("Secret fraction of the request", fontweight="bold")
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
     # The crossing is the point of the figure, so it is ON the figure.
@@ -150,9 +159,13 @@ for ax in axes:
     ax.set_ylabel("IPC overhead vs unhardened (%)", fontweight="bold")
 handles = [
     Line2D([], [], color=BLUE, lw=2, marker="o", ms=5, label="blanket DIT"),
-    Line2D([], [], color=ORANGE, lw=2, marker="o", ms=5, label="ExpeDITe (serialised MSR DIT)"),
+    # The arm is THE PASS. `ExpeDITe` names the gem5 Neoverse-V2 model, not the
+    # compiler pass, so it belongs in the left panel's title and nowhere near a
+    # curve on the right one -- there is no ExpeDITe on an M4.
+    Line2D([], [], color=ORANGE, lw=2, marker="o", ms=5,
+           label="the pass — serialised MSR DIT"),
     Line2D([], [], color=ORANGE, lw=2, ls=(0, (4, 2)), marker="o", ms=5, mfc=SURF,
-           mec=ORANGE, mew=1.4, label="ExpeDITe (renamed — gem5 only)"),
+           mec=ORANGE, mew=1.4, label="the pass — renamed MSR DIT (gem5 only)"),
 ]
 fig.legend(handles=handles, frameon=False, fontsize=7.6, ncol=3,
            loc="lower center", bbox_to_anchor=(0.5, -0.015))
