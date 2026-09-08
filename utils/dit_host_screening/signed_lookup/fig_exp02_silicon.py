@@ -110,11 +110,27 @@ def rows(name):
         return list(csv.DictReader(l for l in fh if not l.startswith("#")))
 
 
+# The x axis says CYCLES, because "secret fraction" on its own does not say
+# fraction of what, and the three candidates (cycles, instructions, bytes) give
+# different numbers. It is
+#
+#     f = (cycles with the secret lane - cycles without) / cycles with
+#
+# measured on the UNHARDENED binary, the second term being the same binary run
+# with --nosecret. So f is a property of the workload and not of any placement
+# policy: every arm moves along one fixed axis. It is also why the two panels
+# read different f at the same L -- same code, but gem5 sustains IPC 1.07 at
+# L=10 where the M4 sustains 3.89, so the public lane costs relatively more
+# there. The README's known limits say the two axes must not be swapped.
+XLABEL = "Secret fraction of request cycles"
+
+
 def secret_axis(ax):
     """Both machines share this one axis. The L behind each point is in the CSV."""
     ax.set_xlim(-2, 102)
     ax.set_xticks([0, 20, 40, 60, 80, 100])
     ax.set_xticklabels([f"{t}%" for t in (0, 20, 40, 60, 80, 100)])
+    ax.set_xlabel(XLABEL, fontweight="bold")
 
 
 def crossing(xs, a, b):
@@ -232,7 +248,6 @@ for ax, title, sub, xs, coarse, others in [
     ax.set_title(title, fontsize=9, color=INK, pad=16, fontweight="bold")
     ax.annotate(sub, xy=(0.5, 1.015), xycoords="axes fraction", fontsize=7.2,
                 color=MUTED, ha="center", va="bottom")
-    ax.set_xlabel("Secret fraction of the request", fontweight="bold")
     ax.set_ylabel("IPC overhead vs unhardened (%)", fontweight="bold")
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
 
@@ -314,7 +329,6 @@ def paper_panel(path, xs, coarse, others):
         draw(ax, xs, ys, key)
     ax.axhline(0, color=BASE, lw=0.9, zorder=2)
     secret_axis(ax)
-    ax.set_xlabel("Secret fraction of the request", fontweight="bold")
     ax.set_ylabel("IPC overhead (%)", fontweight="bold")
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
 
