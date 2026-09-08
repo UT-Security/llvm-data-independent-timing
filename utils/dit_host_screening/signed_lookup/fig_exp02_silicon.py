@@ -122,7 +122,15 @@ def rows(name):
 # read different f at the same L -- same code, but gem5 sustains IPC 1.07 at
 # L=10 where the M4 sustains 3.89, so the public lane costs relatively more
 # there. The README's known limits say the two axes must not be swapped.
-XLABEL = "Secret fraction of request cycles"
+#
+# And OPERATION, not "request", though the driver's own docstring says request
+# and the CSV columns are still requests / cyc_per_request. "Request" implies a
+# server's unit of work, and this public lane is a dependence chain built to
+# have the right shape rather than any application's real public code -- the
+# framing would be claiming more than the benchmark earns. One operation is L
+# value-dependent loads plus one AEAD call over the digest of what they
+# gathered; the data schema keeps its own name, the axis states what it is.
+XLABEL = "Secret fraction of operation cycles"
 
 
 def secret_axis(ax):
