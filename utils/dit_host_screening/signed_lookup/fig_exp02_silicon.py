@@ -134,11 +134,28 @@ grow = lambda L, arm, m: next(r for r in g if int(r["L"]) == L and r["arm"] == a
 gipc = lambda arm, m: [float(grow(L, arm, m)["ipc_ovh_pct"]) for L in gL]
 
 # ------------------------------------------------------------------ M4 series
-m = rows("m4_arms.csv")
+#
+# TWO M4 sweeps, and the headline uses the AES one so that BOTH panels are the
+# same microbenchmark -- same driver, same public lane, same secret op, same
+# L points, same arms. The only thing that still differs between the panels is
+# HDR_CONST, and it has to: the public lane's cost is the load-value predictions
+# the mode suppresses, so the header has to be a value the machine under test
+# can actually hold. gem5's EVES/VTAGE holds 62 bits; this M4 holds 36 (measured
+# -- figures/m4-predictor-width). A shared constant would measure the mechanism
+# on one machine and nothing at all on the other.
+#
+# m4_arms.csv is the chacha20-poly1305 sweep, kept because it is the published
+# headline and because the pair is instructive: the same bracket crosses at 52%
+# there and at 29% here, purely because AES-256-GCM on hardware AES is a much
+# shorter secret lane, so a fixed ~440-cycle bracket is a bigger share of the
+# request. It is the denominator, not the switch.
+m = rows("m4_aes_arms.csv")
+m_chacha = rows("m4_arms.csv")
 
 
-def m4(lane, arm):
-    rs = [r for r in m if r["lane"] == lane and r["arm"] == arm]
+def m4(lane, arm, src=None):
+    rs = [r for r in (m if src is None else src)
+          if r["lane"] == lane and r["arm"] == arm]
     rs.sort(key=lambda r: int(r["L"]))
     return ([float(r["f_secret_pct"]) for r in rs],
             [float(r["ipc_ovh_pct"]) for r in rs])
@@ -147,7 +164,12 @@ def m4(lane, arm):
 # ============================================================ fig 1: the headline
 mf, mblanket = m4("narrow", "blanket")
 _x, mbracket = m4("narrow", "bracket")
-_x, mpass = m4("narrow", "pass")          # measured, in the CSV, not on the figure
+# The chacha lane, measured and committed, reported below but not on the figure:
+# putting a second secret op on the same axes invites reading it as a third
+# machine. The README carries both tables.
+cf, cblanket = m4("narrow", "blanket", m_chacha)
+_c, cbracket = m4("narrow", "bracket", m_chacha)
+_c, cpass = m4("narrow", "pass", m_chacha)
 # Each panel uses ITS OWN measured secret fraction. The two instruments weight
 # the lanes differently -- gem5 reads 44.7% at L=200 where the M4 reads 32.6% --
 # and paper_experiments/02's known limits say plainly they must not be swapped.
@@ -162,7 +184,7 @@ for ax, title, sub, xs, blank, rising in [
      [("Apple's bracket, --apple", gipc("api", "apple"), GREEN, "-", GREEN),
       ("Apple's bracket, --expedite", gipc("api", "expedite"), GREEN, (0, (4, 2)), SURF)]),
     (axes[1], "Apple M4 — shipping silicon",
-     "36-bit load value predictor, measured; chacha20-poly1305, 100 B",
+     "36-bit load value predictor, measured; AES-256-GCM secret lane, 64 B",
      mf, mblanket,
      [("Apple's bracket", mbracket, GREEN, "-", GREEN)]),
 ]:
@@ -220,8 +242,14 @@ for lab, arm, m in (("gem5   Apple bracket, --apple   ", "api", "apple"),
     print(f"  {lab} f* = " + (f"{f:.1f}%" if f is not None
                               else "none -- the bracket is cheaper at every measured point"))
 mo = lambda v: [v[k] for k in sorted(range(len(mf)), key=lambda k: mf[k])]
-for lab, ys in (("M4     Apple bracket           ", mbracket), ("M4     the pass                ", mpass)):
-    f = crossing(mo(mf), mo(ys), mo(mblanket))
+f = crossing(mo(mf), mo(mbracket), mo(mblanket))
+print(f"  M4     Apple bracket, AES-GCM 64 B  f* = "
+      + (f"{f:.1f}%" if f is not None else "none")
+      + "   <- the panel, matched to gem5's lane")
+co = lambda v: [v[k] for k in sorted(range(len(cf)), key=lambda k: cf[k])]
+for lab, ys in (("M4     Apple bracket, chacha 100 B  ", cbracket),
+                ("M4     the pass, chacha 100 B       ", cpass)):
+    f = crossing(co(cf), co(ys), co(cblanket))
     print(f"  {lab} f* = " + (f"{f:.1f}%" if f is not None else "none"))
 
 # ================================================ fig 2: cost vs predictable share

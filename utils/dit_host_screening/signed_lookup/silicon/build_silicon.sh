@@ -69,6 +69,8 @@
 #   OUT=<dir>         where binaries go  (default <this dir>/bin)
 #   ARMS=<list>       default "base taint taintnop"
 #   LANES=<list>      default "wide narrow" (see below)
+#   SECRET_OP=<op>    chacha (default) | aes -- WHICH AEAD is the secret lane
+#   SECRET_MLEN=<n>   secret bytes per request (default 100)
 set -uo pipefail
 
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -80,6 +82,41 @@ OUT="${OUT:-$D/bin}"
 # link the unhardened `base` archive with a wrapper object, so there is nothing
 # extra to compile in libsodium for them.
 ARMS="${ARMS:-base taint taintnop bracket bracketnop bracketnobar bracketdsb bracketdsbnop}"
+# WHICH AEAD IS THE SECRET LANE, and how many bytes of it per request.
+#
+# `chacha` at 100 bytes is the driver's own lane and what every M4 sweep in
+# paper_experiments/02 ran. `aes` selects AES-256-GCM, the lane the GEM5 panel
+# runs -- gem5 cannot resolve a chacha bracket at any message size (chacha is a
+# serial ARX chain that does not fill the reorder window until the message is
+# ~4 KB, by which point the request is 46,000 cycles and a 300-cycle switch is
+# 0.6% of it). So `SECRET_OP=aes SECRET_MLEN=64` is how this rig builds the SAME
+# microbenchmark the simulator half runs.
+#
+# The op is a preprocessor parameter of the staged driver, added by
+# secret_op_param.patch; the vendored source is still never edited. One knob and
+# not three because it must change three things together: the driver AEAD calls,
+# api_bracket.c's wrapped entry points, and the preprocessor renames that
+# interpose them (Apple ld64 has no --wrap). AES-256-GCM needs hardware AES; the
+# driver checks crypto_aead_aes256gcm_is_available() and dies if it is absent.
+SECRET_OP="${SECRET_OP:-chacha}"
+SECRET_MLEN="${SECRET_MLEN:-100}"
+case "$SECRET_OP" in
+  chacha)
+    API_OP_FLAG="-DAPI_CHACHA"
+    OP_DEFS=(-DAEAD_MLEN="$SECRET_MLEN")
+    OP_RENAME=(
+      "-Dcrypto_aead_chacha20poly1305_ietf_encrypt=expedite_api_crypto_aead_chacha20poly1305_ietf_encrypt"
+      "-Dcrypto_aead_chacha20poly1305_ietf_keygen=expedite_api_crypto_aead_chacha20poly1305_ietf_keygen"
+    ) ;;
+  aes)
+    API_OP_FLAG="-DAPI_AES"
+    OP_DEFS=(-DSECRET_AES -DAEAD_MLEN="$SECRET_MLEN")
+    OP_RENAME=(
+      "-Dcrypto_aead_aes256gcm_encrypt=expedite_api_crypto_aead_aes256gcm_encrypt"
+      "-Dcrypto_aead_aes256gcm_keygen=expedite_api_crypto_aead_aes256gcm_keygen"
+    ) ;;
+  *) echo "build_silicon: unknown SECRET_OP: $SECRET_OP (chacha | aes)" >&2; exit 1 ;;
+esac
 # What taint_libsodium_arms.sh has to BUILD.
 LIB_VARIANTS="${LIB_VARIANTS:-base taint taintnop}"
 
@@ -101,8 +138,8 @@ arm_lib() {
 # knobs rather than one.
 arm_bracket_flags() {
   case "$1" in
-    bracket)    echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_SB" ;;
-    bracketnop) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_SB -DAPI_NOP" ;;
+    bracket)    echo "$API_OP_FLAG -DAPI_MACRO_RENAME -DAPI_BARRIER_SB" ;;
+    bracketnop) echo "$API_OP_FLAG -DAPI_MACRO_RENAME -DAPI_BARRIER_SB -DAPI_NOP" ;;
     # Apple's sequence MINUS the speculation barrier. Not a configuration
     # anyone should ship -- without it the mode change is not architecturally
     # guaranteed to be in effect for what follows, which is the whole reason
@@ -110,7 +147,7 @@ arm_bracket_flags() {
     # (bracket - bracketnobar) is what `sb` costs and the rest is the token
     # read and the two writes. In situ that split is not what a tight loop
     # predicts, which is the point.
-    bracketnobar) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_NONE" ;;
+    bracketnobar) echo "$API_OP_FLAG -DAPI_MACRO_RENAME -DAPI_BARRIER_NONE" ;;
     # Apple's documented FALLBACK for a part without FEAT_SB: `dsb nsh; isb sy`
     # in place of `sb`. Not what this M4 needs -- it has FEAT_SB and Apple's own
     # libsystem_platform uses `sb` on it -- but it is the barrier gem5 can
@@ -118,13 +155,13 @@ arm_bracket_flags() {
     # (IsSquashAfter) and no `sb` at all. If this arm lands near the `sb` one,
     # the gem5 bracket column can be made comparable by building it
     # -DAPI_BARRIER_DSBISB instead of leaving it on the isb-only default.
-    bracketdsb) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_DSBISB" ;;
+    bracketdsb) echo "$API_OP_FLAG -DAPI_MACRO_RENAME -DAPI_BARRIER_DSBISB" ;;
     # bracketdsb's OWN twin. It cannot share bracketnop: `dsb nsh; isb sy` is
     # two instructions where `sb` is one, so bracketnop is an instruction short
     # of it. api_bracket.c's API_NOP now emits as many hints as the selected
     # barrier has instructions, so this twin matches at 18 where bracketnop
     # matches bracket at 17.
-    bracketdsbnop) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_DSBISB -DAPI_NOP" ;;
+    bracketdsbnop) echo "$API_OP_FLAG -DAPI_MACRO_RENAME -DAPI_BARRIER_DSBISB -DAPI_NOP" ;;
     *) echo "" ;;
   esac
 }
@@ -134,10 +171,7 @@ arm_bracket_flags() {
 # for exactly this. Only the two the driver actually calls are renamed --
 # `_decrypt`'s wrapper is compiled and never reached, in the bracket arm and in
 # its twin alike, so it cannot move one relative to the other.
-BRACKET_RENAME=(
-  "-Dcrypto_aead_chacha20poly1305_ietf_encrypt=expedite_api_crypto_aead_chacha20poly1305_ietf_encrypt"
-  "-Dcrypto_aead_chacha20poly1305_ietf_keygen=expedite_api_crypto_aead_chacha20poly1305_ietf_keygen"
-)
+BRACKET_RENAME=("${OP_RENAME[@]}")
 BRACKET_SRC="$REPO/utils/dit_host_screening/cioparity/api_bracket.c"
 # THE TWO LANES. Same source, same code, ONE constant apart: the value every
 # record header holds. A value predictor stores a finite number of value bits,
@@ -223,7 +257,19 @@ if want link; then
     || die "hdr_const_param.patch did not apply to the staged driver"
   grep -q '#ifndef HDR_CONST' "$STAGE/signed_lookup.c" \
     || die "patch applied but HDR_CONST is still not overridable"
-  info "staged driver patched: HDR_CONST is a -D parameter"
+  # ...and the second recorded patch, which makes the secret lane's OP and SIZE
+  # -D parameters. Applied unconditionally, including for SECRET_OP=chacha: its
+  # defaults are the driver's own (chacha20-poly1305, 100 bytes), so the staged
+  # source is semantically unchanged and one staging path serves both ops. The
+  # -D on the compile line is the only thing that selects.
+  patch -s -p0 -d "$STAGE" -i "$D/secret_op_param.patch" \
+        --input="$D/secret_op_param.patch" 2>/dev/null \
+    || patch -s -d "$STAGE" "$STAGE/signed_lookup.c" "$D/secret_op_param.patch" \
+    || die "secret_op_param.patch did not apply to the staged driver"
+  grep -q '#ifndef AEAD_MLEN' "$STAGE/signed_lookup.c" \
+    || die "patch applied but AEAD_MLEN is still not overridable"
+  info "staged driver patched: HDR_CONST, AEAD_MLEN and the secret op are -D parameters"
+  info "secret lane: $SECRET_OP, $SECRET_MLEN bytes per request"
 
   # Does this part execute Apple's `sb`? The bracket arm is only Apple's
   # bracket if it does; on a part without FEAT_SB Apple's own fallback is
@@ -271,7 +317,8 @@ EOF
       h="$(lane_hdr "$lane")"
       # -march=armv8.4-a to match the library arms and the gem5 build (FEAT_DIT
       # is armv8.4). -I"$STAGE" first so nothing else can supply kperf_ipc.h.
-      "$CC" -march=armv8.4-a -O2 -g -I"$STAGE" -DHDR_CONST="$h" ${extra[@]+"${extra[@]}"} \
+      "$CC" -march=armv8.4-a -O2 -g -I"$STAGE" -DHDR_CONST="$h" \
+        "${OP_DEFS[@]}" ${extra[@]+"${extra[@]}"} \
         -I"$ARMS_WORK/$(arm_lib "$v")/src/libsodium/include" \
         "$STAGE/signed_lookup.c" ${obj[@]+"${obj[@]}"} "$lib" -o "$OUT/native_${v}_${lane}" \
         >>"$OUT/.link_${v}_${lane}.log" 2>&1 \
