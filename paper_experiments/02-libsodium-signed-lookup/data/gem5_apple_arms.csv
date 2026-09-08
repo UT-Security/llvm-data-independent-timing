@@ -1,0 +1,69 @@
+# provenance: run 2026-09-08 on bellingham (Apple M4, Darwin 24.6.0) -- gem5 built and run ON THE MAC.
+# gem5-DIT b76c101ad4 (origin/master, PR #109 dit-flag-restructure: --apple, --expedite and FEAT_SB);
+#   gem5.fast built here 2026-09-08. Workload cross-compiled to static aarch64-linux ELF with
+#   gem5-DIT util/cross/taint-cross-cc + the aarch64 sysroot, so the simulation needs no aarch64 host.
+# clang from llvm-data-independent-timing 236c397dd459; driver sha256 c91bc6f061649111.., byte-identical to
+#   gem5-DIT benchmarks/signed_lookup/signed_lookup_gem5.c at HEAD and at the pinned ce05d32089.
+# libsodium 1.0.21 --disable-asm, the UNHARDENED base tree; the bracket adds only api_bracket.c,
+#   interposed with the linker's --wrap. No compiler pass is involved in any arm here.
+# ARMS: base unhardened | blanket = the same library plus dit_blanket.c's constructor (msr DIT,#1
+#   before main, never cleared) | api = APPLE'S OWN BRACKET with the REAL `sb`, now that gem5
+#   implements FEAT_SB: mrs DIT / msr DIT,#1 / sb / call / tbnz / msr DIT,#0, -DAPI_BARRIER_SB
+#   (17 instructions) | apinop = its instruction-matched twin, 17 instructions, none touching DIT.
+# MODELS: --apple = flush after the switch (squash at commit) plus the redundant-write skip;
+#   --expedite = the renamed switch with a deferred clear and the MRS read that does not stall.
+#   Mutually exclusive; neither flag is the drain, which is not run here.
+# cycles/insts = median over 5 stack offsets (argv[0] lengths); spread_pct is (max-min)/median.
+# f_secret_pct is MEASURED per L with --nosecret on the unhardened arm, median of the same 5
+#   offsets -- gem5's own, not borrowed from the M4 (the two instruments weight the lanes
+#   differently; see the README's known limits).
+# ipc_ovh_pct = base ipc / arm ipc - 1, the quantity the paper figure plots.
+L,requests,f_secret_pct,model,arm,cycles,insts,ipc,cyc_per_request,vs_base_pct,ipc_ovh_pct,dit_writes,ditw_per_req,n_offsets,spread_pct
+10,1600,96.5,apple,base,3969648,8035220,2.0242,2481.0,0.0,0.0,0,0.0,5,1.84
+10,1600,96.5,apple,blanket,4046499,8035220,1.9857,2529.1,1.94,1.94,0,0.0,5,0.45
+10,1600,96.5,apple,api,3821872,8060820,2.1091,2388.7,-3.72,-4.03,3200,2.0,5,2.31
+10,1600,96.5,apple,apinop,3914588,8060820,2.0592,2446.6,-1.39,-1.7,0,0.0,5,1.01
+10,1600,96.5,expedite,base,3969648,8035220,2.0242,2481.0,0.0,0.0,0,0.0,5,1.84
+10,1600,96.5,expedite,blanket,4046499,8035220,1.9857,2529.1,1.94,1.94,0,0.0,5,0.45
+10,1600,96.5,expedite,api,3728003,8060820,2.1622,2330.0,-6.09,-6.39,3200,2.0,5,1.34
+10,1600,96.5,expedite,apinop,3914588,8060820,2.0592,2446.6,-1.39,-1.7,0,0.0,5,1.01
+50,1500,80.44,apple,base,4695303,8373020,1.7833,3130.2,0.0,0.0,0,0.0,5,2.68
+50,1500,80.44,apple,blanket,5182716,8373020,1.6156,3455.1,10.38,10.38,0,0.0,5,0.32
+50,1500,80.44,apple,api,4574532,8397020,1.8356,3049.7,-2.57,-2.85,3000,2.0,5,0.84
+50,1500,80.44,apple,apinop,4719078,8397020,1.7794,3146.1,0.51,0.22,0,0.0,5,1.68
+50,1500,80.44,expedite,base,4695303,8373020,1.7833,3130.2,0.0,0.0,0,0.0,5,2.68
+50,1500,80.44,expedite,blanket,5182716,8373020,1.6156,3455.1,10.38,10.38,0,0.0,5,0.32
+50,1500,80.44,expedite,api,4578675,8397020,1.8339,3052.4,-2.48,-2.76,3000,2.0,5,1.0
+50,1500,80.44,expedite,apinop,4719078,8397020,1.7794,3146.1,0.51,0.22,0,0.0,5,1.68
+200,1270,44.66,apple,base,7281031,9753620,1.3396,5733.1,0.0,0.0,0,0.0,5,0.81
+200,1270,44.66,apple,blanket,8609368,9753620,1.1329,6779.0,18.24,18.24,0,0.0,5,0.03
+200,1270,44.66,apple,api,7174281,9773940,1.3624,5649.0,-1.47,-1.67,2540,2.0,5,0.42
+200,1270,44.66,apple,apinop,7266891,9773940,1.345,5722.0,-0.19,-0.4,0,0.0,5,0.82
+200,1270,44.66,expedite,base,7281031,9753620,1.3396,5733.1,0.0,0.0,0,0.0,5,0.81
+200,1270,44.66,expedite,blanket,8609368,9753620,1.1329,6779.0,18.24,18.24,0,0.0,5,0.03
+200,1270,44.66,expedite,api,7172401,9773940,1.3627,5647.6,-1.49,-1.7,2540,2.0,5,0.1
+200,1270,44.66,expedite,apinop,7266891,9773940,1.345,5722.0,-0.19,-0.4,0,0.0,5,0.82
+1000,670,13.1,apple,base,13049439,12649620,0.9694,19476.8,0.0,0.0,0,0.0,5,0.35
+1000,670,13.1,apple,blanket,16661957,12649620,0.7592,24868.6,27.68,27.68,0,0.0,5,0.14
+1000,670,13.1,apple,api,12998881,12660340,0.974,19401.3,-0.39,-0.47,1340,2.0,5,0.16
+1000,670,13.1,apple,apinop,13026516,12660340,0.9719,19442.6,-0.18,-0.26,0,0.0,5,0.31
+1000,670,13.1,expedite,base,13049439,12649620,0.9694,19476.8,0.0,0.0,0,0.0,5,0.35
+1000,670,13.1,expedite,blanket,16661957,12649620,0.7592,24868.6,27.68,27.68,0,0.0,5,0.14
+1000,670,13.1,expedite,api,12967149,12660340,0.9763,19354.0,-0.63,-0.71,1340,2.0,5,0.23
+1000,670,13.1,expedite,apinop,13026516,12660340,0.9719,19442.6,-0.18,-0.26,0,0.0,5,0.31
+5000,200,3.44,apple,base,17664269,14976020,0.8478,88321.3,0.0,0.0,0,0.0,5,0.25
+5000,200,3.44,apple,blanket,22963310,14976020,0.6522,114816.6,30.0,30.0,0,0.0,5,0.08
+5000,200,3.44,apple,api,17615315,14979220,0.8504,88076.6,-0.28,-0.3,400,2.0,5,0.66
+5000,200,3.44,apple,apinop,17565613,14979220,0.8528,87828.1,-0.56,-0.58,0,0.0,5,0.86
+5000,200,3.44,expedite,base,17664269,14976020,0.8478,88321.3,0.0,0.0,0,0.0,5,0.25
+5000,200,3.44,expedite,blanket,22963310,14976020,0.6522,114816.6,30.0,30.0,0,0.0,5,0.08
+5000,200,3.44,expedite,api,17643620,14979220,0.849,88218.1,-0.12,-0.14,400,2.0,5,0.18
+5000,200,3.44,expedite,apinop,17565613,14979220,0.8528,87828.1,-0.56,-0.58,0,0.0,5,0.86
+20000,55,1.06,apple,base,19026795,15668420,0.8235,345941.7,0.0,0.0,0,0.0,5,0.72
+20000,55,1.06,apple,blanket,24878279,15668420,0.6298,452332.3,30.75,30.75,0,0.0,5,0.01
+20000,55,1.06,apple,api,19004207,15669300,0.8245,345531.0,-0.12,-0.12,110,2.0,5,0.27
+20000,55,1.06,apple,apinop,19032471,15669300,0.8233,346044.9,0.03,0.02,0,0.0,5,0.57
+20000,55,1.06,expedite,base,19026795,15668420,0.8235,345941.7,0.0,0.0,0,0.0,5,0.72
+20000,55,1.06,expedite,blanket,24878279,15668420,0.6298,452332.3,30.75,30.75,0,0.0,5,0.01
+20000,55,1.06,expedite,api,19035885,15669300,0.8231,346107.0,0.05,0.04,110,2.0,5,0.24
+20000,55,1.06,expedite,apinop,19032471,15669300,0.8233,346044.9,0.03,0.02,0,0.0,5,0.57

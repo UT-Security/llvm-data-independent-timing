@@ -1,0 +1,29 @@
+--- signed_lookup_gem5.c
++++ signed_lookup_gem5.c
+@@ -95,7 +95,26 @@
+ static uint64_t tbl[1u << TBL_MAX_BITS];
+ /* record headers: all the same value, LVP-predictable */
+ static uint64_t hdr[1u << TBL_MAX_BITS];
++/* THE HEADER'S VALUE IS A PARAMETER, because a real value predictor stores a
++ * finite number of value bits and this constant is what tells you how many.
++ *
++ * The default is what the gem5 sweeps used and is unchanged. gem5's EVES/VTAGE
++ * predicts it: it is a constant at a fixed PC, and the model keeps the whole
++ * 64 bits. An Apple M4 does not, and the boundary is sharp -- measured on this
++ * driver's own lane, a header value that fits in 36 bits is predicted (blanket
++ * DIT costs +12/+24/+35/+46% at q = 0.25/0.5/0.75/1) and one that needs 37 is
++ * not (+0.0% at every q). 0x2545F4914F6CDD1D needs 62. So on Apple silicon the
++ * canonical lane measures a predictor that is switched off either way, and the
++ * result is a flat zero that looks like "DIT is free" and is really "this
++ * header is too wide for the predictor this machine has".
++ *
++ * -DHDR_CONST=<value> therefore selects which machine's predictor the lane is
++ * aimed at. It changes ONE constant and no code: the chase, the addresses, the
++ * instruction count and the AEAD are identical, and q keeps its meaning on
++ * both. See utils/dit_host_screening/signed_lookup/silicon/README.md. */
++#ifndef HDR_CONST
+ #define HDR_CONST 0x2545F4914F6CDD1DULL
++#endif
+ /* --predictable: the header is read in (q4/4) of iterations; default 3/4 */
+ static uint32_t pred_q4 = 3;
+ static uint32_t tbl_mask = (1u << 9) - 1u;   /* set from --tblbits */

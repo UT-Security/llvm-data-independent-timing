@@ -1,0 +1,24 @@
+# provenance: CONTROL: the same lane with the table from 4 KB to 512 KB. The wide lane's zero is not 'the lane is L1-resident so there is nothing to predict' -- it holds at every size, while the narrow lane costs at every size. Above 64 KB the page-mapping lottery splits the samples; n_hi says how many landed in the slow cluster
+# run 2026-09-08T07:51:00-0500 on bellingham.csres.utexas.edu (Apple M4, kernel 24.6.0); unrooted, thread NOT pinned -- samples that migrated are rejected by the implied-clock gate and counted in the rejects column
+# clang from llvm-data-independent-timing b2bf47d508cc (WORKING TREE DIRTY); driver sha256 c91bc6f061649111.., byte-identical to gem5-DIT's benchmarks/signed_lookup/signed_lookup_gem5.c at the pinned commit, with utils/dit_host_screening/signed_lookup/silicon/hdr_const_param.patch applied (HDR_CONST becomes a -D; no other change)
+# libsodium 1.0.21 --disable-asm -march=armv8.4-a; library arms base / taint / taintnop from utils/taint_libsodium_arms.sh at the shipped defaults (callee contract, DIT twins, contract fixpoint seeds, owned list)
+# arms: nodit unhardened | blanket the same binary with DIT set before the ROI | bracket = the unhardened library with Apple's own prologue/epilogue around the AEAD entry points (mrs DIT token, msr DIT #1, sb, the call, msr DIT #0 only if it was clear) from utils/dit_host_screening/cioparity/api_bracket.c, which is what AWS-LC ships | bracketnop its instruction-matched twin (token read -> mov xzr, both writes and the barrier -> nop, so the restore takes the same branch) | bracketnobar Apple's sequence minus the speculation barrier, to split the bill; not a shippable configuration | pass = -ftaint-harden | nop its NOP twin. dit_cyc_per_req is (arm - twin) cycles per request, which is what the mode writes cost with layout removed
+# instrument: PMC0 (cycles, bare) and PMC1 (instructions, isb-ordered) read from EL0; CNTVCT_EL0 at 1 GHz gives the implied clock, and a sample outside 3.4-5.0 GHz is rejected as a thread migration and counted
+# lane: HDR_CONST is the value every record header holds. wide = 0x2545F4914F6CDD1D (62 bits), the value every gem5 sweep used; narrow = 0xCAFEBABE (32 bits). This machine's load value predictor holds 36 bits (m4_header_width.csv), so it predicts the narrow header and not the wide one
+# one serialising `msr DIT` on this part: 33.52 cycles (11.50 for a same-value write), measured by dit_switch_cost.c in this run
+# cycles = median of the FAST cluster of n valid samples. Once the tables leave L1 a run's cycles come out bimodal ~15% apart on the physical pages the kernel hands the BSS; n_hi counts the slow-cluster samples, which are kept in the JSONL and excluded from the median. Below 128 KB of table there is no split and this is the plain median.
+axis,value,label,lane,L,pred_q4,tblbits,requests,nodit_cycles,blanket_cycles,nodit_cyc_per_lookup,blanket_cyc_per_lookup,nodit_ipc,blanket_ipc,insts,blanket_pct,ipc_ovh_pct,n,n_all,n_hi_nodit,n_hi_blanket,lottery_gap,rejects,spread_pct
+tblbits,11,16 KB,narrow,20000,4,11,474,131062307.0,190832131.0,13.8251,20.13,1.0854,0.7456,142261550.0,45.6,45.59,15,15,0,0,1.0,0,0.33
+tblbits,12,32 KB,narrow,20000,4,12,473,130792040.0,190431799.0,13.8258,20.1302,1.0854,0.7455,141956977.0,45.6,45.58,15,15,0,0,1.0,1,0.33
+tblbits,13,64 KB,narrow,20000,4,13,474,131166233.0,191703272.0,13.8361,20.2219,1.0846,0.7421,142258639.0,46.15,46.14,15,15,0,0,1.0,0,0.44
+tblbits,14,128 KB,narrow,20000,4,14,277,118716101.0,207394510.5,21.4289,37.4358,0.7004,0.401,83148833.0,74.7,74.67,7,15,8,7,1.1189,0,0.42
+tblbits,15,256 KB,narrow,20000,4,15,222,117338833.5,204353884.5,26.4277,46.0256,0.5681,0.3262,66654495.0,74.16,74.15,8,15,7,7,1.1456,0,0.46
+tblbits,16,512 KB,narrow,20000,4,16,198,115058570.5,199335965.0,29.0552,50.3374,0.5167,0.2983,59448860.5,73.25,73.23,8,15,7,7,1.1561,0,0.26
+tblbits,9,4 KB,narrow,20000,4,9,473,130772790.0,190421814.0,13.8238,20.1292,1.0855,0.7456,141953863.0,45.61,45.59,15,15,0,0,1.0,1,0.25
+tblbits,11,16 KB,wide,20000,4,11,325,130855857.0,130844706.0,20.1317,20.13,0.7455,0.7455,97552019.0,-0.01,-0.01,15,15,0,0,1.0,1,0.12
+tblbits,12,32 KB,wide,20000,4,12,325,130851079.0,130838187.0,20.1309,20.129,0.7455,0.7455,97548781.0,-0.01,-0.01,15,15,0,0,1.0,0,0.32
+tblbits,13,64 KB,wide,20000,4,13,321,129808291.0,129796650.0,20.2194,20.2175,0.7422,0.7423,96348404.0,-0.01,-0.01,15,15,0,0,1.0,0,0.47
+tblbits,14,128 KB,wide,20000,4,14,174,130220436.0,130262882.0,37.4197,37.4319,0.4011,0.4011,52235877.0,0.03,0.02,8,15,7,7,1.1192,0,0.13
+tblbits,15,256 KB,wide,20000,4,15,123,113187470.0,113219316.0,46.0112,46.0241,0.3263,0.3261,36930360.0,0.03,0.05,7,15,8,6,1.1456,1,0.12
+tblbits,16,512 KB,wide,20000,4,16,112,112766231.5,112718225.5,50.3421,50.3206,0.2982,0.2983,33631956.5,-0.04,-0.02,8,15,7,7,1.1555,0,0.13
+tblbits,9,4 KB,wide,20000,4,9,324,130439076.0,130430728.0,20.1295,20.1282,0.7455,0.7456,97248629.0,-0.01,-0.0,15,15,0,0,1.0,0,0.31

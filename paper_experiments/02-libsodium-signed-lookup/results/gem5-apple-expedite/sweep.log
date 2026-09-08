@@ -1,0 +1,22 @@
+240 gem5 runs (5 stack offsets), 9 at a time
+  30/240
+  60/240
+  90/240
+  120/240
+  150/240
+  180/240
+  210/240
+  240/240
+
+wrote /private/tmp/claude-501/-Users-rgangar--treehouse-llvm-data-independent-timing-7b712d-1-llvm-data-independent-timing/1b1d2b97-4ed4-46e9-bfae-74e82bb4dace/scratchpad/g5apple/gem5_apple_arms.csv (48 rows)
+
+=== exp02 gem5, FEAT_SB present: Apple's real bracket under both switch models ===
+median of 5 stack offsets; IPC overhead vs unhardened
+
+      L   req  base c/req   blanket  api@apple  api@exped  api-twin@apple    @exped  ditW/req
+     10  1600       2,481    +1.94%     -4.03%     -6.39%             -58      -117       2.0
+     50  1500       3,130   +10.38%     -2.85%     -2.76%             -96       -94       2.0
+    200  1270       5,733   +18.24%     -1.67%     -1.70%             -73       -74       2.0
+   1000   670      19,477   +27.68%     -0.47%     -0.71%             -41       -89       2.0
+   5000   200      88,321   +30.00%     -0.30%     -0.14%             249       390       2.0
+  20000    55     345,942   +30.75%     -0.12%     +0.04%            -514        62       2.0
