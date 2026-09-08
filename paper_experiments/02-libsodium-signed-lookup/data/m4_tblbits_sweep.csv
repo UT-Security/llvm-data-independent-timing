@@ -1,0 +1,23 @@
+# provenance: CONTROL: the same lane with the table from 4 KB to 512 KB. The wide lane's zero is not 'the lane is L1-resident so there is nothing to predict' -- it holds at every size, while the narrow lane costs at every size. Above 64 KB the page-mapping lottery splits the samples; n_hi says how many landed in the slow cluster
+# run 2026-09-08T00:59:44-0500 on bellingham.csres.utexas.edu (Apple M4, kernel 24.6.0); unrooted, thread NOT pinned -- samples that migrated are rejected by the implied-clock gate and counted in the rejects column
+# clang from llvm-data-independent-timing 81782113460d; driver sha256 c91bc6f061649111.., byte-identical to gem5-DIT's benchmarks/signed_lookup/signed_lookup_gem5.c at the pinned commit, with utils/dit_host_screening/signed_lookup/silicon/hdr_const_param.patch applied (HDR_CONST becomes a -D; no other change)
+# libsodium 1.0.21 --disable-asm -march=armv8.4-a; arms base / taint / taintnop from utils/taint_libsodium_arms.sh at the shipped defaults (callee contract, DIT twins, contract fixpoint seeds, owned list)
+# instrument: PMC0 (cycles, bare) and PMC1 (instructions, isb-ordered) read from EL0; CNTVCT_EL0 at 1 GHz gives the implied clock, and a sample outside 3.4-5.0 GHz is rejected as a thread migration and counted
+# lane: HDR_CONST is the value every record header holds. wide = 0x2545F4914F6CDD1D (62 bits), the value every gem5 sweep used; narrow = 0xCAFEBABE (32 bits). This machine's load value predictor holds 36 bits (m4_header_width.csv), so it predicts the narrow header and not the wide one
+# one serialising `msr DIT` on this part: 33.51 cycles (11.51 for a same-value write), measured by dit_switch_cost.c in this run
+# cycles = median of the FAST cluster of n valid samples. Once the tables leave L1 a run's cycles come out bimodal ~15% apart on the physical pages the kernel hands the BSS; n_hi counts the slow-cluster samples, which are kept in the JSONL and excluded from the median. Below 128 KB of table there is no split and this is the plain median.
+axis,value,label,lane,L,pred_q4,tblbits,requests,nodit_cycles,blanket_cycles,nodit_cyc_per_lookup,blanket_cyc_per_lookup,nodit_ipc,blanket_ipc,insts,blanket_pct,ipc_ovh_pct,n,n_all,n_hi_nodit,n_hi_blanket,lottery_gap,rejects,spread_pct
+tblbits,11,16 KB,narrow,20000,4,11,474,131085496.0,190863954.0,13.8276,20.1333,1.0852,0.7455,142258503.0,45.6,45.58,15,15,0,0,1.0,0,0.27
+tblbits,12,32 KB,narrow,20000,4,12,475,131345445.0,191267046.0,13.8258,20.1334,1.0854,0.7455,142557108.0,45.62,45.6,15,15,0,0,1.0,0,0.1
+tblbits,13,64 KB,narrow,20000,4,13,475,131426771.5,192140426.0,13.8344,20.2253,1.0847,0.7421,142556970.0,46.2,46.17,14,15,1,0,1.0715,0,0.24
+tblbits,14,128 KB,narrow,20000,4,14,280,119953148.5,209616608.5,21.4202,37.4315,0.7006,0.401,84041400.5,74.75,74.71,8,15,7,7,1.1194,0,0.25
+tblbits,15,256 KB,narrow,20000,4,15,222,117211689.0,204348036.5,26.399,46.0243,0.5684,0.3262,66628937.0,74.34,74.25,7,15,8,7,1.1456,1,0.21
+tblbits,16,512 KB,narrow,20000,4,16,199,115536431.0,200383258.0,29.0293,50.3476,0.517,0.2983,59737087.5,73.44,73.35,8,15,7,7,1.1554,0,0.4
+tblbits,9,4 KB,narrow,20000,4,9,475,131355508.0,191244169.0,13.8269,20.131,1.0853,0.7455,142560084.0,45.59,45.58,15,15,0,0,1.0,0,0.1
+tblbits,11,16 KB,wide,20000,4,11,326,131258331.0,131278715.0,20.1316,20.1348,0.7455,0.7454,97850529.0,0.02,0.01,15,15,0,0,1.0,0,0.1
+tblbits,12,32 KB,wide,20000,4,12,326,131259989.0,131253938.0,20.1319,20.131,0.7455,0.7455,97850109.0,-0.0,-0.0,15,15,0,0,1.0,1,0.13
+tblbits,13,64 KB,wide,20000,4,13,324,131096361.0,131030773.0,20.2309,20.2208,0.7419,0.7422,97255200.0,-0.05,-0.05,15,15,0,0,1.0,0,0.19
+tblbits,14,128 KB,wide,20000,4,14,156,116757634.5,116770234.0,37.4223,37.4264,0.4011,0.401,46836778.5,0.01,0.03,8,15,7,8,1.1199,0,0.13
+tblbits,15,256 KB,wide,20000,4,15,143,131639496.5,131625453.5,46.0278,46.0229,0.3262,0.3262,42942919.5,-0.01,-0.0,8,15,7,7,1.1459,1,0.1
+tblbits,16,512 KB,wide,20000,4,16,113,113735470.0,113718890.5,50.3254,50.3181,0.2983,0.2983,33927034.0,-0.01,-0.01,8,15,7,7,1.1557,0,1.78
+tblbits,9,4 KB,wide,20000,4,9,327,131658248.0,131686296.0,20.1312,20.1355,0.7455,0.7453,98151960.0,0.02,0.02,15,15,0,0,1.0,0,0.27

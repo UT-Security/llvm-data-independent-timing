@@ -1,0 +1,29 @@
+# provenance: SENSITIVITY: blanket DIT's cost to the PUBLIC lane against q = pred_q4/4, the fraction of iterations that read the record header. Linear in q on the narrow lane and identically zero on the wide one, at both L. gem5's own q sweep is gem5_predictability_sweep.csv
+# run 2026-09-08T00:58:11-0500 on bellingham.csres.utexas.edu (Apple M4, kernel 24.6.0); unrooted, thread NOT pinned -- samples that migrated are rejected by the implied-clock gate and counted in the rejects column
+# clang from llvm-data-independent-timing 81782113460d; driver sha256 c91bc6f061649111.., byte-identical to gem5-DIT's benchmarks/signed_lookup/signed_lookup_gem5.c at the pinned commit, with utils/dit_host_screening/signed_lookup/silicon/hdr_const_param.patch applied (HDR_CONST becomes a -D; no other change)
+# libsodium 1.0.21 --disable-asm -march=armv8.4-a; arms base / taint / taintnop from utils/taint_libsodium_arms.sh at the shipped defaults (callee contract, DIT twins, contract fixpoint seeds, owned list)
+# instrument: PMC0 (cycles, bare) and PMC1 (instructions, isb-ordered) read from EL0; CNTVCT_EL0 at 1 GHz gives the implied clock, and a sample outside 3.4-5.0 GHz is rejected as a thread migration and counted
+# lane: HDR_CONST is the value every record header holds. wide = 0x2545F4914F6CDD1D (62 bits), the value every gem5 sweep used; narrow = 0xCAFEBABE (32 bits). This machine's load value predictor holds 36 bits (m4_header_width.csv), so it predicts the narrow header and not the wide one
+# one serialising `msr DIT` on this part: 33.52 cycles (11.50 for a same-value write), measured by dit_switch_cost.c in this run
+# cycles = median of the FAST cluster of n valid samples. Once the tables leave L1 a run's cycles come out bimodal ~15% apart on the physical pages the kernel hands the BSS; n_hi counts the slow-cluster samples, which are kept in the JSONL and excluded from the median. Below 128 KB of table there is no split and this is the plain median.
+axis,value,label,lane,L,pred_q4,tblbits,requests,nodit_cycles,blanket_cycles,nodit_cyc_per_lookup,blanket_cyc_per_lookup,nodit_ipc,blanket_ipc,insts,blanket_pct,ipc_ovh_pct,n,n_all,n_hi_nodit,n_hi_blanket,lottery_gap,rejects,spread_pct
+q,0,0.00,narrow,200,0,9,38543,84119064.0,84140247.0,10.9124,10.9151,1.0385,1.0383,87360254.0,0.03,0.02,15,15,0,0,1.0,1,0.2
+q,1,0.25,narrow,200,1,9,37437,85118188.0,95273612.0,11.3682,12.7245,1.0848,0.9693,92337519.0,11.93,11.92,15,15,0,0,1.0,0,0.15
+q,2,0.50,narrow,200,2,9,36658,86737011.0,106813251.0,11.8306,14.5689,1.127,0.9152,97749199.0,23.15,23.14,15,15,0,0,1.0,0,0.24
+q,3,0.75,narrow,200,3,9,36140,88647260.0,118716881.0,12.2644,16.4246,1.1686,0.8727,103596019.0,33.92,33.91,15,15,0,0,1.0,0,0.28
+q,4,1.00,narrow,200,4,9,35486,89812413.0,130090397.0,12.6546,18.3298,1.2116,0.8365,108818824.0,44.85,44.84,15,15,0,0,1.0,1,0.18
+q,0,0.00,narrow,20000,0,9,520,131060874.0,131090269.0,12.602,12.6048,0.8733,0.8732,114458604.0,0.02,0.01,15,15,0,0,1.0,1,0.15
+q,1,0.25,narrow,20000,1,9,508,131237108.0,147252680.0,12.917,14.4934,0.9295,0.8284,121979375.0,12.2,12.19,15,15,0,0,1.0,0,0.07
+q,2,0.50,narrow,20000,2,9,496,131330642.0,162445988.0,13.239,16.3756,0.9825,0.7942,129026277.0,23.69,23.7,15,15,0,0,1.0,1,0.14
+q,3,0.75,narrow,20000,3,9,484,131433271.0,176750215.0,13.5778,18.2593,1.0315,0.7671,135579189.0,34.48,34.46,15,15,0,0,1.0,1,0.2
+q,4,1.00,narrow,20000,4,9,476,131641492.0,191669936.0,13.8279,20.1334,1.0853,0.7454,142864473.0,45.6,45.58,15,15,0,0,1.0,0,0.16
+q,0,0.00,wide,200,0,9,38576,84193844.0,84182524.0,10.9127,10.9113,1.0385,1.0386,87432036.0,-0.01,-0.01,15,15,0,0,1.0,0,0.12
+q,1,0.25,wide,200,1,9,34771,88482718.0,88455570.0,12.7236,12.7197,0.9693,0.9696,85768498.0,-0.03,-0.03,15,15,0,0,1.0,0,0.2
+q,2,0.50,wide,200,2,9,31322,91264226.0,91279245.0,14.5687,14.5711,0.9151,0.915,83520290.0,0.02,0.01,15,15,0,0,1.0,0,0.18
+q,3,0.75,wide,200,3,9,28714,94350064.0,94345470.0,16.4293,16.4285,0.8725,0.8725,82320083.0,-0.0,-0.0,15,15,0,0,1.0,0,0.22
+q,4,1.00,wide,200,4,9,26799,98246845.0,98296659.0,18.3303,18.3396,0.8366,0.8362,82192954.0,0.05,0.05,15,15,0,0,1.0,0,0.21
+q,0,0.00,wide,20000,0,9,520,131077064.0,131074191.0,12.6036,12.6033,0.8732,0.8733,114463026.0,-0.0,-0.0,15,15,0,0,1.0,0,0.1
+q,1,0.25,wide,20000,1,9,453,131298215.0,131331808.0,14.4921,14.4958,0.8285,0.8283,108775656.0,0.03,0.02,15,15,0,0,1.0,1,0.15
+q,2,0.50,wide,20000,2,9,401,131335567.0,131370597.0,16.376,16.3804,0.7942,0.7941,104310685.0,0.03,0.02,15,15,0,0,1.0,0,0.09
+q,3,0.75,wide,20000,3,9,360,131503594.0,131603169.0,18.2644,18.2782,0.767,0.7664,100858748.0,0.08,0.08,15,15,0,0,1.0,1,0.27
+q,4,1.00,wide,20000,4,9,326,131266145.0,131266651.0,20.1328,20.1329,0.7455,0.7455,97853302.0,0.0,0.0,15,15,0,0,1.0,1,0.11

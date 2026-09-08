@@ -1,7 +1,9 @@
 # 02 - libsodium signed lookup
 
-**Status: gem5 complete, re-run 2026-09-06 on the current compiler; silicon not
-yet re-measured.** The numbers below are that run: 1,100 gem5 runs, 0 failed, on
+**Status: complete on both instruments.** gem5 re-run 2026-09-06 on the current
+compiler; **silicon measured 2026-09-08 on an Apple M4**, on the same driver and
+the same library arms, and it finds the same crossover -- see "The crossover on
+silicon" immediately below. The gem5 numbers here are that 2026-09-06 run: 1,100 gem5 runs, 0 failed, on
 this repo's own `gem5-DIT` submodule at the pinned commit and its own `build/`.
 The 2026-09-05 run is kept under "Rerun 2026-09-05" and the 2026-09-03 one under
 it, so the three are comparable. What moved on 2026-09-06 is the executed switch
@@ -11,9 +13,14 @@ default; the headline shape did not move.
 The rig changed on 2026-09-03 (see "Why the rig changed"); everything measured
 before that is under "Retired signing driver" at the bottom and must not be cited.
 
-**Figures:** `figures/overhead-vs-secret-fraction.{png,pdf}` and
-`figures/predictions-suppressed-vs-L.{png,pdf}`, regenerated from `data/` by
-`utils/dit_host_screening/signed_lookup/fig_exp02.py`.
+**Figures:** `figures/crossover-gem5-vs-m4.{png,pdf}` is the headline, the two
+machines side by side. `figures/overhead-vs-secret-fraction.{png,pdf}` and
+`figures/predictions-suppressed-vs-L.{png,pdf}` are the gem5 half alone;
+`figures/predictability-gem5-vs-m4.{png,pdf}` and
+`figures/m4-predictor-width.{png,pdf}` are the mechanism. The gem5 figures come
+from `utils/dit_host_screening/signed_lookup/fig_exp02.py` and the three
+cross-machine ones from `fig_exp02_silicon.py` beside it; both read `data/` and
+nothing else.
 
 **Raw results:** `results/gem5/` holds what the rig actually wrote - one entry per
 run for all 1,100 runs, the arm switch counts, the seed file used, and the
@@ -21,6 +28,164 @@ analysis reports - before `derive_exp02.py` imports it into `data/`. Its README
 says what each file is and where the 1.7 GB of per-run `stats.txt` lives.
 
 ---
+
+# The crossover on silicon (Apple M4, 2026-09-08)
+
+The same experiment on hardware. Same driver, byte for byte; same library arms,
+seeds, contract, twins and owned list; `f_secret` measured the same way with
+`--nosecret`. What differs is the instrument (PMC0/PMC1 read from EL0, not
+simulator statistics) and that **`MSR DIT` is serialising, because that is what
+the machine does** -- the renamed curve is the counterfactual only gem5 can run,
+so on silicon there is one pass curve and it is the serialised one. The rig,
+its gates and its hazards are documented in
+`utils/dit_host_screening/signed_lookup/silicon/README.md`.
+
+**Figure:** `figures/crossover-gem5-vs-m4.{png,pdf}`. **Data:** `data/m4_arms.csv`.
+
+| | gem5 Neoverse-V2 FDP | Apple M4 |
+|---|---|---|
+| blanket, secret-heavy end | +2.3% at f=96.5% | **+1.0%** at f=95.8% |
+| blanket, public-heavy end | +31.0% at f=0.6% | **+34.4%** at f=0.4% |
+| ExpeDITe, secret-heavy end | +25.3% (serialising) | **+113.2%** |
+| ExpeDITe, public-heavy end | +0.4% | **+0.5%** |
+| **crossover** | **f\* = 63%** | **f\* = 25%** |
+| one mode write | 20-25 cycles (modelled) | **33.5 cycles (measured)** |
+
+**Both machines have the crossover, and they disagree about where it sits by a
+factor of two and a half.** Blanket's curve is nearly the same on the two -- it
+is the public lane's lost predictions either way, and it climbs to about a third
+of the request on both. What moves f\* is the pass's side: a serialising `msr
+DIT` costs 33.5 cycles on this part and the AEAD it brackets is only ~1,100
+cycles, so ~40 switches per request is +113% of a secret-heavy request against
+gem5's +25%. Selective placement is a worse deal on real silicon than the
+simulator says, and it is still the right answer below f = 25%.
+
+**IPC overhead** = unhardened IPC / arm IPC - 1, `ipc_ovh_pct` in the CSV; the
+same quantity the gem5 figure plots. 15 reps per cell, `pass - nop` is DIT and
+the rest is layout.
+
+| L | f_secret | blanket | ExpeDITe | NOP twin | pass vs blanket | blanket on the PUBLIC lane alone |
+|---|---|---|---|---|---|---|
+| 10 | 95.8% | +1.0% | +113.2% | -0.4% | +114.1% | +22.4% |
+| 30 | 84.1% | +10.6% | +102.5% | -0.6% | +85.5% | +29.8% |
+| 50 | 73.5% | +12.4% | +79.8% | -2.8% | +62.0% | +30.6% |
+| 100 | 52.0% | +18.9% | +56.2% | -2.2% | +32.9% | +33.5% |
+| 200 | 32.0% | +27.1% | +36.6% | -0.7% | **+8.5%** | +34.0% |
+| 400 | 18.7% | +29.8% | +20.0% | -1.0% | **-6.9%** | +34.4% |
+| 700 | 11.3% | +31.7% | +12.3% | -0.4% | -14.3% | +34.6% |
+| 1,000 | 8.1% | +32.5% | +8.8% | -0.4% | -17.6% | +34.6% |
+| 2,000 | 4.0% | +33.7% | +4.7% | -0.1% | -21.5% | +34.6% |
+| 5,000 | 1.6% | +34.2% | +1.8% | -0.1% | -24.0% | +34.5% |
+| 20,000 | 0.4% | +34.4% | +0.5% | -0.0% | -25.2% | +34.4% |
+
+**Reading the last column.** Blanket's cost to the *public lane alone* is flat at
++34.5% from L=400 up: it is a property of the lane, not of the request, and the
+full-flow column is just that number diluted by the secret fraction. That is the
+same mechanism gem5 reports, arrived at on hardware -- and it is why the two
+blanket curves have nearly the same shape.
+
+**The switch bill.** The pass costs 1,270-1,360 cycles per request more than its
+own NOP twin, at every L, which at the measured 33.5 cycles per serialising write
+is **38-41 executed mode writes per request** -- against the **32 committed
+writes** gem5 counts with `commit.ditWrites` on the same library. Two instruments
+that cannot read each other's counter agreeing within 25%. (The pass also retires
+~73 more instructions per request than unhardened, but that is not the switch
+count: most of it is the DIT twins' own code, which the NOP twin retires too.)
+
+## Why the canonical lane reads zero here, and what that is really saying
+
+Run the **canonical** gem5 lane on this M4 -- the one every table above the
+divider uses -- and blanket DIT costs **nothing**. On the public
+lane alone -- which is the whole of blanket's bill -- it reads -0.12% to +0.37%
+across all eleven lengths, at every q from 0 to 1, and at every table size from
+4 KB to 512 KB (`data/m4_arms.csv` lane `wide`, `data/m4_predictability_sweep.csv`,
+`data/m4_tblbits_sweep.csv`). Full-flow it sits inside the layout band, -0.4% to
++1.6%. Selective placement then loses at every length and there is no crossover
+at all.
+
+That is not "DIT is free on Apple silicon". **It is the width of one constant.**
+
+The lane's public side reads a record header on q of its iterations: a constant
+value at a data-dependent address, the load a value predictor is meant to take
+off the critical path. The canonical header is `0x2545F4914F6CDD1D`, 62 bits.
+**This machine's load value predictor holds 36 bits.** Sweep the header's width
+on the same lane and the answer is a step function, not a slope:
+
+| bits in the header's value | 8 | 16 | 24 | 32 | 34 | 35 | **36** | **37** | 38 | 40 | 48 | 56 | 62 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| blanket, public lane, q=1 | +45.6 | +45.6 | +45.6 | +45.6 | +45.6 | +45.6 | **+45.6** | **+0.0** | +0.0 | +0.0 | -0.0 | +0.0 | +0.0 |
+| blanket, public lane, q=¾ | +34.5 | +34.5 | +34.5 | +34.5 | +34.5 | +34.5 | **+34.5** | **-0.0** | -0.1 | +0.0 | -0.0 | -0.0 | -0.0 |
+
+`data/m4_header_width.csv`, figure `figures/m4-predictor-width.{png,pdf}`. 13
+widths, 15 reps each, 0-2 rejects per cell. Nothing in between: a header that
+fits in 36 bits is predicted and a header that needs 37 is not.
+
+Give the lane a header that fits -- `HDR_CONST = 0xCAFEBABE`, one constant, no
+code changed, identical instruction count -- and **the M4 tracks gem5's own q
+sweep point for point** (`figures/predictability-gem5-vs-m4.{png,pdf}`):
+
+| q | 0 | ¼ | ½ | ¾ | 1 |
+|---|---|---|---|---|---|
+| gem5, 62-bit header (`gem5_predictability_sweep.csv`, L=20,000) | +0.0% | +11.4% | +25.1% | +30.9% | +40.3% |
+| **M4, 32-bit header** (`m4_predictability_sweep.csv`) | +0.0% | **+12.2%** | **+23.7%** | **+34.5%** | **+45.6%** |
+| M4, 62-bit header — the gem5 lane | -0.0% | +0.0% | +0.0% | +0.1% | +0.0% |
+
+**So the paper's claim survives the machine, and gains a caveat with teeth.** The
+crossover is real on hardware and it is the same mechanism. But a value
+predictor is a finite structure, and *which* public code loses predictions under
+DIT depends on what that structure can hold. gem5's EVES/VTAGE keeps 64 bits and
+predicts a hash-shaped header; Apple's keeps 36 and predicts a type tag, a
+length, a small enum, a flag word, a base offset -- which is what real record
+headers mostly are, and is exactly the population FLOP counts. A microbenchmark
+that picks a header value at random from the 64-bit range will measure zero here
+and 31% there, and neither number is the machine's fault.
+
+## What this rig can and cannot say
+
+- **Unrooted, so the thread is not pinned.** `kern.sched_thread_bind_cpu` is
+  root-only. The PMCs are per-core, so a thread that migrates mid-region
+  differences two cores' counters; the region is bracketed with `CNTVCT_EL0` and
+  any sample whose implied clock is not a P-core's 3.4-5.0 GHz is **rejected and
+  counted**, never dropped quietly. 34 rejects across the 88 crossover cells,
+  0-3 per cell, every one of them in `out/runs-*.jsonl`.
+- **The secret-heavy end is the soft cell**, exactly as it is on gem5. Blanket at
+  f=95.8% read +3.8% on one run of the sweep and +1.0% on the next; at f>=84%
+  everything is within a point. The public lane is 4% of that request, so
+  blanket's whole effect is 4% of a 34% number and layout moves it as much as the
+  mode does. **The trend and the low-f points are solid; the exact value at
+  f>90% is not.**
+- **The page-mapping lottery.** Above 64 KB of table a run's cycles come out
+  bimodal, two states ~15% apart chosen by the physical pages the kernel hands
+  the BSS, identical for every arm. That is the same size as the effect being
+  measured. The canonical lane runs at 4 KB, where there is no split; where there
+  is one the rig reports the fast cluster's median and records the split in
+  `n_hi`. See the rig README.
+- **The public lane is synthetic and q=0.75 is a chosen midpoint**, on this
+  instrument exactly as on the other one.
+- **One machine, one part.** M4, 4 P-cores at 4.40 GHz. The 36-bit width is this
+  part's; nothing here says an M3 or an M5 has the same predictor.
+
+Cross-checks against what the project already measured elsewhere, all on the same
+binaries: blanket on the AEAD alone reads **+0.00%** here against experiment 09's
+**-0.54%** on M5; the pass on the same op reads **+113%** against 09's **+114%**;
+one serialising `msr DIT` measures **33.5 cycles** against the cost model's
+**~30**, and a same-value write **11.5** against its **12**.
+
+## Reproducing the silicon half
+
+```sh
+export ARMS_WORK=$HOME/Documents/libsodium-exp02-m4
+export LLVM_BIN=<repo>/build/bin
+utils/dit_host_screening/signed_lookup/silicon/build_silicon.sh
+# ... the sweeps, then derive_exp02_m4.py and fig_exp02_silicon.py
+```
+
+Six minutes of measurement on a quiet machine; the rig README has the exact
+command lines and the reason for every gate.
+
+---
+
+# The gem5 half
 
 ## The flow
 
@@ -193,13 +358,15 @@ It drives the rig in gem5-DIT (`benchmarks/signed_lookup/build_gem5_linux.sh`,
 `run_gem5.py`; gem5 on an aarch64 Linux host, no sysroot, the macOS cross path
 is `build.sh`), then `utils/dit_host_screening/signed_lookup/derive_exp02.py`
 writes `data/` with a provenance line naming the gem5-DIT and LLVM commits, and
-`fig_exp02.py` draws `figures/`. Four sweeps, **1,100 gem5 runs**, a ~60 s median
+`fig_exp02.py` draws the gem5 figures. Four sweeps, **1,100 gem5 runs**, a ~60 s median
 each; on a 160-core box at 100 concurrent processes the sweep is about 20 minutes
 and the five-variant build ahead of it about as long again. `JOBS` defaults to
 80% of `nproc`. gem5 is deterministic and the runner roots the
 binary path at a constant-length `/tmp` path, so another machine reproduces
-`data/` up to its simulator and compiler builds. Silicon (`run_crossover.py`,
-M5, root for kperf) has not been rerun on this lane.
+`data/` up to its simulator and compiler builds. The silicon half is a
+separate rig with its own reproduce steps -- see "Reproducing the silicon half"
+above. (gem5-DIT's own `run_crossover.py`, the M5/kperf path, is superseded by
+it and has not been rerun on this lane.)
 
 ## The four arms (2026-09-05; superseded as the headline by the 2026-09-06 run above)
 
@@ -401,7 +568,9 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 
 ## Known limits
 
-- **Silicon is not re-measured.** The M5 crossover below is the retired lane's.
+- **Silicon IS now measured**, on an M4, 2026-09-08 -- see "The crossover on
+  silicon" at the top. The M5 crossover further down is the retired lane's and
+  is superseded by it.
 - **The public lane is synthetic**, and q=0.75 is a chosen midpoint, not a
   measured property of any application. Experiment 01's coin selection is the
   real-application public lane.
@@ -418,6 +587,14 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 |---|---|
 | `reproduce.sh` | build, sweep, derive, figures, from the committed sources |
 | `results/gem5/` | **the raw run**: one entry per run for all 1,100 runs, the runner's own CSVs, the arm switch counts, the seed file used, and the pass build's info-loss and precision reports. `data/` is the derived import of this |
+| `data/m4_arms.csv` | **the silicon half**: 11 L x 4 arms x 2 lanes on an Apple M4, full flow and public lane alone, 15 reps |
+| `data/m4_header_width.csv` | the 36-bit step: what width of constant this machine's value predictor holds |
+| `data/m4_predictability_sweep.csv` | q = 0..1 on both lanes, at L=200 and L=20,000 |
+| `data/m4_tblbits_sweep.csv` | 4 KB to 512 KB: the wide lane's zero is not an L1-residency artifact |
+| `figures/crossover-gem5-vs-m4.{png,pdf}` | **the headline**: the crossover on both machines, side by side |
+| `figures/predictability-gem5-vs-m4.{png,pdf}` | blanket's public-lane cost vs q, both machines and both lanes |
+| `figures/m4-predictor-width.{png,pdf}` | the step function at 36 bits |
+| `utils/dit_host_screening/signed_lookup/silicon/` (repo root) | the silicon rig and its README |
 | `data/gem5_arms.csv` | **canonical**: 6 L x 4 arms, both switch models, median of 5 offsets |
 | `data/gem5_value_predictor_by_arm.csv` | what the value predictor did under each arm, per L (figure 2's input) |
 | `data/gem5_value_predictor.csv` | public lane alone, predictor totals with and without DIT |
