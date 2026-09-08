@@ -284,11 +284,15 @@ if a.info_md:
           "`CHUNKS=16,1350,16384`: the ten rows of the paper table plus the other rows those selection names reach (the ECDSA P-256 "
           "verify row among them, which never enters the bracket and is not in the table).\n"]
     if rec:
-        M += [f"**The recorded run in `results-m4/`** (before the census existed) used ten filters, "
-              f"`{','.join(rec['tests'] or [])}`, which select {rec['rows']} rows in {rec['families']} families. "
-              f"{rec['rows_never']} of those rows, in {len(rec['families_never'])} families, never enter the bracket: "
+        same = sorted(rec['tests'] or []) == sorted(filters)
+        M += [(f"**The recorded run in `results-m4/`** is this default run: the {len(filters)} filters above, {rec['rows']} rows in "
+               f"{rec['families']} families, of which the {rec['rows_never']} passenger rows never enter the bracket: "
+               if same else
+               f"**The recorded run in `results-m4/`** used a different filter list, `{','.join(rec['tests'] or [])}`, which selects "
+               f"{rec['rows']} rows in {rec['families']} families; {rec['rows_never']} of those rows, in {len(rec['families_never'])} families, "
+               f"never enter the bracket: ")
               + ', '.join(f"`{f}`" for f in rec['families_never']) + ". They are kept in the recorded tables as what they are, "
-              "rows on which the bracket costs nothing; the LaTeX band table leaves them out and says so in its caption.\n"]
+              "rows on which the bracket costs nothing; the analysis and the LaTeX band table set them aside and say so.\n"]
     M += ["## Regenerating\n",
           "```", "paper_experiments/14-awslc-shipping-bracket/reproduce.sh census      # ~5 min, no sudo: ditcount build + every row once",
           "```", "writes `data/dit_census.{md,json}`, `data/bracketed_filters.txt` and this file.\n"]

@@ -1,19 +1,19 @@
 # Experiment 14 analysis: AWS-LC's DIT bracket on `bssl speed`
 
-Source `paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, analysed 2026-09-07. Arms: unhardened (release, no DIT), coarse (DIT set before main), AWS default (the bracket as shipped), AWS default + sb, AWS hoist (-dit), AWS hoist + sb.
+Source `/Users/rgangar/.treehouse/llvm-data-independent-timing-7b712d/1/llvm-data-independent-timing/paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, analysed 2026-09-07. Arms: unhardened (release, no DIT), coarse (DIT set before main), AWS default (the bracket as shipped), AWS default + sb, AWS hoist (-dit), AWS hoist + sb.
 
 ## Validity
 
-- 3 runs, each cell the MEDIAN across runs of that run's median; per-cell spread across runs (max-min)/mean: median 0.08%, p90 1.49%, max 300.0%
-  - run 1: flagged 929, unpinned 0, failures 0, rows 127
-  - run 2: flagged 927, unpinned 0, failures 0, rows 127
-  - run 3: flagged 925, unpinned 0, failures 0, rows 127
+- 3 runs, each cell the MEDIAN across runs of that run's median; per-cell spread across runs (max-min)/mean: median 0.10%, p90 1.06%, max 13.6%
+  - run 1: flagged 352, unpinned 0, failures 0, rows 410
+  - run 2: flagged 350, unpinned 0, failures 0, rows 410
+  - run 3: flagged 355, unpinned 0, failures 0, rows 410
 - pinned to CPU 9 (kern.sched_thread_bind_cpu); processes not reporting the bind: 0
-- failures: 0; rows without PMC cycles: 0; samples flagged (kept) for implied clock outside band [3000, 4700]: 2781
-- implied clock of all samples: min 3996, p10 4068, median 4182, max 703660097 MHz (19782 samples)
-- A samples per row: min 21, median 21, max 42 (reps 7, window 400 ms)
+- failures: 0; rows without PMC cycles: 0; samples flagged (kept) for implied clock outside band [3000, 4700]: 1057
+- implied clock of all samples: min 3793, p10 4042, median 4111, max 5629151375 MHz (51660 samples)
+- A samples per row: min 21, median 21.0, max 21 (reps 7, window 50 ms)
 - DIT readback gate: [['A', 0, '0'], ['B', 0, '0'], ['Bs', 0, '0'], ['C', 1, '1'], ['H', 0, '0'], ['Hs', 0, '0']]
-- SUSPECT cells (a cell whose median implies a clock outside the band, i.e. a majority of its samples was flagged; kept, marked with a dagger): 1 in rows: EVP-AES-128-CTR decrypt [16 B]
+- SUSPECT cells (a cell whose median implies a clock outside the band, i.e. a majority of its samples was flagged; kept, marked with a dagger): 0
 
 ## The three prices (one bracket entry per op: AEAD-AES-128-GCM seal, 16 B)
 
@@ -21,207 +21,578 @@ Source `paper_experiments/14-awslc-shipping-bracket/results-m4/raw/speed.json`, 
 |---|---|
 | two mode-changing writes (AWS default - unhardened) | 156 |
 | read + one non-changing write (AWS hoist - unhardened) | 18 |
-| sb after a changing write (AWS default + sb - AWS default) | 2 |
-| sb after a non-changing write (AWS hoist + sb - AWS hoist) | 66 |
-| same four, from the single-block AES row | 94 / -1 / 30 / 49 |
+| sb after a changing write (AWS default + sb - AWS default) | 4 |
+| sb after a non-changing write (AWS hoist + sb - AWS hoist) | 65 |
+| same four, from the single-block AES row | 96 / -1 / 28 / 49 |
 
 ## Is the cost constant across sizes? (absolute AWS default - unhardened cycles per op)
 
 | family | 16 B | 256 B | 1350 B | 8 KB | 16 KB | max/min |
 |---|---|---|---|---|---|---|
-| AEAD-AES-128-CBC-SHA1 open | 144 | 136 | 147 | 118 | 97 | 1.51 |
-| AEAD-AES-128-CBC-SHA1 seal | 189 | 193 | 206 | 488 | 823 | 4.35 |
-| AEAD-AES-128-CCM-Bluetooth seal | 129 | 160 | 159 | 276 | 444 | 3.44 |
-| AEAD-AES-128-GCM open | 181 | 168 | 164 | 163 | 162 | 1.12 |
-| AEAD-AES-128-GCM seal | 156 | 155 | 155 | 165 | 176 | 1.14 |
-| AEAD-AES-128-GCM-SIV open | 215 | 217 | 208 | 220 | 219 | 1.06 |
-| AEAD-AES-128-GCM-SIV seal | 148 | 148 | 127 | 116 | 115 | 1.29 |
-| AEAD-ChaCha20-Poly1305 seal | 258 | 120 | 114 | 119 | 120 | 2.26 |
-| CMAC-AES-128-CBC | 224 | 1,679 | 8,184 | 48,396 | 96,282 | 430.39 |
-| EVP-AES-128-CBC decrypt | 336 | 336 | 347 | 317 | 305 | 1.14 |
-| EVP-AES-128-CBC encrypt | 331 | 370 | 421 | 528 | 739 | 2.23 |
-| EVP-AES-128-CTR decrypt | 274 | 330 | 342 | 324 | 322 | 1.25 |
-| EVP-AES-128-CTR encrypt | 273 | 332 | 348 | 324 | 326 | 1.28 |
-| EVP-AES-128-GCM decrypt | 564 | 570 | 545 | 544 | 542 | 1.05 |
-| EVP-AES-128-GCM encrypt | 523 | 518 | 531 | 533 | 546 | 1.05 |
-| HMAC-SHA256 | -1 | 0 | 1 | 0 | 2 | n/a |
-| HMAC-SHA256-OneShot | 0 | -1 | -2 | 1 | 7 | n/a |
-| RNG | 474 | 493 | 426 | 464 | 447 | 1.16 |
-| SHA-256 | 0 | -0 | -0 | 0 | -1 | n/a |
+| AEAD-AES-128-CBC-SHA1 open | 146 | 138 | 135 | 114 | 83 | 1.77 |
+| AEAD-AES-128-CBC-SHA1 seal | 188 | 186 | 253 | -39 | 59 | n/a |
+| AEAD-AES-128-CCM-Bluetooth seal | 130 | 161 | 156 | 221 | 343 | 2.64 |
+| AEAD-AES-128-GCM open | 181 | 171 | 167 | 164 | 159 | 1.14 |
+| AEAD-AES-128-GCM seal | 156 | 156 | 153 | 164 | 171 | 1.12 |
+| AEAD-AES-128-GCM-SIV open | 215 | 213 | 207 | 218 | 220 | 1.06 |
+| AEAD-AES-128-GCM-SIV seal | 148 | 147 | 125 | 116 | 115 | 1.28 |
+| AEAD-AES-256-CBC-SHA1 open | 141 | 129 | 121 | 49 | -42 | n/a |
+| AEAD-AES-256-CBC-SHA1 seal | 185 | 186 | 155 | -50 | -303 | n/a |
+| AEAD-AES-256-GCM open | 176 | 164 | 164 | 162 | 155 | 1.13 |
+| AEAD-AES-256-GCM seal | 155 | 152 | 151 | 161 | 171 | 1.13 |
+| AEAD-AES-256-GCM-SIV open | 234 | 243 | 243 | 253 | 246 | 1.08 |
+| AEAD-AES-256-GCM-SIV seal | 172 | 129 | 135 | 122 | 123 | 1.41 |
+| AEAD-ChaCha20-Poly1305 seal | 257 | 119 | 114 | 111 | 117 | 2.32 |
+| AEAD-DES-EDE3-CBC-SHA1 seal | 205 | 188 | -764 | -4,943 | -9,790 | n/a |
+| AES-256-XTS decrypt | 292 | 282 | 321 | 264 | 247 | 1.30 |
+| AES-256-XTS encrypt | 201 | 274 | 297 | 263 | 248 | 1.48 |
+| CMAC-AES-128-CBC | 224 | 1,680 | 8,188 | 48,545 | 96,621 | 431.90 |
+| CMAC-AES-256-CBC | 235 | 1,697 | 8,338 | 49,302 | 98,437 | 418.77 |
+| EVP-AES-128-CBC decrypt | 334 | 332 | 344 | 314 | 299 | 1.15 |
+| EVP-AES-128-CBC encrypt | 330 | 370 | 422 | 529 | 740 | 2.24 |
+| EVP-AES-128-CTR decrypt | 272 | 325 | 338 | 323 | 318 | 1.24 |
+| EVP-AES-128-CTR encrypt | 274 | 331 | 346 | 322 | 319 | 1.26 |
+| EVP-AES-128-GCM decrypt | 562 | 572 | 550 | 546 | 541 | 1.06 |
+| EVP-AES-128-GCM encrypt | 521 | 523 | 534 | 531 | 546 | 1.05 |
+| EVP-AES-192-CBC decrypt | 331 | 336 | 322 | 288 | 256 | 1.32 |
+| EVP-AES-192-CBC encrypt | 348 | 373 | 392 | 483 | 503 | 1.45 |
+| EVP-AES-192-CTR decrypt | 268 | 326 | 336 | 317 | 317 | 1.26 |
+| EVP-AES-192-CTR encrypt | 279 | 334 | 343 | 321 | 318 | 1.23 |
+| EVP-AES-192-GCM decrypt | 566 | 579 | 558 | 559 | 565 | 1.04 |
+| EVP-AES-192-GCM encrypt | 528 | 538 | 539 | 541 | 549 | 1.04 |
+| EVP-AES-256-CBC decrypt | 333 | 332 | 318 | 257 | 190 | 1.75 |
+| EVP-AES-256-CBC encrypt | 349 | 382 | 386 | 141 | -154 | n/a |
+| EVP-AES-256-CTR decrypt | 303 | 333 | 334 | 319 | 321 | 1.10 |
+| EVP-AES-256-CTR encrypt | 320 | 341 | 348 | 330 | 335 | 1.09 |
+| EVP-AES-256-GCM decrypt | 570 | 591 | 573 | 559 | 550 | 1.07 |
+| EVP-AES-256-GCM encrypt | 533 | 562 | 545 | 557 | 568 | 1.06 |
+| EVP-ChaCha20-Poly1305 decrypt | 492 | 521 | 497 | 496 | 496 | 1.06 |
+| EVP-ChaCha20-Poly1305 encrypt | 481 | 482 | 496 | 459 | 462 | 1.08 |
+| EVP-RC4 decrypt | 311 | 296 | 295 | 294 | 288 | 1.08 |
+| EVP-RC4 encrypt | 314 | 297 | 295 | 284 | 289 | 1.11 |
+| RNG | 494 | 490 | 439 | 456 | 447 | 1.13 |
 
 ## Density: how many bracket entries an operation pays for
 
-One AEAD-level entry (two changing writes) costs 156 cycles on the seal row and one single-block AES entry 94; AWS default - unhardened divided by the applicable price is the entries per op.
+One AEAD-level entry (two changing writes) costs 156 cycles on the seal row and one single-block AES entry 96; AWS default - unhardened divided by the applicable price is the entries per op.
 
 | row | AWS default - unhardened cycles | unit price | implied entries/op | AWS default vs unhardened |
 |---|---|---|---|---|
-| CMAC-AES-128-CBC [16384 B] | 96,282 | 94 (single-block AES entry) | 1028 (1024 AES blocks) | +236.0% |
-| CMAC-AES-128-CBC [16 B] | 224 | 94 (single-block AES entry) | 2 (1 AES blocks) | +398.8% |
-| EVP-AES-128-GCM encrypt [16 B] | 523 | 156 (AEAD-level entry) | 3 | +302.6% |
-| EVP-AES-128-GCM encrypt [16384 B] | 546 | 156 (AEAD-level entry) | 3 | +9.5% |
-| EVP-AES-128-CBC decrypt [16 B] | 336 | 156 (AEAD-level entry) | 2 | +325.1% |
-| AEAD-AES-128-GCM open [16 B] | 181 | 156 (AEAD-level entry) | 1 | +88.3% |
+| CMAC-AES-128-CBC [16384 B] | 96,621 | 96 (single-block AES entry) | 1011 (1024 AES blocks) | +236.6% |
+| CMAC-AES-128-CBC [16 B] | 224 | 96 (single-block AES entry) | 2 (1 AES blocks) | +398.6% |
+| EVP-AES-128-GCM encrypt [16 B] | 521 | 156 (AEAD-level entry) | 3 | +301.9% |
+| EVP-AES-128-GCM encrypt [16384 B] | 546 | 156 (AEAD-level entry) | 4 | +9.5% |
+| EVP-AES-128-CBC decrypt [16 B] | 334 | 156 (AEAD-level entry) | 2 | +323.3% |
+| AEAD-AES-128-GCM open [16 B] | 181 | 156 (AEAD-level entry) | 1 | +88.1% |
 
 ## Coarse DIT moving a row by more than 2% (C vs A, rows with MAD < 2%)
 
 | row | unhardened cyc/op | Coarse | AWS hoist | MAD |
 |---|---|---|---|---|
-| RNG [16 B] | 6,795 | -25.4% | -25.4% | 0.14% |
-| RNG [256 B] | 6,844 | -25.3% | -25.0% | 0.13% |
-| HMAC-SHA256 init | 275 | -24.8% | -24.4% | 0.21% |
-| RNG [1350 B] | 7,294 | -23.5% | -23.6% | 0.15% |
-| RNG [8192 B] | 9,611 | -17.9% | -17.7% | 0.09% |
-| RNG [16384 B] | 12,476 | -13.9% | -13.8% | 0.03% |
-| AEAD-ChaCha20-Poly1305 seal init | 37 | -13.7% | -11.5% | 1.66% |
-| Ed25519 key generation | 21,850 | -7.8% | -7.8% | 0.06% |
-| ML-KEM-768 keygen | 31,777 | -5.1% | -5.0% | 0.06% |
-| ML-KEM-768 encaps | 33,425 | -5.1% | -5.2% | 0.24% |
-| SHA-256 [256 B] | 404 | -4.1% | +0.3% | 0.11% |
-| ECDSA P-256 signing | 42,742 | -3.8% | -3.4% | 0.11% |
-| EVP ECDH X25519 | 70,921 | -2.4% | -2.3% | 0.06% |
-| AEAD-AES-128-CBC-SHA1 seal [256 B] | 1,055 | +2.1% | +3.5% | 0.14% |
-| EVP-AES-128-CBC decrypt init | 214 | +3.6% | +8.0% | 0.77% |
-| AEAD-AES-128-CBC-SHA1 seal [16 B] | 384 | +5.3% | +10.3% | 0.64% |
-| EVP-AES-128-GCM decrypt init | 412 | +6.8% | +7.2% | 1.66% |
-| EVP-AES-128-GCM encrypt init | 397 | +7.0% | +10.2% | 1.37% |
-| AEAD-AES-128-GCM-SIV seal [16 B] | 402 | +7.1% | +6.7% | 0.21% |
-| EVP-AES-128-GCM decrypt [16 B] | 138 | +7.4% | +18.4% | 0.12% |
-| AEAD-AES-128-CCM-Bluetooth seal init | 64 | +8.2% | +9.7% | 0.09% |
-| EVP-AES-128-CBC encrypt [16 B] | 94 | +10.4% | +10.2% | 0.22% |
+| EVP-AES-192-CTR encrypt [16 B] | 107 | -49.3% | -35.9% | 0.19% |
+| EVP-AES-128-CTR encrypt [16 B] | 102 | -48.9% | -33.8% | 0.22% |
+| EVP-AES-192-CTR decrypt [16 B] | 118 | -45.5% | -20.9% | 0.28% |
+| EVP-AES-128-CTR decrypt [16 B] | 112 | -44.6% | -17.1% | 0.17% |
+| RNG [16 B] | 6,797 | -25.6% | -25.4% | 0.16% |
+| RNG [256 B] | 6,846 | -25.4% | -25.2% | 0.14% |
+| RNG [1350 B] | 7,289 | -23.7% | -23.4% | 0.09% |
+| RNG [8192 B] | 9,617 | -18.0% | -17.8% | 0.09% |
+| RNG [16384 B] | 12,480 | -14.0% | -13.9% | 0.11% |
+| AEAD-ChaCha20-Poly1305 seal init | 36 | -10.7% | -8.4% | 0.70% |
+| ML-KEM-512 keygen | 21,484 | -7.8% | -7.6% | 0.10% |
+| Ed25519 key generation | 21,861 | -7.8% | -7.9% | 0.06% |
+| ML-KEM-512 encaps | 23,385 | -7.3% | -7.0% | 0.11% |
+| Generate P-256 with EVP_PKEY_keygen | 24,303 | -6.9% | -6.4% | 0.20% |
+| AES-256-XTS encrypt [16 B] | 124 | -6.9% | -3.8% | 1.85% |
+| Generate P-256 with EC_KEY_generate_key | 24,219 | -6.7% | -6.5% | 0.15% |
+| HRSS encap | 28,107 | -6.0% | -6.0% | 0.06% |
+| ML-KEM-768 encaps | 33,417 | -5.1% | -5.2% | 0.22% |
+| ML-KEM-768 keygen | 31,701 | -4.9% | -4.7% | 0.15% |
+| Generate P-224 with EC_KEY_generate_key | 37,128 | -4.5% | -4.3% | 0.04% |
+| Generate P-224 with EVP_PKEY_keygen | 37,222 | -4.4% | -4.1% | 0.10% |
+| TrustToken-Exp2PMB-Batch10 begin_redemption | 569 | -4.3% | -0.3% | 1.82% |
+| Generate P-256 with EC_KEY_generate_key_fips | 41,959 | -3.9% | -3.7% | 0.10% |
+| ML-KEM-1024 keygen | 42,871 | -3.8% | -3.6% | 0.14% |
+| ECDSA P-256 signing | 42,729 | -3.7% | -3.2% | 0.09% |
+| ML-KEM-1024 encaps | 45,473 | -3.7% | -4.0% | 0.12% |
+| AES-256-XTS encrypt [256 B] | 126 | -2.7% | -0.4% | 0.19% |
+| Generate P-224 with EC_KEY_generate_key_fips | 68,305 | -2.5% | -2.2% | 0.04% |
+| ECDSA P-224 signing | 61,495 | -2.5% | -2.5% | 0.07% |
+| MLDSA44 keygen | 65,274 | -2.4% | -2.4% | 0.07% |
+| EVP ECDH X25519 | 70,921 | -2.3% | -2.2% | 0.05% |
+| TrustToken-Exp2PMB-Batch1 begin_redemption | 566 | +2.0% | +6.3% | 1.25% |
+| TrustToken-Exp2VOfPRF-Batch1 begin_redemption | 399 | +2.0% | +3.2% | 1.37% |
+| ECDSA P-384 signing | 184,097 | +2.5% | +2.8% | 0.11% |
+| TrustToken-Exp2VOPRF-Batch10 begin_issuance | 5,056,835 | +2.5% | +2.7% | 0.06% |
+| TrustToken-Exp2PMB-Batch1 begin_issuance | 505,422 | +2.6% | +2.7% | 0.05% |
+| TrustToken-Exp1-Batch10 begin_issuance | 5,052,179 | +2.6% | +2.7% | 0.07% |
+| TrustToken-Exp2PMB-Batch10 begin_issuance | 5,047,609 | +2.7% | +2.7% | 0.05% |
+| TrustToken-Exp2VOfPRF-Batch1 begin_issuance | 505,350 | +2.7% | +2.8% | 0.05% |
+| TrustToken-Exp2VOfPRF-Batch1 redeem | 422,221 | +2.7% | +2.8% | 0.07% |
+| TrustToken-Exp1-Batch1 begin_issuance | 505,593 | +2.7% | +2.8% | 0.06% |
+| TrustToken-Exp2VOPRF-Batch10 redeem | 422,130 | +2.7% | +2.8% | 0.23% |
+| ECDSA P-521 verify | 659,606 | +2.8% | +3.2% | 0.25% |
+| EVP-AES-128-CTR decrypt init | 191 | +3.1% | +10.6% | 1.59% |
+| TrustToken-Exp2VOPRF-Batch10 issue | 8,230,992 | +3.3% | +3.4% | 0.26% |
+| TrustToken-Exp2VOPRF-Batch10 begin_redemption | 402 | +3.5% | +9.1% | 1.76% |
+| EVP-AES-256-GCM decrypt init | 407 | +3.5% | +6.2% | 1.33% |
+| TrustToken-Exp2VOPRF-Batch10 finish_issuance | 9,076,695 | +3.5% | +3.7% | 0.23% |
+| EVP-AES-256-GCM encrypt init | 401 | +3.7% | +6.6% | 1.02% |
+| TrustToken-Exp2PMB-Batch10 finish_issuance | 26,782,405 | +4.0% | +4.6% | 0.14% |
+| AEAD-AES-256-CBC-SHA1 seal [16 B] | 405 | +4.0% | +8.4% | 0.30% |
+| EVP-AES-192-CBC decrypt init | 211 | +4.1% | +7.2% | 1.83% |
+| TrustToken-Exp1-Batch10 finish_issuance | 26,767,910 | +4.3% | +4.5% | 0.19% |
+| ECDSA P-521 signing | 327,781 | +4.7% | +4.9% | 0.12% |
+| TrustToken-Exp1-Batch1 begin_redemption | 607 | +4.8% | +1.5% | 1.76% |
+| AEAD-AES-128-CBC-SHA1 seal [16 B] | 385 | +4.8% | +11.1% | 0.47% |
+| TrustToken-Exp2VOfPRF-Batch1 issue | 2,170,695 | +5.0% | +4.8% | 0.32% |
+| TrustToken-Exp2VOfPRF-Batch1 finish_issuance | 3,020,914 | +5.4% | +5.1% | 0.34% |
+| TrustToken-Exp1-Batch10 generate_key | 1,784,724 | +5.5% | +5.6% | 0.05% |
+| TrustToken-Exp1-Batch1 generate_key | 1,784,765 | +5.5% | +5.8% | 0.03% |
+| TrustToken-Exp2PMB-Batch10 generate_key | 1,783,876 | +5.5% | +5.7% | 0.04% |
+| TrustToken-Exp2PMB-Batch1 generate_key | 1,783,659 | +5.6% | +5.7% | 0.08% |
+| EVP-RC4 decrypt [16 B] | 75 | +5.6% | +41.1% | 0.14% |
+| AES-256-XTS decrypt [16 B] | 54 | +5.6% | +37.3% | 1.36% |
+| EVP-RC4 encrypt [16 B] | 72 | +5.7% | +18.6% | 0.18% |
+| TrustToken-Exp2PMB-Batch1 finish_issuance | 10,381,666 | +5.7% | +6.6% | 0.25% |
+| AEAD-DES-EDE3-CBC-SHA1 seal init | 1,085 | +5.7% | +6.3% | 1.01% |
+| TrustToken-Exp2PMB-Batch10 issue | 37,402,863 | +5.9% | +6.6% | 0.10% |
+| EVP-AES-192-GCM decrypt init | 394 | +6.0% | +8.9% | 0.49% |
+| TrustToken-Exp1-Batch10 issue | 37,395,864 | +6.0% | +6.7% | 0.09% |
+| EVP-AES-256-GCM decrypt [16 B] | 142 | +6.1% | +16.1% | 0.17% |
+| TrustToken-Exp1-Batch1 finish_issuance | 10,367,916 | +6.1% | +6.6% | 0.19% |
+| TrustToken-Exp2PMB-Batch1 issue | 10,405,956 | +6.1% | +7.7% | 0.09% |
+| TrustToken-Exp1-Batch1 issue | 10,400,557 | +6.2% | +7.9% | 0.05% |
+| TrustToken-Exp2PMB-Batch1 redeem | 2,962,446 | +6.5% | +7.0% | 0.13% |
+| EVP-AES-192-GCM encrypt init | 387 | +6.5% | +9.5% | 0.52% |
+| TrustToken-Exp2PMB-Batch10 redeem | 2,960,840 | +6.6% | +7.0% | 0.07% |
+| TrustToken-Exp1-Batch1 redeem | 2,962,081 | +6.6% | +7.1% | 0.09% |
+| TrustToken-Exp1-Batch10 redeem | 2,961,119 | +6.7% | +7.0% | 0.09% |
+| EVP-AES-192-GCM decrypt [16 B] | 139 | +6.9% | +18.2% | 0.16% |
+| EVP-AES-128-GCM decrypt init | 403 | +6.9% | +9.6% | 0.68% |
+| EVP-AES-128-GCM decrypt [16 B] | 138 | +7.1% | +18.6% | 0.28% |
+| AEAD-AES-128-GCM-SIV seal [16 B] | 402 | +7.2% | +7.0% | 0.16% |
+| EVP-AES-128-GCM encrypt init | 396 | +7.2% | +10.2% | 0.88% |
+| EVP-AES-128-CBC encrypt [16 B] | 93 | +10.2% | +10.3% | 0.27% |
+| Ed25519 PKCS#8 v2 encode | 357 | +12.6% | +12.1% | 0.33% |
+| Ed25519 PKCS#8 v1 encode | 291 | +14.4% | +14.5% | 0.81% |
 
 ## Every row (percent over A, cycles per op)
 
 | row | unhardened cyc/op | IPC unhardened | Coarse | AWS default | AWS default - unhardened cyc | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
-| AEAD-AES-128-CBC-SHA1 open [1350 B] | 4,470 | 4.24 | +0.1% | +3.3% | 147 | +8.8% | +0.2% | +7.0% | 0.14% |
-| AEAD-AES-128-CBC-SHA1 open [16 B] | 1,218 | 4.87 | -0.0% | +11.8% | 144 | +32.6% | +0.8% | +26.8% | 0.14% |
-| AEAD-AES-128-CBC-SHA1 open [16384 B] | 26,991 | 2.62 | -0.0% | +0.4% | 97 | +1.3% | -0.1% | +1.0% | 0.02% |
-| AEAD-AES-128-CBC-SHA1 open [256 B] | 2,891 | 5.23 | +0.0% | +4.7% | 136 | +13.2% | +0.1% | +10.6% | 0.32% |
-| AEAD-AES-128-CBC-SHA1 open [8192 B] | 14,747 | 2.89 | -0.0% | +0.8% | 118 | +2.5% | -0.1% | +2.0% | 0.03% |
-| AEAD-AES-128-CBC-SHA1 open init | 614 | 5.16 | +5.4% | +25.2% | 155 | +40.7% | +3.4% | +27.3% | 2.94% |
-| AEAD-AES-128-CBC-SHA1 seal [1350 B] | 4,024 | 1.65 | -0.5% | +5.1% | 206 | +14.9% | +1.6% | +13.4% | 0.59% |
-| AEAD-AES-128-CBC-SHA1 seal [16 B] | 384 | 5.18 | +5.3% | +49.4% | 189 | +132.6% | +10.3% | +116.5% | 0.64% |
-| AEAD-AES-128-CBC-SHA1 seal [16384 B] | 43,960 | 1.25 | +1.2% | +1.9% | 823 | +1.2% | +0.1% | +1.1% | 0.14% |
-| AEAD-AES-128-CBC-SHA1 seal [256 B] | 1,055 | 2.76 | +2.1% | +18.3% | 193 | +49.6% | +3.5% | +44.2% | 0.14% |
-| AEAD-AES-128-CBC-SHA1 seal [8192 B] | 22,200 | 1.28 | +1.2% | +2.2% | 488 | +2.3% | +0.2% | +2.0% | 0.07% |
-| AEAD-AES-128-CBC-SHA1 seal init | 614 | 5.17 | +5.2% | +26.2% | 161 | +42.5% | +4.3% | +26.5% | 2.35% |
-| AEAD-AES-128-CCM-Bluetooth seal [1350 B] | 3,906 | 2.24 | +0.2% | +4.1% | 159 | +3.3% | +0.3% | +1.5% | 0.05% |
-| AEAD-AES-128-CCM-Bluetooth seal [16 B] | 177 | 5.35 | +0.7% | +73.0% | 129 | +80.0% | -0.3% | +37.8% | 0.13% |
-| AEAD-AES-128-CCM-Bluetooth seal [16384 B] | 45,632 | 2.08 | +0.5% | +1.0% | 444 | -1.1% | +0.4% | -1.2% | 0.03% |
-| AEAD-AES-128-CCM-Bluetooth seal [256 B] | 798 | 2.92 | +0.2% | +20.0% | 160 | +21.8% | +0.1% | +12.5% | 0.04% |
-| AEAD-AES-128-CCM-Bluetooth seal [8192 B] | 22,878 | 2.09 | +0.5% | +1.2% | 276 | -0.7% | +0.4% | -1.0% | 0.02% |
-| AEAD-AES-128-CCM-Bluetooth seal init | 64 | 5.46 | +8.2% | +315.4% | 201 | +334.7% | +9.7% | +186.7% | 0.09% |
-| AEAD-AES-128-GCM open [1350 B] | 716 | 5.40 | -0.2% | +22.9% | 164 | +32.1% | +5.7% | +21.0% | 0.11% |
-| AEAD-AES-128-GCM open [16 B] | 205 | 4.08 | +0.3% | +88.3% | 181 | +113.2% | +20.5% | +77.0% | 0.02% |
-| AEAD-AES-128-GCM open [16384 B] | 5,737 | 6.24 | -0.0% | +2.8% | 162 | +4.2% | +0.7% | +2.9% | 0.01% |
-| AEAD-AES-128-GCM open [256 B] | 300 | 4.22 | -0.3% | +56.0% | 168 | +77.4% | +13.1% | +51.5% | 0.40% |
-| AEAD-AES-128-GCM open [8192 B] | 2,975 | 6.14 | -0.0% | +5.5% | 163 | +7.9% | +1.3% | +5.3% | 0.04% |
-| AEAD-AES-128-GCM open init | 241 | 2.78 | +0.6% | +65.7% | 158 | +76.6% | +0.3% | +35.8% | 0.16% |
-| AEAD-AES-128-GCM seal [1350 B] | 718 | 5.32 | -0.5% | +21.6% | 155 | +21.5% | +2.1% | +11.8% | 0.04% |
-| AEAD-AES-128-GCM seal [16 B] | 191 | 4.14 | -0.2% | +81.9% | 156 | +82.7% | +9.6% | +44.2% | 0.11% |
-| AEAD-AES-128-GCM seal [16384 B] | 5,795 | 6.17 | -0.0% | +3.0% | 176 | +3.2% | +0.7% | +2.0% | 0.02% |
-| AEAD-AES-128-GCM seal [256 B] | 292 | 4.19 | +0.6% | +53.2% | 155 | +54.4% | +7.2% | +28.2% | 0.35% |
-| AEAD-AES-128-GCM seal [8192 B] | 3,000 | 6.07 | -0.0% | +5.5% | 165 | +5.8% | +1.0% | +3.4% | 0.04% |
-| AEAD-AES-128-GCM seal init | 242 | 2.78 | +0.4% | +65.7% | 159 | +76.2% | +0.2% | +36.0% | 0.07% |
-| AEAD-AES-128-GCM-SIV open [1350 B] | 1,802 | 5.45 | +0.2% | +11.6% | 208 | +14.8% | -0.1% | +10.8% | 0.09% |
-| AEAD-AES-128-GCM-SIV open [16 B] | 337 | 4.63 | +0.4% | +63.8% | 215 | +80.0% | +2.1% | +58.0% | 0.07% |
-| AEAD-AES-128-GCM-SIV open [16384 B] | 17,280 | 5.81 | +0.0% | +1.3% | 219 | +1.6% | +0.0% | +1.2% | 0.01% |
-| AEAD-AES-128-GCM-SIV open [256 B] | 601 | 4.94 | +0.8% | +36.1% | 217 | +45.0% | +1.0% | +33.1% | 0.28% |
-| AEAD-AES-128-GCM-SIV open [8192 B] | 8,814 | 5.77 | +0.0% | +2.5% | 220 | +3.1% | +0.1% | +2.3% | 0.04% |
-| AEAD-AES-128-GCM-SIV open init | 80 | 4.83 | +0.6% | +222.2% | 178 | +254.2% | -0.0% | +129.4% | 0.38% |
-| AEAD-AES-128-GCM-SIV seal [1350 B] | 1,799 | 5.44 | +0.1% | +7.1% | 127 | +8.2% | +0.3% | +4.0% | 0.09% |
-| AEAD-AES-128-GCM-SIV seal [16 B] | 402 | 3.77 | +7.1% | +36.9% | 148 | +39.9% | +6.7% | +21.6% | 0.21% |
-| AEAD-AES-128-GCM-SIV seal [16384 B] | 17,285 | 5.80 | +0.0% | +0.7% | 115 | +0.8% | -0.0% | +0.3% | 0.03% |
-| AEAD-AES-128-GCM-SIV seal [256 B] | 605 | 4.84 | +1.4% | +24.5% | 148 | +26.3% | +1.3% | +14.0% | 0.08% |
-| AEAD-AES-128-GCM-SIV seal [8192 B] | 8,819 | 5.76 | +0.0% | +1.3% | 116 | +1.5% | -0.0% | +0.7% | 0.02% |
-| AEAD-AES-128-GCM-SIV seal init | 80 | 4.82 | +0.6% | +221.6% | 177 | +254.1% | -0.1% | +127.3% | 0.18% |
-| AEAD-ChaCha20-Poly1305 seal [1350 B] | 3,161 | 3.50 | +0.0% | +3.6% | 114 | +4.4% | +0.0% | +2.1% | 0.02% |
-| AEAD-ChaCha20-Poly1305 seal [16 B] | 579 | 2.55 | +0.0% | +44.4% | 258 | +48.0% | +21.8% | +35.4% | 2.97% |
-| AEAD-ChaCha20-Poly1305 seal [16384 B] | 31,359 | 3.67 | +0.0% | +0.4% | 120 | +0.4% | -0.0% | +0.2% | 0.01% |
-| AEAD-ChaCha20-Poly1305 seal [256 B] | 897 | 2.81 | -0.1% | +13.4% | 120 | +16.5% | -0.1% | +8.5% | 0.15% |
-| AEAD-ChaCha20-Poly1305 seal [8192 B] | 15,851 | 3.65 | +0.0% | +0.7% | 119 | +0.9% | +0.0% | +0.4% | 0.02% |
-| AEAD-ChaCha20-Poly1305 seal init | 37 | 4.23 | -13.7% | +263.0% | 97 | +345.1% | -11.5% | +159.2% | 1.66% |
-| AES-128 decrypt | 34 | 1.94 | +0.0% | +278.5% | 94 | +365.9% | -2.6% | +143.6% | 0.07% |
-| AES-128 decrypt setup | 71 | 3.50 | -0.0% | +247.8% | 176 | +257.3% | -0.2% | +150.8% | 0.16% |
-| AES-128 encrypt | 34 | 1.94 | -0.1% | +277.4% | 94 | +365.9% | -2.6% | +143.6% | 0.15% |
-| AES-128 encrypt setup | 40 | 4.97 | -0.2% | +481.2% | 192 | +506.2% | +5.1% | +334.3% | 0.05% |
-| CMAC-AES-128-CBC [1350 B] | 3,398 | 2.54 | -1.4% | +240.9% | 8,184 | +292.2% | -4.0% | +127.7% | 0.03% |
-| CMAC-AES-128-CBC [16 B] | 56 | 6.43 | +0.0% | +398.8% | 224 | +487.7% | +2.7% | +240.7% | 0.23% |
-| CMAC-AES-128-CBC [16384 B] | 40,796 | 2.47 | -1.0% | +236.0% | 96,282 | +286.1% | -3.8% | +126.6% | 0.10% |
-| CMAC-AES-128-CBC [256 B] | 625 | 2.93 | +1.2% | +268.7% | 1,679 | +323.9% | -1.6% | +143.5% | 0.02% |
-| CMAC-AES-128-CBC [8192 B] | 20,409 | 2.47 | -1.1% | +237.1% | 48,396 | +286.4% | -3.8% | +125.0% | 0.12% |
-| CMAC-AES-128-CBC init | 311 | 5.34 | +2.7% | +112.7% | 351 | +134.5% | +3.0% | +72.3% | 3.80% |
-| Curve25519 arbitrary point multiplication | 48,951 | 5.01 | +0.1% | +0.2% | 99 | +0.5% | -0.1% | +0.2% | 0.02% |
-| Curve25519 base-point multiplication | 14,627 | 4.85 | +0.0% | +1.1% | 160 | +1.2% | +0.0% | +0.7% | 0.02% |
-| ECDH X25519 | 63,553 | 4.97 | +0.1% | +0.5% | 287 | +0.7% | -0.1% | +0.4% | 0.01% |
-| ECDSA P-256 signing | 42,742 | 3.64 | -3.8% | +1.7% | 747 | +2.1% | -3.4% | -2.9% | 0.11% |
-| ECDSA P-256 verify | 105,066 | 4.98 | +0.2% | +0.1% | 109 | +0.1% | +0.2% | +0.1% | 0.10% |
-| EVP ECDH X25519 | 70,921 | 4.70 | -2.4% | -0.5% | -384 | +1.1% | -2.3% | -0.1% | 0.06% |
-| EVP-AES-128-CBC decrypt [1350 B] | 348 | 8.98 | +0.4% | +99.5% | 347 | +156.8% | +3.2% | +97.3% | 1.14% |
-| EVP-AES-128-CBC decrypt [16 B] | 103 | 6.64 | +0.6% | +325.1% | 336 | +530.7% | +23.0% | +323.3% | 2.04% |
-| EVP-AES-128-CBC decrypt [16384 B] | 3,316 | 9.36 | -0.0% | +9.2% | 305 | +15.6% | -0.7% | +9.4% | 0.08% |
-| EVP-AES-128-CBC decrypt [256 B] | 149 | 7.63 | -1.8% | +225.0% | 336 | +360.2% | +2.1% | +222.4% | 0.94% |
-| EVP-AES-128-CBC decrypt [8192 B] | 1,711 | 9.25 | +0.2% | +18.6% | 317 | +30.5% | -0.3% | +18.6% | 0.13% |
-| EVP-AES-128-CBC decrypt init | 214 | 6.33 | +3.6% | +85.7% | 183 | +90.3% | +8.0% | +53.6% | 0.77% |
-| EVP-AES-128-CBC encrypt [1350 B] | 1,927 | 1.38 | +0.0% | +21.9% | 421 | +23.0% | +0.5% | +11.8% | 0.02% |
-| EVP-AES-128-CBC encrypt [16 B] | 94 | 4.77 | +10.4% | +353.7% | 331 | +426.6% | +10.2% | +200.4% | 0.22% |
-| EVP-AES-128-CBC encrypt [16384 B] | 22,264 | 1.21 | +0.0% | +3.3% | 739 | +2.5% | +0.1% | +4.1% | 0.01% |
-| EVP-AES-128-CBC encrypt [256 B] | 408 | 2.05 | +1.3% | +90.7% | 370 | +102.2% | +0.2% | +53.2% | 0.07% |
-| EVP-AES-128-CBC encrypt [8192 B] | 11,173 | 1.23 | +0.0% | +4.7% | 528 | +4.4% | +0.1% | +4.9% | 0.02% |
-| EVP-AES-128-CBC encrypt init | 196 | 6.62 | +2.0% | +95.1% | 187 | +100.6% | +8.5% | +61.2% | 3.94% |
-| EVP-AES-128-CTR decrypt [1350 B] | 368 | 8.56 | +0.0% | +93.0% | 342 | +127.0% | +5.3% | +72.8% | 0.05% |
-| EVP-AES-128-CTR decrypt [16 B]† | 112† | 3.63 | -44.6% | +243.7% | 274 | +356.4% | -16.9% | +178.4% | 21.87% |
-| EVP-AES-128-CTR decrypt [16384 B] | 3,857 | 8.51 | +0.0% | +8.4% | 322 | +11.0% | +0.2% | +5.7% | 0.03% |
-| EVP-AES-128-CTR decrypt [256 B] | 112 | 7.92 | +0.0% | +294.2% | 330 | +407.8% | +6.2% | +229.4% | 0.03% |
-| EVP-AES-128-CTR decrypt [8192 B] | 1,958 | 8.46 | +0.1% | +16.6% | 324 | +22.3% | +0.4% | +12.0% | 0.03% |
-| EVP-AES-128-CTR decrypt init | 200 | 6.35 | -1.7% | +93.9% | 188 | +95.5% | +7.6% | +62.3% | 6.03% |
-| EVP-AES-128-CTR encrypt [1350 B] | 357 | 8.71 | +0.2% | +97.5% | 348 | +118.0% | +3.1% | +61.3% | 0.03% |
-| EVP-AES-128-CTR encrypt [16 B] | 102 | 3.55 | -49.0% | +266.4% | 273 | +344.0% | -33.9% | +145.7% | 13.29% |
-| EVP-AES-128-CTR encrypt [16384 B] | 3,844 | 8.52 | +0.1% | +8.5% | 326 | +10.5% | +0.2% | +4.5% | 0.02% |
-| EVP-AES-128-CTR encrypt [256 B] | 102 | 8.27 | +0.1% | +324.4% | 332 | +400.2% | +6.9% | +201.9% | 0.02% |
-| EVP-AES-128-CTR encrypt [8192 B] | 1,945 | 8.49 | -0.0% | +16.7% | 324 | +20.8% | +0.4% | +9.9% | 0.05% |
-| EVP-AES-128-CTR encrypt init | 193 | 6.56 | +2.7% | +97.0% | 187 | +100.3% | +10.6% | +62.3% | 5.44% |
-| EVP-AES-128-GCM decrypt [1350 B] | 667 | 5.98 | -0.3% | +81.8% | 545 | +94.1% | +5.3% | +48.6% | 0.20% |
-| EVP-AES-128-GCM decrypt [16 B] | 138 | 6.99 | +7.4% | +409.6% | 564 | +473.5% | +18.4% | +253.9% | 0.12% |
-| EVP-AES-128-GCM decrypt [16384 B] | 5,687 | 6.32 | -0.1% | +9.5% | 542 | +11.3% | +0.4% | +6.0% | 0.04% |
-| EVP-AES-128-GCM decrypt [256 B] | 225 | 6.19 | +1.0% | +253.3% | 570 | +290.3% | +9.0% | +159.3% | 0.29% |
-| EVP-AES-128-GCM decrypt [8192 B] | 2,923 | 6.29 | -0.2% | +18.6% | 544 | +21.8% | +0.8% | +11.6% | 0.03% |
-| EVP-AES-128-GCM decrypt init | 412 | 4.47 | +6.8% | +39.7% | 164 | +42.7% | +7.2% | +24.9% | 1.66% |
-| EVP-AES-128-GCM encrypt [1350 B] | 681 | 5.82 | +0.3% | +78.1% | 531 | +89.7% | +4.7% | +46.4% | 0.07% |
-| EVP-AES-128-GCM encrypt [16 B] | 173 | 5.42 | +0.1% | +302.6% | 523 | +348.1% | +0.7% | +173.5% | 0.06% |
-| EVP-AES-128-GCM encrypt [16384 B] | 5,765 | 6.23 | -0.0% | +9.5% | 546 | +11.0% | +0.5% | +5.8% | 0.03% |
-| EVP-AES-128-GCM encrypt [256 B] | 266 | 5.14 | -0.7% | +195.0% | 518 | +227.2% | -4.9% | +114.1% | 0.37% |
-| EVP-AES-128-GCM encrypt [8192 B] | 2,974 | 6.17 | -0.0% | +17.9% | 533 | +20.8% | +0.5% | +10.9% | 0.12% |
-| EVP-AES-128-GCM encrypt init | 397 | 4.46 | +7.0% | +44.4% | 176 | +46.5% | +10.2% | +30.2% | 1.37% |
-| Ed25519 key generation | 21,850 | 3.99 | -7.8% | -7.3% | -1,592 | -6.2% | -7.8% | -6.5% | 0.06% |
-| Ed25519 signing | 16,035 | 4.62 | +0.1% | +0.8% | 121 | +1.0% | +0.1% | +0.5% | 0.03% |
-| Ed25519 verify | 71,811 | 4.93 | -0.0% | -0.0% | -4 | -0.0% | +0.0% | -0.0% | 0.02% |
-| HMAC-SHA256 [1350 B] | 1,953 | 1.79 | +0.1% | +0.0% | 1 | +0.0% | +0.1% | +0.1% | 0.02% |
-| HMAC-SHA256 [16 B] | 248 | 4.20 | +0.1% | -0.4% | -1 | +0.1% | -0.1% | +0.3% | 0.05% |
-| HMAC-SHA256 [16384 B] | 21,484 | 1.43 | -0.0% | +0.0% | 2 | -0.0% | +0.0% | -0.0% | 0.00% |
-| HMAC-SHA256 [256 B] | 541 | 2.78 | +0.5% | +0.1% | 0 | +0.1% | +0.3% | +0.4% | 0.08% |
-| HMAC-SHA256 [8192 B] | 10,848 | 1.46 | +0.0% | +0.0% | 0 | +0.0% | +0.0% | +0.0% | 0.01% |
-| HMAC-SHA256 init | 275 | 2.75 | -24.8% | -0.5% | -1 | -1.3% | -24.4% | -24.1% | 0.21% |
-| HMAC-SHA256-OneShot [1350 B] | 2,262 | 1.99 | -0.3% | -0.1% | -2 | -0.1% | -0.2% | -0.3% | 0.16% |
-| HMAC-SHA256-OneShot [16 B] | 555 | 3.67 | +0.0% | +0.0% | 0 | -0.8% | +0.1% | -0.2% | 1.46% |
-| HMAC-SHA256-OneShot [16384 B] | 21,793 | 1.46 | -0.0% | +0.0% | 7 | -0.0% | -0.0% | -0.0% | 0.07% |
-| HMAC-SHA256-OneShot [256 B] | 848 | 2.95 | -0.6% | -0.2% | -1 | -0.4% | -0.6% | -0.5% | 0.15% |
-| HMAC-SHA256-OneShot [8192 B] | 11,156 | 1.51 | -0.0% | +0.0% | 1 | -0.1% | -0.0% | -0.1% | 0.11% |
-| ML-KEM-768 decaps | 33,173 | 4.19 | +0.2% | +0.7% | 224 | +0.8% | +0.3% | +0.6% | 0.13% |
-| ML-KEM-768 encaps | 33,425 | 3.87 | -5.1% | -4.9% | -1,628 | -4.0% | -5.2% | -4.2% | 0.24% |
-| ML-KEM-768 keygen | 31,777 | 3.75 | -5.1% | -4.7% | -1,487 | -3.7% | -5.0% | -4.0% | 0.06% |
-| RNG [1350 B] | 7,294 | 2.61 | -23.5% | +5.8% | 426 | +7.3% | -23.6% | -20.3% | 0.15% |
-| RNG [16 B] | 6,795 | 2.25 | -25.4% | +7.0% | 474 | +8.3% | -25.4% | -21.2% | 0.14% |
-| RNG [16384 B] | 12,476 | 4.80 | -13.9% | +3.6% | 447 | +4.2% | -13.8% | -12.4% | 0.03% |
-| RNG [256 B] | 6,844 | 2.33 | -25.3% | +7.2% | 493 | +8.6% | -25.0% | -21.2% | 0.13% |
-| RNG [8192 B] | 9,611 | 3.90 | -17.9% | +4.8% | 464 | +5.7% | -17.7% | -15.9% | 0.09% |
-| SHA-256 [1350 B] | 1,814 | 1.61 | -0.7% | -0.0% | -0 | +0.0% | -0.6% | -0.7% | 0.04% |
-| SHA-256 [16 B] | 115 | 4.04 | -0.7% | +0.0% | 0 | +0.0% | -0.5% | -0.6% | 0.08% |
-| SHA-256 [16384 B] | 21,345 | 1.41 | -0.1% | -0.0% | -1 | -0.0% | -0.1% | -0.1% | 0.03% |
-| SHA-256 [256 B] | 404 | 2.30 | -4.1% | -0.0% | -0 | +0.0% | +0.3% | +0.1% | 0.11% |
-| SHA-256 [8192 B] | 10,708 | 1.43 | -0.1% | +0.0% | 0 | +0.0% | -0.1% | -0.1% | 0.04% |
-| **geometric mean of the ratio to A, all 127 rows, every cell** | | | **-1.9%** | **+47.8%** |  | **+56.6%** | **+0.1%** | **+33.5%** | |
-| **geometric mean, suspect cells left out (1 at most in a column)** | | | **-1.4%** | **+46.8%** |  | **+55.3%** | **+0.2%** | **+32.7%** | |
+| AEAD-AES-128-CBC-SHA1 open [1350 B] | 4,482 | 4.23 | -0.2% | +3.0% | 135 | +8.5% | +0.2% | +6.9% | 0.09% |
+| AEAD-AES-128-CBC-SHA1 open [16 B] | 1,217 | 4.88 | +0.1% | +12.0% | 146 | +32.7% | +1.0% | +27.0% | 0.20% |
+| AEAD-AES-128-CBC-SHA1 open [16384 B] | 27,006 | 2.62 | -0.1% | +0.3% | 83 | +1.3% | -0.2% | +1.0% | 0.03% |
+| AEAD-AES-128-CBC-SHA1 open [256 B] | 2,895 | 5.22 | -0.1% | +4.8% | 138 | +13.1% | +0.1% | +10.7% | 0.16% |
+| AEAD-AES-128-CBC-SHA1 open [8192 B] | 14,756 | 2.89 | -0.1% | +0.8% | 114 | +2.4% | -0.1% | +2.0% | 0.05% |
+| AEAD-AES-128-CBC-SHA1 open init | 626 | 5.06 | +2.0% | +24.1% | 151 | +39.7% | +2.4% | +23.4% | 2.07% |
+| AEAD-AES-128-CBC-SHA1 seal [1350 B] | 3,976 | 1.67 | +0.8% | +6.4% | 253 | +16.2% | +2.9% | +14.5% | 0.16% |
+| AEAD-AES-128-CBC-SHA1 seal [16 B] | 385 | 5.16 | +4.8% | +48.7% | 188 | +131.8% | +11.1% | +114.1% | 0.47% |
+| AEAD-AES-128-CBC-SHA1 seal [16384 B] | 44,382 | 1.24 | +0.2% | +0.1% | 59 | +0.3% | -0.3% | +0.2% | 0.34% |
+| AEAD-AES-128-CBC-SHA1 seal [256 B] | 1,057 | 2.76 | +1.9% | +17.6% | 186 | +49.3% | +3.4% | +44.2% | 0.17% |
+| AEAD-AES-128-CBC-SHA1 seal [8192 B] | 22,432 | 1.27 | -0.3% | -0.2% | -39 | +1.3% | -0.7% | +1.0% | 0.58% |
+| AEAD-AES-128-CBC-SHA1 seal init | 634 | 5.03 | +1.1% | +24.0% | 152 | +39.6% | +1.6% | +23.3% | 2.36% |
+| AEAD-AES-128-CCM-Bluetooth seal [1350 B] | 3,907 | 2.24 | +0.2% | +4.0% | 156 | +3.3% | +0.3% | +1.4% | 0.07% |
+| AEAD-AES-128-CCM-Bluetooth seal [16 B] | 177 | 5.37 | +0.8% | +73.4% | 130 | +80.5% | +0.0% | +38.9% | 0.08% |
+| AEAD-AES-128-CCM-Bluetooth seal [16384 B] | 45,625 | 2.08 | +0.5% | +0.8% | 343 | -1.1% | +0.4% | -1.2% | 0.04% |
+| AEAD-AES-128-CCM-Bluetooth seal [256 B] | 799 | 2.92 | +0.2% | +20.1% | 161 | +21.6% | +0.0% | +12.6% | 0.07% |
+| AEAD-AES-128-CCM-Bluetooth seal [8192 B] | 22,883 | 2.09 | +0.4% | +1.0% | 221 | -0.7% | +0.3% | -1.0% | 0.06% |
+| AEAD-AES-128-CCM-Bluetooth seal init | 63 | 5.48 | -0.5% | +317.9% | 201 | +335.7% | -0.1% | +185.1% | 0.18% |
+| AEAD-AES-128-GCM open [1350 B] | 714 | 5.41 | -0.2% | +23.4% | 167 | +32.3% | +6.0% | +21.0% | 0.17% |
+| AEAD-AES-128-GCM open [16 B] | 205 | 4.07 | +0.3% | +88.1% | 181 | +111.3% | +20.3% | +77.5% | 0.04% |
+| AEAD-AES-128-GCM open [16384 B] | 5,739 | 6.24 | -0.0% | +2.8% | 159 | +4.2% | +0.7% | +2.8% | 0.04% |
+| AEAD-AES-128-GCM open [256 B] | 298 | 4.25 | -0.1% | +57.3% | 171 | +77.6% | +13.9% | +51.4% | 0.23% |
+| AEAD-AES-128-GCM open [8192 B] | 2,974 | 6.14 | -0.1% | +5.5% | 164 | +7.9% | +1.4% | +5.1% | 0.06% |
+| AEAD-AES-128-GCM open init | 242 | 2.78 | +0.4% | +65.1% | 157 | +76.4% | +0.2% | +35.5% | 0.10% |
+| AEAD-AES-128-GCM seal [1350 B] | 719 | 5.31 | -0.5% | +21.3% | 153 | +21.5% | +2.1% | +11.5% | 0.07% |
+| AEAD-AES-128-GCM seal [16 B] | 191 | 4.15 | -0.1% | +81.6% | 156 | +83.9% | +9.7% | +43.7% | 0.15% |
+| AEAD-AES-128-GCM seal [16384 B] | 5,799 | 6.16 | -0.1% | +3.0% | 171 | +3.2% | +0.6% | +1.9% | 0.08% |
+| AEAD-AES-128-GCM seal [256 B] | 291 | 4.19 | +0.6% | +53.6% | 156 | +55.8% | +6.6% | +28.0% | 0.23% |
+| AEAD-AES-128-GCM seal [8192 B] | 3,002 | 6.07 | +0.0% | +5.5% | 164 | +5.8% | +1.0% | +3.3% | 0.05% |
+| AEAD-AES-128-GCM seal init | 242 | 2.77 | +0.3% | +65.6% | 159 | +76.2% | +0.2% | +35.7% | 0.09% |
+| AEAD-AES-128-GCM-SIV open [1350 B] | 1,801 | 5.45 | +0.1% | +11.5% | 207 | +14.7% | -0.2% | +10.8% | 0.08% |
+| AEAD-AES-128-GCM-SIV open [16 B] | 337 | 4.63 | +0.5% | +63.8% | 215 | +79.8% | +1.8% | +58.0% | 0.10% |
+| AEAD-AES-128-GCM-SIV open [16384 B] | 17,278 | 5.81 | +0.0% | +1.3% | 220 | +1.6% | +0.0% | +1.2% | 0.02% |
+| AEAD-AES-128-GCM-SIV open [256 B] | 601 | 4.94 | +0.7% | +35.4% | 213 | +43.9% | +0.7% | +32.8% | 0.47% |
+| AEAD-AES-128-GCM-SIV open [8192 B] | 8,815 | 5.77 | +0.0% | +2.5% | 218 | +3.1% | +0.0% | +2.3% | 0.04% |
+| AEAD-AES-128-GCM-SIV open init | 80 | 4.82 | +0.6% | +224.3% | 180 | +253.7% | -0.3% | +125.5% | 0.15% |
+| AEAD-AES-128-GCM-SIV seal [1350 B] | 1,799 | 5.44 | +0.1% | +7.0% | 125 | +8.1% | +0.4% | +4.0% | 0.06% |
+| AEAD-AES-128-GCM-SIV seal [16 B] | 402 | 3.78 | +7.2% | +36.7% | 148 | +40.2% | +7.0% | +21.5% | 0.16% |
+| AEAD-AES-128-GCM-SIV seal [16384 B] | 17,285 | 5.80 | -0.0% | +0.7% | 115 | +0.8% | +0.0% | +0.3% | 0.02% |
+| AEAD-AES-128-GCM-SIV seal [256 B] | 606 | 4.83 | +1.2% | +24.2% | 147 | +26.0% | +1.1% | +13.9% | 0.15% |
+| AEAD-AES-128-GCM-SIV seal [8192 B] | 8,818 | 5.76 | +0.0% | +1.3% | 116 | +1.6% | -0.0% | +0.7% | 0.03% |
+| AEAD-AES-128-GCM-SIV seal init | 80 | 4.82 | +0.6% | +221.7% | 178 | +253.1% | -0.4% | +124.4% | 0.20% |
+| AEAD-AES-256-CBC-SHA1 open [1350 B] | 4,601 | 4.32 | -0.0% | +2.6% | 121 | +8.1% | -0.1% | +6.5% | 0.10% |
+| AEAD-AES-256-CBC-SHA1 open [16 B] | 1,223 | 4.88 | -0.1% | +11.5% | 141 | +32.4% | +0.6% | +27.5% | 0.13% |
+| AEAD-AES-256-CBC-SHA1 open [16384 B] | 28,352 | 2.88 | -0.1% | -0.1% | -42 | +0.8% | -0.6% | +0.5% | 0.02% |
+| AEAD-AES-256-CBC-SHA1 open [256 B] | 2,924 | 5.24 | -0.1% | +4.4% | 129 | +12.8% | -0.1% | +10.4% | 0.13% |
+| AEAD-AES-256-CBC-SHA1 open [8192 B] | 15,436 | 3.12 | -0.1% | +0.3% | 49 | +2.0% | -0.5% | +1.5% | 0.04% |
+| AEAD-AES-256-CBC-SHA1 open init | 637 | 5.03 | -0.9% | +22.4% | 143 | +36.5% | +1.2% | +20.5% | 1.92% |
+| AEAD-AES-256-CBC-SHA1 seal [1350 B] | 4,826 | 1.67 | +0.5% | +3.2% | 155 | +10.9% | -0.3% | +9.6% | 0.07% |
+| AEAD-AES-256-CBC-SHA1 seal [16 B] | 405 | 5.05 | +4.0% | +45.7% | 185 | +126.6% | +8.4% | +109.8% | 0.30% |
+| AEAD-AES-256-CBC-SHA1 seal [16384 B] | 54,111 | 1.32 | +0.1% | -0.6% | -303 | +1.0% | -0.8% | +0.8% | 0.04% |
+| AEAD-AES-256-CBC-SHA1 seal [256 B] | 1,232 | 2.61 | +1.7% | +15.1% | 186 | +40.8% | +2.9% | +36.2% | 0.05% |
+| AEAD-AES-256-CBC-SHA1 seal [8192 B] | 27,267 | 1.35 | +0.1% | -0.2% | -50 | +1.9% | -0.8% | +1.7% | 0.04% |
+| AEAD-AES-256-CBC-SHA1 seal init | 639 | 5.04 | +1.0% | +23.1% | 147 | +37.6% | +2.0% | +21.5% | 2.05% |
+| AEAD-AES-256-GCM open [1350 B] | 804 | 5.75 | -0.1% | +20.4% | 164 | +27.3% | +5.5% | +18.6% | 0.05% |
+| AEAD-AES-256-GCM open [16 B] | 208 | 4.26 | +0.9% | +84.6% | 176 | +108.8% | +19.9% | +73.4% | 0.05% |
+| AEAD-AES-256-GCM open [16384 B] | 6,772 | 6.53 | -0.0% | +2.3% | 155 | +3.2% | +0.4% | +2.2% | 0.05% |
+| AEAD-AES-256-GCM open [256 B] | 309 | 4.57 | -0.1% | +53.2% | 164 | +73.1% | +14.0% | +49.7% | 0.20% |
+| AEAD-AES-256-GCM open [8192 B] | 3,487 | 6.45 | -0.0% | +4.7% | 162 | +6.3% | +1.1% | +4.5% | 0.04% |
+| AEAD-AES-256-GCM open init | 243 | 2.96 | -0.2% | +63.8% | 155 | +73.9% | -0.2% | +33.6% | 0.03% |
+| AEAD-AES-256-GCM seal [1350 B] | 807 | 5.66 | -0.1% | +18.7% | 151 | +20.4% | +2.2% | +10.3% | 0.05% |
+| AEAD-AES-256-GCM seal [16 B] | 194 | 4.34 | +0.4% | +80.0% | 155 | +81.5% | +10.1% | +43.1% | 0.03% |
+| AEAD-AES-256-GCM seal [16384 B] | 6,858 | 6.45 | -0.0% | +2.5% | 171 | +2.7% | +0.6% | +1.6% | 0.05% |
+| AEAD-AES-256-GCM seal [256 B] | 301 | 4.54 | +0.0% | +50.4% | 152 | +53.6% | +6.3% | +28.0% | 0.14% |
+| AEAD-AES-256-GCM seal [8192 B] | 3,529 | 6.36 | -0.1% | +4.6% | 161 | +4.8% | +0.8% | +2.6% | 0.11% |
+| AEAD-AES-256-GCM seal init | 243 | 2.96 | -0.2% | +63.6% | 155 | +73.8% | -0.2% | +34.4% | 0.03% |
+| AEAD-AES-256-GCM-SIV open [1350 B] | 1,978 | 5.78 | +0.0% | +12.3% | 243 | +15.1% | +0.7% | +11.5% | 0.08% |
+| AEAD-AES-256-GCM-SIV open [16 B] | 362 | 5.05 | +0.1% | +64.7% | 234 | +79.1% | +8.4% | +58.7% | 0.38% |
+| AEAD-AES-256-GCM-SIV open [16384 B] | 19,341 | 6.05 | -0.0% | +1.3% | 246 | +1.6% | +0.1% | +1.2% | 0.04% |
+| AEAD-AES-256-GCM-SIV open [256 B] | 645 | 5.39 | -0.5% | +37.6% | 243 | +45.4% | +1.1% | +34.8% | 0.28% |
+| AEAD-AES-256-GCM-SIV open [8192 B] | 9,845 | 6.02 | -0.0% | +2.6% | 253 | +3.2% | +0.2% | +2.4% | 0.03% |
+| AEAD-AES-256-GCM-SIV open init | 79 | 5.28 | +0.6% | +219.4% | 174 | +251.9% | +1.1% | +131.0% | 0.09% |
+| AEAD-AES-256-GCM-SIV seal [1350 B] | 2,013 | 5.66 | +0.0% | +6.7% | 135 | +7.6% | +0.4% | +4.0% | 0.07% |
+| AEAD-AES-256-GCM-SIV seal [16 B] | 434 | 4.12 | +0.3% | +39.7% | 172 | +39.8% | +0.1% | +22.9% | 0.13% |
+| AEAD-AES-256-GCM-SIV seal [16384 B] | 19,380 | 6.03 | -0.0% | +0.6% | 123 | +0.7% | -0.0% | +0.3% | 0.03% |
+| AEAD-AES-256-GCM-SIV seal [256 B] | 683 | 5.03 | -0.2% | +18.8% | 129 | +21.2% | +0.2% | +10.5% | 0.24% |
+| AEAD-AES-256-GCM-SIV seal [8192 B] | 9,891 | 5.99 | -0.0% | +1.2% | 122 | +1.4% | -0.0% | +0.6% | 0.02% |
+| AEAD-AES-256-GCM-SIV seal init | 79 | 5.28 | +0.6% | +219.9% | 175 | +250.8% | +1.1% | +131.0% | 0.11% |
+| AEAD-ChaCha20-Poly1305 seal [1350 B] | 3,161 | 3.50 | +0.0% | +3.6% | 114 | +4.3% | +0.0% | +2.1% | 0.04% |
+| AEAD-ChaCha20-Poly1305 seal [16 B] | 579 | 2.55 | +0.2% | +44.3% | 257 | +48.1% | +14.1% | +35.5% | 0.08% |
+| AEAD-ChaCha20-Poly1305 seal [16384 B] | 31,354 | 3.67 | -0.0% | +0.4% | 117 | +0.5% | +0.0% | +0.2% | 0.03% |
+| AEAD-ChaCha20-Poly1305 seal [256 B] | 895 | 2.81 | +0.0% | +13.3% | 119 | +16.8% | -0.1% | +8.7% | 0.08% |
+| AEAD-ChaCha20-Poly1305 seal [8192 B] | 15,852 | 3.65 | +0.0% | +0.7% | 111 | +0.8% | +0.0% | +0.4% | 0.03% |
+| AEAD-ChaCha20-Poly1305 seal init | 36 | 4.38 | -10.7% | +274.7% | 98 | +362.4% | -8.4% | +165.5% | 0.70% |
+| AEAD-DES-EDE3-CBC-SHA1 seal [1350 B] | 134,654 | 1.98 | -0.7% | -0.6% | -764 | -0.3% | -0.7% | -0.4% | 0.03% |
+| AEAD-DES-EDE3-CBC-SHA1 seal [16 B] | 4,045 | 2.36 | +0.3% | +5.1% | 205 | +12.3% | +1.2% | +10.6% | 0.05% |
+| AEAD-DES-EDE3-CBC-SHA1 seal [16384 B] | 1,601,587 | 1.97 | -0.6% | -0.6% | -9,790 | -0.6% | -0.6% | -0.6% | 0.07% |
+| AEAD-DES-EDE3-CBC-SHA1 seal [256 B] | 27,392 | 2.04 | +0.0% | +0.7% | 188 | +1.7% | +0.1% | +1.5% | 0.03% |
+| AEAD-DES-EDE3-CBC-SHA1 seal [8192 B] | 802,218 | 1.97 | -0.6% | -0.6% | -4,943 | -0.6% | -0.6% | -0.5% | 0.04% |
+| AEAD-DES-EDE3-CBC-SHA1 seal init | 1,085 | 5.63 | +5.7% | +18.5% | 201 | +27.1% | +6.3% | +18.3% | 1.01% |
+| AES-128 decrypt | 34 | 1.94 | -0.3% | +282.9% | 96 | +360.1% | -2.6% | +143.4% | 0.05% |
+| AES-128 decrypt setup | 71 | 3.50 | -0.0% | +247.9% | 176 | +257.0% | -0.4% | +150.8% | 0.04% |
+| AES-128 encrypt | 34 | 1.94 | -0.2% | +282.9% | 96 | +365.7% | -2.5% | +143.5% | 0.07% |
+| AES-128 encrypt setup | 40 | 4.97 | -0.2% | +482.8% | 193 | +505.9% | +5.1% | +334.8% | 0.06% |
+| AES-192 decrypt | 39 | 1.90 | -0.1% | +253.3% | 98 | +320.4% | -2.4% | +126.0% | 0.09% |
+| AES-192 decrypt setup | 72 | 4.01 | -0.0% | +241.6% | 174 | +250.3% | -1.7% | +146.9% | 0.06% |
+| AES-192 encrypt | 39 | 1.90 | +0.2% | +248.3% | 96 | +319.5% | -2.6% | +126.1% | 0.07% |
+| AES-192 encrypt setup | 46 | 5.05 | -0.3% | +400.0% | 183 | +415.6% | -0.5% | +255.5% | 0.11% |
+| AES-256 decrypt | 41 | 2.00 | +0.4% | +244.7% | 100 | +310.9% | +2.8% | +126.5% | 0.26% |
+| AES-256 decrypt setup | 68 | 4.40 | -0.1% | +267.5% | 181 | +279.4% | +1.8% | +169.8% | 0.04% |
+| AES-256 encrypt | 41 | 2.00 | +0.3% | +246.2% | 100 | +310.8% | +2.7% | +126.4% | 0.28% |
+| AES-256 encrypt setup | 42 | 5.48 | -0.5% | +449.9% | 190 | +476.5% | +1.1% | +303.3% | 0.07% |
+| AES-256-XTS decrypt [1350 B] | 487 | 7.43 | -0.3% | +66.0% | 321 | +85.2% | +7.2% | +55.3% | 0.12% |
+| AES-256-XTS decrypt [16 B] | 54 | 7.06 | +5.6% | +538.7% | 292 | +680.1% | +37.3% | +414.4% | 1.36% |
+| AES-256-XTS decrypt [16384 B] | 4,979 | 7.85 | -0.1% | +5.0% | 247 | +7.0% | -0.0% | +4.1% | 0.10% |
+| AES-256-XTS decrypt [256 B] | 129 | 7.66 | +0.7% | +219.2% | 282 | +295.7% | +1.6% | +183.7% | 0.85% |
+| AES-256-XTS decrypt [8192 B] | 2,521 | 7.82 | -0.2% | +10.5% | 264 | +14.3% | +0.1% | +8.6% | 0.22% |
+| AES-256-XTS decrypt init | 308 | 5.41 | +0.4% | +52.0% | 160 | +117.8% | +5.5% | +93.2% | 2.75% |
+| AES-256-XTS encrypt [1350 B] | 472 | 7.51 | -0.5% | +62.9% | 297 | +73.7% | +1.5% | +42.4% | 0.17% |
+| AES-256-XTS encrypt [16 B] | 124 | 2.57 | -6.9% | +162.1% | 201 | +193.9% | -3.8% | +89.6% | 1.85% |
+| AES-256-XTS encrypt [16384 B] | 4,961 | 7.86 | -0.0% | +5.0% | 248 | +6.3% | +0.2% | +3.1% | 0.06% |
+| AES-256-XTS encrypt [256 B] | 126 | 7.36 | -2.7% | +217.6% | 274 | +257.9% | -0.4% | +141.2% | 0.19% |
+| AES-256-XTS encrypt [8192 B] | 2,505 | 7.85 | +0.0% | +10.5% | 263 | +12.8% | +0.5% | +6.6% | 0.05% |
+| AES-256-XTS encrypt init | 268 | 5.98 | -1.4% | +62.2% | 166 | +145.8% | +5.7% | +117.1% | 2.51% |
+| CMAC-AES-128-CBC [1350 B] | 3,400 | 2.54 | -1.6% | +240.8% | 8,188 | +290.5% | -4.1% | +127.5% | 0.03% |
+| CMAC-AES-128-CBC [16 B] | 56 | 6.42 | -0.0% | +398.6% | 224 | +487.6% | +2.5% | +241.6% | 0.22% |
+| CMAC-AES-128-CBC [16384 B] | 40,845 | 2.46 | -1.5% | +236.6% | 96,621 | +285.4% | -3.9% | +124.6% | 0.06% |
+| CMAC-AES-128-CBC [256 B] | 625 | 2.93 | +0.8% | +268.7% | 1,680 | +323.0% | -1.6% | +143.6% | 0.03% |
+| CMAC-AES-128-CBC [8192 B] | 20,416 | 2.47 | -1.6% | +237.8% | 48,545 | +286.2% | -3.9% | +124.9% | 0.05% |
+| CMAC-AES-128-CBC init | 321 | 5.18 | +2.4% | +105.7% | 339 | +131.7% | +3.6% | +68.9% | 2.75% |
+| CMAC-AES-256-CBC [1350 B] | 4,195 | 2.49 | -0.8% | +198.8% | 8,338 | +236.8% | -3.8% | +104.4% | 0.02% |
+| CMAC-AES-256-CBC [16 B] | 57 | 6.68 | +0.3% | +411.8% | 235 | +492.5% | +5.8% | +254.6% | 0.23% |
+| CMAC-AES-256-CBC [16384 B] | 50,488 | 2.42 | -0.7% | +195.0% | 98,437 | +231.9% | -3.9% | +101.8% | 0.03% |
+| CMAC-AES-256-CBC [256 B] | 785 | 2.76 | -0.1% | +216.2% | 1,697 | +257.3% | -3.1% | +115.3% | 0.05% |
+| CMAC-AES-256-CBC [8192 B] | 25,247 | 2.42 | -0.8% | +195.3% | 49,302 | +232.3% | -3.8% | +102.0% | 0.02% |
+| CMAC-AES-256-CBC init | 321 | 5.34 | -4.2% | +104.1% | 334 | +128.3% | -1.7% | +65.2% | 2.55% |
+| Curve25519 arbitrary point multiplication | 48,974 | 5.00 | +0.1% | +0.2% | 97 | +0.5% | -0.1% | +0.2% | 0.03% |
+| Curve25519 base-point multiplication | 14,621 | 4.85 | +0.1% | +1.1% | 159 | +1.2% | +0.0% | +0.7% | 0.01% |
+| EC POINT P-224 add | 473 | 5.08 | +0.1% | +0.2% | 1 | +0.0% | +0.2% | +0.1% | 0.06% |
+| EC POINT P-224 dbl | 221 | 5.28 | -0.0% | -0.1% | -0 | -0.1% | -0.2% | -0.5% | 0.08% |
+| EC POINT P-224 mul | 73,394 | 5.24 | +0.0% | +0.0% | 34 | +0.2% | -0.1% | +0.0% | 0.02% |
+| EC POINT P-224 mul base | 30,003 | 5.73 | +0.0% | +0.7% | 219 | +0.8% | +0.3% | +0.5% | 0.04% |
+| EC POINT P-224 mul public | 104,030 | 5.37 | +0.0% | +0.0% | 47 | +0.1% | -0.1% | +0.1% | 0.04% |
+| EC POINT P-256 add | 423 | 5.27 | +0.6% | +0.2% | 1 | +0.0% | +0.7% | +0.6% | 0.04% |
+| EC POINT P-256 dbl | 238 | 5.19 | +0.1% | -0.1% | -0 | +0.1% | +0.4% | +0.3% | 0.03% |
+| EC POINT P-256 mul | 79,369 | 5.17 | +0.0% | +0.2% | 175 | +0.3% | +0.0% | +0.2% | 0.02% |
+| EC POINT P-256 mul base | 16,730 | 5.05 | -0.0% | +1.0% | 171 | +1.7% | +0.3% | +1.5% | 0.09% |
+| EC POINT P-256 mul public | 96,597 | 5.14 | -0.0% | +0.3% | 263 | +0.5% | +0.1% | +0.4% | 0.02% |
+| EC POINT P-384 add | 1,733 | 3.67 | -0.0% | -0.0% | -0 | -0.1% | -0.0% | -0.0% | 0.04% |
+| EC POINT P-384 dbl | 826 | 3.63 | +0.0% | +0.2% | 1 | -0.1% | +0.0% | +0.1% | 0.05% |
+| EC POINT P-384 mul | 285,841 | 4.50 | +0.0% | +0.1% | 280 | +0.1% | +0.0% | +0.1% | 0.03% |
+| EC POINT P-384 mul base | 106,074 | 4.40 | +0.4% | +0.8% | 871 | +0.8% | -0.8% | +0.4% | 0.12% |
+| EC POINT P-384 mul public | 393,787 | 4.47 | +0.1% | +0.3% | 1,042 | +0.3% | -0.1% | +0.2% | 0.07% |
+| EC POINT P-521 add | 1,828 | 4.42 | -0.2% | -0.0% | -0 | -0.0% | -0.0% | -0.2% | 0.06% |
+| EC POINT P-521 dbl | 835 | 4.40 | -0.0% | -0.1% | -1 | -0.1% | +0.0% | +0.0% | 0.08% |
+| EC POINT P-521 mul | 390,909 | 5.63 | +0.0% | +0.1% | 287 | +0.1% | +0.1% | +0.1% | 0.04% |
+| EC POINT P-521 mul base | 146,457 | 5.04 | -0.3% | +0.3% | 503 | +0.4% | -0.6% | +0.3% | 0.05% |
+| EC POINT P-521 mul public | 539,610 | 5.46 | -0.1% | +0.1% | 311 | +0.1% | -0.0% | +0.1% | 0.08% |
+| EC POINT secp256k1 add | 1,062 | 5.71 | +1.0% | -0.1% | -1 | -0.1% | +0.7% | +0.8% | 0.06% |
+| EC POINT secp256k1 dbl | 788 | 5.65 | -0.4% | +0.4% | 3 | -0.0% | +0.3% | -0.0% | 0.04% |
+| EC POINT secp256k1 mul | 307,528 | 5.94 | +0.0% | +0.7% | 2,236 | +0.6% | -0.1% | -0.2% | 0.04% |
+| EC POINT secp256k1 mul base | 307,398 | 5.95 | -0.0% | +0.4% | 1,211 | +0.2% | +0.2% | +0.1% | 0.06% |
+| EC POINT secp256k1 mul public | 615,855 | 5.94 | -0.0% | +0.5% | 3,302 | +0.3% | +0.1% | -0.0% | 0.07% |
+| ECDH P-224 | 118,769 | 5.05 | -1.4% | +0.6% | 749 | +0.8% | -1.4% | -1.1% | 0.05% |
+| ECDH P-256 | 108,011 | 4.87 | -1.6% | +0.8% | 851 | +1.0% | -1.4% | -0.9% | 0.08% |
+| ECDH P-384 | 406,544 | 4.41 | -0.3% | +0.3% | 1,145 | +0.3% | -0.3% | +0.0% | 0.09% |
+| ECDH P-521 | 553,515 | 5.40 | -0.3% | +0.2% | 1,287 | +0.3% | -0.1% | +0.1% | 0.07% |
+| ECDH X25519 | 63,558 | 4.97 | +0.1% | +0.5% | 295 | +0.7% | -0.1% | +0.3% | 0.02% |
+| ECDH secp256k1 | 641,251 | 5.87 | -0.2% | +0.4% | 2,804 | +0.3% | +0.2% | -0.1% | 0.05% |
+| ECDSA P-224 signing | 61,495 | 4.75 | -2.5% | +1.0% | 632 | +1.2% | -2.5% | -2.1% | 0.07% |
+| ECDSA P-224 verify | 107,333 | 4.95 | +0.0% | +0.0% | 16 | +0.1% | +0.2% | +0.5% | 0.05% |
+| ECDSA P-256 signing | 42,729 | 3.64 | -3.7% | +1.9% | 793 | +2.2% | -3.2% | -2.5% | 0.09% |
+| ECDSA P-256 verify | 105,088 | 4.97 | +0.0% | -0.0% | -23 | -0.0% | +0.2% | +0.1% | 0.22% |
+| ECDSA P-384 signing | 184,097 | 4.69 | +2.5% | +0.6% | 1,107 | +0.6% | +2.8% | +3.1% | 0.11% |
+| ECDSA P-384 verify | 425,288 | 4.41 | +0.7% | -0.2% | -930 | -0.2% | +0.9% | +0.8% | 0.48% |
+| ECDSA P-521 signing | 327,781 | 5.46 | +4.7% | +0.4% | 1,327 | +0.4% | +4.9% | +5.0% | 0.12% |
+| ECDSA P-521 verify | 659,606 | 5.28 | +2.8% | +0.1% | 797 | +0.6% | +3.2% | +3.5% | 0.25% |
+| ECDSA secp256k1 signing | 352,125 | 5.74 | -0.5% | +0.5% | 1,715 | +0.3% | -0.0% | -0.3% | 0.03% |
+| ECDSA secp256k1 verify | 333,980 | 5.53 | -0.2% | +0.6% | 2,096 | -0.2% | +0.2% | +0.6% | 0.44% |
+| EVP ECDH P-224 | 119,740 | 5.05 | -1.4% | +0.2% | 242 | +1.4% | -1.2% | +0.6% | 0.04% |
+| EVP ECDH P-256 | 108,782 | 4.88 | -1.6% | +0.3% | 320 | +1.9% | -1.3% | +1.1% | 0.08% |
+| EVP ECDH P-384 | 407,369 | 4.42 | -0.3% | +0.2% | 780 | +0.5% | -0.2% | +0.4% | 0.06% |
+| EVP ECDH P-521 | 554,893 | 5.40 | -0.3% | +0.1% | 643 | +0.5% | -0.1% | +0.4% | 0.06% |
+| EVP ECDH X25519 | 70,921 | 4.70 | -2.3% | -0.5% | -372 | +1.2% | -2.2% | +0.1% | 0.05% |
+| EVP ECDH secp256k1 | 641,742 | 5.87 | -0.3% | -0.1% | -601 | +0.1% | -0.1% | +0.3% | 0.07% |
+| EVP-AES-128-CBC decrypt [1350 B] | 349 | 8.95 | +1.5% | +98.4% | 344 | +155.7% | +2.8% | +96.7% | 0.91% |
+| EVP-AES-128-CBC decrypt [16 B] | 103 | 6.63 | +0.9% | +323.3% | 334 | +529.5% | +22.5% | +323.2% | 0.83% |
+| EVP-AES-128-CBC decrypt [16384 B] | 3,318 | 9.36 | -0.1% | +9.0% | 299 | +15.6% | -0.7% | +9.4% | 0.07% |
+| EVP-AES-128-CBC decrypt [256 B] | 151 | 7.53 | +1.2% | +219.6% | 332 | +354.0% | +1.4% | +217.6% | 1.09% |
+| EVP-AES-128-CBC decrypt [8192 B] | 1,711 | 9.25 | +0.1% | +18.4% | 314 | +30.5% | -0.5% | +18.5% | 0.06% |
+| EVP-AES-128-CBC decrypt init | 215 | 6.30 | +2.7% | +85.5% | 184 | +93.5% | +6.8% | +53.3% | 2.01% |
+| EVP-AES-128-CBC encrypt [1350 B] | 1,927 | 1.38 | +0.0% | +21.9% | 422 | +23.0% | +0.4% | +11.8% | 0.03% |
+| EVP-AES-128-CBC encrypt [16 B] | 93 | 4.78 | +10.2% | +353.3% | 330 | +427.3% | +10.3% | +200.6% | 0.27% |
+| EVP-AES-128-CBC encrypt [16384 B] | 22,262 | 1.22 | +0.0% | +3.3% | 740 | +2.5% | +0.1% | +4.1% | 0.04% |
+| EVP-AES-128-CBC encrypt [256 B] | 408 | 2.05 | +1.5% | +90.7% | 370 | +102.3% | +0.3% | +53.2% | 0.05% |
+| EVP-AES-128-CBC encrypt [8192 B] | 11,174 | 1.23 | +0.0% | +4.7% | 529 | +4.4% | +0.1% | +4.9% | 0.02% |
+| EVP-AES-128-CBC encrypt init | 198 | 6.54 | +1.5% | +96.6% | 192 | +102.9% | +7.0% | +59.3% | 2.63% |
+| EVP-AES-128-CTR decrypt [1350 B] | 369 | 8.56 | +0.0% | +91.6% | 338 | +127.0% | +5.2% | +72.7% | 0.08% |
+| EVP-AES-128-CTR decrypt [16 B] | 112 | 3.63 | -44.6% | +242.1% | 272 | +355.9% | -17.1% | +178.1% | 0.17% |
+| EVP-AES-128-CTR decrypt [16384 B] | 3,859 | 8.50 | -0.1% | +8.2% | 318 | +10.9% | +0.2% | +5.7% | 0.03% |
+| EVP-AES-128-CTR decrypt [256 B] | 112 | 7.92 | +0.0% | +289.9% | 325 | +407.7% | +6.2% | +229.4% | 0.04% |
+| EVP-AES-128-CTR decrypt [8192 B] | 1,957 | 8.46 | +0.1% | +16.5% | 323 | +22.3% | +0.5% | +12.1% | 0.06% |
+| EVP-AES-128-CTR decrypt init | 191 | 6.66 | +3.1% | +103.7% | 198 | +109.7% | +10.6% | +63.8% | 1.59% |
+| EVP-AES-128-CTR encrypt [1350 B] | 358 | 8.68 | +0.1% | +96.6% | 346 | +117.3% | +3.1% | +60.7% | 0.16% |
+| EVP-AES-128-CTR encrypt [16 B] | 102 | 3.55 | -48.9% | +267.3% | 274 | +343.5% | -33.8% | +145.7% | 0.22% |
+| EVP-AES-128-CTR encrypt [16384 B] | 3,850 | 8.51 | -0.1% | +8.3% | 319 | +10.4% | +0.2% | +4.4% | 0.08% |
+| EVP-AES-128-CTR encrypt [256 B] | 102 | 8.27 | +0.0% | +323.7% | 331 | +399.6% | +6.8% | +200.8% | 0.05% |
+| EVP-AES-128-CTR encrypt [8192 B] | 1,946 | 8.49 | -0.1% | +16.5% | 322 | +20.7% | +0.3% | +9.7% | 0.07% |
+| EVP-AES-128-CTR encrypt init | 192 | 6.60 | +1.6% | +100.2% | 192 | +108.6% | +9.3% | +62.6% | 2.81% |
+| EVP-AES-128-GCM decrypt [1350 B] | 662 | 6.03 | +0.1% | +83.1% | 550 | +95.1% | +5.8% | +49.9% | 0.16% |
+| EVP-AES-128-GCM decrypt [16 B] | 138 | 7.00 | +7.1% | +408.3% | 562 | +474.0% | +18.6% | +254.2% | 0.28% |
+| EVP-AES-128-GCM decrypt [16384 B] | 5,688 | 6.32 | -0.1% | +9.5% | 541 | +11.2% | +0.4% | +6.0% | 0.05% |
+| EVP-AES-128-GCM decrypt [256 B] | 223 | 6.24 | +0.6% | +255.9% | 572 | +292.7% | +9.1% | +161.2% | 0.35% |
+| EVP-AES-128-GCM decrypt [8192 B] | 2,921 | 6.29 | -0.2% | +18.7% | 546 | +21.9% | +0.9% | +11.8% | 0.07% |
+| EVP-AES-128-GCM decrypt init | 403 | 4.57 | +6.9% | +41.4% | 167 | +47.9% | +9.6% | +27.1% | 0.68% |
+| EVP-AES-128-GCM encrypt [1350 B] | 680 | 5.83 | +0.1% | +78.5% | 534 | +90.1% | +4.5% | +47.1% | 0.22% |
+| EVP-AES-128-GCM encrypt [16 B] | 173 | 5.42 | -0.0% | +301.9% | 521 | +347.5% | +0.7% | +173.3% | 0.03% |
+| EVP-AES-128-GCM encrypt [16384 B] | 5,765 | 6.23 | -0.0% | +9.5% | 546 | +11.0% | +0.5% | +5.9% | 0.04% |
+| EVP-AES-128-GCM encrypt [256 B] | 261 | 5.24 | -0.1% | +200.3% | 523 | +233.9% | -3.4% | +117.4% | 0.37% |
+| EVP-AES-128-GCM encrypt [8192 B] | 2,974 | 6.17 | -0.2% | +17.8% | 531 | +20.7% | +0.5% | +11.0% | 0.26% |
+| EVP-AES-128-GCM encrypt init | 396 | 4.47 | +7.2% | +44.1% | 175 | +48.2% | +10.2% | +27.2% | 0.88% |
+| EVP-AES-192-CBC decrypt [1350 B] | 414 | 8.67 | +0.5% | +77.9% | 322 | +128.9% | -1.2% | +79.2% | 0.30% |
+| EVP-AES-192-CBC decrypt [16 B] | 106 | 6.67 | +0.1% | +311.2% | 331 | +516.6% | +18.8% | +318.3% | 0.78% |
+| EVP-AES-192-CBC decrypt [16384 B] | 3,925 | 9.30 | -0.1% | +6.5% | 256 | +12.5% | -0.8% | +7.3% | 0.05% |
+| EVP-AES-192-CBC decrypt [256 B] | 164 | 7.56 | +1.7% | +204.7% | 336 | +332.1% | +1.1% | +207.4% | 0.62% |
+| EVP-AES-192-CBC decrypt [8192 B] | 2,022 | 9.18 | -0.1% | +14.2% | 288 | +25.0% | -0.6% | +14.9% | 0.08% |
+| EVP-AES-192-CBC decrypt init | 211 | 6.57 | +4.1% | +86.2% | 182 | +93.0% | +7.2% | +55.5% | 1.83% |
+| EVP-AES-192-CBC encrypt [1350 B] | 2,283 | 1.51 | -0.2% | +17.2% | 392 | +20.7% | +0.4% | +11.4% | 0.04% |
+| EVP-AES-192-CBC encrypt [16 B] | 87 | 5.44 | +1.5% | +398.5% | 348 | +478.8% | +0.4% | +234.2% | 0.03% |
+| EVP-AES-192-CBC encrypt [16384 B] | 26,809 | 1.35 | +0.0% | +1.9% | 503 | +2.1% | +0.1% | +2.7% | 0.02% |
+| EVP-AES-192-CBC encrypt [256 B] | 490 | 2.04 | -0.2% | +76.1% | 373 | +85.4% | -1.2% | +42.6% | 0.10% |
+| EVP-AES-192-CBC encrypt [8192 B] | 13,444 | 1.37 | +0.0% | +3.6% | 483 | +4.0% | +0.1% | +3.7% | 0.04% |
+| EVP-AES-192-CBC encrypt init | 205 | 6.46 | -5.5% | +85.7% | 176 | +89.6% | +2.8% | +52.8% | 2.59% |
+| EVP-AES-192-CTR decrypt [1350 B] | 425 | 8.52 | +0.1% | +79.1% | 336 | +109.5% | +3.6% | +62.0% | 0.10% |
+| EVP-AES-192-CTR decrypt [16 B] | 118 | 3.59 | -45.5% | +227.1% | 268 | +342.1% | -20.9% | +168.7% | 0.28% |
+| EVP-AES-192-CTR decrypt [16384 B] | 4,490 | 8.53 | -0.0% | +7.1% | 317 | +9.7% | +0.1% | +5.2% | 0.03% |
+| EVP-AES-192-CTR decrypt [256 B] | 121 | 8.13 | +0.0% | +268.9% | 326 | +378.4% | +5.8% | +212.6% | 0.02% |
+| EVP-AES-192-CTR decrypt [8192 B] | 2,275 | 8.49 | +0.0% | +14.0% | 317 | +19.4% | +0.3% | +10.6% | 0.08% |
+| EVP-AES-192-CTR decrypt init | 194 | 6.68 | -3.8% | +96.5% | 188 | +98.7% | +6.6% | +59.7% | 2.58% |
+| EVP-AES-192-CTR encrypt [1350 B] | 416 | 8.60 | +0.2% | +82.6% | 343 | +99.8% | +2.1% | +51.2% | 0.11% |
+| EVP-AES-192-CTR encrypt [16 B] | 107 | 3.55 | -49.3% | +260.9% | 279 | +329.1% | -35.9% | +139.0% | 0.19% |
+| EVP-AES-192-CTR encrypt [16384 B] | 4,481 | 8.53 | -0.0% | +7.1% | 318 | +8.9% | +0.2% | +4.1% | 0.02% |
+| EVP-AES-192-CTR encrypt [256 B] | 111 | 8.46 | +0.0% | +300.3% | 334 | +368.9% | +6.2% | +187.5% | 0.05% |
+| EVP-AES-192-CTR encrypt [8192 B] | 2,265 | 8.50 | -0.0% | +14.2% | 321 | +17.6% | +0.3% | +8.4% | 0.04% |
+| EVP-AES-192-CTR encrypt init | 197 | 6.59 | -4.4% | +91.1% | 179 | +95.8% | +5.1% | +57.3% | 2.37% |
+| EVP-AES-192-GCM decrypt [1350 B] | 708 | 6.17 | -0.0% | +78.8% | 558 | +89.7% | +5.6% | +47.4% | 0.16% |
+| EVP-AES-192-GCM decrypt [16 B] | 139 | 7.09 | +6.9% | +406.4% | 566 | +468.9% | +18.2% | +255.3% | 0.16% |
+| EVP-AES-192-GCM decrypt [16384 B] | 6,197 | 6.48 | -0.1% | +9.1% | 565 | +10.3% | +0.6% | +5.4% | 0.02% |
+| EVP-AES-192-GCM decrypt [256 B] | 233 | 6.30 | +0.7% | +249.1% | 579 | +287.2% | +11.8% | +155.8% | 0.42% |
+| EVP-AES-192-GCM decrypt [8192 B] | 3,177 | 6.45 | -0.2% | +17.6% | 559 | +20.2% | +1.1% | +11.0% | 0.06% |
+| EVP-AES-192-GCM decrypt init | 394 | 4.79 | +6.0% | +43.4% | 171 | +46.5% | +8.9% | +27.9% | 0.49% |
+| EVP-AES-192-GCM encrypt [1350 B] | 722 | 6.01 | +0.4% | +74.7% | 539 | +86.1% | +3.7% | +44.9% | 0.24% |
+| EVP-AES-192-GCM encrypt [16 B] | 174 | 5.53 | -0.4% | +303.5% | 528 | +348.2% | +0.2% | +174.7% | 0.05% |
+| EVP-AES-192-GCM encrypt [16384 B] | 6,269 | 6.40 | +0.0% | +8.8% | 549 | +9.9% | +0.3% | +5.0% | 0.02% |
+| EVP-AES-192-GCM encrypt [256 B] | 258 | 5.58 | -0.3% | +208.7% | 538 | +245.4% | -0.5% | +126.0% | 0.19% |
+| EVP-AES-192-GCM encrypt [8192 B] | 3,219 | 6.36 | +0.0% | +16.8% | 541 | +19.3% | +0.4% | +10.4% | 0.10% |
+| EVP-AES-192-GCM encrypt init | 387 | 4.69 | +6.5% | +44.8% | 173 | +48.3% | +9.5% | +28.8% | 0.52% |
+| EVP-AES-256-CBC decrypt [1350 B] | 475 | 8.51 | +0.4% | +66.9% | 318 | +111.6% | -2.2% | +68.1% | 0.33% |
+| EVP-AES-256-CBC decrypt [16 B] | 110 | 6.70 | +0.4% | +303.9% | 333 | +510.2% | +18.0% | +315.3% | 0.95% |
+| EVP-AES-256-CBC decrypt [16384 B] | 4,660 | 9.01 | -0.0% | +4.1% | 190 | +8.8% | -3.0% | +4.4% | 0.07% |
+| EVP-AES-256-CBC decrypt [256 B] | 177 | 7.59 | +0.4% | +187.3% | 332 | +305.1% | +0.9% | +189.8% | 0.60% |
+| EVP-AES-256-CBC decrypt [8192 B] | 2,391 | 8.91 | -0.1% | +10.8% | 257 | +19.7% | -2.8% | +11.0% | 0.13% |
+| EVP-AES-256-CBC decrypt init | 223 | 6.28 | +1.2% | +79.8% | 178 | +85.7% | +3.6% | +48.2% | 1.39% |
+| EVP-AES-256-CBC encrypt [1350 B] | 2,655 | 1.52 | -0.0% | +14.5% | 386 | +16.4% | -0.3% | +8.2% | 0.03% |
+| EVP-AES-256-CBC encrypt [16 B] | 96 | 5.09 | -0.0% | +363.6% | 349 | +434.6% | +0.2% | +212.7% | 0.04% |
+| EVP-AES-256-CBC encrypt [16384 B] | 32,500 | 1.34 | -0.0% | -0.5% | -154 | +1.4% | -1.7% | -2.0% | 0.02% |
+| EVP-AES-256-CBC encrypt [256 B] | 570 | 1.96 | +0.0% | +67.0% | 382 | +75.1% | -1.0% | +35.8% | 0.02% |
+| EVP-AES-256-CBC encrypt [8192 B] | 16,278 | 1.35 | +0.0% | +0.9% | 141 | +2.8% | -1.7% | -1.3% | 0.01% |
+| EVP-AES-256-CBC encrypt init | 201 | 6.60 | -1.6% | +94.5% | 190 | +97.8% | +5.5% | +57.4% | 2.51% |
+| EVP-AES-256-CTR decrypt [1350 B] | 485 | 8.41 | -0.1% | +68.9% | 334 | +95.6% | +3.0% | +52.9% | 0.10% |
+| EVP-AES-256-CTR decrypt [16 B] | 87 | 5.05 | -24.0% | +348.0% | 303 | +504.0% | +6.6% | +263.7% | 3.35% |
+| EVP-AES-256-CTR decrypt [16384 B] | 5,160 | 8.48 | -0.0% | +6.2% | 321 | +8.5% | +0.2% | +4.5% | 0.02% |
+| EVP-AES-256-CTR decrypt [256 B] | 131 | 8.24 | -0.0% | +253.4% | 333 | +354.5% | +5.3% | +197.6% | 0.04% |
+| EVP-AES-256-CTR decrypt [8192 B] | 2,611 | 8.44 | +0.0% | +12.2% | 319 | +17.0% | +0.4% | +9.0% | 0.05% |
+| EVP-AES-256-CTR decrypt init | 192 | 6.76 | +0.8% | +100.0% | 192 | +104.3% | +8.9% | +62.3% | 4.07% |
+| EVP-AES-256-CTR encrypt [1350 B] | 475 | 8.51 | +0.1% | +73.4% | 348 | +86.8% | +1.9% | +43.8% | 0.08% |
+| EVP-AES-256-CTR encrypt [16 B] | 69 | 5.76 | -18.0% | +466.2% | 320 | +577.1% | +1.5% | +273.2% | 3.24% |
+| EVP-AES-256-CTR encrypt [16384 B] | 5,155 | 8.48 | -0.1% | +6.5% | 335 | +7.6% | +0.1% | +3.4% | 0.05% |
+| EVP-AES-256-CTR encrypt [256 B] | 121 | 8.55 | -0.0% | +281.1% | 341 | +339.7% | +5.9% | +172.7% | 0.07% |
+| EVP-AES-256-CTR encrypt [8192 B] | 2,603 | 8.45 | -0.1% | +12.7% | 330 | +15.2% | +0.3% | +7.1% | 0.09% |
+| EVP-AES-256-CTR encrypt init | 194 | 6.71 | +0.6% | +98.7% | 191 | +103.9% | +10.5% | +64.2% | 3.78% |
+| EVP-AES-256-GCM decrypt [1350 B] | 750 | 6.33 | +0.4% | +76.4% | 573 | +86.0% | +5.4% | +45.9% | 0.35% |
+| EVP-AES-256-GCM decrypt [16 B] | 142 | 7.12 | +6.1% | +401.2% | 570 | +466.4% | +16.1% | +253.5% | 0.17% |
+| EVP-AES-256-GCM decrypt [16384 B] | 6,718 | 6.61 | -0.2% | +8.2% | 550 | +9.6% | +0.1% | +4.7% | 0.03% |
+| EVP-AES-256-GCM decrypt [256 B] | 238 | 6.48 | +0.0% | +248.6% | 591 | +283.8% | +14.7% | +157.1% | 0.34% |
+| EVP-AES-256-GCM decrypt [8192 B] | 3,433 | 6.59 | -0.2% | +16.3% | 559 | +19.0% | +0.6% | +10.0% | 0.07% |
+| EVP-AES-256-GCM decrypt init | 407 | 4.68 | +3.5% | +39.8% | 162 | +44.2% | +6.2% | +24.7% | 1.33% |
+| EVP-AES-256-GCM encrypt [1350 B] | 770 | 6.12 | +0.4% | +70.8% | 545 | +81.5% | +2.6% | +43.0% | 0.28% |
+| EVP-AES-256-GCM encrypt [16 B] | 176 | 5.61 | -1.4% | +303.4% | 533 | +346.9% | -0.1% | +175.0% | 0.10% |
+| EVP-AES-256-GCM encrypt [16384 B] | 6,842 | 6.48 | +0.0% | +8.3% | 568 | +9.4% | +0.4% | +5.0% | 0.04% |
+| EVP-AES-256-GCM encrypt [256 B] | 252 | 6.00 | +0.4% | +223.3% | 562 | +259.2% | +4.5% | +136.3% | 0.16% |
+| EVP-AES-256-GCM encrypt [8192 B] | 3,503 | 6.45 | +0.0% | +15.9% | 557 | +18.2% | +0.4% | +10.0% | 0.06% |
+| EVP-AES-256-GCM encrypt init | 401 | 4.58 | +3.7% | +42.1% | 169 | +44.5% | +6.6% | +25.0% | 1.02% |
+| EVP-ChaCha20-Poly1305 decrypt [1350 B] | 5,072 | 4.51 | -0.1% | +9.8% | 497 | +12.2% | -0.0% | +6.2% | 0.07% |
+| EVP-ChaCha20-Poly1305 decrypt [16 B] | 757 | 4.79 | +0.6% | +65.0% | 492 | +78.0% | +1.5% | +38.5% | 0.14% |
+| EVP-ChaCha20-Poly1305 decrypt [16384 B] | 44,585 | 4.79 | +0.0% | +1.1% | 496 | +1.3% | +0.0% | +0.6% | 0.02% |
+| EVP-ChaCha20-Poly1305 decrypt [256 B] | 1,409 | 4.12 | +0.1% | +37.0% | 521 | +43.9% | +0.7% | +22.8% | 0.08% |
+| EVP-ChaCha20-Poly1305 decrypt [8192 B] | 22,534 | 4.79 | -0.0% | +2.2% | 496 | +2.6% | +0.0% | +1.3% | 0.03% |
+| EVP-ChaCha20-Poly1305 decrypt init | 213 | 5.85 | -2.8% | +51.3% | 109 | +67.9% | +6.8% | +34.5% | 3.20% |
+| EVP-ChaCha20-Poly1305 encrypt [1350 B] | 5,058 | 4.52 | +0.0% | +9.8% | 496 | +12.2% | +0.5% | +5.9% | 0.04% |
+| EVP-ChaCha20-Poly1305 encrypt [16 B] | 765 | 4.70 | -0.1% | +62.9% | 481 | +75.7% | +2.2% | +36.0% | 0.25% |
+| EVP-ChaCha20-Poly1305 encrypt [16384 B] | 44,554 | 4.79 | -0.0% | +1.0% | 462 | +1.3% | +0.0% | +0.6% | 0.02% |
+| EVP-ChaCha20-Poly1305 encrypt [256 B] | 1,385 | 4.17 | -0.4% | +34.8% | 482 | +41.8% | +1.1% | +19.8% | 0.11% |
+| EVP-ChaCha20-Poly1305 encrypt [8192 B] | 22,501 | 4.80 | +0.0% | +2.0% | 459 | +2.5% | +0.1% | +1.2% | 0.03% |
+| EVP-ChaCha20-Poly1305 encrypt init | 205 | 5.72 | -2.4% | +56.0% | 115 | +70.9% | +3.4% | +39.0% | 2.02% |
+| EVP-RC4 decrypt [1350 B] | 4,068 | 5.37 | -0.0% | +7.2% | 295 | +10.6% | +0.4% | +5.6% | 0.05% |
+| EVP-RC4 decrypt [16 B] | 75 | 6.43 | +5.6% | +415.0% | 311 | +600.8% | +41.1% | +329.2% | 0.14% |
+| EVP-RC4 decrypt [16384 B] | 48,827 | 5.37 | -0.0% | +0.6% | 288 | +0.9% | +0.0% | +0.5% | 0.02% |
+| EVP-RC4 decrypt [256 B] | 806 | 5.36 | +0.4% | +36.7% | 296 | +53.6% | +2.2% | +28.4% | 0.15% |
+| EVP-RC4 decrypt [8192 B] | 24,441 | 5.37 | +0.0% | +1.2% | 294 | +1.8% | +0.1% | +1.0% | 0.02% |
+| EVP-RC4 decrypt init | 1,680 | 2.75 | +0.6% | +8.8% | 148 | +9.6% | +1.4% | +5.8% | 0.10% |
+| EVP-RC4 encrypt [1350 B] | 4,059 | 5.37 | +0.0% | +7.3% | 295 | +9.4% | +0.4% | +4.4% | 0.03% |
+| EVP-RC4 encrypt [16 B] | 72 | 6.06 | +5.7% | +433.9% | 314 | +543.7% | +18.6% | +260.6% | 0.18% |
+| EVP-RC4 encrypt [16384 B] | 48,818 | 5.37 | -0.0% | +0.6% | 289 | +0.8% | +0.0% | +0.4% | 0.02% |
+| EVP-RC4 encrypt [256 B] | 799 | 5.36 | +0.4% | +37.2% | 297 | +47.7% | +2.2% | +22.4% | 0.07% |
+| EVP-RC4 encrypt [8192 B] | 24,439 | 5.37 | -0.0% | +1.2% | 284 | +1.5% | +0.0% | +0.7% | 0.02% |
+| EVP-RC4 encrypt init | 1,678 | 2.75 | +0.7% | +8.7% | 145 | +9.7% | +1.4% | +5.5% | 0.10% |
+| Ed25519 PKCS#8 v1 decode | 15,289 | 4.80 | -0.2% | +1.0% | 150 | +1.1% | -0.2% | +0.6% | 0.06% |
+| Ed25519 PKCS#8 v1 encode | 291 | 6.49 | +14.4% | +0.6% | 2 | -0.1% | +14.5% | +14.9% | 0.81% |
+| Ed25519 PKCS#8 v2 decode | 15,360 | 4.81 | -0.1% | +1.0% | 155 | +1.1% | -0.1% | +0.6% | 0.11% |
+| Ed25519 PKCS#8 v2 encode | 357 | 6.50 | +12.6% | +0.8% | 3 | +0.7% | +12.1% | +12.1% | 0.33% |
+| Ed25519 key generation | 21,861 | 3.99 | -7.8% | -7.2% | -1,583 | -6.2% | -7.9% | -6.5% | 0.06% |
+| Ed25519 signing | 16,032 | 4.62 | +0.1% | +0.7% | 120 | +1.0% | +0.1% | +0.5% | 0.04% |
+| Ed25519 verify | 71,835 | 4.93 | +0.0% | +0.0% | 8 | -0.0% | +0.0% | -0.0% | 0.02% |
+| FFDH 2048 | 11,005,998 | 6.18 | -0.0% | -0.0% | -3,140 | -0.1% | +0.0% | +0.0% | 0.03% |
+| FFDH 4096 | 83,358,714 | 6.25 | -0.0% | -0.0% | -13,978 | -0.0% | -0.0% | -0.0% | 0.03% |
+| Generate P-224 with EC_KEY_generate_key | 37,128 | 5.07 | -4.5% | +1.7% | 644 | +2.0% | -4.3% | -3.7% | 0.04% |
+| Generate P-224 with EC_KEY_generate_key_fips | 68,305 | 5.32 | -2.5% | +1.1% | 742 | +1.2% | -2.2% | -2.0% | 0.04% |
+| Generate P-224 with EVP_PKEY_keygen | 37,222 | 5.08 | -4.4% | -3.7% | -1,372 | -3.0% | -4.1% | -3.1% | 0.10% |
+| Generate P-256 with EC_KEY_generate_key | 24,219 | 4.18 | -6.7% | +2.7% | 645 | +3.3% | -6.5% | -5.3% | 0.15% |
+| Generate P-256 with EC_KEY_generate_key_fips | 41,959 | 4.54 | -3.9% | +1.8% | 765 | +2.3% | -3.7% | -2.7% | 0.10% |
+| Generate P-256 with EVP_PKEY_keygen | 24,303 | 4.19 | -6.9% | -6.0% | -1,448 | -4.4% | -6.4% | -4.4% | 0.20% |
+| Generate P-384 with EC_KEY_generate_key | 112,381 | 4.30 | -0.3% | +1.7% | 1,937 | +1.8% | -0.1% | +0.0% | 0.11% |
+| Generate P-384 with EC_KEY_generate_key_fips | 219,700 | 4.38 | +0.5% | +1.5% | 3,380 | +1.5% | +0.9% | +1.1% | 0.09% |
+| Generate P-384 with EVP_PKEY_keygen | 112,183 | 4.33 | -0.2% | +0.0% | 14 | +0.3% | +0.4% | +0.7% | 0.13% |
+| Generate P-521 with EC_KEY_generate_key | 152,773 | 4.94 | -0.8% | +1.4% | 2,071 | +1.4% | -0.2% | -0.0% | 0.09% |
+| Generate P-521 with EC_KEY_generate_key_fips | 300,835 | 5.00 | -0.7% | +1.3% | 4,050 | +1.3% | +0.6% | +0.7% | 0.12% |
+| Generate P-521 with EVP_PKEY_keygen | 152,732 | 4.95 | -0.9% | -0.1% | -202 | +0.1% | +0.0% | +0.3% | 0.09% |
+| Generate secp256k1 with EC_KEY_generate_key | 313,524 | 5.88 | -0.5% | +0.5% | 1,588 | +0.3% | +0.0% | -0.0% | 0.05% |
+| Generate secp256k1 with EC_KEY_generate_key_fips | 621,957 | 5.91 | -0.2% | +0.4% | 2,472 | +0.2% | +0.4% | +0.3% | 0.04% |
+| Generate secp256k1 with EVP_PKEY_keygen | 313,287 | 5.89 | -0.5% | -0.2% | -507 | -0.3% | +0.4% | +0.4% | 0.03% |
+| HRSS decap | 60,373 | 5.64 | +0.6% | +0.0% | 22 | -0.0% | +0.6% | +0.6% | 0.05% |
+| HRSS encap | 28,107 | 4.28 | -6.0% | +1.5% | 413 | +1.9% | -6.0% | -5.3% | 0.06% |
+| HRSS generate | 443,899 | 5.29 | +0.3% | +0.2% | 672 | +0.2% | +0.2% | +0.3% | 0.02% |
+| ML-KEM-1024 decaps | 48,130 | 4.23 | +0.2% | +0.2% | 78 | +0.3% | -0.0% | +0.2% | 0.19% |
+| ML-KEM-1024 encaps | 45,473 | 3.99 | -3.7% | -3.8% | -1,747 | -3.1% | -4.0% | -3.3% | 0.12% |
+| ML-KEM-1024 keygen | 42,871 | 3.90 | -3.8% | -3.5% | -1,501 | -2.6% | -3.6% | -2.7% | 0.14% |
+| ML-KEM-512 decaps | 21,242 | 4.20 | +0.3% | +0.8% | 179 | +1.0% | +0.3% | +0.7% | 0.10% |
+| ML-KEM-512 encaps | 23,385 | 3.69 | -7.3% | -6.6% | -1,532 | -5.5% | -7.0% | -5.7% | 0.11% |
+| ML-KEM-512 keygen | 21,484 | 3.55 | -7.8% | -7.1% | -1,517 | -5.5% | -7.6% | -5.7% | 0.10% |
+| ML-KEM-768 decaps | 33,146 | 4.19 | +0.3% | +0.6% | 213 | +0.8% | +0.4% | +0.7% | 0.16% |
+| ML-KEM-768 encaps | 33,417 | 3.87 | -5.1% | -4.9% | -1,630 | -4.1% | -5.2% | -4.2% | 0.22% |
+| ML-KEM-768 keygen | 31,701 | 3.76 | -4.9% | -4.4% | -1,402 | -3.5% | -4.7% | -3.6% | 0.15% |
+| MLDSA44 keygen | 65,274 | 4.11 | -2.4% | -2.2% | -1,448 | -1.7% | -2.4% | -1.7% | 0.07% |
+| MLDSA44 signing | 177,214 | 4.27 | -0.9% | -0.9% | -1,511 | -0.8% | -1.0% | -0.8% | 0.53% |
+| MLDSA44 verify | 54,135 | 4.29 | +0.3% | +0.4% | 237 | +0.7% | +0.4% | +0.7% | 0.14% |
+| MLDSA65 keygen | 108,406 | 4.16 | -1.4% | -1.2% | -1,297 | -0.9% | -1.4% | -1.0% | 0.07% |
+| MLDSA65 signing | 272,462 | 4.32 | -1.2% | -0.1% | -306 | -0.2% | -0.4% | +0.5% | 1.70% |
+| MLDSA65 verify | 92,245 | 4.29 | +0.3% | +0.3% | 294 | +0.4% | +0.4% | +0.5% | 0.12% |
+| MLDSA87 keygen | 172,596 | 4.23 | -0.9% | -0.9% | -1,508 | -0.6% | -0.9% | -0.6% | 0.11% |
+| MLDSA87 signing | 353,940 | 4.33 | -1.5% | -1.5% | -5,398 | -1.8% | -1.7% | -0.9% | 1.55% |
+| MLDSA87 verify | 152,314 | 4.32 | +0.3% | +0.4% | 544 | +0.5% | +0.2% | +0.4% | 0.11% |
+| RNG [1350 B] | 7,289 | 2.61 | -23.7% | +6.0% | 439 | +7.4% | -23.4% | -20.6% | 0.09% |
+| RNG [16 B] | 6,797 | 2.26 | -25.6% | +7.3% | 494 | +8.4% | -25.4% | -22.1% | 0.16% |
+| RNG [16384 B] | 12,480 | 4.80 | -14.0% | +3.6% | 447 | +4.2% | -13.9% | -12.4% | 0.11% |
+| RNG [256 B] | 6,846 | 2.33 | -25.4% | +7.2% | 490 | +8.4% | -25.2% | -21.8% | 0.14% |
+| RNG [8192 B] | 9,617 | 3.90 | -18.0% | +4.7% | 456 | +5.6% | -17.8% | -15.9% | 0.09% |
+| RSA 2048 private key parse | 343,724 | 4.08 | -0.4% | -0.3% | -941 | -0.3% | -0.6% | -0.6% | 0.04% |
+| RSA 2048 signing | 1,123,150 | 6.13 | -0.0% | +0.0% | 545 | +0.0% | +0.1% | +0.1% | 0.02% |
+| RSA 2048 verify (fresh key) | 36,802 | 5.90 | +0.8% | +2.1% | 769 | +2.8% | +0.6% | +2.2% | 0.29% |
+| RSA 2048 verify (same key) | 30,720 | 6.19 | +0.3% | +1.0% | 309 | +1.5% | +0.3% | +1.4% | 0.31% |
+| RSA 3072 private key parse | 607,938 | 4.36 | +0.7% | +0.7% | 4,435 | +0.8% | +0.8% | +0.9% | 0.05% |
+| RSA 3072 signing | 3,656,197 | 5.97 | +0.8% | +0.9% | 31,344 | +0.9% | +0.8% | +0.9% | 0.04% |
+| RSA 3072 verify (fresh key) | 74,766 | 5.88 | +0.5% | +1.5% | 1,112 | +1.9% | +0.9% | +1.1% | 0.32% |
+| RSA 3072 verify (same key) | 64,090 | 6.18 | +0.1% | +0.4% | 231 | +0.7% | +0.2% | +0.9% | 0.09% |
+| RSA 4096 private key parse | 962,413 | 4.48 | +1.7% | +1.7% | 16,282 | +1.7% | +1.5% | +1.5% | 0.07% |
+| RSA 4096 signing | 7,681,517 | 6.19 | +0.0% | -0.1% | -4,607 | -0.0% | -0.0% | -0.0% | 0.03% |
+| RSA 4096 verify (fresh key) | 126,090 | 5.92 | +0.2% | +0.7% | 909 | +1.0% | +0.4% | +0.8% | 0.08% |
+| RSA 4096 verify (same key) | 110,039 | 6.19 | +0.0% | +0.3% | 303 | +0.4% | +0.1% | +0.5% | 0.09% |
+| RSA 8192 private key parse | 3,381,137 | 4.39 | +0.2% | +0.5% | 17,149 | +0.4% | +0.7% | +0.7% | 0.07% |
+| RSA 8192 signing | 57,774,756 | 6.25 | +0.0% | +0.0% | 16,699 | +0.0% | +0.0% | +0.0% | 0.01% |
+| RSA 8192 verify (fresh key) | 484,991 | 5.83 | +0.1% | +0.4% | 2,033 | +0.2% | +0.3% | +0.1% | 0.04% |
+| RSA 8192 verify (same key) | 426,590 | 6.14 | +0.0% | +0.3% | 1,390 | +0.0% | +0.3% | +0.0% | 0.04% |
+| SPAKE2 over Ed25519 | 183,758 | 5.18 | -0.8% | +0.3% | 504 | +0.4% | -0.7% | -0.5% | 0.03% |
+| TrustToken-Exp1-Batch1 begin_issuance | 505,593 | 4.84 | +2.7% | +0.3% | 1,691 | +0.3% | +2.8% | +2.9% | 0.06% |
+| TrustToken-Exp1-Batch1 begin_redemption | 607 | 6.66 | +4.8% | -0.0% | -0 | -3.5% | +1.5% | -0.2% | 1.76% |
+| TrustToken-Exp1-Batch1 finish_issuance | 10,367,916 | 5.75 | +6.1% | -0.1% | -8,396 | +0.3% | +6.6% | +6.7% | 0.19% |
+| TrustToken-Exp1-Batch1 generate_key | 1,784,765 | 6.10 | +5.5% | +0.2% | 3,265 | +0.1% | +5.8% | +5.8% | 0.03% |
+| TrustToken-Exp1-Batch1 issue | 10,400,557 | 6.02 | +6.2% | +0.2% | 17,473 | +1.5% | +7.9% | +8.0% | 0.05% |
+| TrustToken-Exp1-Batch1 redeem | 2,962,081 | 6.07 | +6.6% | +0.0% | 470 | +0.1% | +7.1% | +7.2% | 0.09% |
+| TrustToken-Exp1-Batch10 begin_issuance | 5,052,179 | 4.84 | +2.6% | +0.2% | 10,054 | +0.3% | +2.7% | +2.8% | 0.07% |
+| TrustToken-Exp1-Batch10 begin_redemption | 604 | 6.69 | +1.7% | +1.0% | 6 | -2.7% | +0.1% | -0.8% | 2.35% |
+| TrustToken-Exp1-Batch10 finish_issuance | 26,767,910 | 5.35 | +4.3% | -0.0% | -8,969 | +0.2% | +4.5% | +4.4% | 0.19% |
+| TrustToken-Exp1-Batch10 generate_key | 1,784,724 | 6.10 | +5.5% | +0.3% | 5,876 | +0.2% | +5.6% | +5.8% | 0.05% |
+| TrustToken-Exp1-Batch10 issue | 37,395,864 | 5.95 | +6.0% | +0.1% | 46,000 | +0.4% | +6.7% | +6.7% | 0.09% |
+| TrustToken-Exp1-Batch10 redeem | 2,961,119 | 6.07 | +6.7% | -0.0% | -60 | +0.2% | +7.0% | +7.2% | 0.09% |
+| TrustToken-Exp2PMB-Batch1 begin_issuance | 505,422 | 4.84 | +2.6% | +0.2% | 865 | +0.3% | +2.7% | +2.8% | 0.05% |
+| TrustToken-Exp2PMB-Batch1 begin_redemption | 566 | 6.98 | +2.0% | +2.4% | 13 | +2.1% | +6.3% | +2.8% | 1.25% |
+| TrustToken-Exp2PMB-Batch1 finish_issuance | 10,381,666 | 5.74 | +5.7% | -0.1% | -9,591 | +0.5% | +6.6% | +6.6% | 0.25% |
+| TrustToken-Exp2PMB-Batch1 generate_key | 1,783,659 | 6.10 | +5.6% | +0.4% | 6,419 | +0.2% | +5.7% | +5.8% | 0.08% |
+| TrustToken-Exp2PMB-Batch1 issue | 10,405,956 | 6.01 | +6.1% | +0.1% | 14,231 | +1.6% | +7.7% | +7.9% | 0.09% |
+| TrustToken-Exp2PMB-Batch1 redeem | 2,962,446 | 6.07 | +6.5% | -0.1% | -3,185 | +0.2% | +7.0% | +7.1% | 0.13% |
+| TrustToken-Exp2PMB-Batch10 begin_issuance | 5,047,609 | 4.84 | +2.7% | +0.2% | 12,124 | +0.3% | +2.7% | +2.9% | 0.05% |
+| TrustToken-Exp2PMB-Batch10 begin_redemption | 569 | 6.95 | -4.3% | +2.1% | 12 | -0.0% | -0.3% | -3.7% | 1.82% |
+| TrustToken-Exp2PMB-Batch10 finish_issuance | 26,782,405 | 5.34 | +4.0% | -0.1% | -22,321 | +0.1% | +4.6% | +4.3% | 0.14% |
+| TrustToken-Exp2PMB-Batch10 generate_key | 1,783,876 | 6.10 | +5.5% | +0.2% | 4,337 | +0.3% | +5.7% | +5.8% | 0.04% |
+| TrustToken-Exp2PMB-Batch10 issue | 37,402,863 | 5.95 | +5.9% | +0.1% | 42,042 | +0.4% | +6.6% | +6.7% | 0.10% |
+| TrustToken-Exp2PMB-Batch10 redeem | 2,960,840 | 6.07 | +6.6% | +0.3% | 7,806 | +0.2% | +7.0% | +7.1% | 0.07% |
+| TrustToken-Exp2VOPRF-Batch10 begin_issuance | 5,056,835 | 4.84 | +2.5% | +0.2% | 12,273 | +0.3% | +2.7% | +2.8% | 0.06% |
+| TrustToken-Exp2VOPRF-Batch10 begin_redemption | 402 | 7.15 | +3.5% | +5.7% | 23 | +2.2% | +9.1% | +5.1% | 1.76% |
+| TrustToken-Exp2VOPRF-Batch10 finish_issuance | 9,076,695 | 5.26 | +3.5% | +0.1% | 8,150 | -0.3% | +3.7% | +3.6% | 0.23% |
+| TrustToken-Exp2VOPRF-Batch10 generate_key | 118,235 | 4.25 | -0.1% | +1.9% | 2,200 | +1.7% | +0.0% | +0.2% | 0.10% |
+| TrustToken-Exp2VOPRF-Batch10 issue | 8,230,992 | 5.20 | +3.3% | +0.2% | 14,207 | -0.1% | +3.4% | +3.5% | 0.26% |
+| TrustToken-Exp2VOPRF-Batch10 redeem | 422,130 | 4.85 | +2.7% | +0.1% | 297 | +0.1% | +2.8% | +2.9% | 0.23% |
+| TrustToken-Exp2VOfPRF-Batch1 begin_issuance | 505,350 | 4.84 | +2.7% | +0.3% | 1,540 | +0.4% | +2.8% | +2.9% | 0.05% |
+| TrustToken-Exp2VOfPRF-Batch1 begin_redemption | 399 | 7.02 | +2.0% | +5.2% | 21 | +1.3% | +3.2% | +0.8% | 1.37% |
+| TrustToken-Exp2VOfPRF-Batch1 finish_issuance | 3,020,914 | 5.53 | +5.4% | +0.1% | 2,777 | -0.3% | +5.1% | +5.5% | 0.34% |
+| TrustToken-Exp2VOfPRF-Batch1 generate_key | 118,391 | 4.24 | -0.2% | +1.7% | 2,044 | +1.6% | -0.1% | +0.1% | 0.12% |
+| TrustToken-Exp2VOfPRF-Batch1 issue | 2,170,695 | 5.42 | +5.0% | +0.1% | 1,382 | +0.2% | +4.8% | +5.0% | 0.32% |
+| TrustToken-Exp2VOfPRF-Batch1 redeem | 422,221 | 4.85 | +2.7% | +0.0% | 192 | +0.1% | +2.8% | +2.8% | 0.07% |
+| **geometric mean of the ratio to A, all 410 rows, every cell** | | | **-0.6%** | **+39.4%** |  | **+46.8%** | **+1.3%** | **+29.5%** | |
+| **geometric mean, suspect cells left out (0 at most in a column)** | | | **-0.6%** | **+39.4%** |  | **+46.8%** | **+1.3%** | **+29.5%** | |
 
 Both means count each of the tool's rows once, so they summarise this table, not any application's mix of operations. The first includes the cells whose medians the backward-counter fault corrupted; the second leaves them out.
 
@@ -229,230 +600,659 @@ Both means count each of the tool's rows once, so they summarise this table, not
 
 | row | instr/op unhardened | IPC unhardened | IPC Coarse | IPC AWS default | IPC AWS default + sb | IPC AWS hoist | IPC AWS hoist + sb | AWS default - unhardened instr |
 |---|---|---|---|---|---|---|---|---|
-| AEAD-AES-128-CBC-SHA1 open [1350 B] | 18,972 | 4.24 | 4.24 | 4.13 | 3.92 | 4.25 | 3.98 | 78 |
-| AEAD-AES-128-CBC-SHA1 open [16 B] | 5,937 | 4.87 | 4.88 | 4.42 | 3.73 | 4.89 | 3.89 | 78 |
-| AEAD-AES-128-CBC-SHA1 open [16384 B] | 70,836 | 2.62 | 2.63 | 2.62 | 2.59 | 2.63 | 2.60 | 78 |
-| AEAD-AES-128-CBC-SHA1 open [256 B] | 15,120 | 5.23 | 5.23 | 5.02 | 4.64 | 5.25 | 4.75 | 78 |
-| AEAD-AES-128-CBC-SHA1 open [8192 B] | 42,612 | 2.89 | 2.89 | 2.87 | 2.83 | 2.90 | 2.84 | 78 |
-| AEAD-AES-128-CBC-SHA1 open init | 3,169 | 5.16 | 4.90 | 4.17 | 3.71 | 5.04 | 4.10 | 35 |
-| AEAD-AES-128-CBC-SHA1 seal [1350 B] | 6,650 | 1.65 | 1.66 | 1.60 | 1.46 | 1.65 | 1.48 | 110 |
-| AEAD-AES-128-CBC-SHA1 seal [16 B] | 1,986 | 5.18 | 4.92 | 3.63 | 2.34 | 4.90 | 2.51 | 95 |
-| AEAD-AES-128-CBC-SHA1 seal [16384 B] | 54,835 | 1.25 | 1.23 | 1.23 | 1.23 | 1.25 | 1.24 | 96 |
-| AEAD-AES-128-CBC-SHA1 seal [256 B] | 2,915 | 2.76 | 2.70 | 2.41 | 1.91 | 2.75 | 1.98 | 95 |
-| AEAD-AES-128-CBC-SHA1 seal [8192 B] | 28,462 | 1.28 | 1.27 | 1.26 | 1.26 | 1.28 | 1.26 | 95 |
-| AEAD-AES-128-CBC-SHA1 seal init | 3,171 | 5.17 | 4.91 | 4.14 | 3.67 | 5.00 | 4.12 | 35 |
+| AEAD-AES-128-CBC-SHA1 open [1350 B] | 18,972 | 4.23 | 4.24 | 4.13 | 3.92 | 4.24 | 3.98 | 78 |
+| AEAD-AES-128-CBC-SHA1 open [16 B] | 5,938 | 4.88 | 4.88 | 4.41 | 3.73 | 4.89 | 3.89 | 78 |
+| AEAD-AES-128-CBC-SHA1 open [16384 B] | 70,836 | 2.62 | 2.62 | 2.62 | 2.59 | 2.63 | 2.60 | 78 |
+| AEAD-AES-128-CBC-SHA1 open [256 B] | 15,120 | 5.22 | 5.23 | 5.01 | 4.64 | 5.24 | 4.74 | 78 |
+| AEAD-AES-128-CBC-SHA1 open [8192 B] | 42,612 | 2.89 | 2.89 | 2.87 | 2.82 | 2.90 | 2.84 | 78 |
+| AEAD-AES-128-CBC-SHA1 open init | 3,169 | 5.06 | 4.97 | 4.13 | 3.67 | 4.99 | 4.14 | 35 |
+| AEAD-AES-128-CBC-SHA1 seal [1350 B] | 6,650 | 1.67 | 1.66 | 1.60 | 1.46 | 1.65 | 1.49 | 110 |
+| AEAD-AES-128-CBC-SHA1 seal [16 B] | 1,985 | 5.16 | 4.92 | 3.63 | 2.34 | 4.85 | 2.53 | 95 |
+| AEAD-AES-128-CBC-SHA1 seal [16384 B] | 54,835 | 1.24 | 1.23 | 1.24 | 1.23 | 1.24 | 1.24 | 95 |
+| AEAD-AES-128-CBC-SHA1 seal [256 B] | 2,915 | 2.76 | 2.71 | 2.42 | 1.91 | 2.75 | 1.98 | 95 |
+| AEAD-AES-128-CBC-SHA1 seal [8192 B] | 28,463 | 1.27 | 1.27 | 1.28 | 1.26 | 1.28 | 1.26 | 95 |
+| AEAD-AES-128-CBC-SHA1 seal init | 3,186 | 5.03 | 4.97 | 4.10 | 3.64 | 5.00 | 4.12 | 34 |
 | AEAD-AES-128-CCM-Bluetooth seal [1350 B] | 8,769 | 2.24 | 2.24 | 2.16 | 2.18 | 2.24 | 2.22 | 18 |
-| AEAD-AES-128-CCM-Bluetooth seal [16 B] | 946 | 5.35 | 5.32 | 3.16 | 3.03 | 5.46 | 3.95 | 20 |
-| AEAD-AES-128-CCM-Bluetooth seal [16384 B] | 94,740 | 2.08 | 2.07 | 2.06 | 2.10 | 2.07 | 2.10 | 18 |
+| AEAD-AES-128-CCM-Bluetooth seal [16 B] | 948 | 5.37 | 5.31 | 3.15 | 3.03 | 5.44 | 3.93 | 18 |
+| AEAD-AES-128-CCM-Bluetooth seal [16384 B] | 94,738 | 2.08 | 2.07 | 2.06 | 2.10 | 2.07 | 2.10 | 20 |
 | AEAD-AES-128-CCM-Bluetooth seal [256 B] | 2,331 | 2.92 | 2.91 | 2.45 | 2.42 | 2.93 | 2.61 | 18 |
-| AEAD-AES-128-CCM-Bluetooth seal [8192 B] | 47,771 | 2.09 | 2.08 | 2.06 | 2.10 | 2.08 | 2.11 | 18 |
-| AEAD-AES-128-CCM-Bluetooth seal init | 347 | 5.46 | 5.05 | 1.39 | 1.33 | 5.20 | 1.99 | 20 |
-| AEAD-AES-128-GCM open [1350 B] | 3,866 | 5.40 | 5.41 | 4.45 | 4.14 | 5.17 | 4.52 | 49 |
-| AEAD-AES-128-GCM open [16 B] | 835 | 4.08 | 4.06 | 2.29 | 2.03 | 3.58 | 2.43 | 49 |
-| AEAD-AES-128-GCM open [16384 B] | 35,791 | 6.24 | 6.24 | 6.08 | 6.00 | 6.21 | 6.07 | 49 |
-| AEAD-AES-128-GCM open [256 B] | 1,266 | 4.22 | 4.23 | 2.81 | 2.48 | 3.87 | 2.89 | 49 |
-| AEAD-AES-128-GCM open [8192 B] | 18,255 | 6.14 | 6.14 | 5.83 | 5.70 | 6.07 | 5.84 | 49 |
-| AEAD-AES-128-GCM open init | 670 | 2.78 | 2.76 | 1.73 | 1.62 | 2.83 | 2.09 | 20 |
-| AEAD-AES-128-GCM seal [1350 B] | 3,819 | 5.32 | 5.34 | 4.39 | 4.39 | 5.22 | 4.77 | 18 |
-| AEAD-AES-128-GCM seal [16 B] | 789 | 4.14 | 4.16 | 2.33 | 2.31 | 3.82 | 2.92 | 20 |
-| AEAD-AES-128-GCM seal [16384 B] | 35,746 | 6.17 | 6.17 | 5.99 | 5.98 | 6.13 | 6.05 | 18 |
-| AEAD-AES-128-GCM seal [256 B] | 1,221 | 4.19 | 4.16 | 2.77 | 2.75 | 3.93 | 3.30 | 18 |
-| AEAD-AES-128-GCM seal [8192 B] | 18,210 | 6.07 | 6.07 | 5.76 | 5.74 | 6.01 | 5.87 | 18 |
-| AEAD-AES-128-GCM seal init | 670 | 2.78 | 2.76 | 1.72 | 1.62 | 2.83 | 2.09 | 20 |
-| AEAD-AES-128-GCM-SIV open [1350 B] | 9,818 | 5.45 | 5.44 | 4.91 | 4.77 | 5.48 | 4.94 | 49 |
-| AEAD-AES-128-GCM-SIV open [16 B] | 1,560 | 4.63 | 4.61 | 2.92 | 2.66 | 4.66 | 3.02 | 49 |
+| AEAD-AES-128-CCM-Bluetooth seal [8192 B] | 47,771 | 2.09 | 2.08 | 2.07 | 2.10 | 2.08 | 2.11 | 18 |
+| AEAD-AES-128-CCM-Bluetooth seal init | 347 | 5.48 | 5.51 | 1.39 | 1.33 | 5.72 | 2.01 | 20 |
+| AEAD-AES-128-GCM open [1350 B] | 3,866 | 5.41 | 5.42 | 4.44 | 4.15 | 5.17 | 4.53 | 49 |
+| AEAD-AES-128-GCM open [16 B] | 835 | 4.07 | 4.06 | 2.29 | 2.05 | 3.58 | 2.44 | 49 |
+| AEAD-AES-128-GCM open [16384 B] | 35,791 | 6.24 | 6.24 | 6.08 | 5.99 | 6.20 | 6.07 | 49 |
+| AEAD-AES-128-GCM open [256 B] | 1,266 | 4.25 | 4.26 | 2.81 | 2.49 | 3.88 | 2.92 | 49 |
+| AEAD-AES-128-GCM open [8192 B] | 18,255 | 6.14 | 6.14 | 5.83 | 5.70 | 6.07 | 5.86 | 49 |
+| AEAD-AES-128-GCM open init | 670 | 2.78 | 2.76 | 1.73 | 1.62 | 2.83 | 2.10 | 20 |
+| AEAD-AES-128-GCM seal [1350 B] | 3,819 | 5.31 | 5.34 | 4.40 | 4.39 | 5.21 | 4.78 | 18 |
+| AEAD-AES-128-GCM seal [16 B] | 791 | 4.15 | 4.15 | 2.34 | 2.31 | 3.82 | 2.92 | 18 |
+| AEAD-AES-128-GCM seal [16384 B] | 35,747 | 6.16 | 6.17 | 5.99 | 5.98 | 6.13 | 6.05 | 18 |
+| AEAD-AES-128-GCM seal [256 B] | 1,221 | 4.19 | 4.17 | 2.77 | 2.73 | 3.96 | 3.30 | 18 |
+| AEAD-AES-128-GCM seal [8192 B] | 18,210 | 6.07 | 6.07 | 5.76 | 5.74 | 6.01 | 5.88 | 18 |
+| AEAD-AES-128-GCM seal init | 670 | 2.77 | 2.77 | 1.73 | 1.62 | 2.83 | 2.09 | 20 |
+| AEAD-AES-128-GCM-SIV open [1350 B] | 9,818 | 5.45 | 5.45 | 4.91 | 4.78 | 5.48 | 4.94 | 49 |
+| AEAD-AES-128-GCM-SIV open [16 B] | 1,560 | 4.63 | 4.61 | 2.92 | 2.66 | 4.68 | 3.02 | 49 |
 | AEAD-AES-128-GCM-SIV open [16384 B] | 100,335 | 5.81 | 5.81 | 5.74 | 5.72 | 5.81 | 5.74 | 49 |
-| AEAD-AES-128-GCM-SIV open [256 B] | 2,968 | 4.94 | 4.90 | 3.69 | 3.47 | 4.96 | 3.77 | 49 |
+| AEAD-AES-128-GCM-SIV open [256 B] | 2,968 | 4.94 | 4.91 | 3.71 | 3.49 | 4.98 | 3.78 | 49 |
 | AEAD-AES-128-GCM-SIV open [8192 B] | 50,861 | 5.77 | 5.77 | 5.64 | 5.60 | 5.77 | 5.65 | 49 |
-| AEAD-AES-128-GCM-SIV open init | 386 | 4.83 | 4.80 | 1.58 | 1.44 | 5.02 | 2.19 | 20 |
-| AEAD-AES-128-GCM-SIV seal [1350 B] | 9,778 | 5.44 | 5.43 | 5.09 | 5.03 | 5.43 | 5.24 | 18 |
-| AEAD-AES-128-GCM-SIV seal [16 B] | 1,518 | 3.77 | 3.53 | 2.79 | 2.73 | 3.57 | 3.14 | 20 |
-| AEAD-AES-128-GCM-SIV seal [16384 B] | 100,295 | 5.80 | 5.80 | 5.77 | 5.76 | 5.80 | 5.78 | 18 |
-| AEAD-AES-128-GCM-SIV seal [256 B] | 2,928 | 4.84 | 4.77 | 3.91 | 3.86 | 4.80 | 4.27 | 18 |
+| AEAD-AES-128-GCM-SIV open init | 386 | 4.82 | 4.79 | 1.56 | 1.44 | 5.03 | 2.23 | 20 |
+| AEAD-AES-128-GCM-SIV seal [1350 B] | 9,778 | 5.44 | 5.43 | 5.09 | 5.04 | 5.42 | 5.24 | 18 |
+| AEAD-AES-128-GCM-SIV seal [16 B] | 1,520 | 3.78 | 3.53 | 2.80 | 2.73 | 3.57 | 3.15 | 18 |
+| AEAD-AES-128-GCM-SIV seal [16384 B] | 100,295 | 5.80 | 5.80 | 5.76 | 5.76 | 5.80 | 5.78 | 18 |
+| AEAD-AES-128-GCM-SIV seal [256 B] | 2,928 | 4.83 | 4.78 | 3.91 | 3.86 | 4.80 | 4.26 | 18 |
 | AEAD-AES-128-GCM-SIV seal [8192 B] | 50,821 | 5.76 | 5.76 | 5.69 | 5.68 | 5.77 | 5.73 | 18 |
-| AEAD-AES-128-GCM-SIV seal init | 386 | 4.82 | 4.79 | 1.58 | 1.44 | 5.02 | 2.21 | 20 |
+| AEAD-AES-128-GCM-SIV seal init | 386 | 4.82 | 4.79 | 1.58 | 1.44 | 5.03 | 2.24 | 20 |
+| AEAD-AES-256-CBC-SHA1 open [1350 B] | 19,892 | 4.32 | 4.33 | 4.23 | 4.02 | 4.34 | 4.07 | 78 |
+| AEAD-AES-256-CBC-SHA1 open [16 B] | 5,970 | 4.88 | 4.89 | 4.43 | 3.74 | 4.91 | 3.88 | 78 |
+| AEAD-AES-256-CBC-SHA1 open [16384 B] | 81,780 | 2.88 | 2.89 | 2.89 | 2.86 | 2.90 | 2.87 | 78 |
+| AEAD-AES-256-CBC-SHA1 open [256 B] | 15,312 | 5.24 | 5.24 | 5.04 | 4.67 | 5.27 | 4.77 | 78 |
+| AEAD-AES-256-CBC-SHA1 open [8192 B] | 48,108 | 3.12 | 3.12 | 3.11 | 3.06 | 3.14 | 3.08 | 78 |
+| AEAD-AES-256-CBC-SHA1 open init | 3,200 | 5.03 | 5.07 | 4.15 | 3.72 | 5.01 | 4.21 | 35 |
+| AEAD-AES-256-CBC-SHA1 seal [1350 B] | 8,041 | 1.67 | 1.66 | 1.64 | 1.52 | 1.69 | 1.54 | 110 |
+| AEAD-AES-256-CBC-SHA1 seal [16 B] | 2,047 | 5.05 | 4.86 | 3.63 | 2.34 | 4.87 | 2.52 | 97 |
+| AEAD-AES-256-CBC-SHA1 seal [16384 B] | 71,267 | 1.32 | 1.32 | 1.33 | 1.31 | 1.33 | 1.31 | 96 |
+| AEAD-AES-256-CBC-SHA1 seal [256 B] | 3,218 | 2.61 | 2.57 | 2.34 | 1.91 | 2.61 | 1.97 | 95 |
+| AEAD-AES-256-CBC-SHA1 seal [8192 B] | 36,702 | 1.35 | 1.34 | 1.35 | 1.32 | 1.36 | 1.33 | 96 |
+| AEAD-AES-256-CBC-SHA1 seal init | 3,218 | 5.04 | 4.99 | 4.14 | 3.70 | 4.99 | 4.19 | 36 |
+| AEAD-AES-256-GCM open [1350 B] | 4,622 | 5.75 | 5.76 | 4.83 | 4.57 | 5.51 | 4.90 | 49 |
+| AEAD-AES-256-GCM open [16 B] | 884 | 4.26 | 4.22 | 2.43 | 2.16 | 3.75 | 2.60 | 49 |
+| AEAD-AES-256-GCM open [16384 B] | 44,254 | 6.53 | 6.54 | 6.40 | 6.34 | 6.52 | 6.40 | 49 |
+| AEAD-AES-256-GCM open [256 B] | 1,412 | 4.57 | 4.58 | 3.09 | 2.74 | 4.15 | 3.16 | 49 |
+| AEAD-AES-256-GCM open [8192 B] | 22,493 | 6.45 | 6.45 | 6.18 | 6.08 | 6.40 | 6.19 | 49 |
+| AEAD-AES-256-GCM open init | 720 | 2.96 | 2.97 | 1.86 | 1.75 | 3.03 | 2.27 | 20 |
+| AEAD-AES-256-GCM seal [1350 B] | 4,573 | 5.66 | 5.67 | 4.79 | 4.72 | 5.55 | 5.15 | 18 |
+| AEAD-AES-256-GCM seal [16 B] | 840 | 4.34 | 4.32 | 2.46 | 2.44 | 3.98 | 3.06 | 18 |
+| AEAD-AES-256-GCM seal [16384 B] | 44,207 | 6.45 | 6.45 | 6.29 | 6.28 | 6.41 | 6.35 | 18 |
+| AEAD-AES-256-GCM seal [256 B] | 1,365 | 4.54 | 4.54 | 3.06 | 3.00 | 4.30 | 3.57 | 18 |
+| AEAD-AES-256-GCM seal [8192 B] | 22,446 | 6.36 | 6.36 | 6.09 | 6.07 | 6.31 | 6.20 | 18 |
+| AEAD-AES-256-GCM seal init | 720 | 2.96 | 2.97 | 1.86 | 1.75 | 3.03 | 2.25 | 20 |
+| AEAD-AES-256-GCM-SIV open [1350 B] | 11,429 | 5.78 | 5.78 | 5.17 | 5.04 | 5.76 | 5.20 | 49 |
+| AEAD-AES-256-GCM-SIV open [16 B] | 1,827 | 5.05 | 5.05 | 3.15 | 2.90 | 4.77 | 3.26 | 49 |
+| AEAD-AES-256-GCM-SIV open [16384 B] | 116,970 | 6.05 | 6.05 | 5.97 | 5.96 | 6.05 | 5.98 | 49 |
+| AEAD-AES-256-GCM-SIV open [256 B] | 3,475 | 5.39 | 5.41 | 3.97 | 3.76 | 5.40 | 4.05 | 49 |
+| AEAD-AES-256-GCM-SIV open [8192 B] | 59,304 | 6.02 | 6.02 | 5.88 | 5.84 | 6.01 | 5.89 | 49 |
+| AEAD-AES-256-GCM-SIV open init | 419 | 5.28 | 5.25 | 1.73 | 1.58 | 5.41 | 2.37 | 20 |
+| AEAD-AES-256-GCM-SIV seal [1350 B] | 11,389 | 5.66 | 5.66 | 5.31 | 5.27 | 5.65 | 5.45 | 18 |
+| AEAD-AES-256-GCM-SIV seal [16 B] | 1,787 | 4.12 | 4.11 | 2.98 | 2.98 | 4.15 | 3.38 | 18 |
+| AEAD-AES-256-GCM-SIV seal [16384 B] | 116,930 | 6.03 | 6.03 | 6.00 | 5.99 | 6.04 | 6.01 | 18 |
+| AEAD-AES-256-GCM-SIV seal [256 B] | 3,435 | 5.03 | 5.04 | 4.25 | 4.17 | 5.03 | 4.57 | 18 |
+| AEAD-AES-256-GCM-SIV seal [8192 B] | 59,264 | 5.99 | 5.99 | 5.92 | 5.91 | 6.00 | 5.96 | 18 |
+| AEAD-AES-256-GCM-SIV seal init | 419 | 5.28 | 5.25 | 1.73 | 1.58 | 5.41 | 2.37 | 20 |
 | AEAD-ChaCha20-Poly1305 seal [1350 B] | 11,055 | 3.50 | 3.50 | 3.38 | 3.36 | 3.50 | 3.43 | 18 |
-| AEAD-ChaCha20-Poly1305 seal [16 B] | 1,480 | 2.55 | 2.56 | 1.79 | 1.75 | 2.12 | 1.91 | 20 |
-| AEAD-ChaCha20-Poly1305 seal [16384 B] | 115,107 | 3.67 | 3.67 | 3.66 | 3.65 | 3.67 | 3.66 | 18 |
-| AEAD-ChaCha20-Poly1305 seal [256 B] | 2,520 | 2.81 | 2.81 | 2.49 | 2.43 | 2.83 | 2.60 | 18 |
-| AEAD-ChaCha20-Poly1305 seal [8192 B] | 57,787 | 3.65 | 3.65 | 3.62 | 3.62 | 3.65 | 3.63 | 18 |
-| AEAD-ChaCha20-Poly1305 seal init | 155 | 4.23 | 4.90 | 1.32 | 1.08 | 5.24 | 1.80 | 20 |
-| AES-128 decrypt | 65 | 1.94 | 1.94 | 0.74 | 0.61 | 2.69 | 1.09 | 29 |
+| AEAD-ChaCha20-Poly1305 seal [16 B] | 1,480 | 2.55 | 2.55 | 1.79 | 1.75 | 2.26 | 1.91 | 20 |
+| AEAD-ChaCha20-Poly1305 seal [16384 B] | 115,105 | 3.67 | 3.67 | 3.66 | 3.65 | 3.67 | 3.66 | 19 |
+| AEAD-ChaCha20-Poly1305 seal [256 B] | 2,520 | 2.81 | 2.81 | 2.50 | 2.43 | 2.83 | 2.60 | 18 |
+| AEAD-ChaCha20-Poly1305 seal [8192 B] | 57,787 | 3.65 | 3.64 | 3.62 | 3.62 | 3.65 | 3.63 | 18 |
+| AEAD-ChaCha20-Poly1305 seal init | 155 | 4.38 | 4.90 | 1.32 | 1.07 | 5.24 | 1.82 | 20 |
+| AEAD-DES-EDE3-CBC-SHA1 seal [1350 B] | 267,176 | 1.98 | 2.00 | 2.00 | 1.99 | 2.00 | 1.99 | 107 |
+| AEAD-DES-EDE3-CBC-SHA1 seal [16 B] | 9,555 | 2.36 | 2.35 | 2.27 | 2.13 | 2.36 | 2.16 | 95 |
+| AEAD-DES-EDE3-CBC-SHA1 seal [16384 B] | 3,160,329 | 1.97 | 1.99 | 1.99 | 1.99 | 1.99 | 1.98 | 126 |
+| AEAD-DES-EDE3-CBC-SHA1 seal [256 B] | 55,909 | 2.04 | 2.04 | 2.03 | 2.01 | 2.04 | 2.01 | 96 |
+| AEAD-DES-EDE3-CBC-SHA1 seal [8192 B] | 1,583,494 | 1.97 | 1.99 | 1.99 | 1.99 | 1.99 | 1.98 | 106 |
+| AEAD-DES-EDE3-CBC-SHA1 seal init | 6,115 | 5.63 | 5.33 | 4.78 | 4.46 | 5.33 | 4.79 | 34 |
+| AES-128 decrypt | 65 | 1.94 | 1.94 | 0.73 | 0.61 | 2.68 | 1.09 | 29 |
 | AES-128 decrypt setup | 248 | 3.50 | 3.50 | 1.11 | 1.09 | 3.79 | 1.51 | 26 |
-| AES-128 encrypt | 65 | 1.94 | 1.94 | 0.74 | 0.61 | 2.69 | 1.09 | 29 |
-| AES-128 encrypt setup | 198 | 4.97 | 4.98 | 0.97 | 0.93 | 5.20 | 1.26 | 26 |
+| AES-128 encrypt | 65 | 1.94 | 1.94 | 0.73 | 0.61 | 2.68 | 1.09 | 29 |
+| AES-128 encrypt setup | 198 | 4.97 | 4.98 | 0.96 | 0.93 | 5.20 | 1.26 | 26 |
+| AES-192 decrypt | 73 | 1.90 | 1.90 | 0.75 | 0.64 | 2.56 | 1.12 | 29 |
+| AES-192 decrypt setup | 288 | 4.01 | 4.02 | 1.28 | 1.25 | 4.35 | 1.74 | 25 |
+| AES-192 encrypt | 73 | 1.90 | 1.90 | 0.76 | 0.64 | 2.57 | 1.12 | 29 |
+| AES-192 encrypt setup | 230 | 5.05 | 5.06 | 1.12 | 1.09 | 5.49 | 1.54 | 25 |
+| AES-256 decrypt | 81 | 2.00 | 1.99 | 0.79 | 0.67 | 2.49 | 1.14 | 29 |
+| AES-256 decrypt setup | 297 | 4.40 | 4.40 | 1.30 | 1.26 | 4.59 | 1.74 | 25 |
+| AES-256 encrypt | 81 | 2.00 | 1.99 | 0.78 | 0.67 | 2.50 | 1.14 | 29 |
+| AES-256 encrypt setup | 231 | 5.48 | 5.51 | 1.10 | 1.06 | 5.86 | 1.48 | 25 |
+| AES-256-XTS decrypt [1350 B] | 3,614 | 7.43 | 7.45 | 4.54 | 4.07 | 7.01 | 4.84 | 52 |
+| AES-256-XTS decrypt [16 B] | 382 | 7.06 | 6.68 | 1.26 | 1.03 | 5.70 | 1.53 | 52 |
+| AES-256-XTS decrypt [16384 B] | 39,060 | 7.85 | 7.85 | 7.48 | 7.34 | 7.85 | 7.55 | 52 |
+| AES-256-XTS decrypt [256 B] | 984 | 7.66 | 7.60 | 2.53 | 2.04 | 7.86 | 2.82 | 52 |
+| AES-256-XTS decrypt [8192 B] | 19,724 | 7.82 | 7.84 | 7.10 | 6.86 | 7.84 | 7.22 | 52 |
+| AES-256-XTS decrypt init | 1,665 | 5.41 | 5.38 | 3.69 | 2.58 | 5.29 | 2.90 | 61 |
+| AES-256-XTS encrypt [1350 B] | 3,545 | 7.51 | 7.55 | 4.66 | 4.37 | 7.46 | 5.32 | 39 |
+| AES-256-XTS encrypt [16 B] | 317 | 2.57 | 2.75 | 1.10 | 0.99 | 2.91 | 1.49 | 39 |
+| AES-256-XTS encrypt [16384 B] | 39,006 | 7.86 | 7.87 | 7.50 | 7.40 | 7.85 | 7.63 | 39 |
+| AES-256-XTS encrypt [256 B] | 928 | 7.36 | 7.56 | 2.42 | 2.15 | 7.62 | 3.15 | 39 |
+| AES-256-XTS encrypt [8192 B] | 19,668 | 7.85 | 7.85 | 7.12 | 6.97 | 7.82 | 7.37 | 39 |
+| AES-256-XTS encrypt init | 1,599 | 5.98 | 6.06 | 3.83 | 2.53 | 5.86 | 2.86 | 62 |
 | CMAC-AES-128-CBC [1350 B] | 8,645 | 2.54 | 2.58 | 0.87 | 0.76 | 3.00 | 1.27 | 1,395 |
-| CMAC-AES-128-CBC [16 B] | 360 | 6.43 | 6.43 | 1.45 | 1.23 | 6.83 | 2.07 | 44 |
-| CMAC-AES-128-CBC [16384 B] | 100,622 | 2.47 | 2.49 | 0.85 | 0.75 | 2.90 | 1.24 | 16,439 |
-| CMAC-AES-128-CBC [256 B] | 1,831 | 2.93 | 2.89 | 0.92 | 0.81 | 3.36 | 1.37 | 289 |
-| CMAC-AES-128-CBC [8192 B] | 50,443 | 2.47 | 2.50 | 0.85 | 0.75 | 2.91 | 1.26 | 8,236 |
-| CMAC-AES-128-CBC init | 1,662 | 5.34 | 5.20 | 2.61 | 2.37 | 5.34 | 3.20 | 64 |
-| Curve25519 arbitrary point multiplication | 245,001 | 5.01 | 5.00 | 5.00 | 4.98 | 5.01 | 5.00 | 19 |
-| Curve25519 base-point multiplication | 70,934 | 4.85 | 4.85 | 4.80 | 4.79 | 4.85 | 4.82 | 19 |
-| ECDH X25519 | 315,911 | 4.97 | 4.96 | 4.95 | 4.94 | 4.98 | 4.95 | 38 |
-| ECDSA P-256 signing | 155,634 | 3.64 | 3.78 | 3.58 | 3.57 | 3.77 | 3.75 | 99 |
-| ECDSA P-256 verify | 523,097 | 4.98 | 4.97 | 4.97 | 4.97 | 4.97 | 4.97 | 15 |
-| EVP ECDH X25519 | 333,641 | 4.70 | 4.82 | 4.74 | 4.66 | 4.82 | 4.71 | 369 |
-| EVP-AES-128-CBC decrypt [1350 B] | 3,126 | 8.98 | 8.94 | 4.63 | 3.60 | 8.91 | 4.66 | 89 |
-| EVP-AES-128-CBC decrypt [16 B] | 685 | 6.64 | 6.60 | 1.76 | 1.20 | 5.97 | 1.75 | 89 |
-| EVP-AES-128-CBC decrypt [16384 B] | 31,043 | 9.36 | 9.36 | 8.60 | 8.12 | 9.45 | 8.58 | 89 |
-| EVP-AES-128-CBC decrypt [256 B] | 1,138 | 7.63 | 7.77 | 2.53 | 1.80 | 7.95 | 2.53 | 89 |
-| EVP-AES-128-CBC decrypt [8192 B] | 15,827 | 9.25 | 9.24 | 7.85 | 7.13 | 9.33 | 7.84 | 89 |
-| EVP-AES-128-CBC decrypt init | 1,351 | 6.33 | 6.11 | 3.46 | 3.38 | 5.92 | 4.17 | 20 |
+| CMAC-AES-128-CBC [16 B] | 360 | 6.42 | 6.42 | 1.45 | 1.23 | 6.84 | 2.06 | 44 |
+| CMAC-AES-128-CBC [16384 B] | 100,623 | 2.46 | 2.50 | 0.85 | 0.75 | 2.90 | 1.25 | 16,442 |
+| CMAC-AES-128-CBC [256 B] | 1,831 | 2.93 | 2.91 | 0.92 | 0.81 | 3.36 | 1.37 | 289 |
+| CMAC-AES-128-CBC [8192 B] | 50,443 | 2.47 | 2.51 | 0.85 | 0.75 | 2.91 | 1.26 | 8,237 |
+| CMAC-AES-128-CBC init | 1,662 | 5.18 | 5.06 | 2.62 | 2.33 | 5.16 | 3.17 | 64 |
+| CMAC-AES-256-CBC [1350 B] | 10,430 | 2.49 | 2.51 | 0.94 | 0.84 | 2.86 | 1.36 | 1,395 |
+| CMAC-AES-256-CBC [16 B] | 381 | 6.68 | 6.66 | 1.46 | 1.26 | 6.86 | 2.06 | 44 |
+| CMAC-AES-256-CBC [16384 B] | 122,128 | 2.42 | 2.44 | 0.93 | 0.83 | 2.79 | 1.34 | 16,439 |
+| CMAC-AES-256-CBC [256 B] | 2,167 | 2.76 | 2.76 | 0.99 | 0.88 | 3.15 | 1.43 | 289 |
+| CMAC-AES-256-CBC [8192 B] | 61,194 | 2.42 | 2.44 | 0.93 | 0.83 | 2.80 | 1.34 | 8,239 |
+| CMAC-AES-256-CBC init | 1,714 | 5.34 | 5.57 | 2.72 | 2.43 | 5.59 | 3.33 | 64 |
+| Curve25519 arbitrary point multiplication | 245,003 | 5.00 | 5.00 | 4.99 | 4.98 | 5.01 | 5.00 | 19 |
+| Curve25519 base-point multiplication | 70,934 | 4.85 | 4.85 | 4.80 | 4.80 | 4.85 | 4.82 | 19 |
+| EC POINT P-224 add | 2,402 | 5.08 | 5.08 | 5.07 | 5.08 | 5.07 | 5.07 | -0 |
+| EC POINT P-224 dbl | 1,166 | 5.28 | 5.28 | 5.29 | 5.28 | 5.29 | 5.30 | -0 |
+| EC POINT P-224 mul | 384,801 | 5.24 | 5.24 | 5.24 | 5.23 | 5.25 | 5.24 | 50 |
+| EC POINT P-224 mul base | 171,792 | 5.73 | 5.72 | 5.69 | 5.68 | 5.71 | 5.70 | 45 |
+| EC POINT P-224 mul public | 558,842 | 5.37 | 5.37 | 5.37 | 5.37 | 5.38 | 5.37 | 60 |
+| EC POINT P-256 add | 2,225 | 5.27 | 5.24 | 5.25 | 5.26 | 5.23 | 5.24 | 0 |
+| EC POINT P-256 dbl | 1,238 | 5.19 | 5.19 | 5.20 | 5.19 | 5.17 | 5.18 | -0 |
+| EC POINT P-256 mul | 410,249 | 5.17 | 5.17 | 5.16 | 5.15 | 5.17 | 5.16 | 53 |
+| EC POINT P-256 mul base | 84,559 | 5.05 | 5.05 | 5.01 | 4.97 | 5.04 | 4.98 | 45 |
+| EC POINT P-256 mul public | 496,882 | 5.14 | 5.14 | 5.13 | 5.12 | 5.14 | 5.12 | 62 |
+| EC POINT P-384 add | 6,356 | 3.67 | 3.67 | 3.67 | 3.67 | 3.67 | 3.67 | -0 |
+| EC POINT P-384 dbl | 2,995 | 3.63 | 3.62 | 3.62 | 3.63 | 3.62 | 3.62 | -0 |
+| EC POINT P-384 mul | 1,286,328 | 4.50 | 4.50 | 4.50 | 4.49 | 4.50 | 4.50 | 53 |
+| EC POINT P-384 mul base | 466,844 | 4.40 | 4.38 | 4.37 | 4.37 | 4.44 | 4.38 | 44 |
+| EC POINT P-384 mul public | 1,759,369 | 4.47 | 4.46 | 4.46 | 4.46 | 4.47 | 4.46 | 59 |
+| EC POINT P-521 add | 8,087 | 4.42 | 4.43 | 4.42 | 4.42 | 4.42 | 4.43 | -0 |
+| EC POINT P-521 dbl | 3,674 | 4.40 | 4.40 | 4.40 | 4.40 | 4.40 | 4.40 | 0 |
+| EC POINT P-521 mul | 2,202,751 | 5.63 | 5.63 | 5.63 | 5.63 | 5.63 | 5.63 | 57 |
+| EC POINT P-521 mul base | 737,985 | 5.04 | 5.05 | 5.02 | 5.02 | 5.07 | 5.02 | 46 |
+| EC POINT P-521 mul public | 2,948,690 | 5.46 | 5.47 | 5.46 | 5.46 | 5.47 | 5.46 | 39 |
+| EC POINT secp256k1 add | 6,068 | 5.71 | 5.65 | 5.72 | 5.71 | 5.67 | 5.67 | 0 |
+| EC POINT secp256k1 dbl | 4,455 | 5.65 | 5.68 | 5.63 | 5.66 | 5.64 | 5.66 | -0 |
+| EC POINT secp256k1 mul | 1,827,519 | 5.94 | 5.94 | 5.90 | 5.91 | 5.95 | 5.95 | 42 |
+| EC POINT secp256k1 mul base | 1,827,490 | 5.95 | 5.95 | 5.92 | 5.93 | 5.93 | 5.94 | 41 |
+| EC POINT secp256k1 mul public | 3,660,922 | 5.94 | 5.95 | 5.91 | 5.92 | 5.94 | 5.95 | 51 |
+| ECDH P-224 | 599,946 | 5.05 | 5.12 | 5.02 | 5.01 | 5.12 | 5.11 | 136 |
+| ECDH P-256 | 526,419 | 4.87 | 4.95 | 4.84 | 4.83 | 4.94 | 4.92 | 143 |
+| ECDH P-384 | 1,794,573 | 4.41 | 4.43 | 4.40 | 4.40 | 4.43 | 4.41 | 117 |
+| ECDH P-521 | 2,989,633 | 5.40 | 5.42 | 5.39 | 5.38 | 5.41 | 5.40 | 103 |
+| ECDH X25519 | 315,912 | 4.97 | 4.96 | 4.95 | 4.94 | 4.98 | 4.95 | 38 |
+| ECDH secp256k1 | 3,762,228 | 5.87 | 5.88 | 5.84 | 5.85 | 5.86 | 5.87 | 124 |
+| ECDSA P-224 signing | 291,811 | 4.75 | 4.87 | 4.70 | 4.69 | 4.86 | 4.85 | 97 |
+| ECDSA P-224 verify | 530,894 | 4.95 | 4.94 | 4.94 | 4.94 | 4.93 | 4.92 | -321 |
+| ECDSA P-256 signing | 155,629 | 3.64 | 3.78 | 3.58 | 3.57 | 3.76 | 3.74 | 100 |
+| ECDSA P-256 verify | 522,658 | 4.97 | 4.98 | 4.98 | 4.98 | 4.97 | 4.97 | 129 |
+| ECDSA P-384 signing | 862,904 | 4.69 | 4.57 | 4.66 | 4.66 | 4.56 | 4.55 | 280 |
+| ECDSA P-384 verify | 1,877,400 | 4.41 | 4.37 | 4.42 | 4.44 | 4.37 | 4.36 | -1,882 |
+| ECDSA P-521 signing | 1,790,282 | 5.46 | 5.22 | 5.44 | 5.44 | 5.21 | 5.20 | 152 |
+| ECDSA P-521 verify | 3,480,166 | 5.28 | 5.14 | 5.29 | 5.27 | 5.14 | 5.11 | 12,517 |
+| ECDSA secp256k1 signing | 2,019,593 | 5.74 | 5.76 | 5.71 | 5.72 | 5.74 | 5.75 | 108 |
+| ECDSA secp256k1 verify | 1,845,298 | 5.53 | 5.52 | 5.51 | 5.52 | 5.49 | 5.49 | 5,142 |
+| EVP ECDH P-224 | 604,142 | 5.05 | 5.12 | 5.04 | 4.98 | 5.11 | 5.02 | 559 |
+| EVP ECDH P-256 | 530,484 | 4.88 | 4.95 | 4.87 | 4.79 | 4.94 | 4.83 | 554 |
+| EVP ECDH P-384 | 1,799,512 | 4.42 | 4.43 | 4.41 | 4.40 | 4.43 | 4.40 | 552 |
+| EVP ECDH P-521 | 2,994,735 | 5.40 | 5.41 | 5.39 | 5.37 | 5.40 | 5.37 | 570 |
+| EVP ECDH X25519 | 333,637 | 4.70 | 4.81 | 4.73 | 4.66 | 4.82 | 4.71 | 365 |
+| EVP ECDH secp256k1 | 3,766,370 | 5.87 | 5.89 | 5.88 | 5.87 | 5.87 | 5.85 | 547 |
+| EVP-AES-128-CBC decrypt [1350 B] | 3,126 | 8.95 | 8.82 | 4.64 | 3.61 | 8.91 | 4.66 | 89 |
+| EVP-AES-128-CBC decrypt [16 B] | 685 | 6.63 | 6.57 | 1.77 | 1.20 | 5.99 | 1.74 | 89 |
+| EVP-AES-128-CBC decrypt [16384 B] | 31,043 | 9.36 | 9.37 | 8.61 | 8.12 | 9.44 | 8.58 | 89 |
+| EVP-AES-128-CBC decrypt [256 B] | 1,138 | 7.53 | 7.44 | 2.54 | 1.80 | 7.90 | 2.53 | 89 |
+| EVP-AES-128-CBC decrypt [8192 B] | 15,827 | 9.25 | 9.24 | 7.86 | 7.13 | 9.34 | 7.84 | 89 |
+| EVP-AES-128-CBC decrypt init | 1,351 | 6.30 | 6.13 | 3.44 | 3.30 | 5.96 | 4.16 | 20 |
 | EVP-AES-128-CBC encrypt [1350 B] | 2,666 | 1.38 | 1.38 | 1.16 | 1.15 | 1.40 | 1.26 | 62 |
-| EVP-AES-128-CBC encrypt [16 B] | 446 | 4.77 | 4.32 | 1.20 | 1.04 | 4.79 | 1.77 | 62 |
-| EVP-AES-128-CBC encrypt [16384 B] | 27,049 | 1.21 | 1.21 | 1.18 | 1.19 | 1.22 | 1.17 | 62 |
+| EVP-AES-128-CBC encrypt [16 B] | 446 | 4.78 | 4.33 | 1.20 | 1.04 | 4.79 | 1.77 | 62 |
+| EVP-AES-128-CBC encrypt [16384 B] | 27,048 | 1.22 | 1.21 | 1.18 | 1.19 | 1.22 | 1.17 | 63 |
 | EVP-AES-128-CBC encrypt [256 B] | 836 | 2.05 | 2.02 | 1.15 | 1.09 | 2.16 | 1.42 | 62 |
-| EVP-AES-128-CBC encrypt [8192 B] | 13,734 | 1.23 | 1.23 | 1.18 | 1.18 | 1.23 | 1.18 | 62 |
-| EVP-AES-128-CBC encrypt init | 1,298 | 6.62 | 6.49 | 3.44 | 3.35 | 6.17 | 4.15 | 20 |
-| EVP-AES-128-CTR decrypt [1350 B] | 3,154 | 8.56 | 8.56 | 4.54 | 3.87 | 8.28 | 5.05 | 74 |
+| EVP-AES-128-CBC encrypt [8192 B] | 13,734 | 1.23 | 1.23 | 1.18 | 1.18 | 1.23 | 1.18 | 63 |
+| EVP-AES-128-CBC encrypt init | 1,298 | 6.54 | 6.45 | 3.38 | 3.28 | 6.18 | 4.16 | 20 |
+| EVP-AES-128-CTR decrypt [1350 B] | 3,154 | 8.56 | 8.56 | 4.57 | 3.86 | 8.28 | 5.05 | 74 |
 | EVP-AES-128-CTR decrypt [16 B] | 407 | 3.63 | 6.55 | 1.25 | 0.95 | 4.99 | 1.50 | 74 |
-| EVP-AES-128-CTR decrypt [16384 B] | 32,810 | 8.51 | 8.51 | 7.87 | 7.68 | 8.50 | 8.06 | 74 |
-| EVP-AES-128-CTR decrypt [256 B] | 889 | 7.92 | 7.92 | 2.18 | 1.70 | 7.95 | 2.57 | 74 |
-| EVP-AES-128-CTR decrypt [8192 B] | 16,566 | 8.46 | 8.46 | 7.29 | 6.95 | 8.46 | 7.58 | 74 |
-| EVP-AES-128-CTR decrypt init | 1,270 | 6.35 | 6.46 | 3.33 | 3.30 | 5.97 | 3.96 | 20 |
-| EVP-AES-128-CTR encrypt [1350 B] | 3,110 | 8.71 | 8.69 | 4.50 | 4.08 | 8.57 | 5.48 | 62 |
-| EVP-AES-128-CTR encrypt [16 B] | 363 | 3.55 | 6.96 | 1.13 | 0.94 | 6.07 | 1.64 | 62 |
-| EVP-AES-128-CTR encrypt [16384 B] | 32,766 | 8.52 | 8.52 | 7.87 | 7.73 | 8.52 | 8.17 | 62 |
-| EVP-AES-128-CTR encrypt [256 B] | 845 | 8.27 | 8.26 | 2.09 | 1.78 | 8.17 | 2.90 | 62 |
-| EVP-AES-128-CTR encrypt [8192 B] | 16,522 | 8.49 | 8.50 | 7.31 | 7.06 | 8.49 | 7.75 | 62 |
-| EVP-AES-128-CTR encrypt init | 1,267 | 6.56 | 6.39 | 3.38 | 3.33 | 6.00 | 4.09 | 20 |
-| EVP-AES-128-GCM decrypt [1350 B] | 3,990 | 5.98 | 6.00 | 3.35 | 3.14 | 5.76 | 4.09 | 77 |
-| EVP-AES-128-GCM decrypt [16 B] | 962 | 6.99 | 6.50 | 1.48 | 1.32 | 6.24 | 2.10 | 77 |
+| EVP-AES-128-CTR decrypt [16384 B] | 32,810 | 8.50 | 8.51 | 7.87 | 7.68 | 8.50 | 8.06 | 74 |
+| EVP-AES-128-CTR decrypt [256 B] | 889 | 7.92 | 7.92 | 2.20 | 1.70 | 7.94 | 2.57 | 74 |
+| EVP-AES-128-CTR decrypt [8192 B] | 16,566 | 8.46 | 8.46 | 7.30 | 6.95 | 8.45 | 7.58 | 74 |
+| EVP-AES-128-CTR decrypt init | 1,270 | 6.66 | 6.46 | 3.32 | 3.23 | 6.10 | 4.12 | 20 |
+| EVP-AES-128-CTR encrypt [1350 B] | 3,110 | 8.68 | 8.68 | 4.51 | 4.08 | 8.55 | 5.49 | 62 |
+| EVP-AES-128-CTR encrypt [16 B] | 363 | 3.55 | 6.95 | 1.13 | 0.94 | 6.06 | 1.64 | 62 |
+| EVP-AES-128-CTR encrypt [16384 B] | 32,766 | 8.51 | 8.52 | 7.87 | 7.73 | 8.51 | 8.17 | 62 |
+| EVP-AES-128-CTR encrypt [256 B] | 845 | 8.27 | 8.26 | 2.09 | 1.78 | 8.17 | 2.91 | 62 |
+| EVP-AES-128-CTR encrypt [8192 B] | 16,522 | 8.49 | 8.50 | 7.31 | 7.06 | 8.49 | 7.76 | 62 |
+| EVP-AES-128-CTR encrypt init | 1,267 | 6.60 | 6.49 | 3.35 | 3.22 | 6.11 | 4.11 | 20 |
+| EVP-AES-128-GCM decrypt [1350 B] | 3,990 | 6.03 | 6.02 | 3.36 | 3.15 | 5.78 | 4.08 | 77 |
+| EVP-AES-128-GCM decrypt [16 B] | 962 | 7.00 | 6.53 | 1.49 | 1.32 | 6.24 | 2.10 | 77 |
 | EVP-AES-128-GCM decrypt [16384 B] | 35,918 | 6.32 | 6.32 | 5.78 | 5.69 | 6.30 | 5.97 | 77 |
-| EVP-AES-128-GCM decrypt [256 B] | 1,393 | 6.19 | 6.13 | 1.85 | 1.68 | 5.91 | 2.49 | 77 |
-| EVP-AES-128-GCM decrypt [8192 B] | 18,382 | 6.29 | 6.30 | 5.32 | 5.19 | 6.26 | 5.66 | 77 |
-| EVP-AES-128-GCM decrypt init | 1,841 | 4.47 | 4.19 | 3.23 | 3.17 | 4.20 | 3.61 | 20 |
-| EVP-AES-128-GCM encrypt [1350 B] | 3,961 | 5.82 | 5.80 | 3.33 | 3.13 | 5.64 | 4.04 | 81 |
-| EVP-AES-128-GCM encrypt [16 B] | 936 | 5.42 | 5.42 | 1.46 | 1.32 | 5.73 | 2.12 | 81 |
+| EVP-AES-128-GCM decrypt [256 B] | 1,393 | 6.24 | 6.20 | 1.85 | 1.68 | 5.95 | 2.49 | 77 |
+| EVP-AES-128-GCM decrypt [8192 B] | 18,382 | 6.29 | 6.30 | 5.32 | 5.19 | 6.26 | 5.65 | 77 |
+| EVP-AES-128-GCM decrypt init | 1,841 | 4.57 | 4.28 | 3.27 | 3.13 | 4.20 | 3.63 | 20 |
+| EVP-AES-128-GCM encrypt [1350 B] | 3,961 | 5.83 | 5.82 | 3.33 | 3.13 | 5.66 | 4.02 | 81 |
+| EVP-AES-128-GCM encrypt [16 B] | 936 | 5.42 | 5.42 | 1.47 | 1.32 | 5.73 | 2.12 | 81 |
 | EVP-AES-128-GCM encrypt [16384 B] | 35,891 | 6.23 | 6.23 | 5.70 | 5.62 | 6.20 | 5.89 | 81 |
-| EVP-AES-128-GCM encrypt [256 B] | 1,366 | 5.14 | 5.18 | 1.85 | 1.67 | 5.64 | 2.52 | 81 |
-| EVP-AES-128-GCM encrypt [8192 B] | 18,355 | 6.17 | 6.18 | 5.26 | 5.13 | 6.16 | 5.59 | 81 |
-| EVP-AES-128-GCM encrypt init | 1,770 | 4.46 | 4.17 | 3.12 | 3.08 | 4.08 | 3.46 | 20 |
-| Ed25519 key generation | 87,113 | 3.99 | 4.32 | 4.30 | 4.25 | 4.32 | 4.26 | -34 |
+| EVP-AES-128-GCM encrypt [256 B] | 1,366 | 5.24 | 5.24 | 1.85 | 1.67 | 5.66 | 2.52 | 81 |
+| EVP-AES-128-GCM encrypt [8192 B] | 18,355 | 6.17 | 6.18 | 5.26 | 5.13 | 6.16 | 5.58 | 81 |
+| EVP-AES-128-GCM encrypt init | 1,770 | 4.47 | 4.17 | 3.14 | 3.05 | 4.09 | 3.55 | 20 |
+| EVP-AES-192-CBC decrypt [1350 B] | 3,586 | 8.67 | 8.63 | 5.00 | 3.89 | 8.96 | 4.95 | 89 |
+| EVP-AES-192-CBC decrypt [16 B] | 709 | 6.67 | 6.66 | 1.83 | 1.23 | 6.19 | 1.77 | 89 |
+| EVP-AES-192-CBC decrypt [16384 B] | 36,523 | 9.30 | 9.31 | 8.76 | 8.29 | 9.40 | 8.69 | 89 |
+| EVP-AES-192-CBC decrypt [256 B] | 1,242 | 7.56 | 7.44 | 2.66 | 1.88 | 7.92 | 2.61 | 89 |
+| EVP-AES-192-CBC decrypt [8192 B] | 18,571 | 9.18 | 9.20 | 8.08 | 7.38 | 9.28 | 8.03 | 89 |
+| EVP-AES-192-CBC decrypt init | 1,387 | 6.57 | 6.31 | 3.58 | 3.45 | 6.19 | 4.27 | 20 |
+| EVP-AES-192-CBC encrypt [1350 B] | 3,441 | 1.51 | 1.51 | 1.31 | 1.27 | 1.52 | 1.37 | 62 |
+| EVP-AES-192-CBC encrypt [16 B] | 474 | 5.44 | 5.36 | 1.23 | 1.07 | 5.95 | 1.80 | 62 |
+| EVP-AES-192-CBC encrypt [16384 B] | 36,285 | 1.35 | 1.35 | 1.33 | 1.33 | 1.35 | 1.32 | 62 |
+| EVP-AES-192-CBC encrypt [256 B] | 999 | 2.04 | 2.04 | 1.23 | 1.17 | 2.16 | 1.50 | 62 |
+| EVP-AES-192-CBC encrypt [8192 B] | 18,363 | 1.37 | 1.37 | 1.32 | 1.32 | 1.37 | 1.32 | 62 |
+| EVP-AES-192-CBC encrypt init | 1,326 | 6.46 | 6.83 | 3.53 | 3.46 | 6.35 | 4.28 | 20 |
+| EVP-AES-192-CTR decrypt [1350 B] | 3,619 | 8.52 | 8.51 | 4.85 | 4.15 | 8.35 | 5.35 | 74 |
+| EVP-AES-192-CTR decrypt [16 B] | 423 | 3.59 | 6.59 | 1.29 | 0.96 | 5.16 | 1.53 | 74 |
+| EVP-AES-192-CTR decrypt [16384 B] | 38,282 | 8.53 | 8.53 | 7.98 | 7.79 | 8.53 | 8.12 | 74 |
+| EVP-AES-192-CTR decrypt [256 B] | 985 | 8.13 | 8.13 | 2.37 | 1.83 | 8.14 | 2.76 | 74 |
+| EVP-AES-192-CTR decrypt [8192 B] | 19,302 | 8.49 | 8.49 | 7.48 | 7.13 | 8.49 | 7.69 | 74 |
+| EVP-AES-192-CTR decrypt init | 1,298 | 6.68 | 6.94 | 3.45 | 3.42 | 6.34 | 4.23 | 20 |
+| EVP-AES-192-CTR encrypt [1350 B] | 3,574 | 8.60 | 8.58 | 4.79 | 4.38 | 8.53 | 5.77 | 62 |
+| EVP-AES-192-CTR encrypt [16 B] | 379 | 3.55 | 6.99 | 1.14 | 0.97 | 6.22 | 1.68 | 62 |
+| EVP-AES-192-CTR encrypt [16384 B] | 38,238 | 8.53 | 8.53 | 7.98 | 7.85 | 8.53 | 8.21 | 62 |
+| EVP-AES-192-CTR encrypt [256 B] | 941 | 8.46 | 8.46 | 2.25 | 1.93 | 8.36 | 3.10 | 62 |
+| EVP-AES-192-CTR encrypt [8192 B] | 19,258 | 8.50 | 8.50 | 7.47 | 7.26 | 8.50 | 7.86 | 62 |
+| EVP-AES-192-CTR encrypt init | 1,295 | 6.59 | 6.89 | 3.50 | 3.42 | 6.34 | 4.24 | 20 |
+| EVP-AES-192-GCM decrypt [1350 B] | 4,368 | 6.17 | 6.17 | 3.51 | 3.31 | 5.92 | 4.24 | 77 |
+| EVP-AES-192-GCM decrypt [16 B] | 987 | 7.09 | 6.63 | 1.51 | 1.35 | 6.34 | 2.12 | 77 |
+| EVP-AES-192-GCM decrypt [16384 B] | 40,149 | 6.48 | 6.48 | 5.95 | 5.88 | 6.45 | 6.15 | 77 |
+| EVP-AES-192-GCM decrypt [256 B] | 1,466 | 6.30 | 6.26 | 1.90 | 1.72 | 5.85 | 2.57 | 77 |
+| EVP-AES-192-GCM decrypt [8192 B] | 20,501 | 6.45 | 6.47 | 5.51 | 5.39 | 6.40 | 5.83 | 77 |
+| EVP-AES-192-GCM decrypt init | 1,885 | 4.79 | 4.52 | 3.37 | 3.30 | 4.43 | 3.78 | 20 |
+| EVP-AES-192-GCM encrypt [1350 B] | 4,338 | 6.01 | 5.98 | 3.50 | 3.29 | 5.88 | 4.21 | 81 |
+| EVP-AES-192-GCM encrypt [16 B] | 961 | 5.53 | 5.55 | 1.49 | 1.34 | 5.87 | 2.15 | 81 |
+| EVP-AES-192-GCM encrypt [16384 B] | 40,121 | 6.40 | 6.40 | 5.90 | 5.84 | 6.39 | 6.10 | 81 |
+| EVP-AES-192-GCM encrypt [256 B] | 1,438 | 5.58 | 5.59 | 1.91 | 1.71 | 5.85 | 2.58 | 81 |
+| EVP-AES-192-GCM encrypt [8192 B] | 20,473 | 6.36 | 6.36 | 5.47 | 5.35 | 6.36 | 5.78 | 81 |
+| EVP-AES-192-GCM encrypt init | 1,814 | 4.69 | 4.40 | 3.28 | 3.20 | 4.32 | 3.67 | 20 |
+| EVP-AES-256-CBC decrypt [1350 B] | 4,047 | 8.51 | 8.48 | 5.21 | 4.12 | 8.87 | 5.16 | 89 |
+| EVP-AES-256-CBC decrypt [16 B] | 733 | 6.70 | 6.67 | 1.86 | 1.24 | 6.24 | 1.78 | 89 |
+| EVP-AES-256-CBC decrypt [16384 B] | 42,003 | 9.01 | 9.02 | 8.68 | 8.30 | 9.31 | 8.65 | 89 |
+| EVP-AES-256-CBC decrypt [256 B] | 1,346 | 7.59 | 7.56 | 2.82 | 2.00 | 7.93 | 2.77 | 89 |
+| EVP-AES-256-CBC decrypt [8192 B] | 21,315 | 8.91 | 8.92 | 8.08 | 7.48 | 9.20 | 8.06 | 89 |
+| EVP-AES-256-CBC decrypt init | 1,398 | 6.28 | 6.20 | 3.54 | 3.43 | 6.13 | 4.28 | 20 |
+| EVP-AES-256-CBC encrypt [1350 B] | 4,036 | 1.52 | 1.52 | 1.35 | 1.33 | 1.54 | 1.42 | 62 |
+| EVP-AES-256-CBC encrypt [16 B] | 488 | 5.09 | 5.09 | 1.24 | 1.08 | 5.57 | 1.79 | 62 |
+| EVP-AES-256-CBC encrypt [16384 B] | 43,461 | 1.34 | 1.34 | 1.35 | 1.32 | 1.36 | 1.37 | 62 |
+| EVP-AES-256-CBC encrypt [256 B] | 1,119 | 1.96 | 1.96 | 1.24 | 1.18 | 2.06 | 1.51 | 62 |
+| EVP-AES-256-CBC encrypt [8192 B] | 21,954 | 1.35 | 1.35 | 1.34 | 1.32 | 1.37 | 1.37 | 62 |
+| EVP-AES-256-CBC encrypt init | 1,329 | 6.60 | 6.71 | 3.45 | 3.39 | 6.33 | 4.25 | 20 |
+| EVP-AES-256-CTR decrypt [1350 B] | 4,083 | 8.41 | 8.42 | 5.07 | 4.38 | 8.29 | 5.59 | 74 |
+| EVP-AES-256-CTR decrypt [16 B] | 439 | 5.05 | 6.64 | 1.32 | 0.98 | 5.36 | 1.58 | 74 |
+| EVP-AES-256-CTR decrypt [16384 B] | 43,754 | 8.48 | 8.48 | 8.00 | 7.83 | 8.48 | 8.13 | 74 |
+| EVP-AES-256-CTR decrypt [256 B] | 1,081 | 8.24 | 8.24 | 2.49 | 1.94 | 8.24 | 2.93 | 74 |
+| EVP-AES-256-CTR decrypt [8192 B] | 22,038 | 8.44 | 8.44 | 7.55 | 7.24 | 8.43 | 7.76 | 74 |
+| EVP-AES-256-CTR decrypt init | 1,301 | 6.76 | 6.71 | 3.43 | 3.36 | 6.29 | 4.22 | 20 |
+| EVP-AES-256-CTR encrypt [1350 B] | 4,039 | 8.51 | 8.50 | 4.98 | 4.63 | 8.45 | 5.99 | 62 |
+| EVP-AES-256-CTR encrypt [16 B] | 395 | 5.76 | 7.03 | 1.18 | 0.99 | 6.35 | 1.74 | 62 |
+| EVP-AES-256-CTR encrypt [16384 B] | 43,710 | 8.48 | 8.48 | 7.97 | 7.89 | 8.48 | 8.21 | 62 |
+| EVP-AES-256-CTR encrypt [256 B] | 1,037 | 8.55 | 8.55 | 2.38 | 2.07 | 8.44 | 3.28 | 62 |
+| EVP-AES-256-CTR encrypt [8192 B] | 21,994 | 8.45 | 8.46 | 7.52 | 7.36 | 8.44 | 7.90 | 62 |
+| EVP-AES-256-CTR encrypt init | 1,298 | 6.71 | 6.67 | 3.43 | 3.34 | 6.14 | 4.14 | 20 |
+| EVP-AES-256-GCM decrypt [1350 B] | 4,746 | 6.33 | 6.30 | 3.64 | 3.46 | 6.07 | 4.39 | 77 |
+| EVP-AES-256-GCM decrypt [16 B] | 1,011 | 7.12 | 6.71 | 1.53 | 1.36 | 6.47 | 2.13 | 77 |
+| EVP-AES-256-GCM decrypt [16384 B] | 44,381 | 6.61 | 6.62 | 6.12 | 6.04 | 6.61 | 6.32 | 77 |
+| EVP-AES-256-GCM decrypt [256 B] | 1,539 | 6.48 | 6.48 | 1.95 | 1.78 | 5.86 | 2.62 | 77 |
+| EVP-AES-256-GCM decrypt [8192 B] | 22,620 | 6.59 | 6.60 | 5.69 | 5.56 | 6.56 | 6.01 | 77 |
+| EVP-AES-256-GCM decrypt init | 1,905 | 4.68 | 4.52 | 3.38 | 3.28 | 4.44 | 3.79 | 20 |
+| EVP-AES-256-GCM encrypt [1350 B] | 4,715 | 6.12 | 6.10 | 3.64 | 3.43 | 6.04 | 4.34 | 81 |
+| EVP-AES-256-GCM encrypt [16 B] | 985 | 5.61 | 5.69 | 1.50 | 1.36 | 5.96 | 2.17 | 81 |
+| EVP-AES-256-GCM encrypt [16384 B] | 44,351 | 6.48 | 6.48 | 6.00 | 5.94 | 6.46 | 6.18 | 81 |
+| EVP-AES-256-GCM encrypt [256 B] | 1,510 | 6.00 | 5.98 | 1.96 | 1.77 | 5.98 | 2.65 | 81 |
+| EVP-AES-256-GCM encrypt [8192 B] | 22,591 | 6.45 | 6.45 | 5.58 | 5.48 | 6.44 | 5.88 | 81 |
+| EVP-AES-256-GCM encrypt init | 1,833 | 4.58 | 4.41 | 3.26 | 3.20 | 4.33 | 3.69 | 20 |
+| EVP-ChaCha20-Poly1305 decrypt [1350 B] | 22,880 | 4.51 | 4.52 | 4.12 | 4.04 | 4.52 | 4.26 | 77 |
+| EVP-ChaCha20-Poly1305 decrypt [16 B] | 3,627 | 4.79 | 4.76 | 2.96 | 2.75 | 4.79 | 3.51 | 77 |
+| EVP-ChaCha20-Poly1305 decrypt [16384 B] | 213,476 | 4.79 | 4.79 | 4.74 | 4.73 | 4.79 | 4.76 | 76 |
+| EVP-ChaCha20-Poly1305 decrypt [256 B] | 5,808 | 4.12 | 4.12 | 3.05 | 2.90 | 4.13 | 3.39 | 77 |
+| EVP-ChaCha20-Poly1305 decrypt [8192 B] | 107,998 | 4.79 | 4.79 | 4.69 | 4.67 | 4.79 | 4.73 | 77 |
+| EVP-ChaCha20-Poly1305 decrypt init | 1,244 | 5.85 | 6.01 | 3.93 | 3.54 | 5.54 | 4.40 | 20 |
+| EVP-ChaCha20-Poly1305 encrypt [1350 B] | 22,847 | 4.52 | 4.52 | 4.13 | 4.04 | 4.51 | 4.28 | 81 |
+| EVP-ChaCha20-Poly1305 encrypt [16 B] | 3,594 | 4.70 | 4.70 | 2.95 | 2.74 | 4.68 | 3.52 | 81 |
+| EVP-ChaCha20-Poly1305 encrypt [16384 B] | 213,444 | 4.79 | 4.79 | 4.74 | 4.73 | 4.79 | 4.77 | 79 |
+| EVP-ChaCha20-Poly1305 encrypt [256 B] | 5,775 | 4.17 | 4.19 | 3.14 | 2.98 | 4.17 | 3.52 | 81 |
+| EVP-ChaCha20-Poly1305 encrypt [8192 B] | 107,966 | 4.80 | 4.80 | 4.71 | 4.68 | 4.80 | 4.75 | 81 |
+| EVP-ChaCha20-Poly1305 encrypt init | 1,173 | 5.72 | 5.86 | 3.73 | 3.41 | 5.61 | 4.17 | 20 |
+| EVP-RC4 decrypt [1350 B] | 21,827 | 5.37 | 5.37 | 5.02 | 4.87 | 5.36 | 5.10 | 74 |
+| EVP-RC4 decrypt [16 B] | 482 | 6.43 | 6.09 | 1.44 | 1.07 | 5.11 | 1.69 | 74 |
+| EVP-RC4 decrypt [16384 B] | 262,381 | 5.37 | 5.38 | 5.34 | 5.33 | 5.37 | 5.35 | 74 |
+| EVP-RC4 decrypt [256 B] | 4,323 | 5.36 | 5.34 | 3.99 | 3.55 | 5.31 | 4.24 | 74 |
+| EVP-RC4 decrypt [8192 B] | 131,304 | 5.37 | 5.37 | 5.31 | 5.28 | 5.37 | 5.32 | 73 |
+| EVP-RC4 decrypt init | 4,613 | 2.75 | 2.73 | 2.53 | 2.52 | 2.72 | 2.61 | 20 |
+| EVP-RC4 encrypt [1350 B] | 21,783 | 5.37 | 5.36 | 5.02 | 4.92 | 5.36 | 5.15 | 62 |
+| EVP-RC4 encrypt [16 B] | 438 | 6.06 | 5.73 | 1.29 | 1.08 | 5.65 | 1.87 | 62 |
+| EVP-RC4 encrypt [16384 B] | 262,337 | 5.37 | 5.38 | 5.34 | 5.33 | 5.37 | 5.36 | 61 |
+| EVP-RC4 encrypt [256 B] | 4,279 | 5.36 | 5.34 | 3.96 | 3.68 | 5.30 | 4.43 | 62 |
+| EVP-RC4 encrypt [8192 B] | 131,259 | 5.37 | 5.37 | 5.31 | 5.29 | 5.37 | 5.34 | 62 |
+| EVP-RC4 encrypt init | 4,613 | 2.75 | 2.73 | 2.54 | 2.52 | 2.72 | 2.61 | 20 |
+| Ed25519 PKCS#8 v1 decode | 73,373 | 4.80 | 4.81 | 4.75 | 4.75 | 4.81 | 4.77 | 22 |
+| Ed25519 PKCS#8 v1 encode | 1,888 | 6.49 | 5.67 | 6.45 | 6.49 | 5.66 | 5.65 | 0 |
+| Ed25519 PKCS#8 v2 decode | 73,923 | 4.81 | 4.82 | 4.77 | 4.76 | 4.82 | 4.78 | 22 |
+| Ed25519 PKCS#8 v2 encode | 2,318 | 6.50 | 5.77 | 6.44 | 6.45 | 5.79 | 5.80 | 0 |
+| Ed25519 key generation | 87,142 | 3.99 | 4.32 | 4.30 | 4.25 | 4.33 | 4.26 | -40 |
 | Ed25519 signing | 74,118 | 4.62 | 4.62 | 4.59 | 4.58 | 4.62 | 4.60 | 20 |
-| Ed25519 verify | 354,141 | 4.93 | 4.93 | 4.93 | 4.93 | 4.93 | 4.93 | -0 |
-| HMAC-SHA256 [1350 B] | 3,502 | 1.79 | 1.79 | 1.79 | 1.79 | 1.79 | 1.79 | -0 |
-| HMAC-SHA256 [16 B] | 1,042 | 4.20 | 4.19 | 4.22 | 4.19 | 4.21 | 4.19 | 0 |
-| HMAC-SHA256 [16384 B] | 30,742 | 1.43 | 1.43 | 1.43 | 1.43 | 1.43 | 1.43 | -0 |
-| HMAC-SHA256 [256 B] | 1,506 | 2.78 | 2.77 | 2.78 | 2.78 | 2.78 | 2.77 | -0 |
-| HMAC-SHA256 [8192 B] | 15,891 | 1.46 | 1.46 | 1.46 | 1.46 | 1.46 | 1.46 | -0 |
-| HMAC-SHA256 init | 755 | 2.75 | 3.66 | 2.77 | 2.79 | 3.64 | 3.62 | -0 |
-| HMAC-SHA256-OneShot [1350 B] | 4,497 | 1.99 | 1.99 | 1.99 | 1.99 | 1.99 | 1.99 | -0 |
-| HMAC-SHA256-OneShot [16 B] | 2,038 | 3.67 | 3.67 | 3.67 | 3.71 | 3.67 | 3.68 | 0 |
-| HMAC-SHA256-OneShot [16384 B] | 31,736 | 1.46 | 1.46 | 1.46 | 1.46 | 1.46 | 1.46 | 0 |
-| HMAC-SHA256-OneShot [256 B] | 2,501 | 2.95 | 2.96 | 2.95 | 2.96 | 2.97 | 2.96 | -0 |
-| HMAC-SHA256-OneShot [8192 B] | 16,886 | 1.51 | 1.51 | 1.51 | 1.51 | 1.51 | 1.51 | -0 |
-| ML-KEM-768 decaps | 138,918 | 4.19 | 4.18 | 4.16 | 4.16 | 4.18 | 4.17 | 96 |
-| ML-KEM-768 encaps | 129,244 | 3.87 | 4.07 | 4.06 | 4.03 | 4.07 | 4.03 | -154 |
-| ML-KEM-768 keygen | 119,318 | 3.75 | 3.95 | 3.94 | 3.90 | 3.95 | 3.91 | -114 |
-| RNG [1350 B] | 19,011 | 2.61 | 3.39 | 2.47 | 2.44 | 3.40 | 3.26 | 67 |
-| RNG [16 B] | 15,302 | 2.25 | 3.00 | 2.11 | 2.09 | 3.01 | 2.85 | 69 |
-| RNG [16384 B] | 59,935 | 4.80 | 5.57 | 4.64 | 4.61 | 5.57 | 5.48 | 67 |
-| RNG [256 B] | 15,953 | 2.33 | 3.10 | 2.18 | 2.16 | 3.10 | 2.95 | 67 |
-| RNG [8192 B] | 37,529 | 3.90 | 4.74 | 3.73 | 3.70 | 4.74 | 4.64 | 67 |
-| SHA-256 [1350 B] | 2,923 | 1.61 | 1.62 | 1.61 | 1.61 | 1.62 | 1.62 | 0 |
-| SHA-256 [16 B] | 464 | 4.04 | 4.07 | 4.04 | 4.04 | 4.06 | 4.06 | 0 |
-| SHA-256 [16384 B] | 30,163 | 1.41 | 1.41 | 1.41 | 1.41 | 1.41 | 1.41 | -0 |
-| SHA-256 [256 B] | 927 | 2.30 | 2.40 | 2.30 | 2.30 | 2.29 | 2.30 | -0 |
-| SHA-256 [8192 B] | 15,313 | 1.43 | 1.43 | 1.43 | 1.43 | 1.43 | 1.43 | -0 |
+| Ed25519 verify | 354,140 | 4.93 | 4.93 | 4.93 | 4.93 | 4.93 | 4.93 | 3 |
+| FFDH 2048 | 67,999,504 | 6.18 | 6.18 | 6.18 | 6.18 | 6.18 | 6.18 | -55 |
+| FFDH 4096 | 521,048,982 | 6.25 | 6.25 | 6.25 | 6.25 | 6.25 | 6.25 | -3,183 |
+| Generate P-224 with EC_KEY_generate_key | 188,415 | 5.07 | 5.31 | 4.99 | 4.98 | 5.30 | 5.27 | 90 |
+| Generate P-224 with EC_KEY_generate_key_fips | 363,605 | 5.32 | 5.46 | 5.27 | 5.26 | 5.44 | 5.43 | 112 |
+| Generate P-224 with EVP_PKEY_keygen | 189,061 | 5.08 | 5.31 | 5.27 | 5.23 | 5.29 | 5.24 | -2 |
+| Generate P-256 with EC_KEY_generate_key | 101,180 | 4.18 | 4.48 | 4.07 | 4.05 | 4.46 | 4.41 | 93 |
+| Generate P-256 with EC_KEY_generate_key_fips | 190,645 | 4.54 | 4.73 | 4.46 | 4.44 | 4.72 | 4.67 | 113 |
+| Generate P-256 with EVP_PKEY_keygen | 101,790 | 4.19 | 4.50 | 4.45 | 4.38 | 4.47 | 4.38 | 1 |
+| Generate P-384 with EC_KEY_generate_key | 483,505 | 4.30 | 4.31 | 4.23 | 4.23 | 4.31 | 4.30 | 93 |
+| Generate P-384 with EC_KEY_generate_key_fips | 962,905 | 4.38 | 4.36 | 4.32 | 4.32 | 4.34 | 4.33 | 114 |
+| Generate P-384 with EVP_PKEY_keygen | 485,442 | 4.33 | 4.34 | 4.33 | 4.31 | 4.31 | 4.30 | 44 |
+| Generate P-521 with EC_KEY_generate_key | 754,879 | 4.94 | 4.98 | 4.88 | 4.88 | 4.95 | 4.94 | 91 |
+| Generate P-521 with EC_KEY_generate_key_fips | 1,504,961 | 5.00 | 5.04 | 4.94 | 4.94 | 4.97 | 4.97 | 96 |
+| Generate P-521 with EVP_PKEY_keygen | 756,648 | 4.95 | 5.00 | 4.96 | 4.95 | 4.95 | 4.94 | 75 |
+| Generate secp256k1 with EC_KEY_generate_key | 1,844,113 | 5.88 | 5.91 | 5.85 | 5.86 | 5.88 | 5.88 | 86 |
+| Generate secp256k1 with EC_KEY_generate_key_fips | 3,676,594 | 5.91 | 5.92 | 5.89 | 5.90 | 5.89 | 5.89 | 85 |
+| Generate secp256k1 with EVP_PKEY_keygen | 1,844,725 | 5.89 | 5.92 | 5.90 | 5.90 | 5.87 | 5.86 | -14 |
+| HRSS decap | 340,620 | 5.64 | 5.61 | 5.64 | 5.64 | 5.61 | 5.61 | 1 |
+| HRSS encap | 120,269 | 4.28 | 4.55 | 4.22 | 4.20 | 4.55 | 4.52 | 67 |
+| HRSS generate | 2,348,283 | 5.29 | 5.27 | 5.28 | 5.28 | 5.28 | 5.28 | 61 |
+| ML-KEM-1024 decaps | 203,751 | 4.23 | 4.23 | 4.22 | 4.22 | 4.23 | 4.22 | -119 |
+| ML-KEM-1024 encaps | 181,502 | 3.99 | 4.14 | 4.15 | 4.12 | 4.15 | 4.12 | -167 |
+| ML-KEM-1024 keygen | 167,290 | 3.90 | 4.05 | 4.04 | 4.00 | 4.05 | 4.01 | -133 |
+| ML-KEM-512 decaps | 89,155 | 4.20 | 4.19 | 4.17 | 4.16 | 4.19 | 4.17 | 95 |
+| ML-KEM-512 encaps | 86,348 | 3.69 | 3.98 | 3.95 | 3.91 | 3.97 | 3.92 | 49 |
+| ML-KEM-512 keygen | 76,174 | 3.55 | 3.84 | 3.81 | 3.75 | 3.83 | 3.76 | -61 |
+| ML-KEM-768 decaps | 138,917 | 4.19 | 4.18 | 4.17 | 4.16 | 4.18 | 4.17 | 128 |
+| ML-KEM-768 encaps | 129,243 | 3.87 | 4.07 | 4.06 | 4.03 | 4.07 | 4.03 | -122 |
+| ML-KEM-768 keygen | 119,348 | 3.76 | 3.95 | 3.94 | 3.90 | 3.95 | 3.90 | -115 |
+| MLDSA44 keygen | 268,014 | 4.11 | 4.21 | 4.20 | 4.18 | 4.21 | 4.18 | -14 |
+| MLDSA44 signing | 756,868 | 4.27 | 4.30 | 4.31 | 4.29 | 4.30 | 4.30 | -204 |
+| MLDSA44 verify | 232,167 | 4.29 | 4.28 | 4.27 | 4.26 | 4.27 | 4.26 | -29 |
+| MLDSA65 keygen | 450,795 | 4.16 | 4.22 | 4.21 | 4.20 | 4.22 | 4.20 | 112 |
+| MLDSA65 signing | 1,176,099 | 4.32 | 4.35 | 4.33 | 4.34 | 4.34 | 4.32 | 1,747 |
+| MLDSA65 verify | 395,726 | 4.29 | 4.28 | 4.28 | 4.27 | 4.27 | 4.27 | -90 |
+| MLDSA87 keygen | 729,804 | 4.23 | 4.26 | 4.26 | 4.25 | 4.27 | 4.25 | -141 |
+| MLDSA87 signing | 1,533,597 | 4.33 | 4.36 | 4.36 | 4.35 | 4.37 | 4.36 | -13,267 |
+| MLDSA87 verify | 657,970 | 4.32 | 4.31 | 4.31 | 4.30 | 4.31 | 4.30 | 131 |
+| RNG [1350 B] | 19,011 | 2.61 | 3.40 | 2.47 | 2.44 | 3.39 | 3.27 | 67 |
+| RNG [16 B] | 15,335 | 2.26 | 3.01 | 2.11 | 2.09 | 3.01 | 2.89 | 64 |
+| RNG [16384 B] | 59,935 | 4.80 | 5.57 | 4.64 | 4.62 | 5.57 | 5.48 | 67 |
+| RNG [256 B] | 15,953 | 2.33 | 3.10 | 2.18 | 2.16 | 3.10 | 2.97 | 67 |
+| RNG [8192 B] | 37,529 | 3.90 | 4.75 | 3.73 | 3.70 | 4.74 | 4.64 | 67 |
+| RSA 2048 private key parse | 1,402,288 | 4.08 | 4.09 | 4.09 | 4.09 | 4.10 | 4.10 | 75 |
+| RSA 2048 signing | 6,889,029 | 6.13 | 6.13 | 6.13 | 6.13 | 6.13 | 6.13 | -305 |
+| RSA 2048 verify (fresh key) | 217,008 | 5.90 | 5.85 | 5.78 | 5.74 | 5.86 | 5.77 | 143 |
+| RSA 2048 verify (same key) | 190,140 | 6.19 | 6.17 | 6.13 | 6.10 | 6.18 | 6.11 | 78 |
+| RSA 3072 private key parse | 2,648,194 | 4.36 | 4.32 | 4.32 | 4.32 | 4.32 | 4.32 | 84 |
+| RSA 3072 signing | 21,821,188 | 5.97 | 5.92 | 5.92 | 5.92 | 5.92 | 5.91 | 824 |
+| RSA 3072 verify (fresh key) | 439,636 | 5.88 | 5.85 | 5.79 | 5.77 | 5.83 | 5.82 | 29 |
+| RSA 3072 verify (same key) | 396,345 | 6.18 | 6.18 | 6.16 | 6.14 | 6.17 | 6.13 | 77 |
+| RSA 4096 private key parse | 4,311,681 | 4.48 | 4.41 | 4.41 | 4.41 | 4.41 | 4.41 | 50 |
+| RSA 4096 signing | 47,584,362 | 6.19 | 6.19 | 6.20 | 6.20 | 6.20 | 6.20 | -270 |
+| RSA 4096 verify (fresh key) | 746,151 | 5.92 | 5.91 | 5.88 | 5.86 | 5.90 | 5.87 | 156 |
+| RSA 4096 verify (same key) | 681,093 | 6.19 | 6.19 | 6.17 | 6.16 | 6.19 | 6.16 | 219 |
+| RSA 8192 private key parse | 14,856,978 | 4.39 | 4.39 | 4.37 | 4.38 | 4.36 | 4.36 | 88 |
+| RSA 8192 signing | 361,288,743 | 6.25 | 6.25 | 6.25 | 6.25 | 6.25 | 6.25 | 221 |
+| RSA 8192 verify (fresh key) | 2,827,315 | 5.83 | 5.83 | 5.81 | 5.82 | 5.81 | 5.83 | 131 |
+| RSA 8192 verify (same key) | 2,619,836 | 6.14 | 6.14 | 6.12 | 6.14 | 6.12 | 6.14 | 74 |
+| SPAKE2 over Ed25519 | 951,264 | 5.18 | 5.22 | 5.16 | 5.16 | 5.21 | 5.20 | -219 |
+| TrustToken-Exp1-Batch1 begin_issuance | 2,448,012 | 4.84 | 4.71 | 4.83 | 4.83 | 4.71 | 4.70 | 150 |
+| TrustToken-Exp1-Batch1 begin_redemption | 4,045 | 6.66 | 6.36 | 6.66 | 6.91 | 6.56 | 6.68 | 0 |
+| TrustToken-Exp1-Batch1 finish_issuance | 59,586,649 | 5.75 | 5.42 | 5.75 | 5.73 | 5.39 | 5.39 | -67,910 |
+| TrustToken-Exp1-Batch1 generate_key | 10,885,635 | 6.10 | 5.78 | 6.09 | 6.09 | 5.76 | 5.76 | 479 |
+| TrustToken-Exp1-Batch1 issue | 62,577,188 | 6.02 | 5.67 | 6.01 | 5.93 | 5.58 | 5.57 | -6,561 |
+| TrustToken-Exp1-Batch1 redeem | 17,968,239 | 6.07 | 5.69 | 6.07 | 6.06 | 5.67 | 5.66 | 52 |
+| TrustToken-Exp1-Batch10 begin_issuance | 24,455,313 | 4.84 | 4.72 | 4.83 | 4.83 | 4.71 | 4.71 | 1,460 |
+| TrustToken-Exp1-Batch10 begin_redemption | 4,043 | 6.69 | 6.58 | 6.62 | 6.88 | 6.69 | 6.74 | 0 |
+| TrustToken-Exp1-Batch10 finish_issuance | 143,095,872 | 5.35 | 5.13 | 5.35 | 5.33 | 5.12 | 5.12 | 27,893 |
+| TrustToken-Exp1-Batch10 generate_key | 10,885,590 | 6.10 | 5.78 | 6.08 | 6.09 | 5.78 | 5.76 | 429 |
+| TrustToken-Exp1-Batch10 issue | 222,434,542 | 5.95 | 5.61 | 5.94 | 5.92 | 5.58 | 5.58 | 60,959 |
+| TrustToken-Exp1-Batch10 redeem | 17,968,219 | 6.07 | 5.69 | 6.07 | 6.05 | 5.67 | 5.66 | 52 |
+| TrustToken-Exp2PMB-Batch1 begin_issuance | 2,447,503 | 4.84 | 4.72 | 4.83 | 4.83 | 4.71 | 4.71 | 157 |
+| TrustToken-Exp2PMB-Batch1 begin_redemption | 3,954 | 6.98 | 6.84 | 6.82 | 6.83 | 6.57 | 6.79 | -0 |
+| TrustToken-Exp2PMB-Batch1 finish_issuance | 59,603,957 | 5.74 | 5.42 | 5.75 | 5.72 | 5.39 | 5.38 | 55,388 |
+| TrustToken-Exp2PMB-Batch1 generate_key | 10,885,070 | 6.10 | 5.78 | 6.08 | 6.09 | 5.77 | 5.77 | 384 |
+| TrustToken-Exp2PMB-Batch1 issue | 62,569,539 | 6.01 | 5.67 | 6.00 | 5.92 | 5.58 | 5.57 | -7,264 |
+| TrustToken-Exp2PMB-Batch1 redeem | 17,968,446 | 6.07 | 5.70 | 6.07 | 6.06 | 5.67 | 5.66 | -88 |
+| TrustToken-Exp2PMB-Batch10 begin_issuance | 24,453,054 | 4.84 | 4.72 | 4.83 | 4.83 | 4.72 | 4.71 | 1,443 |
+| TrustToken-Exp2PMB-Batch10 begin_redemption | 3,954 | 6.95 | 6.90 | 6.80 | 6.95 | 6.62 | 6.86 | 0 |
+| TrustToken-Exp2PMB-Batch10 finish_issuance | 143,061,980 | 5.34 | 5.13 | 5.35 | 5.35 | 5.12 | 5.12 | 104,605 |
+| TrustToken-Exp2PMB-Batch10 generate_key | 10,885,055 | 6.10 | 5.78 | 6.09 | 6.09 | 5.77 | 5.77 | 370 |
+| TrustToken-Exp2PMB-Batch10 issue | 222,434,491 | 5.95 | 5.61 | 5.94 | 5.93 | 5.58 | 5.58 | 21,051 |
+| TrustToken-Exp2PMB-Batch10 redeem | 17,968,348 | 6.07 | 5.69 | 6.05 | 6.05 | 5.67 | 5.66 | 95 |
+| TrustToken-Exp2VOPRF-Batch10 begin_issuance | 24,451,725 | 4.84 | 4.72 | 4.82 | 4.82 | 4.71 | 4.70 | 1,575 |
+| TrustToken-Exp2VOPRF-Batch10 begin_redemption | 2,871 | 7.15 | 7.24 | 6.76 | 7.00 | 6.87 | 7.13 | 0 |
+| TrustToken-Exp2VOPRF-Batch10 finish_issuance | 47,763,624 | 5.26 | 5.08 | 5.27 | 5.28 | 5.07 | 5.08 | 73,395 |
+| TrustToken-Exp2VOPRF-Batch10 generate_key | 501,971 | 4.25 | 4.25 | 4.17 | 4.18 | 4.24 | 4.24 | 92 |
+| TrustToken-Exp2VOPRF-Batch10 issue | 42,781,024 | 5.20 | 5.03 | 5.20 | 5.21 | 5.02 | 5.03 | 68,446 |
+| TrustToken-Exp2VOPRF-Batch10 redeem | 2,046,654 | 4.85 | 4.72 | 4.85 | 4.84 | 4.72 | 4.71 | 31 |
+| TrustToken-Exp2VOfPRF-Batch1 begin_issuance | 2,447,393 | 4.84 | 4.72 | 4.83 | 4.83 | 4.71 | 4.71 | 155 |
+| TrustToken-Exp2VOfPRF-Batch1 begin_redemption | 2,797 | 7.02 | 6.88 | 6.67 | 6.93 | 6.80 | 6.96 | 0 |
+| TrustToken-Exp2VOfPRF-Batch1 finish_issuance | 16,700,873 | 5.53 | 5.25 | 5.52 | 5.54 | 5.25 | 5.25 | -163 |
+| TrustToken-Exp2VOfPRF-Batch1 generate_key | 501,973 | 4.24 | 4.25 | 4.17 | 4.17 | 4.24 | 4.24 | 90 |
+| TrustToken-Exp2VOfPRF-Batch1 issue | 11,774,536 | 5.42 | 5.18 | 5.41 | 5.40 | 5.16 | 5.16 | -19,087 |
+| TrustToken-Exp2VOfPRF-Batch1 redeem | 2,046,657 | 4.85 | 4.72 | 4.85 | 4.84 | 4.72 | 4.72 | 22 |
 
 ## The paper's ten rows
 
 | # | op | unhardened cyc/op | entries/op | Coarse | AWS default | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | AES-128 single block | 34 | 1 | -0% | +277% | +366% | -3% | +144% | 0.15% |
-| 2 | EVP AES-GCM encrypt, 16 B | 173 | 3 | +0% | +303% | +348% | +1% | +173% | 0.06% |
-| 3 | AEAD AES-GCM seal, 16 B | 191 | 1 | -0% | +82% | +83% | +10% | +44% | 0.11% |
-| 4 | AEAD AES-GCM open, 16 B | 205 | 1 | +0% | +88% | +113% | +20% | +77% | 0.02% |
-| 5 | AEAD ChaCha20-Poly1305 seal, 16 B | 579 | 2 | +0% | +44% | +48% | +22% | +35% | 2.97% |
-| 6 | AEAD AES-GCM seal, 1350 B (a TLS record) | 718 | 1 | -0% | +22% | +22% | +2% | +12% | 0.04% |
-| 7 | AEAD AES-GCM seal, 16 KB | 5,795 | 1 | -0% | +3% | +3% | +1% | +2% | 0.02% |
-| 8 | CMAC-AES-128, 16 KB | 40,796 | 1,028 | -1% | +236% | +286% | -4% | +127% | 0.10% |
-| 9 | ECDSA P-256 sign | 42,742 | 5 | -4% | +2% | +2% | -3% | -3% | 0.11% |
-| 10 | RNG, 16 B | 6,795 | 3 | -25% | +7% | +8% | -25% | -21% | 0.14% |
-| | **geometric mean of the ratio to A, all cells** | | | **-3%** | **+79%** | **+91%** | **+1%** | **+46%** | |
+| 1 | AES-128 single block | 34 | 1 | -0% | +283% | +366% | -3% | +144% | 0.07% |
+| 2 | EVP AES-GCM encrypt, 16 B | 173 | 3 | -0% | +302% | +348% | +1% | +173% | 0.03% |
+| 3 | AEAD AES-GCM seal, 16 B | 191 | 1 | -0% | +82% | +84% | +10% | +44% | 0.15% |
+| 4 | AEAD AES-GCM open, 16 B | 205 | 1 | +0% | +88% | +111% | +20% | +77% | 0.04% |
+| 5 | AEAD ChaCha20-Poly1305 seal, 16 B | 579 | 2 | +0% | +44% | +48% | +14% | +35% | 0.08% |
+| 6 | AEAD AES-GCM seal, 1350 B (a TLS record) | 719 | 1 | -0% | +21% | +21% | +2% | +11% | 0.07% |
+| 7 | AEAD AES-GCM seal, 16 KB | 5,799 | 1 | -0% | +3% | +3% | +1% | +2% | 0.08% |
+| 8 | CMAC-AES-128, 16 KB | 40,845 | 1,011 | -2% | +237% | +285% | -4% | +125% | 0.06% |
+| 9 | ECDSA P-256 sign | 42,729 | 5 | -4% | +2% | +2% | -3% | -3% | 0.09% |
+| 10 | RNG, 16 B | 6,797 | 3 | -26% | +7% | +8% | -25% | -22% | 0.16% |
+| | **geometric mean of the ratio to A, all cells** | | | **-3%** | **+80%** | **+91%** | **+1%** | **+46%** | |
 
-Entries per op = (AWS default - unhardened) / one entry's price: 156 cycles for an AEAD-level entry, 94 for a single-block AES entry (rows 1 and 8). Run only these rows with BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG" CHUNKS=16,1350,16384.
+Entries per op = (AWS default - unhardened) / one entry's price: 156 cycles for an AEAD-level entry, 96 for a single-block AES entry (rows 1 and 8). Run only these rows with BENCH_TESTS="AES-128,AEAD-ChaCha20-Poly1305,ECDSA P-256,RNG" CHUNKS=16,1350,16384.
 
 ## Rows where AWS hoist + sb costs at least 5%
 
 | # | row | unhardened cyc/op | Coarse | AWS default | AWS default + sb | AWS hoist | AWS hoist + sb | MAD |
 |---|---|---|---|---|---|---|---|---|
-| 1 | AES-128 encrypt setup | 40 | -0% | +481% | +506% | +5% | +334% | 0.05% |
-| 2 | EVP-AES-128-CBC decrypt [16 B] | 103 | +1% | +325% | +531% | +23% | +323% | 2.04% |
-| 3 | EVP-AES-128-GCM decrypt [16 B] | 138 | +7% | +410% | +474% | +18% | +254% | 0.12% |
-| 4 | CMAC-AES-128-CBC [16 B] | 56 | +0% | +399% | +488% | +3% | +241% | 0.23% |
-| 5 | EVP-AES-128-CTR decrypt [256 B] | 112 | +0% | +294% | +408% | +6% | +229% | 0.03% |
-| 6 | EVP-AES-128-CBC decrypt [256 B] | 149 | -2% | +225% | +360% | +2% | +222% | 0.94% |
-| 7 | EVP-AES-128-CTR encrypt [256 B] | 102 | +0% | +324% | +400% | +7% | +202% | 0.02% |
-| 8 | EVP-AES-128-CBC encrypt [16 B] | 94 | +10% | +354% | +427% | +10% | +200% | 0.22% |
-| 9 | AEAD-AES-128-CCM-Bluetooth seal init | 64 | +8% | +315% | +335% | +10% | +187% | 0.09% |
-| 10 | EVP-AES-128-CTR decrypt [16 B]† | 112† | -45% | +244% | +356% | -17% | +178% | 21.87% |
-| 11 | EVP-AES-128-GCM encrypt [16 B] | 173 | +0% | +303% | +348% | +1% | +173% | 0.06% |
-| 12 | EVP-AES-128-GCM decrypt [256 B] | 225 | +1% | +253% | +290% | +9% | +159% | 0.29% |
-| 13 | AEAD-ChaCha20-Poly1305 seal init | 37 | -14% | +263% | +345% | -12% | +159% | 1.66% |
-| 14 | AES-128 decrypt setup | 71 | -0% | +248% | +257% | -0% | +151% | 0.16% |
-| 15 | EVP-AES-128-CTR encrypt [16 B] | 102 | -49% | +266% | +344% | -34% | +146% | 13.29% |
-| 16 | AES-128 encrypt | 34 | -0% | +277% | +366% | -3% | +144% | 0.15% |
-| 17 | AES-128 decrypt | 34 | +0% | +278% | +366% | -3% | +144% | 0.07% |
-| 18 | CMAC-AES-128-CBC [256 B] | 625 | +1% | +269% | +324% | -2% | +143% | 0.02% |
-| 19 | AEAD-AES-128-GCM-SIV open init | 80 | +1% | +222% | +254% | -0% | +129% | 0.38% |
-| 20 | CMAC-AES-128-CBC [1350 B] | 3,398 | -1% | +241% | +292% | -4% | +128% | 0.03% |
-| 21 | AEAD-AES-128-GCM-SIV seal init | 80 | +1% | +222% | +254% | -0% | +127% | 0.18% |
-| 22 | CMAC-AES-128-CBC [16384 B] | 40,796 | -1% | +236% | +286% | -4% | +127% | 0.10% |
-| 23 | CMAC-AES-128-CBC [8192 B] | 20,409 | -1% | +237% | +286% | -4% | +125% | 0.12% |
-| 24 | AEAD-AES-128-CBC-SHA1 seal [16 B] | 384 | +5% | +49% | +133% | +10% | +117% | 0.64% |
-| 25 | EVP-AES-128-GCM encrypt [256 B] | 266 | -1% | +195% | +227% | -5% | +114% | 0.37% |
-| 26 | EVP-AES-128-CBC decrypt [1350 B] | 348 | +0% | +100% | +157% | +3% | +97% | 1.14% |
-| 27 | AEAD-AES-128-GCM open [16 B] | 205 | +0% | +88% | +113% | +20% | +77% | 0.02% |
-| 28 | EVP-AES-128-CTR decrypt [1350 B] | 368 | +0% | +93% | +127% | +5% | +73% | 0.05% |
-| 29 | CMAC-AES-128-CBC init | 311 | +3% | +113% | +134% | +3% | +72% | 3.80% |
-| 30 | EVP-AES-128-CTR decrypt init | 200 | -2% | +94% | +96% | +8% | +62% | 6.03% |
-| 31 | EVP-AES-128-CTR encrypt init | 193 | +3% | +97% | +100% | +11% | +62% | 5.44% |
-| 32 | EVP-AES-128-CTR encrypt [1350 B] | 357 | +0% | +98% | +118% | +3% | +61% | 0.03% |
-| 33 | EVP-AES-128-CBC encrypt init | 196 | +2% | +95% | +101% | +9% | +61% | 3.94% |
-| 34 | AEAD-AES-128-GCM-SIV open [16 B] | 337 | +0% | +64% | +80% | +2% | +58% | 0.07% |
-| 35 | EVP-AES-128-CBC decrypt init | 214 | +4% | +86% | +90% | +8% | +54% | 0.77% |
-| 36 | EVP-AES-128-CBC encrypt [256 B] | 408 | +1% | +91% | +102% | +0% | +53% | 0.07% |
-| 37 | AEAD-AES-128-GCM open [256 B] | 300 | -0% | +56% | +77% | +13% | +51% | 0.40% |
-| 38 | EVP-AES-128-GCM decrypt [1350 B] | 667 | -0% | +82% | +94% | +5% | +49% | 0.20% |
-| 39 | EVP-AES-128-GCM encrypt [1350 B] | 681 | +0% | +78% | +90% | +5% | +46% | 0.07% |
-| 40 | AEAD-AES-128-CBC-SHA1 seal [256 B] | 1,055 | +2% | +18% | +50% | +3% | +44% | 0.14% |
-| 41 | AEAD-AES-128-GCM seal [16 B] | 191 | -0% | +82% | +83% | +10% | +44% | 0.11% |
-| 42 | AEAD-AES-128-CCM-Bluetooth seal [16 B] | 177 | +1% | +73% | +80% | -0% | +38% | 0.13% |
-| 43 | AEAD-AES-128-GCM seal init | 242 | +0% | +66% | +76% | +0% | +36% | 0.07% |
-| 44 | AEAD-AES-128-GCM open init | 241 | +1% | +66% | +77% | +0% | +36% | 0.16% |
-| 45 | AEAD-ChaCha20-Poly1305 seal [16 B] | 579 | +0% | +44% | +48% | +22% | +35% | 2.97% |
-| 46 | AEAD-AES-128-GCM-SIV open [256 B] | 601 | +1% | +36% | +45% | +1% | +33% | 0.28% |
-| 47 | EVP-AES-128-GCM encrypt init | 397 | +7% | +44% | +46% | +10% | +30% | 1.37% |
-| 48 | AEAD-AES-128-GCM seal [256 B] | 292 | +1% | +53% | +54% | +7% | +28% | 0.35% |
-| 49 | AEAD-AES-128-CBC-SHA1 open init | 614 | +5% | +25% | +41% | +3% | +27% | 2.94% |
-| 50 | AEAD-AES-128-CBC-SHA1 open [16 B] | 1,218 | -0% | +12% | +33% | +1% | +27% | 0.14% |
-| 51 | AEAD-AES-128-CBC-SHA1 seal init | 614 | +5% | +26% | +43% | +4% | +27% | 2.35% |
-| 52 | EVP-AES-128-GCM decrypt init | 412 | +7% | +40% | +43% | +7% | +25% | 1.66% |
-| 53 | AEAD-AES-128-GCM-SIV seal [16 B] | 402 | +7% | +37% | +40% | +7% | +22% | 0.21% |
-| 54 | AEAD-AES-128-GCM open [1350 B] | 716 | -0% | +23% | +32% | +6% | +21% | 0.11% |
-| 55 | EVP-AES-128-CBC decrypt [8192 B] | 1,711 | +0% | +19% | +31% | -0% | +19% | 0.13% |
-| 56 | AEAD-AES-128-GCM-SIV seal [256 B] | 605 | +1% | +25% | +26% | +1% | +14% | 0.08% |
-| 57 | AEAD-AES-128-CBC-SHA1 seal [1350 B] | 4,024 | -0% | +5% | +15% | +2% | +13% | 0.59% |
-| 58 | AEAD-AES-128-CCM-Bluetooth seal [256 B] | 798 | +0% | +20% | +22% | +0% | +12% | 0.04% |
-| 59 | EVP-AES-128-CTR decrypt [8192 B] | 1,958 | +0% | +17% | +22% | +0% | +12% | 0.03% |
-| 60 | AEAD-AES-128-GCM seal [1350 B] | 718 | -0% | +22% | +22% | +2% | +12% | 0.04% |
-| 61 | EVP-AES-128-CBC encrypt [1350 B] | 1,927 | +0% | +22% | +23% | +0% | +12% | 0.02% |
-| 62 | EVP-AES-128-GCM decrypt [8192 B] | 2,923 | -0% | +19% | +22% | +1% | +12% | 0.03% |
-| 63 | EVP-AES-128-GCM encrypt [8192 B] | 2,974 | -0% | +18% | +21% | +1% | +11% | 0.12% |
-| 64 | AEAD-AES-128-GCM-SIV open [1350 B] | 1,802 | +0% | +12% | +15% | -0% | +11% | 0.09% |
-| 65 | AEAD-AES-128-CBC-SHA1 open [256 B] | 2,891 | +0% | +5% | +13% | +0% | +11% | 0.32% |
-| 66 | EVP-AES-128-CTR encrypt [8192 B] | 1,945 | -0% | +17% | +21% | +0% | +10% | 0.05% |
-| 67 | EVP-AES-128-CBC decrypt [16384 B] | 3,316 | -0% | +9% | +16% | -1% | +9% | 0.08% |
-| 68 | AEAD-ChaCha20-Poly1305 seal [256 B] | 897 | -0% | +13% | +16% | -0% | +9% | 0.15% |
-| 69 | AEAD-AES-128-CBC-SHA1 open [1350 B] | 4,470 | +0% | +3% | +9% | +0% | +7% | 0.14% |
-| 70 | EVP-AES-128-GCM decrypt [16384 B] | 5,687 | -0% | +10% | +11% | +0% | +6% | 0.04% |
-| 71 | EVP-AES-128-GCM encrypt [16384 B] | 5,765 | -0% | +9% | +11% | +1% | +6% | 0.03% |
-| 72 | EVP-AES-128-CTR decrypt [16384 B] | 3,857 | +0% | +8% | +11% | +0% | +6% | 0.03% |
-| 73 | AEAD-AES-128-GCM open [8192 B] | 2,975 | -0% | +5% | +8% | +1% | +5% | 0.04% |
-| | **geometric mean of the ratio to A, all cells** | | **-1%** | **+95%** | **+116%** | **+2%** | **+68%** | |
-| | **geometric mean, clean cells only** | | **-0%** | **+94%** | **+114%** | **+3%** | **+67%** | |
+| 1 | AES-256-XTS decrypt [16 B] | 54 | +6% | +539% | +680% | +37% | +414% | 1.36% |
+| 2 | AES-128 encrypt setup | 40 | -0% | +483% | +506% | +5% | +335% | 0.06% |
+| 3 | EVP-RC4 decrypt [16 B] | 75 | +6% | +415% | +601% | +41% | +329% | 0.14% |
+| 4 | EVP-AES-128-CBC decrypt [16 B] | 103 | +1% | +323% | +529% | +22% | +323% | 0.83% |
+| 5 | EVP-AES-192-CBC decrypt [16 B] | 106 | +0% | +311% | +517% | +19% | +318% | 0.78% |
+| 6 | EVP-AES-256-CBC decrypt [16 B] | 110 | +0% | +304% | +510% | +18% | +315% | 0.95% |
+| 7 | AES-256 encrypt setup | 42 | -0% | +450% | +477% | +1% | +303% | 0.07% |
+| 8 | EVP-AES-256-CTR encrypt [16 B] | 69 | -18% | +466% | +577% | +1% | +273% | 3.24% |
+| 9 | EVP-AES-256-CTR decrypt [16 B] | 87 | -24% | +348% | +504% | +7% | +264% | 3.35% |
+| 10 | EVP-RC4 encrypt [16 B] | 72 | +6% | +434% | +544% | +19% | +261% | 0.18% |
+| 11 | AES-192 encrypt setup | 46 | -0% | +400% | +416% | -0% | +255% | 0.11% |
+| 12 | EVP-AES-192-GCM decrypt [16 B] | 139 | +7% | +406% | +469% | +18% | +255% | 0.16% |
+| 13 | CMAC-AES-256-CBC [16 B] | 57 | +0% | +412% | +493% | +6% | +255% | 0.23% |
+| 14 | EVP-AES-128-GCM decrypt [16 B] | 138 | +7% | +408% | +474% | +19% | +254% | 0.28% |
+| 15 | EVP-AES-256-GCM decrypt [16 B] | 142 | +6% | +401% | +466% | +16% | +254% | 0.17% |
+| 16 | CMAC-AES-128-CBC [16 B] | 56 | -0% | +399% | +488% | +3% | +242% | 0.22% |
+| 17 | EVP-AES-192-CBC encrypt [16 B] | 87 | +2% | +398% | +479% | +0% | +234% | 0.03% |
+| 18 | EVP-AES-128-CTR decrypt [256 B] | 112 | +0% | +290% | +408% | +6% | +229% | 0.04% |
+| 19 | EVP-AES-128-CBC decrypt [256 B] | 151 | +1% | +220% | +354% | +1% | +218% | 1.09% |
+| 20 | EVP-AES-256-CBC encrypt [16 B] | 96 | -0% | +364% | +435% | +0% | +213% | 0.04% |
+| 21 | EVP-AES-192-CTR decrypt [256 B] | 121 | +0% | +269% | +378% | +6% | +213% | 0.02% |
+| 22 | EVP-AES-192-CBC decrypt [256 B] | 164 | +2% | +205% | +332% | +1% | +207% | 0.62% |
+| 23 | EVP-AES-128-CTR encrypt [256 B] | 102 | +0% | +324% | +400% | +7% | +201% | 0.05% |
+| 24 | EVP-AES-128-CBC encrypt [16 B] | 93 | +10% | +353% | +427% | +10% | +201% | 0.27% |
+| 25 | EVP-AES-256-CTR decrypt [256 B] | 131 | -0% | +253% | +354% | +5% | +198% | 0.04% |
+| 26 | EVP-AES-256-CBC decrypt [256 B] | 177 | +0% | +187% | +305% | +1% | +190% | 0.60% |
+| 27 | EVP-AES-192-CTR encrypt [256 B] | 111 | +0% | +300% | +369% | +6% | +188% | 0.05% |
+| 28 | AEAD-AES-128-CCM-Bluetooth seal init | 63 | -1% | +318% | +336% | -0% | +185% | 0.18% |
+| 29 | AES-256-XTS decrypt [256 B] | 129 | +1% | +219% | +296% | +2% | +184% | 0.85% |
+| 30 | EVP-AES-128-CTR decrypt [16 B] | 112 | -45% | +242% | +356% | -17% | +178% | 0.17% |
+| 31 | EVP-AES-256-GCM encrypt [16 B] | 176 | -1% | +303% | +347% | -0% | +175% | 0.10% |
+| 32 | EVP-AES-192-GCM encrypt [16 B] | 174 | -0% | +304% | +348% | +0% | +175% | 0.05% |
+| 33 | EVP-AES-128-GCM encrypt [16 B] | 173 | -0% | +302% | +348% | +1% | +173% | 0.03% |
+| 34 | EVP-AES-256-CTR encrypt [256 B] | 121 | -0% | +281% | +340% | +6% | +173% | 0.07% |
+| 35 | AES-256 decrypt setup | 68 | -0% | +268% | +279% | +2% | +170% | 0.04% |
+| 36 | EVP-AES-192-CTR decrypt [16 B] | 118 | -45% | +227% | +342% | -21% | +169% | 0.28% |
+| 37 | AEAD-ChaCha20-Poly1305 seal init | 36 | -11% | +275% | +362% | -8% | +165% | 0.70% |
+| 38 | EVP-AES-128-GCM decrypt [256 B] | 223 | +1% | +256% | +293% | +9% | +161% | 0.35% |
+| 39 | EVP-AES-256-GCM decrypt [256 B] | 238 | +0% | +249% | +284% | +15% | +157% | 0.34% |
+| 40 | EVP-AES-192-GCM decrypt [256 B] | 233 | +1% | +249% | +287% | +12% | +156% | 0.42% |
+| 41 | AES-128 decrypt setup | 71 | -0% | +248% | +257% | -0% | +151% | 0.04% |
+| 42 | AES-192 decrypt setup | 72 | -0% | +242% | +250% | -2% | +147% | 0.06% |
+| 43 | EVP-AES-128-CTR encrypt [16 B] | 102 | -49% | +267% | +343% | -34% | +146% | 0.22% |
+| 44 | CMAC-AES-128-CBC [256 B] | 625 | +1% | +269% | +323% | -2% | +144% | 0.03% |
+| 45 | AES-128 encrypt | 34 | -0% | +283% | +366% | -3% | +144% | 0.07% |
+| 46 | AES-128 decrypt | 34 | -0% | +283% | +360% | -3% | +143% | 0.05% |
+| 47 | AES-256-XTS encrypt [256 B] | 126 | -3% | +218% | +258% | -0% | +141% | 0.19% |
+| 48 | EVP-AES-192-CTR encrypt [16 B] | 107 | -49% | +261% | +329% | -36% | +139% | 0.19% |
+| 49 | EVP-AES-256-GCM encrypt [256 B] | 252 | +0% | +223% | +259% | +5% | +136% | 0.16% |
+| 50 | AEAD-AES-256-GCM-SIV open init | 79 | +1% | +219% | +252% | +1% | +131% | 0.09% |
+| 51 | AEAD-AES-256-GCM-SIV seal init | 79 | +1% | +220% | +251% | +1% | +131% | 0.11% |
+| 52 | CMAC-AES-128-CBC [1350 B] | 3,400 | -2% | +241% | +291% | -4% | +128% | 0.03% |
+| 53 | AES-256 decrypt | 41 | +0% | +245% | +311% | +3% | +126% | 0.26% |
+| 54 | AES-256 encrypt | 41 | +0% | +246% | +311% | +3% | +126% | 0.28% |
+| 55 | AES-192 encrypt | 39 | +0% | +248% | +319% | -3% | +126% | 0.07% |
+| 56 | AES-192 decrypt | 39 | -0% | +253% | +320% | -2% | +126% | 0.09% |
+| 57 | EVP-AES-192-GCM encrypt [256 B] | 258 | -0% | +209% | +245% | -1% | +126% | 0.19% |
+| 58 | AEAD-AES-128-GCM-SIV open init | 80 | +1% | +224% | +254% | -0% | +125% | 0.15% |
+| 59 | CMAC-AES-128-CBC [8192 B] | 20,416 | -2% | +238% | +286% | -4% | +125% | 0.05% |
+| 60 | CMAC-AES-128-CBC [16384 B] | 40,845 | -2% | +237% | +285% | -4% | +125% | 0.06% |
+| 61 | AEAD-AES-128-GCM-SIV seal init | 80 | +1% | +222% | +253% | -0% | +124% | 0.20% |
+| 62 | EVP-AES-128-GCM encrypt [256 B] | 261 | -0% | +200% | +234% | -3% | +117% | 0.37% |
+| 63 | AES-256-XTS encrypt init | 268 | -1% | +62% | +146% | +6% | +117% | 2.51% |
+| 64 | CMAC-AES-256-CBC [256 B] | 785 | -0% | +216% | +257% | -3% | +115% | 0.05% |
+| 65 | AEAD-AES-128-CBC-SHA1 seal [16 B] | 385 | +5% | +49% | +132% | +11% | +114% | 0.47% |
+| 66 | AEAD-AES-256-CBC-SHA1 seal [16 B] | 405 | +4% | +46% | +127% | +8% | +110% | 0.30% |
+| 67 | CMAC-AES-256-CBC [1350 B] | 4,195 | -1% | +199% | +237% | -4% | +104% | 0.02% |
+| 68 | CMAC-AES-256-CBC [8192 B] | 25,247 | -1% | +195% | +232% | -4% | +102% | 0.02% |
+| 69 | CMAC-AES-256-CBC [16384 B] | 50,488 | -1% | +195% | +232% | -4% | +102% | 0.03% |
+| 70 | EVP-AES-128-CBC decrypt [1350 B] | 349 | +2% | +98% | +156% | +3% | +97% | 0.91% |
+| 71 | AES-256-XTS decrypt init | 308 | +0% | +52% | +118% | +6% | +93% | 2.75% |
+| 72 | AES-256-XTS encrypt [16 B] | 124 | -7% | +162% | +194% | -4% | +90% | 1.85% |
+| 73 | EVP-AES-192-CBC decrypt [1350 B] | 414 | +1% | +78% | +129% | -1% | +79% | 0.30% |
+| 74 | AEAD-AES-128-GCM open [16 B] | 205 | +0% | +88% | +111% | +20% | +77% | 0.04% |
+| 75 | AEAD-AES-256-GCM open [16 B] | 208 | +1% | +85% | +109% | +20% | +73% | 0.05% |
+| 76 | EVP-AES-128-CTR decrypt [1350 B] | 369 | +0% | +92% | +127% | +5% | +73% | 0.08% |
+| 77 | CMAC-AES-128-CBC init | 321 | +2% | +106% | +132% | +4% | +69% | 2.75% |
+| 78 | EVP-AES-256-CBC decrypt [1350 B] | 475 | +0% | +67% | +112% | -2% | +68% | 0.33% |
+| 79 | CMAC-AES-256-CBC init | 321 | -4% | +104% | +128% | -2% | +65% | 2.55% |
+| 80 | EVP-AES-256-CTR encrypt init | 194 | +1% | +99% | +104% | +11% | +64% | 3.78% |
+| 81 | EVP-AES-128-CTR decrypt init | 191 | +3% | +104% | +110% | +11% | +64% | 1.59% |
+| 82 | EVP-AES-128-CTR encrypt init | 192 | +2% | +100% | +109% | +9% | +63% | 2.81% |
+| 83 | EVP-AES-256-CTR decrypt init | 192 | +1% | +100% | +104% | +9% | +62% | 4.07% |
+| 84 | EVP-AES-192-CTR decrypt [1350 B] | 425 | +0% | +79% | +109% | +4% | +62% | 0.10% |
+| 85 | EVP-AES-128-CTR encrypt [1350 B] | 358 | +0% | +97% | +117% | +3% | +61% | 0.16% |
+| 86 | EVP-AES-192-CTR decrypt init | 194 | -4% | +96% | +99% | +7% | +60% | 2.58% |
+| 87 | EVP-AES-128-CBC encrypt init | 198 | +1% | +97% | +103% | +7% | +59% | 2.63% |
+| 88 | AEAD-AES-256-GCM-SIV open [16 B] | 362 | +0% | +65% | +79% | +8% | +59% | 0.38% |
+| 89 | AEAD-AES-128-GCM-SIV open [16 B] | 337 | +0% | +64% | +80% | +2% | +58% | 0.10% |
+| 90 | EVP-AES-256-CBC encrypt init | 201 | -2% | +95% | +98% | +5% | +57% | 2.51% |
+| 91 | EVP-AES-192-CTR encrypt init | 197 | -4% | +91% | +96% | +5% | +57% | 2.37% |
+| 92 | EVP-AES-192-CBC decrypt init | 211 | +4% | +86% | +93% | +7% | +56% | 1.83% |
+| 93 | AES-256-XTS decrypt [1350 B] | 487 | -0% | +66% | +85% | +7% | +55% | 0.12% |
+| 94 | EVP-AES-128-CBC decrypt init | 215 | +3% | +86% | +93% | +7% | +53% | 2.01% |
+| 95 | EVP-AES-128-CBC encrypt [256 B] | 408 | +1% | +91% | +102% | +0% | +53% | 0.05% |
+| 96 | EVP-AES-256-CTR decrypt [1350 B] | 485 | -0% | +69% | +96% | +3% | +53% | 0.10% |
+| 97 | EVP-AES-192-CBC encrypt init | 205 | -6% | +86% | +90% | +3% | +53% | 2.59% |
+| 98 | AEAD-AES-128-GCM open [256 B] | 298 | -0% | +57% | +78% | +14% | +51% | 0.23% |
+| 99 | EVP-AES-192-CTR encrypt [1350 B] | 416 | +0% | +83% | +100% | +2% | +51% | 0.11% |
+| 100 | EVP-AES-128-GCM decrypt [1350 B] | 662 | +0% | +83% | +95% | +6% | +50% | 0.16% |
+| 101 | AEAD-AES-256-GCM open [256 B] | 309 | -0% | +53% | +73% | +14% | +50% | 0.20% |
+| 102 | EVP-AES-256-CBC decrypt init | 223 | +1% | +80% | +86% | +4% | +48% | 1.39% |
+| 103 | EVP-AES-192-GCM decrypt [1350 B] | 708 | -0% | +79% | +90% | +6% | +47% | 0.16% |
+| 104 | EVP-AES-128-GCM encrypt [1350 B] | 680 | +0% | +78% | +90% | +5% | +47% | 0.22% |
+| 105 | EVP-AES-256-GCM decrypt [1350 B] | 750 | +0% | +76% | +86% | +5% | +46% | 0.35% |
+| 106 | EVP-AES-192-GCM encrypt [1350 B] | 722 | +0% | +75% | +86% | +4% | +45% | 0.24% |
+| 107 | AEAD-AES-128-CBC-SHA1 seal [256 B] | 1,057 | +2% | +18% | +49% | +3% | +44% | 0.17% |
+| 108 | EVP-AES-256-CTR encrypt [1350 B] | 475 | +0% | +73% | +87% | +2% | +44% | 0.08% |
+| 109 | AEAD-AES-128-GCM seal [16 B] | 191 | -0% | +82% | +84% | +10% | +44% | 0.15% |
+| 110 | AEAD-AES-256-GCM seal [16 B] | 194 | +0% | +80% | +81% | +10% | +43% | 0.03% |
+| 111 | EVP-AES-256-GCM encrypt [1350 B] | 770 | +0% | +71% | +82% | +3% | +43% | 0.28% |
+| 112 | EVP-AES-192-CBC encrypt [256 B] | 490 | -0% | +76% | +85% | -1% | +43% | 0.10% |
+| 113 | AES-256-XTS encrypt [1350 B] | 472 | -1% | +63% | +74% | +1% | +42% | 0.17% |
+| 114 | EVP-ChaCha20-Poly1305 encrypt init | 205 | -2% | +56% | +71% | +3% | +39% | 2.02% |
+| 115 | AEAD-AES-128-CCM-Bluetooth seal [16 B] | 177 | +1% | +73% | +81% | +0% | +39% | 0.08% |
+| 116 | EVP-ChaCha20-Poly1305 decrypt [16 B] | 757 | +1% | +65% | +78% | +1% | +39% | 0.14% |
+| 117 | AEAD-AES-256-CBC-SHA1 seal [256 B] | 1,232 | +2% | +15% | +41% | +3% | +36% | 0.05% |
+| 118 | EVP-ChaCha20-Poly1305 encrypt [16 B] | 765 | -0% | +63% | +76% | +2% | +36% | 0.25% |
+| 119 | EVP-AES-256-CBC encrypt [256 B] | 570 | +0% | +67% | +75% | -1% | +36% | 0.02% |
+| 120 | AEAD-AES-128-GCM seal init | 242 | +0% | +66% | +76% | +0% | +36% | 0.09% |
+| 121 | AEAD-ChaCha20-Poly1305 seal [16 B] | 579 | +0% | +44% | +48% | +14% | +35% | 0.08% |
+| 122 | AEAD-AES-128-GCM open init | 242 | +0% | +65% | +76% | +0% | +35% | 0.10% |
+| 123 | AEAD-AES-256-GCM-SIV open [256 B] | 645 | -0% | +38% | +45% | +1% | +35% | 0.28% |
+| 124 | EVP-ChaCha20-Poly1305 decrypt init | 213 | -3% | +51% | +68% | +7% | +35% | 3.20% |
+| 125 | AEAD-AES-256-GCM seal init | 243 | -0% | +64% | +74% | -0% | +34% | 0.03% |
+| 126 | AEAD-AES-256-GCM open init | 243 | -0% | +64% | +74% | -0% | +34% | 0.03% |
+| 127 | AEAD-AES-128-GCM-SIV open [256 B] | 601 | +1% | +35% | +44% | +1% | +33% | 0.47% |
+| 128 | EVP-AES-192-GCM encrypt init | 387 | +7% | +45% | +48% | +10% | +29% | 0.52% |
+| 129 | EVP-RC4 decrypt [256 B] | 806 | +0% | +37% | +54% | +2% | +28% | 0.15% |
+| 130 | AEAD-AES-256-GCM seal [256 B] | 301 | +0% | +50% | +54% | +6% | +28% | 0.14% |
+| 131 | AEAD-AES-128-GCM seal [256 B] | 291 | +1% | +54% | +56% | +7% | +28% | 0.23% |
+| 132 | EVP-AES-192-GCM decrypt init | 394 | +6% | +43% | +47% | +9% | +28% | 0.49% |
+| 133 | AEAD-AES-256-CBC-SHA1 open [16 B] | 1,223 | -0% | +12% | +32% | +1% | +28% | 0.13% |
+| 134 | EVP-AES-128-GCM encrypt init | 396 | +7% | +44% | +48% | +10% | +27% | 0.88% |
+| 135 | EVP-AES-128-GCM decrypt init | 403 | +7% | +41% | +48% | +10% | +27% | 0.68% |
+| 136 | AEAD-AES-128-CBC-SHA1 open [16 B] | 1,217 | +0% | +12% | +33% | +1% | +27% | 0.20% |
+| 137 | EVP-AES-256-GCM encrypt init | 401 | +4% | +42% | +44% | +7% | +25% | 1.02% |
+| 138 | EVP-AES-256-GCM decrypt init | 407 | +4% | +40% | +44% | +6% | +25% | 1.33% |
+| 139 | AEAD-AES-128-CBC-SHA1 open init | 626 | +2% | +24% | +40% | +2% | +23% | 2.07% |
+| 140 | AEAD-AES-128-CBC-SHA1 seal init | 634 | +1% | +24% | +40% | +2% | +23% | 2.36% |
+| 141 | AEAD-AES-256-GCM-SIV seal [16 B] | 434 | +0% | +40% | +40% | +0% | +23% | 0.13% |
+| 142 | EVP-ChaCha20-Poly1305 decrypt [256 B] | 1,409 | +0% | +37% | +44% | +1% | +23% | 0.08% |
+| 143 | EVP-RC4 encrypt [256 B] | 799 | +0% | +37% | +48% | +2% | +22% | 0.07% |
+| 144 | AEAD-AES-128-GCM-SIV seal [16 B] | 402 | +7% | +37% | +40% | +7% | +21% | 0.16% |
+| 145 | AEAD-AES-256-CBC-SHA1 seal init | 639 | +1% | +23% | +38% | +2% | +21% | 2.05% |
+| 146 | AEAD-AES-128-GCM open [1350 B] | 714 | -0% | +23% | +32% | +6% | +21% | 0.17% |
+| 147 | AEAD-AES-256-CBC-SHA1 open init | 637 | -1% | +22% | +36% | +1% | +20% | 1.92% |
+| 148 | EVP-ChaCha20-Poly1305 encrypt [256 B] | 1,385 | -0% | +35% | +42% | +1% | +20% | 0.11% |
+| 149 | AEAD-AES-256-GCM open [1350 B] | 804 | -0% | +20% | +27% | +6% | +19% | 0.05% |
+| 150 | EVP-AES-128-CBC decrypt [8192 B] | 1,711 | +0% | +18% | +31% | -0% | +19% | 0.06% |
+| 151 | AEAD-DES-EDE3-CBC-SHA1 seal init | 1,085 | +6% | +18% | +27% | +6% | +18% | 1.01% |
+| 152 | Ed25519 PKCS#8 v1 encode | 291 | +14% | +1% | -0% | +15% | +15% | 0.81% |
+| 153 | EVP-AES-192-CBC decrypt [8192 B] | 2,022 | -0% | +14% | +25% | -1% | +15% | 0.08% |
+| 154 | AEAD-AES-128-CBC-SHA1 seal [1350 B] | 3,976 | +1% | +6% | +16% | +3% | +14% | 0.16% |
+| 155 | AEAD-AES-128-GCM-SIV seal [256 B] | 606 | +1% | +24% | +26% | +1% | +14% | 0.15% |
+| 156 | AEAD-AES-128-CCM-Bluetooth seal [256 B] | 799 | +0% | +20% | +22% | +0% | +13% | 0.07% |
+| 157 | EVP-AES-128-CTR decrypt [8192 B] | 1,957 | +0% | +16% | +22% | +0% | +12% | 0.06% |
+| 158 | Ed25519 PKCS#8 v2 encode | 357 | +13% | +1% | +1% | +12% | +12% | 0.33% |
+| 159 | EVP-AES-128-GCM decrypt [8192 B] | 2,921 | -0% | +19% | +22% | +1% | +12% | 0.07% |
+| 160 | EVP-AES-128-CBC encrypt [1350 B] | 1,927 | +0% | +22% | +23% | +0% | +12% | 0.03% |
+| 161 | AEAD-AES-256-GCM-SIV open [1350 B] | 1,978 | +0% | +12% | +15% | +1% | +12% | 0.08% |
+| 162 | AEAD-AES-128-GCM seal [1350 B] | 719 | -0% | +21% | +21% | +2% | +11% | 0.07% |
+| 163 | EVP-AES-192-CBC encrypt [1350 B] | 2,283 | -0% | +17% | +21% | +0% | +11% | 0.04% |
+| 164 | EVP-AES-256-CBC decrypt [8192 B] | 2,391 | -0% | +11% | +20% | -3% | +11% | 0.13% |
+| 165 | EVP-AES-128-GCM encrypt [8192 B] | 2,974 | -0% | +18% | +21% | +1% | +11% | 0.26% |
+| 166 | EVP-AES-192-GCM decrypt [8192 B] | 3,177 | -0% | +18% | +20% | +1% | +11% | 0.06% |
+| 167 | AEAD-AES-128-GCM-SIV open [1350 B] | 1,801 | +0% | +12% | +15% | -0% | +11% | 0.08% |
+| 168 | AEAD-AES-128-CBC-SHA1 open [256 B] | 2,895 | -0% | +5% | +13% | +0% | +11% | 0.16% |
+| 169 | EVP-AES-192-CTR decrypt [8192 B] | 2,275 | +0% | +14% | +19% | +0% | +11% | 0.08% |
+| 170 | AEAD-DES-EDE3-CBC-SHA1 seal [16 B] | 4,045 | +0% | +5% | +12% | +1% | +11% | 0.05% |
+| 171 | AEAD-AES-256-GCM-SIV seal [256 B] | 683 | -0% | +19% | +21% | +0% | +11% | 0.24% |
+| 172 | EVP-AES-192-GCM encrypt [8192 B] | 3,219 | +0% | +17% | +19% | +0% | +10% | 0.10% |
+| 173 | AEAD-AES-256-CBC-SHA1 open [256 B] | 2,924 | -0% | +4% | +13% | -0% | +10% | 0.13% |
+| 174 | AEAD-AES-256-GCM seal [1350 B] | 807 | -0% | +19% | +20% | +2% | +10% | 0.05% |
+| 175 | EVP-AES-256-GCM encrypt [8192 B] | 3,503 | +0% | +16% | +18% | +0% | +10% | 0.06% |
+| 176 | EVP-AES-256-GCM decrypt [8192 B] | 3,433 | -0% | +16% | +19% | +1% | +10% | 0.07% |
+| 177 | EVP-AES-128-CTR encrypt [8192 B] | 1,946 | -0% | +17% | +21% | +0% | +10% | 0.07% |
+| 178 | AEAD-AES-256-CBC-SHA1 seal [1350 B] | 4,826 | +0% | +3% | +11% | -0% | +10% | 0.07% |
+| 179 | EVP-AES-128-CBC decrypt [16384 B] | 3,318 | -0% | +9% | +16% | -1% | +9% | 0.07% |
+| 180 | EVP-AES-256-CTR decrypt [8192 B] | 2,611 | +0% | +12% | +17% | +0% | +9% | 0.05% |
+| 181 | AEAD-ChaCha20-Poly1305 seal [256 B] | 895 | +0% | +13% | +17% | -0% | +9% | 0.08% |
+| 182 | AES-256-XTS decrypt [8192 B] | 2,521 | -0% | +10% | +14% | +0% | +9% | 0.22% |
+| 183 | EVP-AES-192-CTR encrypt [8192 B] | 2,265 | -0% | +14% | +18% | +0% | +8% | 0.04% |
+| 184 | EVP-AES-256-CBC encrypt [1350 B] | 2,655 | -0% | +15% | +16% | -0% | +8% | 0.03% |
+| 185 | TrustToken-Exp1-Batch1 issue | 10,400,557 | +6% | +0% | +2% | +8% | +8% | 0.05% |
+| 186 | TrustToken-Exp2PMB-Batch1 issue | 10,405,956 | +6% | +0% | +2% | +8% | +8% | 0.09% |
+| 187 | EVP-AES-192-CBC decrypt [16384 B] | 3,925 | -0% | +7% | +12% | -1% | +7% | 0.05% |
+| 188 | TrustToken-Exp1-Batch10 redeem | 2,961,119 | +7% | -0% | +0% | +7% | +7% | 0.09% |
+| 189 | TrustToken-Exp1-Batch1 redeem | 2,962,081 | +7% | +0% | +0% | +7% | +7% | 0.09% |
+| 190 | TrustToken-Exp2PMB-Batch10 redeem | 2,960,840 | +7% | +0% | +0% | +7% | +7% | 0.07% |
+| 191 | EVP-AES-256-CTR encrypt [8192 B] | 2,603 | -0% | +13% | +15% | +0% | +7% | 0.09% |
+| 192 | TrustToken-Exp2PMB-Batch1 redeem | 2,962,446 | +6% | -0% | +0% | +7% | +7% | 0.13% |
+| 193 | AEAD-AES-128-CBC-SHA1 open [1350 B] | 4,482 | -0% | +3% | +8% | +0% | +7% | 0.09% |
+| 194 | TrustToken-Exp1-Batch1 finish_issuance | 10,367,916 | +6% | -0% | +0% | +7% | +7% | 0.19% |
+| 195 | TrustToken-Exp1-Batch10 issue | 37,395,864 | +6% | +0% | +0% | +7% | +7% | 0.09% |
+| 196 | TrustToken-Exp2PMB-Batch10 issue | 37,402,863 | +6% | +0% | +0% | +7% | +7% | 0.10% |
+| 197 | AES-256-XTS encrypt [8192 B] | 2,505 | +0% | +10% | +13% | +1% | +7% | 0.05% |
+| 198 | TrustToken-Exp2PMB-Batch1 finish_issuance | 10,381,666 | +6% | -0% | +0% | +7% | +7% | 0.25% |
+| 199 | AEAD-AES-256-CBC-SHA1 open [1350 B] | 4,601 | -0% | +3% | +8% | -0% | +7% | 0.10% |
+| 200 | EVP-ChaCha20-Poly1305 decrypt [1350 B] | 5,072 | -0% | +10% | +12% | -0% | +6% | 0.07% |
+| 201 | EVP-AES-128-GCM decrypt [16384 B] | 5,688 | -0% | +10% | +11% | +0% | +6% | 0.05% |
+| 202 | EVP-AES-128-GCM encrypt [16384 B] | 5,765 | -0% | +9% | +11% | +1% | +6% | 0.04% |
+| 203 | EVP-ChaCha20-Poly1305 encrypt [1350 B] | 5,058 | +0% | +10% | +12% | +0% | +6% | 0.04% |
+| 204 | TrustToken-Exp2PMB-Batch1 generate_key | 1,783,659 | +6% | +0% | +0% | +6% | +6% | 0.08% |
+| 205 | TrustToken-Exp1-Batch10 generate_key | 1,784,724 | +5% | +0% | +0% | +6% | +6% | 0.05% |
+| 206 | TrustToken-Exp1-Batch1 generate_key | 1,784,765 | +5% | +0% | +0% | +6% | +6% | 0.03% |
+| 207 | TrustToken-Exp2PMB-Batch10 generate_key | 1,783,876 | +6% | +0% | +0% | +6% | +6% | 0.04% |
+| 208 | EVP-RC4 decrypt init | 1,680 | +1% | +9% | +10% | +1% | +6% | 0.10% |
+| 209 | EVP-AES-128-CTR decrypt [16384 B] | 3,859 | -0% | +8% | +11% | +0% | +6% | 0.03% |
+| 210 | EVP-RC4 decrypt [1350 B] | 4,068 | -0% | +7% | +11% | +0% | +6% | 0.05% |
+| 211 | EVP-RC4 encrypt init | 1,678 | +1% | +9% | +10% | +1% | +6% | 0.10% |
+| 212 | TrustToken-Exp2VOfPRF-Batch1 finish_issuance | 3,020,914 | +5% | +0% | -0% | +5% | +5% | 0.34% |
+| 213 | EVP-AES-192-GCM decrypt [16384 B] | 6,197 | -0% | +9% | +10% | +1% | +5% | 0.02% |
+| 214 | EVP-AES-192-CTR decrypt [16384 B] | 4,490 | -0% | +7% | +10% | +0% | +5% | 0.03% |
+| 215 | AEAD-AES-128-GCM open [8192 B] | 2,974 | -0% | +6% | +8% | +1% | +5% | 0.06% |
+| 216 | TrustToken-Exp2VOPRF-Batch10 begin_redemption | 402 | +3% | +6% | +2% | +9% | +5% | 1.76% |
+| 217 | ECDSA P-521 signing | 327,781 | +5% | +0% | +0% | +5% | +5% | 0.12% |
+| 218 | EVP-AES-256-GCM encrypt [16384 B] | 6,842 | +0% | +8% | +9% | +0% | +5% | 0.04% |
+| 219 | TrustToken-Exp2VOfPRF-Batch1 issue | 2,170,695 | +5% | +0% | +0% | +5% | +5% | 0.32% |
+| 220 | EVP-AES-192-GCM encrypt [16384 B] | 6,269 | +0% | +9% | +10% | +0% | +5% | 0.02% |
+| | **geometric mean of the ratio to A, all cells** | | **-0%** | **+84%** | **+102%** | **+3%** | **+62%** | |
 
-73 of 127 rows: those where the AWS hoist + sb arm (Hs, the vendor's `-dit` hoisting with an `sb` after the enable) costs at least 5% over A, cycles per operation, largest first; the other arms are shown for the same rows. HS_MIN_PCT sets the threshold. † marks a cell whose median implies a clock outside the P-core band: kept, not to be read.
+220 of 410 rows: those where the AWS hoist + sb arm (Hs, the vendor's `-dit` hoisting with an `sb` after the enable) costs at least 5% over A, cycles per operation, largest first; the other arms are shown for the same rows. HS_MIN_PCT sets the threshold.

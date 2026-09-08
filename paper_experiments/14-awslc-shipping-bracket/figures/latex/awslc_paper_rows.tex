@@ -9,21 +9,21 @@
  & \cellcolor[HTML]{BCD6D8}\textbf{Coarse} & \multicolumn{2}{c}{\cellcolor[HTML]{EACBC8}\textbf{AWS default}} & \multicolumn{2}{c}{\cellcolor[HTML]{EFDEC0}\textbf{AWS hoist}} \\
 \textbf{Benchmark} &  &  & \textbf{+ sb} &  & \textbf{+ sb} \\
 \midrule
-AES-128 single block & \awsgradient{1.00} & \awsgradient{3.77} & \awsgradient{4.66} & \awsgradient{0.97} & \awsgradient{2.44} \\
-EVP AES-GCM encrypt, 16 B & \awsgradient{1.00} & \awsgradient{4.03} & \awsgradient{4.48} & \awsgradient{1.01} & \awsgradient{2.73} \\
-AEAD AES-GCM seal, 16 B & \awsgradient{1.00} & \awsgradient{1.82} & \awsgradient{1.83} & \awsgradient{1.10} & \awsgradient{1.44} \\
-AEAD AES-GCM open, 16 B & \awsgradient{1.00} & \awsgradient{1.88} & \awsgradient{2.13} & \awsgradient{1.20} & \awsgradient{1.77} \\
-ChaCha20-Poly1305 seal, 16 B & \awsgradient{1.00} & \awsgradient{1.44} & \awsgradient{1.48} & \awsgradient{1.22} & \awsgradient{1.35} \\
-AEAD AES-GCM seal, 1350 B & \awsgradient{1.00} & \awsgradient{1.22} & \awsgradient{1.22} & \awsgradient{1.02} & \awsgradient{1.12} \\
+AES-128 single block & \awsgradient{1.00} & \awsgradient{3.83} & \awsgradient{4.66} & \awsgradient{0.97} & \awsgradient{2.44} \\
+EVP AES-GCM encrypt, 16 B & \awsgradient{1.00} & \awsgradient{4.02} & \awsgradient{4.48} & \awsgradient{1.01} & \awsgradient{2.73} \\
+AEAD AES-GCM seal, 16 B & \awsgradient{1.00} & \awsgradient{1.82} & \awsgradient{1.84} & \awsgradient{1.10} & \awsgradient{1.44} \\
+AEAD AES-GCM open, 16 B & \awsgradient{1.00} & \awsgradient{1.88} & \awsgradient{2.11} & \awsgradient{1.20} & \awsgradient{1.77} \\
+ChaCha20-Poly1305 seal, 16 B & \awsgradient{1.00} & \awsgradient{1.44} & \awsgradient{1.48} & \awsgradient{1.14} & \awsgradient{1.35} \\
+AEAD AES-GCM seal, 1350 B & \awsgradient{1.00} & \awsgradient{1.21} & \awsgradient{1.21} & \awsgradient{1.02} & \awsgradient{1.11} \\
 AEAD AES-GCM seal, 16 KB & \awsgradient{1.00} & \awsgradient{1.03} & \awsgradient{1.03} & \awsgradient{1.01} & \awsgradient{1.02} \\
-CMAC-AES-128, 16 KB & \awsgradient{0.99} & \awsgradient{3.36} & \awsgradient{3.86} & \awsgradient{0.96} & \awsgradient{2.27} \\
+CMAC-AES-128, 16 KB & \awsgradient{0.98} & \awsgradient{3.37} & \awsgradient{3.85} & \awsgradient{0.96} & \awsgradient{2.25} \\
 ECDSA P-256 sign & \awsgradient{0.96} & \awsgradient{1.02} & \awsgradient{1.02} & \awsgradient{0.97} & \awsgradient{0.97} \\
-RNG, 16 B & \awsgradient{0.75} & \awsgradient{1.07} & \awsgradient{1.08} & \awsgradient{0.75} & \awsgradient{0.79} \\
+RNG, 16 B & \awsgradient{0.74} & \awsgradient{1.07} & \awsgradient{1.08} & \awsgradient{0.75} & \awsgradient{0.78} \\
 \midrule
-\textbf{Geomean} & \awsgradientbold{0.97} & \awsgradientbold{1.79} & \awsgradientbold{1.91} & \awsgradientbold{1.01} & \awsgradientbold{1.46} \\
+\textbf{Geomean} & \awsgradientbold{0.97} & \awsgradientbold{1.80} & \awsgradientbold{1.91} & \awsgradientbold{1.01} & \awsgradientbold{1.46} \\
 \bottomrule
 \end{tabular}
-\caption{\textbf{AWS-LC's DIT bracket on \texttt{bssl speed}.} \textit{Cycles per operation relative to the unhardened build (1.00 = no cost) on an Apple M4 P-core, hard-bound, 400\,ms windows, medians of 7 repetitions, 3 runs combined by the per-cell median. Coarse sets DIT once for the whole process; AWS default is the bracket as shipped; AWS hoist is the vendor's \texttt{-dit} mode; + sb adds the barrier after each enable. Geomean is over every cell.}}
+\caption{\textbf{AWS-LC's DIT bracket on \texttt{bssl speed}.} \textit{Cycles per operation relative to the unhardened build (1.00 = no cost) on an Apple M4 P-core, hard-bound, 50\,ms windows, medians of 7 repetitions, 3 runs combined by the per-cell median. Coarse sets DIT once for the whole process; AWS default is the bracket as shipped; AWS hoist is the vendor's \texttt{-dit} mode; + sb adds the barrier after each enable. Geomean is over every cell.}}
 \label{tab:awslc-bracket}
 \setlength{\aboverulesep}{0.6ex}\setlength{\belowrulesep}{0.9ex}
 \end{table}

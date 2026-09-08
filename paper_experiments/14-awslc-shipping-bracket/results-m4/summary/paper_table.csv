@@ -1,13 +1,13 @@
 n,op,A_cycles_per_op,entries_per_op,C_pct,B_pct,Bs_pct,H_pct,Hs_pct,MAD_pct
-1,"AES-128 single block",33.8,1.0,-0.09,277.43,365.89,-2.60,143.57,0.147
-2,"EVP AES-GCM encrypt, 16 B",172.7,3.3,0.09,302.59,348.14,0.73,173.48,0.056
-3,"AEAD AES-GCM seal, 16 B",190.7,1.0,-0.20,81.87,82.75,9.56,44.18,0.107
-4,"AEAD AES-GCM open, 16 B",205.0,1.2,0.28,88.31,113.22,20.48,77.00,0.019
-5,"AEAD ChaCha20-Poly1305 seal, 16 B",579.5,1.6,0.01,44.44,48.02,21.76,35.36,2.972
-6,"AEAD AES-GCM seal, 1350 B (a TLS record)",718.0,1.0,-0.47,21.64,21.54,2.12,11.81,0.044
-7,"AEAD AES-GCM seal, 16 KB",5794.9,1.1,-0.00,3.04,3.22,0.69,1.96,0.019
-8,"CMAC-AES-128, 16 KB",40795.9,1027.6,-1.01,236.01,286.08,-3.78,126.63,0.100
-9,"ECDSA P-256 sign",42742.4,4.8,-3.78,1.75,2.12,-3.42,-2.88,0.111
-10,"RNG, 16 B",6795.1,3.0,-25.37,6.98,8.33,-25.44,-21.15,0.137
-geomean_all,"geometric mean of arm/A over the rows above, all cells",,,-3.39,79.36,90.97,1.17,46.50,
-geomean_clean,"geometric mean of arm/A over the rows above, suspect cells left out",,,-3.39,79.36,90.97,1.17,46.50,
+1,"AES-128 single block",33.8,1.0,-0.22,282.89,365.71,-2.52,143.55,0.071
+2,"EVP AES-GCM encrypt, 16 B",172.7,3.3,-0.02,301.85,347.54,0.69,173.27,0.034
+3,"AEAD AES-GCM seal, 16 B",190.7,1.0,-0.13,81.63,83.94,9.67,43.74,0.152
+4,"AEAD AES-GCM open, 16 B",205.0,1.2,0.27,88.05,111.28,20.34,77.49,0.044
+5,"AEAD ChaCha20-Poly1305 seal, 16 B",579.2,1.6,0.19,44.32,48.08,14.14,35.48,0.078
+6,"AEAD AES-GCM seal, 1350 B (a TLS record)",718.8,1.0,-0.47,21.31,21.50,2.13,11.46,0.067
+7,"AEAD AES-GCM seal, 16 KB",5799.4,1.1,-0.09,2.95,3.16,0.62,1.88,0.075
+8,"CMAC-AES-128, 16 KB",40845.2,1010.8,-1.51,236.55,285.42,-3.90,124.60,0.064
+9,"ECDSA P-256 sign",42729.0,5.1,-3.74,1.86,2.21,-3.18,-2.53,0.094
+10,"RNG, 16 B",6797.2,3.2,-25.56,7.27,8.40,-25.36,-22.14,0.157
+geomean_all,"geometric mean of arm/A over the rows above, all cells",,,-3.47,79.56,90.88,0.54,46.17,
+geomean_clean,"geometric mean of arm/A over the rows above, suspect cells left out",,,-3.47,79.56,90.88,0.54,46.17,

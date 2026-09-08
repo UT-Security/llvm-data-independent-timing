@@ -1,5 +1,5 @@
-reproduce 2026-09-07 09:34:56 RUNS=3 stages: pmc build run collect analyze
-driver starting 2026-09-07 09:35:00: 6 arms x 10 filters x 8 passes (1 warm-up), 400 ms per row, chunks 16,256,1350,8192,16384; pin CPU 9; progress follows
+reproduce 2026-09-07 18:47:28 RUNS=3 stages: pmc build run collect analyze
+driver starting 2026-09-07 18:49:15: 6 arms x 25 filters x 8 passes (1 warm-up), 50 ms per row, chunks 16,256,1350,8192,16384; pin CPU 9; progress follows
 rep 1/8 done
 rep 2/8 done
 rep 3/8 done
@@ -8,7 +8,7 @@ rep 5/8 done
 rep 6/8 done
 rep 7/8 done
 rep 8/8 done
-driver starting 2026-09-07 11:04:03: 6 arms x 10 filters x 8 passes (1 warm-up), 400 ms per row, chunks 16,256,1350,8192,16384; pin CPU 9; progress follows
+driver starting 2026-09-07 19:10:10: 6 arms x 25 filters x 8 passes (1 warm-up), 50 ms per row, chunks 16,256,1350,8192,16384; pin CPU 9; progress follows
 rep 1/8 done
 rep 2/8 done
 rep 3/8 done
@@ -17,7 +17,7 @@ rep 5/8 done
 rep 6/8 done
 rep 7/8 done
 rep 8/8 done
-driver starting 2026-09-07 12:02:51: 6 arms x 10 filters x 8 passes (1 warm-up), 400 ms per row, chunks 16,256,1350,8192,16384; pin CPU 9; progress follows
+driver starting 2026-09-07 19:41:57: 6 arms x 25 filters x 8 passes (1 warm-up), 50 ms per row, chunks 16,256,1350,8192,16384; pin CPU 9; progress follows
 rep 1/8 done
 rep 2/8 done
 rep 3/8 done

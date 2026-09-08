@@ -36,3 +36,9 @@ aws-lc: v5.8.0 from 04d9aa2586412650...  builds: rel mrs_dit=2 msr_dit=2 sb=0 se
 pmc:   read cost        1 cycles bare, 39 cycles with isb (kperf is ~3,400) VERDICT: PMC access is AVAILABLE and sane. PMC=1 will use it. 
 runs: 3 (per-cell mean across runs in raw/speed.json; each run in raw/run-N/)
 pin_cpu: 9 (kern.sched_thread_bind_cpu; boot-args: enable_skstb=1)  reps 7  timeout_ms 400  chunks 16,256,1350,8192,16384  flagged 2781  unpinned 0
+== 2026-09-07 20:01 CDT  host Mac16,10 Apple M4  macOS 15.7.3
+repo: 77cb72aaf7a40b27ce67ac31e0e41b424edfee27 +uncommitted  compiler: Apple clang version 17.0.0 (clang-1700.4.4.1)
+aws-lc: v5.8.0 from 04d9aa2586412650...  builds: rel mrs_dit=2 msr_dit=2 sb=0 set_dit_calls=1 pmc=6;dit mrs_dit=278 msr_dit=554 sb=0 set_dit_calls=8 pmc=6;ditsb mrs_dit=278 msr_dit=554 sb=277 set_dit_calls=8 pmc=6;
+pmc:   read cost        1 cycles bare, 39 cycles with isb (kperf is ~3,400) VERDICT: PMC access is AVAILABLE and sane. PMC=1 will use it. 
+runs: 3 (per-cell mean across runs in raw/speed.json; each run in raw/run-N/)
+pin_cpu: 9 (kern.sched_thread_bind_cpu; boot-args: enable_skstb=1)  reps 7  timeout_ms 50  chunks 16,256,1350,8192,16384  flagged 1057  unpinned 0
