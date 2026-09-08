@@ -67,15 +67,46 @@ It will price the two `msr DIT` writes under the model the flag names. It will
 **not** close the gap to the M4, for two reasons that are worth knowing before
 the rerun:
 
-1. **gem5 has no FEAT_SB.** Nothing in the checked-out tree decodes `0xd50330ff`
-   (`sb`); the barrier group ends at `Isb64` and falls through to `Unknown64`.
-   So `api_bracket.c` substitutes `isb sy`, and exp02's api arm took that default
-   (`-DAPI_CHACHA`, no `-DAPI_BARRIER_*`). Experiment 14's runner says the same
-   thing outright: "gem5 has no FEAT_SB and `isb sy` in its place was only ever a
-   stand-in". On the M4 the real `sb` is **most of the bracket's cost** — dropping
-   it takes the bracket from ~480 cycles to ~300 (`bracketnobar`). Whether
-   `dit-flag-restructure` adds FEAT_SB is the first thing to check; if it does
-   not, the gem5 bracket column still understates by the barrier.
+1. **gem5 has no FEAT_SB — upstream either.** Checked against upstream
+   `gem5/gem5` `stable` @ `f5c5a6e390f5` (2026-09-07): the A64 barrier decode
+   group ends at `Isb64` and falls through to `Unknown64`
+   (`src/arch/arm/isa/formats/aarch64.isa:269-273`), and nothing anywhere
+   implements `sb` or FEAT_SB. So `api_bracket.c` substitutes `isb sy`, and
+   exp02's api arm took that default (`-DAPI_CHACHA`, no `-DAPI_BARRIER_*`).
+   Experiment 14's runner says the same thing outright: "gem5 has no FEAT_SB and
+   `isb sy` in its place was only ever a stand-in".
+
+   **And the `isb` model itself is not the problem — it is upstream and it is
+   the stronger of gem5's two barrier models.** Upstream has
+   `isbIop = ArmInstObjParams("isb", "Isb64", "IsbOp64", "", ['IsSquashAfter'])`
+   (`src/arch/arm/isa/insts/misc64.isa:191`), byte-identical in the fork, and it
+   deliberately differs from `dsb`, which gets `IsSerializeAfter`. The two are
+   not interchangeable and `IsSquashAfter` is the more expensive:
+
+   | flag | where | what happens |
+   |---|---|---|
+   | `IsSerializeAfter` (dsb) | rename (`o3/rename.cc:756`) | marks the next instruction serializeBefore, which "makes the instruction wait in rename until the ROB is empty". Drains; younger instructions stay fetched in the rename queue; **no squash, no refetch** |
+   | `IsSquashAfter` (isb) | commit (`o3/commit.cc:1119`) | the ISB must reach the ROB head, so everything older drains; then `squashAfter()` sets `SquashAfterPending`, squashing everything younger and **restarting fetch** |
+
+   So `isb` does stall the front end — by redirecting it at commit rather than
+   blocking rename — and it drains *and* discards *and* refetches. Changing it to
+   `IsSerializeAfter` would make it CHEAPER, not more expensive.
+
+   The ~20 cycles experiment 09 measures is therefore the modelled pipeline
+   depth, not a lax flag: `configs/common/cores/arm/neoverse_v2.py` has
+   `commitToFetchDelay=1`, `fetchToDecodeDelay=3`, `decodeToRenameDelay=2`,
+   `renameToIEWDelay=1`, so fetch-to-issue is ~7 cycles and a squash-plus-refill
+   lands around 15-20. exp09 measured 18-27. Self-consistent.
+
+   **The undercharge is entirely `isb` != `sb`.** On the M4 the real `sb` is
+   **164 cycles** (median over 11 lengths, `bracket - bracketnobar`), 8x a
+   frontend refill and far more than any refill can account for, so Apple's
+   speculation barrier is doing something heavier than ISB's
+   context-synchronisation. Dropping it takes the M4 bracket from ~480 cycles to
+   ~300. Whether `dit-flag-restructure` adds FEAT_SB is the first thing to
+   check; if it does not, the gem5 bracket column still understates by that 8x
+   no matter which switch flag is passed, and the fix is implementing FEAT_SB
+   with a cost calibrated against silicon rather than retuning `isb`.
 2. **The name is contested by the project's own numbers.** `--apple` selects
    flush-after, which `paper_experiments/12-dit-clear-shadow/README.md`
    calibrates as design 2 and says explicitly is **not** a model of Apple's
