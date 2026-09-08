@@ -700,17 +700,19 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
   is therefore a property of the workload and not of any placement, so every arm
   moves along one fixed axis -- and it is why the same L sits at a different f on
   the two machines: gem5 sustains IPC 1.07 at L=10 where the M4 sustains 3.89, so
-  the public lane is a larger share of the model's operation. The figures label
-  the axis "Secret fraction of operation cycles" for exactly this reason.
-- **The figures say OPERATION where the rig says request.** The driver's
-  docstring opens "One request = a PUBLIC lane that gathers records..." and the
-  CSV columns are still `requests` and `cyc_per_request` -- that schema is
-  published and stays. But "request" implies a server's unit of work, and this
-  public lane is a dependence chain built to have the right shape rather than any
-  application's real public code, so the figures do not claim it. Same unit
-  either way: L value-dependent loads plus one AEAD call over the digest of what
-  they gathered. Experiment 01's coin selection is the real-application public
-  lane.
+  the public lane is a larger share of the model's run. The figures label the axis
+  "Secret Fraction of Workload (cycles)" for exactly this reason.
+- **The figures say WORKLOAD where the rig says request.** The driver's docstring
+  opens "One request = a PUBLIC lane that gathers records..." and the CSV columns
+  are still `requests` and `cyc_per_request` -- that schema is published and
+  stays. "Request" implies a server's unit of work, and this public lane is a
+  dependence chain built to have the right shape rather than any application's
+  real public code, so the figures do not claim it. Experiment 01's coin
+  selection is the real-application public lane.
+  **"Workload" is exact here only because the driver repeats ONE identical
+  unit**, so the secret share of one iteration and of the whole run are the same
+  number. On a driver with a mix of units they would differ and the label would
+  have to change with it.
 - **The public lane is synthetic**, and q=0.75 is a chosen midpoint, not a
   measured property of any application. Experiment 01's coin selection is the
   real-application public lane.

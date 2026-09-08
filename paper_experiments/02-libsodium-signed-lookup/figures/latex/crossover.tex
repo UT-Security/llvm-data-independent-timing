@@ -32,17 +32,18 @@
   \end{subfigure}
   \caption{%
     \textbf{Where fine placement stops paying, on one microbenchmark and two
-    machines.} One operation is a public lookup lane of $L$ dependent loads and one
-    AES-256-GCM call over 64 secret bytes; sweeping $L$ sweeps the secret
-    fraction $f$ on the $x$ axis. \emph{$f$ is a ratio of cycles}, measured on
+    machines.} The workload is a public lookup lane of $L$ dependent loads then
+    one AES-256-GCM call over 64 secret bytes, repeated; sweeping $L$ sweeps the
+    secret fraction $f$ on the $x$ axis. \emph{$f$ is a ratio of cycles}, measured on
     the unhardened build: $f = (c - c_\mathrm{pub})/c$, where $c$ is the
-    operation's cycles and $c_\mathrm{pub}$ is the same binary with the crypto
-    call skipped. It is therefore a property of the workload rather than of any
+    workload's cycles and $c_\mathrm{pub}$ is the same binary with the crypto
+    call skipped. Every iteration is identical, so the secret share of one and
+    of the whole run are the same number. It is therefore a property of the workload rather than of any
     placement, so all three arms move along one fixed axis --- and it is why the
     same $L$ sits at a different $f$ on the two machines, gem5 sustaining
     IPC~1.07 at $L=10$ where the M4 sustains 3.89.
     \textbf{Coarse} holds \texttt{PSTATE.DIT} over
-    the whole operation, so it costs the public lane its load-value predictions
+    the whole workload, so it costs the public lane its load-value predictions
     and gets dearer as $f$ falls. \textbf{Fine} brackets the mode around each
     crypto call instead --- read the previous DIT state, set it, speculation
     barrier, call, restore --- paying a fixed bill per call, so it gets cheaper.
@@ -56,8 +57,8 @@
     %
     \emph{The two $y$ ranges differ, $+105\%$ against $+35\%$, and that is a
     result rather than a plotting choice}: one bracket costs 333--710\,cycles
-    per operation on the M4 against 206--351 in the model, over an operation
-    3.6$\times$ shorter, so it is 106\% of a secret-heavy operation on hardware
+    per iteration on the M4 against 206--351 in the model, over an iteration
+    3.6$\times$ shorter, so it is 106\% of a secret-heavy iteration on hardware
     and 18\% of one in simulation. The simulator is optimistic about fine
     placement by roughly a factor of two in secret fraction.%
   }

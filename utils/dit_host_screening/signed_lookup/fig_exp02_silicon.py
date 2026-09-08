@@ -123,14 +123,18 @@ def rows(name):
 # L=10 where the M4 sustains 3.89, so the public lane costs relatively more
 # there. The README's known limits say the two axes must not be swapped.
 #
-# And OPERATION, not "request", though the driver's own docstring says request
-# and the CSV columns are still requests / cyc_per_request. "Request" implies a
-# server's unit of work, and this public lane is a dependence chain built to
-# have the right shape rather than any application's real public code -- the
-# framing would be claiming more than the benchmark earns. One operation is L
-# value-dependent loads plus one AEAD call over the digest of what they
-# gathered; the data schema keeps its own name, the axis states what it is.
-XLABEL = "Secret fraction of operation cycles"
+# WORKLOAD, not "request". The driver's docstring says request and the CSV
+# columns are still requests / cyc_per_request -- that schema is published and
+# stays -- but "request" implies a server's unit of work, and this public lane
+# is a dependence chain built to have the right shape rather than any
+# application's real public code, so the axis does not claim it. "Workload" is
+# exact here for a reason worth writing down: the driver repeats ONE identical
+# unit, so the secret share of one unit and the secret share of the whole run
+# are the same number. On a driver with a mix of units they would not be, and
+# this label would have to change with it.
+#
+# Title case and a parenthesised unit, matching "IPC overhead (%)" on the y.
+XLABEL = "Secret Fraction of Workload (cycles)"
 
 
 def secret_axis(ax):
