@@ -1,0 +1,33 @@
+patched for 5 offsets
+ok
+180 gem5 runs (5 stack offsets), 9 at a time
+  30/180
+  60/180
+  90/180
+  120/180
+  150/180
+  180/180
+
+=== exp02 gem5 arms, barrier = dsb nsh + isb sy (api_bracket.c's new default) ===
+median of 5 stack offsets, offset-0 binary hard-linked at 5 argv[0] lengths
+
+      L   req        model  base c/req  api-apinop   % req  ser-ren  cyc/write  spread  ditW/req
+     10  1600  serialising       2,481         -45  -1.80%     46.1       23.0   0.66%       2.0
+     10  1600      renamed       2,481         -91  -3.66%     46.1       23.0   0.80%       2.0
+     50  1500  serialising       3,130         -42  -1.33%     51.8       25.9   0.66%       2.0
+     50  1500      renamed       3,130         -94  -2.99%     51.8       25.9   0.54%       2.0
+    200  1270  serialising       5,733         -15  -0.26%     73.8       36.9   0.31%       2.0
+    200  1270      renamed       5,733         -89  -1.55%     73.8       36.9   0.46%       2.0
+   1000   670  serialising      19,477           2   0.01%    233.6      116.8   0.14%       2.0
+   1000   670      renamed      19,477        -231  -1.19%    233.6      116.8   0.67%       2.0
+   5000   200  serialising      88,321         129   0.15%    298.2      149.1   0.28%       2.0
+   5000   200      renamed      88,321        -170  -0.19%    298.2      149.1   0.66%       2.0
+  20000    55  serialising     345,942      -1,382  -0.40%   -162.7      -81.4   1.66%       2.0
+  20000    55      renamed     345,942      -1,220  -0.35%   -162.7      -81.4   0.90%       2.0
+
+ser-ren is the SAME BINARY under the two switch models, so it carries no
+layout term at all: it is the only clean number here, and /2 is per write.
+python3 run.py 2>&1  5742.01s user 17.57s system 851% cpu 11:16.40 total
+tail -30  0.00s user 0.00s system 0% cpu 11:16.40 total
+
+[exited with code 0]
