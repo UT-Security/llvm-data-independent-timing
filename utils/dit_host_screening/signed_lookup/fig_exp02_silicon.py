@@ -101,17 +101,32 @@ def crossing(xs, a, b):
 
 # ------------------------------------------------------------------ gem5 series
 #
-# gem5_apple_arms.csv, not gem5_arms.csv. The old file's bracket arm carried
-# `isb sy` as a substitute because gem5 had no FEAT_SB, and its two switch
-# models were "renamed" and a bare `--no-speculative-dit`. The simulator now
-# implements `sb` (Sb64, IsSerializeAfter) and names the two designs
-# `--apple` (flush after the switch, plus the redundant-write skip) and
-# `--expedite` (renamed switch, deferred clear, MRS read that does not stall),
-# so the bracket runs Apple's actual sequence under both. f_secret comes from
-# the M4 CSV's measurement of the same lane -- the gem5 sweep here did not run
-# the --nosecret arm, so the x axis is shared rather than re-derived, and the
-# two instruments weight the lanes differently (see the README's known limits).
-g = rows("gem5_apple_arms.csv")
+# gem5_aes_arms.csv. Three earlier files were tried and each was wrong for a
+# reason worth keeping:
+#
+#   gem5_arms.csv        the bracket's barrier was `isb sy`, a substitute for
+#                        the `sb` gem5 could not decode, and the two switch
+#                        models were "renamed" and a bare --no-speculative-dit.
+#   gem5_apple_arms.csv  the real `sb` under the real --apple/--expedite, but on
+#                        the chacha20-poly1305 secret lane, where the bracket
+#                        never rises above the model's own layout noise: chacha
+#                        is a serial ARX chain that does not fill the reorder
+#                        window until the message is ~4 KB, by which point the
+#                        request is 46,000 cycles and a ~300-cycle flush-after
+#                        switch is 0.6% of it. No crossover, for want of a
+#                        denominator rather than for want of a cost.
+#   ...secret_bytes      growing the chacha message does not fix that: the
+#                        switch's cost saturates while the request grows without
+#                        bound, and the sweep peaks at 0.64%.
+#
+# What fixes it is the secret OP, not its size. AES-256-GCM has independent
+# round and GHASH work per block, so it saturates the window at 16-64 bytes:
+# the bracket costs 206-351 cycles there against a ~1,100-cycle request, which
+# is the same ballpark as the 455-510 measured on an M4. f_secret is derived
+# from this sweep's own --nosecret arm, so each panel's x axis is its own
+# instrument's measurement -- the two weight the lanes differently and the
+# README's known limits say plainly they must not be swapped.
+g = rows("gem5_aes_arms.csv")
 gL = sorted({int(r["L"]) for r in g})
 gf = {int(r["L"]): float(r["f_secret_pct"]) for r in g if r["arm"] == "base"}
 grow = lambda L, arm, m: next(r for r in g if int(r["L"]) == L and r["arm"] == arm
@@ -142,12 +157,12 @@ fig.patch.set_facecolor(SURF)
 
 for ax, title, sub, xs, blank, rising in [
     (axes[0], "gem5 Neoverse-V2 FDP",
-     "EVES + VTAGE, FEAT_SB; the bracket's real `sb` under both switch designs",
+     "EVES + VTAGE, FEAT_SB; AES-256-GCM secret lane, 64 B, real `sb`",
      [gf[L] for L in gL], gipc("blanket", "apple"),
      [("Apple's bracket, --apple", gipc("api", "apple"), GREEN, "-", GREEN),
       ("Apple's bracket, --expedite", gipc("api", "expedite"), GREEN, (0, (4, 2)), SURF)]),
     (axes[1], "Apple M4 — shipping silicon",
-     "load value predictor: 36 bits, measured; `msr DIT` serialises",
+     "36-bit load value predictor, measured; chacha20-poly1305, 100 B",
      mf, mblanket,
      [("Apple's bracket", mbracket, GREEN, "-", GREEN)]),
 ]:

@@ -53,20 +53,34 @@ The rig, its gates and its hazards: `utils/dit_host_screening/signed_lookup/sili
 
 | | gem5 Neoverse-V2 FDP | Apple M4 |
 |---|---|---|
-| blanket, secret-heavy end | +2.3% at f=96.5% | **-1.6%** at f=95.9% |
-| blanket, public-heavy end | +31.0% at f=0.6% | **+34.4%** at f=0.4% |
-| Apple's bracket, secret-heavy end | +2.8% | **+28.2%** |
-| Apple's bracket, public-heavy end | +0.1% | **+0.2%** |
-| **the bracket stops winning at** | **f\* = 96%** | **f\* = 52%** |
-| one bracketed call | ~50 cycles | **455-510 cycles** |
-| one mode write | 20-25 cycles (modelled) | **33.5 cycles (measured)** |
+| secret lane | AES-256-GCM, 64 B | chacha20-poly1305, 100 B |
+| blanket, secret-heavy end | -0.4% at f=91.7% | **-1.6%** at f=95.9% |
+| blanket, public-heavy end | +31.3% at f=0.6% | **+34.4%** at f=0.4% |
+| Apple's bracket, secret-heavy end | +16.6% | **+28.2%** |
+| Apple's bracket, public-heavy end | -0.3% | **+0.2%** |
+| **the bracket stops winning at** | **f\* = 60%** | **f\* = 52%** |
+| one bracketed call | 206-351 cycles | **455-510 cycles** |
+| one mode write | 165 cycles inferred, of which ~14 is the renamed write | **33.5 cycles (measured)** |
+| the same bracket, renamed switch (`--expedite`) | 10-29 cycles, **no crossover** | not available on silicon |
 
-**Both machines have the crossover and the bracket wins over most of the range on
-both -- but what it costs differs by an order of magnitude.** In the simulator a
-bracket is ~50 cycles and never really loses; on the hardware it is ~480, which
-is 42% of a 1,131-cycle AEAD request and 0.2% of a 272,602-cycle one. The
-simulator would tell a library author the bracket is free. It is not: it is free
-*relative to blanket* only below f = 52%.
+**Both machines have the crossover, at f\* = 60% and f\* = 52%, and on both the
+bracket wins over most of the range.** A flush-after switch costs 206-351 cycles
+in the simulator and 455-510 on the hardware -- the same order, which is what
+lets the two panels be read side by side at all. The simulator's own renamed
+design is the flat dashed line: 10-29 cycles a bracket, never crossing blanket
+anywhere in the sweep.
+
+**The two secret lanes are different on purpose, and this is the one thing about
+the figure to keep in mind.** gem5 cannot resolve a chacha20-poly1305 bracket:
+chacha is a serial ARX chain that does not fill the reorder window until the
+message is ~4 KB, and by then the request is 46,000 cycles and a ~300-cycle
+switch is 0.6% of it, under the model's own layout noise. Growing the message
+does not help -- the switch's cost saturates while the request grows without
+bound, and that sweep peaks at 0.64% (`results/gem5-apple-expedite/scout_secret_size.py`).
+AES-256-GCM has independent round and GHASH work per block, so it saturates the
+window at 16-64 bytes and the switch is finally a measurable share of the
+request. So the gem5 panel changed *op* to keep the same *question*; it is not
+the same binary as the M4 panel, and the f axes are each instrument's own.
 
 **Where the 480 cycles go.** 33.5 of them are each of the two `msr DIT` writes
 and ~11 the token read, which a tight loop over the four instructions prices at
@@ -634,6 +648,23 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
   reaches (`docs/design/dit-cloning.md` §5.1).
 - **The layout noise is real** and largest where the secret lane dominates; the
   spread column is part of every result.
+- **The two panels of the headline figure are not the same binary.** The gem5
+  panel's secret lane is AES-256-GCM over 64 bytes; the M4 panel's is
+  chacha20-poly1305 over 100 bytes, and the reason is in the cross-machine
+  section above -- gem5 cannot resolve a chacha bracket at any message size. The
+  crossovers (60% and 52%) are therefore two instruments answering the same
+  question about the same switch, not one measurement repeated. Closing that gap
+  means rerunning the silicon half with `-DSECRET_AES -DAEAD_MLEN=64`
+  (`silicon/secret_op_param.patch` already parameterises it, and
+  `run_crossover_m4.py` needs only the two `-D`s added to its lane); nobody has.
+- **`--expedite` is only near zero when the barrier is adjacent to the write.**
+  gem5 drops a barrier's ordering only when it sits immediately behind the
+  `msr DIT` in program order. `api_bracket.c` emits the pair from one
+  `asm volatile` so the compiler cannot separate them, and
+  `barrier_fused` in `data/gem5_aes_arms.csv` is the check: it must be one per
+  bracket entry. It read 0 in the first AES sweep, where clang had scheduled an
+  argument reload into the gap, and every `--expedite` arm paid a drain it
+  should not have -- 9 to 17 points.
 
 ## Contents
 
@@ -644,6 +675,8 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 | `data/m4_arms.csv` | **the silicon half**: 11 L x 7 arms x 2 lanes on an Apple M4 -- blanket, Apple's bracket and its NOP twin, the bracket without its barrier, the pass and its twin -- full flow and public lane alone, 15 reps |
 | `data/m4_per_call_cost.csv` | what ONE placement costs per call, from the `--chunks` sweep: Apple's bracket 455-510 cycles, the pass 1,260-1,340 |
 | `data/m4_header_width.csv` | the 36-bit step: what width of constant this machine's value predictor holds |
+| `data/gem5_aes_arms.csv` | **the gem5 half of the headline figure**: the AES-256-GCM secret lane under `--apple` and `--expedite`, with `bracket_cyc_per_req`, `barrier_fused` and `rename_serializing` beside every cell |
+| `data/gem5_apple_arms.csv` | the same arms on the chacha lane, where the bracket never rises above the model's layout noise. Kept because that null result is why the op changed |
 | `data/m4_predictability_sweep.csv` | q = 0..1 on both lanes, at L=200 and L=20,000 |
 | `data/m4_tblbits_sweep.csv` | 4 KB to 512 KB: the wide lane's zero is not an L1-residency artifact |
 | `figures/crossover-gem5-vs-m4.{png,pdf}` | **the headline**: the crossover on both machines, side by side |
