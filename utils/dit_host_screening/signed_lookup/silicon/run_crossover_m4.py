@@ -81,6 +81,10 @@ import sys
 import time
 
 D = os.path.dirname(os.path.abspath(__file__))
+# Where the arm binaries are. `--bin` retargets it, which is how a build with a
+# different secret lane (build_silicon.sh's SECRET_OP=aes, into its own OUT) is
+# swept without disturbing the committed chacha binaries: the arms, the gates
+# and the argv equalisation are identical, only the AEAD underneath differs.
 BIN = os.path.join(D, "bin")
 
 # arm -> (library/link variant, extra argv). nodit and blanket are ONE binary:
@@ -448,11 +452,24 @@ def sweep_crossover(a, log):
           f"without the speculation barrier; "
           f"sw/req = (pass - nop) cycles / {cw:.2f} cyc per serialising msr DIT"
           if cw else "   full-flow IPC overhead vs unhardened; (pub) is the public lane alone")
+    # Only the arms this sweep ran get a column. The label per arm is fixed so
+    # a restricted run's table is a subset of the full run's, not a new format.
+    LABEL = {"blanket": "blanket", "bracket": "Apple bracket",
+             "bracketnop": "brk twin", "bracketnobar": "brk no sb",
+             "bracketdsb": "brk dsb+isb", "bracketdsbnop": "dsb twin",
+             "pass": "pass", "nop": "pass twin", "nodit": "nodit"}
+    cols = [x for x in ARM_ORDER if x != "nodit"]
+    hdr = "".join(f"{LABEL[x]:>17}" for x in cols)
+    hdr += "".join(f"{'b-vs-blk':>9}" for x in ["bracket"] if x in ARM_ORDER
+                   and "blanket" in ARM_ORDER)
+    hdr += "".join(f"{'p-vs-blk':>9}" for x in ["pass"] if x in ARM_ORDER
+                   and "blanket" in ARM_ORDER)
+    hdr += "".join(f"{'brk cyc':>8}" for x in ["bracket"] if x in TWIN)
+    hdr += "".join(f"{'-no sb':>8}" for x in ["bracketnobar"] if x in TWIN)
+    hdr += "".join(f"{'sw/req':>7}" for x in ["pass"] if x in TWIN)
     print(f"   {'L':>6} {'req':>6} {'f_sec':>6} {'c/req':>8} {'IPC':>6} "
-          f"{'blanket':>17} {'Apple bracket':>17} {'brk twin':>17} {'pass':>17} "
-          f"{'b-vs-blk':>9} {'p-vs-blk':>9} {'brk cyc':>8} {'-no sb':>8} "
-          f"{'sw/req':>7} {'rej':>4}")
-    print("   " + "-" * 167)
+          + hdr + f"{'rej':>4}")
+    print("   " + "-" * (48 + len(hdr) + 4))
     for L in a.L:
         iters, warm = budget(a, L)
         args = common(a, L, iters, warm)
@@ -474,17 +491,18 @@ def sweep_crossover(a, log):
             sys.exit(f"FATAL: arms disagree on the public-lane checksum at L={L}: {sums}\n"
                      "  They are not computing the same thing; no cycle ratio means anything.")
         # ---- gate 3b: nodit and blanket are one binary
-        di = abs(full["blanket"]["insts"] - base["insts"]) / base["insts"] * 100
+        di = (abs(full["blanket"]["insts"] - base["insts"]) / base["insts"] * 100
+              if "blanket" in ARM_ORDER else 0.0)
         if di > a.ins_tol:
             sys.exit(f"FATAL: blanket retired {di:.3f}% more instructions than nodit at "
                      f"L={L} (tolerance {a.ins_tol}%). They are the same binary in two "
                      "modes; a real difference means the arms are not what they claim.")
-        if full["bracket"]["insts"] <= base["insts"]:
+        if "bracket" in ARM_ORDER and full["bracket"]["insts"] <= base["insts"]:
             sys.exit(f"FATAL: the bracket arm retired no more instructions than nodit at "
                      f"L={L}. Apple's sequence is six instructions per call; if none "
                      "executed, the driver's calls were not renamed onto the wrapper and "
                      "this arm is the baseline under another name.")
-        if full["pass"]["insts"] <= base["insts"]:
+        if "pass" in ARM_ORDER and full["pass"]["insts"] <= base["insts"]:
             sys.exit(f"FATAL: the pass arm retired no more instructions than nodit at L={L}. "
                      "Selective placement adds mode writes; if none executed, the arm is "
                      "the baseline under another name.")
@@ -532,12 +550,18 @@ def sweep_crossover(a, log):
         mine = {r["arm"]: r for r in rows[-len(ARM_ORDER):]}
         cell = lambda arm: (f"{mine[arm]['ipc_ovh_pct']:+7.2f}%"
                             f" ({mine[arm]['pub_vs_base_pct']:+6.2f}%)")
+        line = "".join(f"{cell(x):>17}" for x in ARM_ORDER if x != "nodit")
+        if "blanket" in ARM_ORDER:
+            for x in ("bracket", "pass"):
+                if x in ARM_ORDER:
+                    line += f"{vs_blanket(x):>+8.2f}%"
+        for x in ("bracket", "bracketnobar"):
+            if x in TWIN:
+                line += f"{dit_cyc[x]:>8.0f}"
+        if "pass" in TWIN:
+            line += f"{sw_req['pass']:>7.1f}"
         print(f"   {L:>6} {iters:>6} {f_secret:>5.1f}% {base['cycles'] / iters:>8.0f} "
-              f"{base['ipc']:>6.3f} {cell('blanket'):>17} {cell('bracket'):>17} "
-              f"{cell('bracketnop'):>17} {cell('pass'):>17} "
-              f"{vs_blanket('bracket'):>+8.2f}% {vs_blanket('pass'):>+8.2f}% "
-              f"{dit_cyc['bracket']:>8.0f} {dit_cyc['bracketnobar']:>8.0f} "
-              f"{sw_req['pass']:>7.1f} {rej:>4}")
+              f"{base['ipc']:>6.3f} " + line + f"{rej:>4}")
     return rows
 
 
@@ -699,6 +723,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=os.path.join(D, "out"), help="result directory")
+    ap.add_argument("--arms", nargs="+", default=None, metavar="ARM",
+                    choices=sorted(ARMS),
+                    help="restrict the sweep to these arms (default: all nine). "
+                         "The gem5 panel runs four -- nodit blanket bracket "
+                         "bracketnop -- so that set is how the two instruments "
+                         "are made to run the same comparison.")
+    ap.add_argument("--bin", default=None,
+                    help="directory holding the native_<arm>_<lane> binaries "
+                         "(default <this dir>/bin). Point it at a build made "
+                         "with a different SECRET_OP to sweep that lane.")
     ap.add_argument("--reps", type=int, default=11)
     ap.add_argument("--tries", type=int, default=8,
                     help="attempts allowed per wanted sample before giving up")
@@ -745,6 +779,23 @@ def main():
                     help="run the header-value-width sweep instead: how many "
                          "value bits this machine's predictor will hold")
     a = ap.parse_args()
+    if a.arms:
+        # ARM_ORDER drives the manifest, the checksum gate, the rejection
+        # tally, the rows and the rotation, so restricting the sweep means
+        # restricting it. TWIN entries whose arm or twin is gone go too --
+        # a (arm - twin) column with no twin is not a measurement.
+        global ARM_ORDER, TWIN
+        want = [x for x in ARM_ORDER if x in set(a.arms)]
+        missing = sorted(set(a.arms) - set(want))
+        if missing:
+            sys.exit(f"FATAL: unknown arm(s): {missing}")
+        ARM_ORDER = want
+        TWIN = {k: v for k, v in TWIN.items() if k in want and v in want}
+    if a.bin:
+        global BIN
+        BIN = os.path.abspath(a.bin)
+        if not os.path.isdir(BIN):
+            sys.exit(f"FATAL: --bin {BIN} is not a directory")
     a.cyc_per_request = {}
     a.swcost = switch_cost()
     a.cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],

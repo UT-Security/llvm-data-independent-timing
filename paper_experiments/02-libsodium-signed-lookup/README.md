@@ -1,9 +1,12 @@
 # 02 - libsodium signed lookup
 
-**Status: complete on both instruments.** gem5 re-run 2026-09-06 on the current
-compiler; **silicon measured 2026-09-08 on an Apple M4**, on the same driver and
-the same library arms, and it finds the same crossover -- see "The crossover on
-silicon" immediately below. The gem5 numbers here are that 2026-09-06 run: 1,100 gem5 runs, 0 failed, on
+**Status: complete on both instruments, on the same microbenchmark.** gem5
+re-run 2026-09-06 on the current compiler; **silicon measured 2026-09-08 on an
+Apple M4**, on the same driver and the same library arms. Both halves now run
+the AES-256-GCM 64 B secret lane, gem5's own eight L points and the same four
+arms, and both find the crossover -- **f\* = 60.0% in the simulator against
+f\* = 29.3% on the hardware**. See "The crossover on silicon" immediately
+below. The gem5 numbers here are that 2026-09-06 run: 1,100 gem5 runs, 0 failed, on
 this repo's own `gem5-DIT` submodule at the pinned commit and its own `build/`.
 The 2026-09-05 run is kept under "Rerun 2026-09-05" and the 2026-09-03 one under
 it, so the three are comparable. What moved on 2026-09-06 is the executed switch
@@ -49,38 +52,90 @@ mode's cost and everything else is layout. The pass is measured too and is in
 
 The rig, its gates and its hazards: `utils/dit_host_screening/signed_lookup/silicon/README.md`.
 
-**Figure:** `figures/crossover-gem5-vs-m4.{png,pdf}`. **Data:** `data/m4_arms.csv`.
+**Figure:** `figures/crossover-gem5-vs-m4.{png,pdf}`.
+**Data:** `data/m4_aes_arms.csv` (the matched panel) and `data/m4_arms.csv`
+(the chacha lane, and the pass, and the barrier variants).
 
 | | gem5 Neoverse-V2 FDP | Apple M4 |
 |---|---|---|
-| secret lane | AES-256-GCM, 64 B | chacha20-poly1305, 100 B |
-| blanket, secret-heavy end | -0.4% at f=91.7% | **-1.6%** at f=95.9% |
-| blanket, public-heavy end | +31.3% at f=0.6% | **+34.4%** at f=0.4% |
-| Apple's bracket, secret-heavy end | +16.6% | **+28.2%** |
-| Apple's bracket, public-heavy end | -0.3% | **+0.2%** |
-| **the bracket stops winning at** | **f\* = 60%** | **f\* = 52%** |
-| one bracketed call | 206-351 cycles | **455-510 cycles** |
-| one mode write | 165 cycles inferred, of which ~14 is the renamed write | **33.5 cycles (measured)** |
+| secret lane | AES-256-GCM, 64 B | **AES-256-GCM, 64 B** |
+| blanket, secret-heavy end | -0.4% at f=91.7% | **+12.1%** at f=85.3% |
+| blanket, public-heavy end | +31.3% at f=0.6% | **+34.5%** at f=0.1% |
+| Apple's bracket, secret-heavy end | +16.6% | **+103.8%** |
+| Apple's bracket, public-heavy end | -0.3% | **+0.3%** |
+| **the bracket stops winning at** | **f\* = 60.0%** | **f\* = 29.3%** |
+| one bracketed call | 206-351 cycles | **333-710 cycles** |
+| one mode write | ~14 cycles, renamed | **33.5 cycles (measured)** |
 | the same bracket, renamed switch (`--expedite`) | 10-29 cycles, **no crossover** | not available on silicon |
 
-**Both machines have the crossover, at f\* = 60% and f\* = 52%, and on both the
-bracket wins over most of the range.** A flush-after switch costs 206-351 cycles
-in the simulator and 455-510 on the hardware -- the same order, which is what
-lets the two panels be read side by side at all. The simulator's own renamed
-design is the flat dashed line: 10-29 cycles a bracket, never crossing blanket
-anywhere in the sweep.
+**Both machines have the crossover, and on the SAME microbenchmark they put it
+31 points apart: f\* = 60.0% in the simulator, f\* = 29.3% on the hardware.**
+That is the result. A library author reading the simulator would conclude the
+bracket is the right call for any workload under about 60% secret; on the part
+that actually ships, the answer flips at 29%. The simulator's own renamed design
+is the flat dashed line -- 10-29 cycles a bracket, never crossing blanket
+anywhere in the sweep -- which is what the switch could cost if the hardware
+renamed it.
 
-**The two secret lanes are different on purpose, and this is the one thing about
-the figure to keep in mind.** gem5 cannot resolve a chacha20-poly1305 bracket:
-chacha is a serial ARX chain that does not fill the reorder window until the
-message is ~4 KB, and by then the request is 46,000 cycles and a ~300-cycle
-switch is 0.6% of it, under the model's own layout noise. Growing the message
-does not help -- the switch's cost saturates while the request grows without
-bound, and that sweep peaks at 0.64% (`results/gem5-apple-expedite/scout_secret_size.py`).
-AES-256-GCM has independent round and GHASH work per block, so it saturates the
-window at 16-64 bytes and the switch is finally a measurable share of the
-request. So the gem5 panel changed *op* to keep the same *question*; it is not
-the same binary as the M4 panel, and the f axes are each instrument's own.
+**Why AES-256-GCM and not the driver's own chacha.** gem5 cannot resolve a
+chacha20-poly1305 bracket: chacha is a serial ARX chain that does not fill the
+reorder window until the message is ~4 KB, and by then the request is 46,000
+cycles and a ~300-cycle switch is 0.6% of it, under the model's own layout
+noise. Growing the message does not help -- the switch's cost saturates while
+the request grows without bound, and that sweep peaks at 0.64%
+(`results/gem5-apple-expedite/scout_secret_size.py`). AES-256-GCM has
+independent round and GHASH work per block, so it saturates the window at
+16-64 bytes and the switch is finally a measurable share of the request.
+
+**Both panels now run that same lane** (2026-09-08). Same driver, same public
+lane, same secret op, same L points, same arms, same bracket -- the M4 half
+rebuilt with `SECRET_OP=aes SECRET_MLEN=64`. The one thing that still differs is
+`HDR_CONST`, and it has to: the public lane's cost IS the load-value predictions
+the mode suppresses, so the header must be a value the machine under test can
+hold. gem5 holds 62 bits, this M4 holds 36 (measured). A shared constant would
+measure the mechanism on one machine and nothing at all on the other.
+
+**On one benchmark the two instruments are 31 points of f apart**, and the
+earlier 8-point agreement was an artifact of comparing different secret lanes.
+Two terms, both pushing the same way:
+
+| | gem5 | Apple M4 | ratio |
+|---|---|---|---|
+| one bracket, cyc/request | 206-351 | 333-710 | ~2x dearer |
+| the request at L=10, cycles | 1,139 | 314 | 3.6x shorter |
+| bracket as a share of that request | 18% | 106% | |
+| **f\*** | **60.0%** | **29.3%** | |
+
+AES-GCM on hardware AES is fast, so the secret lane the bracket is amortised
+over is short; gem5 sustains IPC 1.07 at L=10 where the M4 sustains 3.89 on the
+same instruction stream, so the same public work is a smaller share there. The
+simulator is optimistic about hand placement by roughly a factor of two in
+secret fraction, on the same code.
+
+**M4, AES-256-GCM 64 B secret lane** -- the matched panel. `data/m4_aes_arms.csv`,
+narrow lane, 11 reps, `bracket - twin` cycles per request beside it.
+
+| L | f_secret | blanket | Apple's bracket | bracket's NOP twin | bracket - twin, cyc/req | bracket vs blanket | blanket on the PUBLIC lane alone |
+|---|---|---|---|---|---|---|---|
+| 10 | 85.26% | +12.1% | +103.8% | -0.7% | 333 | +91.7% | +22.7% |
+| 30 | 64.39% | +23.0% | +72.4% | -2.4% | 438 | +49.4% | +29.8% |
+| 50 | 49.04% | +28.9% | +51.5% | -0.3% | 437 | +22.6% | +30.8% |
+| 100 | 27.41% | +31.0% | +28.8% | -0.4% | 445 | -2.2% | +32.6% |
+| 200 | 14.87% | +32.3% | +14.2% | -0.9% | 438 | -18.0% | +34.0% |
+| 1,000 | 3.03% | +34.2% | +3.2% | -0.1% | 452 | -31.1% | +34.6% |
+| 5,000 | 0.59% | +34.4% | +0.7% | -0.1% | 516 | -33.7% | +34.5% |
+| 20,000 | 0.14% | +34.5% | +0.3% | -0.0% | 710 | -34.2% | +34.5% |
+
+**The public-lane column is the cross-check.** It reads +22.7% to +34.5%, which
+is the chacha sweep's column to within a few tenths at every length -- the same
+public lane, as it must be, since only the secret op changed. And the twin
+column stays inside -2.4% to +0.0%, so the bracket's restructuring of the binary
+is worth about a point and the rest of its column is the mode.
+
+**The chacha lane stays measured and committed** (`data/m4_arms.csv`, the table
+further down). It is worth keeping precisely because the same bracket crosses at
+f\* = 51.6% there and f\* = 29.3% here: it is the denominator that moved, not
+the switch.
 
 **Where the 480 cycles go.** 33.5 of them are each of the two `msr DIT` writes
 and ~11 the token read, which a tight loop over the four instructions prices at
@@ -648,15 +703,19 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
   reaches (`docs/design/dit-cloning.md` §5.1).
 - **The layout noise is real** and largest where the secret lane dominates; the
   spread column is part of every result.
-- **The two panels of the headline figure are not the same binary.** The gem5
-  panel's secret lane is AES-256-GCM over 64 bytes; the M4 panel's is
-  chacha20-poly1305 over 100 bytes, and the reason is in the cross-machine
-  section above -- gem5 cannot resolve a chacha bracket at any message size. The
-  crossovers (60% and 52%) are therefore two instruments answering the same
-  question about the same switch, not one measurement repeated. Closing that gap
-  means rerunning the silicon half with `-DSECRET_AES -DAEAD_MLEN=64`
-  (`silicon/secret_op_param.patch` already parameterises it, and
-  `run_crossover_m4.py` needs only the two `-D`s added to its lane); nobody has.
+- **The two panels ARE now the same microbenchmark** (2026-09-08), down to the
+  L points, with `HDR_CONST` the one deliberate exception (see above -- a shared
+  constant measures the mechanism on one machine and nothing on the other). The
+  earlier figure compared AES on gem5 against chacha on the M4 and read the two
+  crossovers 8 points apart; matched, they are 31 apart. **Do not cite the 52%
+  against gem5's 60%** -- that pairing is not a comparison.
+- **The M4's AES arms are three, not nine.** `nodit`, `blanket`, `bracket` and
+  its twin -- what gem5 runs. The pass, the no-barrier split and the `dsb;isb`
+  fallback are measured on the chacha lane only, so `switches_per_req` and the
+  `sb`-cost decomposition are not available on the matched lane.
+- **AES-256-GCM needs hardware AES.** `crypto_aead_aes256gcm_is_available()`
+  returns 1 on this M4 and the driver dies loudly if it ever returns 0, so the
+  arm cannot silently fall back to a different primitive.
 - **`--expedite` is only near zero when the barrier is adjacent to the write.**
   gem5 drops a barrier's ordering only when it sits immediately behind the
   `msr DIT` in program order. `api_bracket.c` emits the pair from one
@@ -672,7 +731,8 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 |---|---|
 | `reproduce.sh` | build, sweep, derive, figures, from the committed sources |
 | `results/gem5/` | **the raw run**: one entry per run for all 1,100 runs, the runner's own CSVs, the arm switch counts, the seed file used, and the pass build's info-loss and precision reports. `data/` is the derived import of this |
-| `data/m4_arms.csv` | **the silicon half**: 11 L x 7 arms x 2 lanes on an Apple M4 -- blanket, Apple's bracket and its NOP twin, the bracket without its barrier, the pass and its twin -- full flow and public lane alone, 15 reps |
+| `data/m4_aes_arms.csv` | **the silicon half of the headline figure**: the AES-256-GCM 64 B secret lane, gem5's own eight L points, four arms, 11 reps. The matched panel |
+| `data/m4_arms.csv` | the chacha20-poly1305 lane: 11 L x 7 arms x 2 lanes on an Apple M4 -- blanket, Apple's bracket and its NOP twin, the bracket without its barrier, the pass and its twin -- full flow and public lane alone, 15 reps |
 | `data/m4_per_call_cost.csv` | what ONE placement costs per call, from the `--chunks` sweep: Apple's bracket 455-510 cycles, the pass 1,260-1,340 |
 | `data/m4_header_width.csv` | the 36-bit step: what width of constant this machine's value predictor holds |
 | `data/gem5_aes_arms.csv` | **the gem5 half of the headline figure**: the AES-256-GCM secret lane under `--apple` and `--expedite`, with `bracket_cyc_per_req`, `barrier_fused` and `rename_serializing` beside every cell |

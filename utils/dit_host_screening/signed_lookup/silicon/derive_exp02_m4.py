@@ -100,6 +100,12 @@ def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(D, "out", "final")
     if not os.path.isdir(outdir):
         sys.exit(f"no such directory: {outdir}")
+    # An optional CSV prefix, so a sweep of a DIFFERENT secret lane does not
+    # overwrite the canonical one. `derive_exp02_m4.py <outdir> aes` writes
+    # m4_aes_arms.csv beside m4_arms.csv rather than on top of it -- the
+    # published chacha numbers stay exactly as measured.
+    tag = sys.argv[2] if len(sys.argv) > 2 else ""
+    name = lambda base: f"m4_{tag}_{base}" if tag else f"m4_{base}"
 
     # ------------------------------------------------------------ crossover
     runs = load(outdir, "crossover")
@@ -111,7 +117,7 @@ def main():
                  "pass", "nop"]
         rows.sort(key=lambda r: (r["lane"] != "narrow", r["L"],
                                  order.index(r["arm"]) if r["arm"] in order else 99))
-        write("m4_arms.csv",
+        write(name("arms.csv"),
               prov(runs, "CANONICAL Apple M4 sweep: secret-fraction crossover, "
                          "both lanes, 7 arms including Apple's own bracket and "
                          "its instruction-matched twin. The paper figure's y is ipc_ovh_pct "
