@@ -1,0 +1,5 @@
+# tectonic / pdflatex output of the compile-check documents
+*.pdf
+*.log
+*.aux
+*.out

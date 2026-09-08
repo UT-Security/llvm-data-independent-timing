@@ -739,7 +739,9 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 | `data/gem5_apple_arms.csv` | the same arms on the chacha lane, where the bracket never rises above the model's layout noise. Kept because that null result is why the op changed |
 | `data/m4_predictability_sweep.csv` | q = 0..1 on both lanes, at L=200 and L=20,000 |
 | `data/m4_tblbits_sweep.csv` | 4 KB to 512 KB: the wide lane's zero is not an L1-residency artifact |
-| `figures/crossover-gem5-vs-m4.{png,pdf}` | **the headline**: the crossover on both machines, side by side |
+| `figures/crossover-gem5-vs-m4.{png,pdf}` | **the headline**: the crossover on both machines, side by side, one file |
+| `figures/crossover-panel-{a-m4,b-gem5,legend}.{pdf,png}` | the same pair as three separate files, for a LaTeX side-by-side: no titles, no subtitles, no in-panel legend. Silicon is (a) |
+| `figures/latex/crossover.tex` | the `figure*` that places them, with the caption. `\input` it; needs `graphicx` and `subcaption`. `crossover_standalone.tex` beside it is the compile check (`tectonic -X compile crossover_standalone.tex`) |
 | `figures/predictability-gem5-vs-m4.{png,pdf}` | blanket's public-lane cost vs q, both machines and both lanes |
 | `figures/m4-predictor-width.{png,pdf}` | the step function at 36 bits |
 | `utils/dit_host_screening/signed_lookup/silicon/` (repo root) | the silicon rig and its README |

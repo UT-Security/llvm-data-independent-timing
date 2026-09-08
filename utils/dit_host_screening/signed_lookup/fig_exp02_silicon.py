@@ -252,6 +252,100 @@ for lab, ys in (("M4     Apple bracket, chacha 100 B  ", cbracket),
     f = crossing(co(cf), co(ys), co(cblanket))
     print(f"  {lab} f* = " + (f"{f:.1f}%" if f is not None else "none"))
 
+# ======================================= fig 1b: the same pair, as paper panels
+#
+# The two panels again, each as its OWN file, for a LaTeX side-by-side with
+# subcaptions (a) and (b). What the surrounding document does instead:
+#
+#   * no panel title and no subtitle -- the subcaption carries both
+#   * no in-panel legend. Both panels are full (two curves that cross, plus a
+#     third in gem5's), and a box placed to miss the data in one lands on it in
+#     the other. So the legend is a THIRD file, a wide strip listing all three
+#     arms once, which LaTeX puts above the pair.
+#   * transparent background, so the page colour shows through
+#   * "IPC overhead (%)" and not "... vs unhardened (%)": the long form does not
+#     fit the height of a two-column panel and the caption can say it.
+#
+# SILICON IS (a) AND COMES FIRST. The hardware is the measurement and the
+# simulator is the comparison, so the reader meets the hardware first. The
+# LaTeX is written beside them in figures/latex/crossover.tex.
+#
+# The two y axes do NOT share a range (about +105 against about +35) and must
+# not be forced to: on a shared axis gem5's curves flatten into the bottom third
+# and stop being readable. Both panels label their own axis, and the caption
+# says the ranges differ -- that difference is a result, not a plotting artifact.
+PANEL = (3.35, 2.5)
+ARMS_LEGEND = [
+    ("blanket DIT", BLUE, "-", BLUE),
+    ("Apple's bracket at the crypto call", GREEN, "-", GREEN),
+    ("the same bracket, renamed switch (gem5 only)", GREEN, (0, (4, 2)), SURF),
+]
+
+
+def paper_panel(path, xs, blank, rising):
+    fig, ax = plt.subplots(figsize=PANEL, dpi=300)
+    style(ax)
+    ax.set_facecolor("none")
+    ax.plot(xs, blank, color=BLUE, lw=2.0, marker="o", ms=4.2, mfc=BLUE, mec=BLUE,
+            zorder=4)
+    for _name, ys, col, ls, mfc in rising:
+        ax.plot(xs, ys, color=col, lw=1.9, ls=ls, marker="o", ms=4.2, mfc=mfc,
+                mec=col, mew=1.3, zorder=3)
+    ax.axhline(0, color=BASE, lw=0.9, zorder=2)
+    secret_axis(ax)
+    ax.set_xlabel("Secret fraction of the request", fontweight="bold")
+    ax.set_ylabel("IPC overhead (%)", fontweight="bold")
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
+
+    order = sorted(range(len(xs)), key=lambda k: xs[k])
+    xo, bo = [xs[k] for k in order], [blank[k] for k in order]
+    lo, hi = ax.get_ylim()
+    ax.set_ylim(lo, hi + (hi - lo) * 0.06)
+    lo, hi = ax.get_ylim()
+    for _name, ys, col, ls, _mfc in rising:
+        if ls != "-":
+            continue
+        f = crossing(xo, [ys[k] for k in order], bo)
+        if f is None:
+            continue
+        ax.axvline(f, color=col, lw=1.0, ls=(0, (2, 2)), zorder=1, alpha=0.75)
+        # Just right of the line and near the top: empty in both panels, because
+        # the crossing is where the two curves MEET and the space above it is
+        # clear on either side of the line.
+        ax.annotate(f"$f^*$ = {f:.0f}%", xy=(f, hi),
+                    xytext=(f + 2.5, hi - (hi - lo) * 0.02),
+                    fontsize=8.5, color=col, ha="left", va="top",
+                    fontweight="bold")
+    fig.tight_layout(pad=0.25)
+    for ext in ("pdf", "png"):
+        fig.savefig(FIG / f"{path}.{ext}", transparent=True,
+                    bbox_inches="tight", pad_inches=0.02)
+    plt.close(fig)
+
+
+def paper_legend(path):
+    """The shared legend, as its own strip. One row, all three arms."""
+    fig = plt.figure(figsize=(6.9, 0.24), dpi=300)
+    handles = [Line2D([], [], color=c, lw=2.0, ls=ls, marker="o", ms=4.2,
+                      mfc=mfc, mec=c, mew=1.3, label=n)
+               for n, c, ls, mfc in ARMS_LEGEND]
+    fig.legend(handles=handles, frameon=False, fontsize=8, ncol=3,
+               loc="center", handlelength=2.0, columnspacing=1.6,
+               handletextpad=0.5)
+    for ext in ("pdf", "png"):
+        fig.savefig(FIG / f"{path}.{ext}", transparent=True,
+                    bbox_inches="tight", pad_inches=0.01)
+    plt.close(fig)
+
+
+paper_panel("crossover-panel-a-m4", mf, mblanket,
+            [("Apple's bracket", mbracket, GREEN, "-", GREEN)])
+paper_panel("crossover-panel-b-gem5", [gf[L] for L in gL], gipc("blanket", "apple"),
+            [("Apple's bracket, --apple", gipc("api", "apple"), GREEN, "-", GREEN),
+             ("the same, --expedite", gipc("api", "expedite"), GREEN, (0, (4, 2)), SURF)])
+paper_legend("crossover-panel-legend")
+print("wrote " + str(FIG / "crossover-panel-{a-m4,b-gem5,legend}.{pdf,png}"))
+
 # ================================================ fig 2: cost vs predictable share
 gq = rows("gem5_predictability_sweep.csv")
 mq = rows("m4_predictability_sweep.csv")
