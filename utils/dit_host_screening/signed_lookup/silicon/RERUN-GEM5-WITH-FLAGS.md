@@ -1,25 +1,32 @@
 # The gem5 column of experiment 02 has to be rerun: `--apple` / `--expedite`, and `dsb nsh; isb sy`
 
-## Build the gem5 bracket with `-DAPI_BARRIER_DSBISB`
+## The barrier is now `dsb nsh; isb sy` by default — nothing left to change
 
-**This is the actionable fix and it needs no FEAT_SB work.** Apple's guide gives
-two recipes: `sb` on a part that has FEAT_SB, and `dsb nsh; isb sy` on one that
-does not. gem5 implements **both instructions of the fallback exactly** --
-`Dsb64Local` with `IsSerializeAfter` and `Isb64` with `IsSquashAfter` -- and no
-`sb` at all. So the gem5 bracket arm should be built with Apple's fallback, which
-is a recipe Apple actually publishes:
+`api_bracket.c`'s default barrier **was** `isb sy` alone, which is half of
+Apple's fallback pair and not a recipe Apple publishes anywhere. It was picked
+only because gem5 lacks `sb`. **As of 2026-09-08 the default is Apple's actual
+fallback, `dsb nsh; isb sy`**, which gem5 implements both halves of
+(`Dsb64Local` → `IsSerializeAfter`, `Isb64` → `IsSquashAfter`).
 
-```diff
--link api     base  "$API_BRACKET -DAPI_CHACHA -Wl,--wrap=..."
-+link api     base  "$API_BRACKET -DAPI_CHACHA -DAPI_BARRIER_DSBISB -Wl,--wrap=..."
-```
+exp02's gem5 build reads `api_bracket.c` out of this repo
+(`API_BRACKET="${API_BRACKET:-$LB/../utils/dit_host_screening/cioparity/api_bracket.c}"`)
+and passes `-DAPI_CHACHA` only, so **the rerun picks the new barrier up with no
+change to `build_gem5_linux.sh` at all.** Only the switch model still needs the
+one-table edit below.
 
-(and the same on `apinop`, whose `-DAPI_NOP` already NOPs whatever barrier is
-selected). What it is on today -- no `-DAPI_BARRIER_*`, so `api_bracket.c`'s
-`isb sy`-only default -- is **not an Apple recipe at all**. It was chosen because
-gem5 lacks `sb`, and `isb` alone is half of the fallback. Switching to the full
-pair costs nothing and makes the gem5 column a faithful model of something Apple
-ships, rather than of a sequence nobody would write.
+`isb sy` alone stays selectable and is now *named* (`-DAPI_BARRIER_ISB`) rather
+than an unnamed fallthrough. Experiment 09's gem5 arms whose published numbers
+were measured with it — `api`, `apiisb`, `apinop` — pass it explicitly, so the
+default moving does not silently restate them.
+
+**The NOP twins moved with it.** `API_NOP` used to hardcode one `hint #0` in the
+barrier slot, which matched a one-instruction barrier. `dsb nsh; isb sy` is two,
+so every barrier branch now declares a `DIT_BARRIER_NOP()` beside its real
+barrier and `API_NOP` emits that. Verified: the twin matches at 17 instructions
+for `sb` and for `isb`, and at 18 for `dsb;isb`. Without it the twin would be a
+whole instruction shorter than the arm it controls for — which is how a layout
+control stops being one. `bracketdsb` in the silicon rig therefore gets its own
+twin, `bracketdsbnop`, instead of sharing `bracketnop`.
 
 **Apple ships `sb`, verified from the binary.** `/usr/lib/system/libsystem_platform.dylib`
 (macOS SDK 26.1) implements the API the guide points at:
@@ -33,46 +40,24 @@ timingsafe_enable_if_supported:        timingsafe_restore_if_supported:
     ret
 ```
 
-So on an M-series part the shipping barrier is `sb`, and `api_bracket.c`'s
-`-DAPI_BARRIER_SB` arm reproduces Apple's sequence instruction for instruction.
-gem5 can never run that arm; it can run the fallback.
+So on an M-series part the shipping barrier is `sb`, and the silicon rig's
+`bracket` arm (`-DAPI_BARRIER_SB`) reproduces Apple's sequence instruction for
+instruction. gem5 can never run that arm; it can now run the fallback
+faithfully.
 
+**What the fallback costs on the M4** — each arm against a twin with its own
+instruction count, cycles per request, one bracketed call:
 
+| L | `sb` (M-series ships this) | `dsb nsh; isb sy` | no barrier |
+|---|---|---|---|
+| 200 | 477 | 339 | 298 |
+| 1,000 | 475 | 368 | 286 |
+| 5,000 | 543 | 367 | 360 |
 
-**Why:** the committed gem5 arms (`data/gem5_arms.csv`, run 2026-09-06) predate
-those flags. They were run on the old two-model surface —
-
-```
-MODELS = {"renamed": [], "serialising": ["--no-speculative-dit"]}
-BASEFLAGS = ["--eves", "--dmp", "--comp-simp"]
-```
-
-— so the "serialising" column is `--no-speculative-dit`, not `--apple`, and
-there is no `--expedite` column at all. Experiment 14's runner
-(`utils/dit_host_screening/awslc/run_awslc_gem5.py`) already uses both:
-
-```python
-CONFIGS = {"apple":    ["--apple",    "--eves", "--dmp", "--comp-simp"],
-           "expedite": ["--expedite", "--eves", "--dmp", "--comp-simp"]}
-```
-
-and its provenance names what they are: `--apple` flushes after the switch
-(squash at commit), `--expedite` is the renamed switch with a deferred clear and
-the `isb` fused at rename.
-
-**Where the flags live.** NOT in this repo's `gem5-DIT` submodule and not on any
-of its 33 refs — `git ls-remote origin` has no `dit-flag-restructure` and
-`455bc87c56a4` is "not our ref". Experiment 14's gem5 provenance points at a
-separate clone on the simulator host:
-
-```
-gem5   /home/rgangar/Documents/gem5-DIT-flags
-       branch dit-flag-restructure @ 455bc87c56a427bb81ab8c1fc4d105a01f73d0f8
-host   beckham, 160 cores, Linux aarch64
-```
-
-So the rerun has to happen there. The exp02 driver binaries are static aarch64
-ELF for the simulator; nothing about this runs on the Mac.
+The fallback is **cheaper than `sb` on a part that has `sb`** — 339-368 against
+477-543 — and both sit clear of the no-barrier arm. That bounds what the gem5
+rerun can show: it will now model a barrier that costs a real ~70-80 cycles on
+hardware, where before it modelled a sequence that is not an Apple recipe.
 
 ## The change
 
