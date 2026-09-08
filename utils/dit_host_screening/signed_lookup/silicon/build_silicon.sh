@@ -25,6 +25,26 @@
 #   taintnop   identical placement and instruction count at identical addresses,
 #              every `msr DIT` emitted as HINT #0. The layout control:
 #              (taint - taintnop) is DIT's real cost, the rest is code motion.
+#   bracket    THE APPLE BRACKET: the unhardened library, with the AEAD entry
+#              points the driver calls wrapped in Apple's own prologue and
+#              epilogue -- read the previous DIT state, `msr DIT, #1`, a
+#              speculation barrier, the call, and clear only if it was clear.
+#              This is what AWS-LC ships (armv8_get_dit / armv8_set_dit /
+#              armv8_restore_dit in crypto/fipsmodule/cpucap/cpu_aarch64.c,
+#              experiment 14's `ditsb` variant) and what Apple's
+#              "Writing ARM64 code for Apple platforms" tells a library author
+#              to do. Two mode writes and one barrier per CALL, against the
+#              pass's ~40 writes per request. Measured on this part, one whole
+#              bracket is 106 cycles: 67 for the two writes, 11 for the token
+#              read, 28 for `sb` (dit_switch_cost.c and the README).
+#   bracketnop the bracket's INSTRUCTION-MATCHED twin, experiment 14's `ditnop`:
+#              the token read becomes `mov x, xzr`, both writes and the barrier
+#              become `nop`, and because the read now yields 0 the restore takes
+#              the same branch the real bracket takes. Same instruction count at
+#              the same addresses, no mode ever changes. (bracket - bracketnop)
+#              is the bracket's real cost and the rest is layout. Experiment 09
+#              had to borrow a barrier arm for this and it cost it a wrong
+#              column; do not run the bracket without it.
 #
 # The library arms come from utils/taint_libsodium_arms.sh, which is already the
 # Apple-silicon counterpart of the gem5 rig's build_arms.sh and is kept in sync
@@ -56,7 +76,55 @@ REPO="$(cd "$D/../../../.." && pwd)"
 LLVM_BIN="${LLVM_BIN:-$REPO/build/bin}"
 ARMS_WORK="${ARMS_WORK:-$HOME/Documents/libsodium-arms-m4}"
 OUT="${OUT:-$D/bin}"
-ARMS="${ARMS:-base taint taintnop}"
+# What gets LINKED. `bracket` and `bracketnop` are not library variants -- they
+# link the unhardened `base` archive with a wrapper object, so there is nothing
+# extra to compile in libsodium for them.
+ARMS="${ARMS:-base taint taintnop bracket bracketnop bracketnobar}"
+# What taint_libsodium_arms.sh has to BUILD.
+LIB_VARIANTS="${LIB_VARIANTS:-base taint taintnop}"
+
+# arm -> the libsodium archive it links.
+arm_lib() {
+  case "$1" in
+    bracket|bracketnop|bracketnobar) echo base ;;
+    *) echo "$1" ;;
+  esac
+}
+# arm -> the -D set for api_bracket.c, empty for the arms that do not use it.
+#
+# api_bracket.c is experiment 09's file, unmodified and shared: this rig is the
+# third consumer, and keeping one copy is what makes "the same bracket on both
+# instruments" a fact rather than a claim. API_BARRIER_SB selects Apple's real
+# `sb` by its raw encoding (0xd50330ff), which needs no -march and which THIS
+# PART EXECUTES (checked at build time below); gem5 has no FEAT_SB, which is why
+# that rig defaults to `isb sy` instead and why the two barriers are separate
+# knobs rather than one.
+arm_bracket_flags() {
+  case "$1" in
+    bracket)    echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_SB" ;;
+    bracketnop) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_SB -DAPI_NOP" ;;
+    # Apple's sequence MINUS the speculation barrier. Not a configuration
+    # anyone should ship -- without it the mode change is not architecturally
+    # guaranteed to be in effect for what follows, which is the whole reason
+    # Apple's text asks for it. It is here to split the bracket's bill:
+    # (bracket - bracketnobar) is what `sb` costs and the rest is the token
+    # read and the two writes. In situ that split is not what a tight loop
+    # predicts, which is the point.
+    bracketnobar) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_NONE" ;;
+    *) echo "" ;;
+  esac
+}
+# The driver's calls into the wrapped entry points, renamed at the PREPROCESSOR
+# so the driver source still does not change. Apple's ld64 has no --wrap, which
+# is how the gem5 rig interposes; api_bracket.c's API_MACRO_RENAME path exists
+# for exactly this. Only the two the driver actually calls are renamed --
+# `_decrypt`'s wrapper is compiled and never reached, in the bracket arm and in
+# its twin alike, so it cannot move one relative to the other.
+BRACKET_RENAME=(
+  "-Dcrypto_aead_chacha20poly1305_ietf_encrypt=expedite_api_crypto_aead_chacha20poly1305_ietf_encrypt"
+  "-Dcrypto_aead_chacha20poly1305_ietf_keygen=expedite_api_crypto_aead_chacha20poly1305_ietf_keygen"
+)
+BRACKET_SRC="$REPO/utils/dit_host_screening/cioparity/api_bracket.c"
 # THE TWO LANES. Same source, same code, ONE constant apart: the value every
 # record header holds. A value predictor stores a finite number of value bits,
 # and this constant is what decides whether the machine under test can hold it.
@@ -120,7 +188,7 @@ info "driver sha256 matches the pinned gem5-DIT copy"
 # ------------------------------------------------------------------ lib
 if want lib; then
   info "libsodium arms (utils/taint_libsodium_arms.sh)"
-  VARIANTS="$ARMS" ARMS_WORK="$ARMS_WORK" LLVM_BIN="$LLVM_BIN" \
+  VARIANTS="$LIB_VARIANTS" ARMS_WORK="$ARMS_WORK" LLVM_BIN="$LLVM_BIN" \
     bash "$REPO/utils/taint_libsodium_arms.sh" seeds lib || die "library build failed"
 fi
 
@@ -143,20 +211,59 @@ if want link; then
     || die "patch applied but HDR_CONST is still not overridable"
   info "staged driver patched: HDR_CONST is a -D parameter"
 
+  # Does this part execute Apple's `sb`? The bracket arm is only Apple's
+  # bracket if it does; on a part without FEAT_SB Apple's own fallback is
+  # `dsb nsh; isb sy` and the arm would have to say so.
+  cat > "$STAGE/sbprobe.c" <<'EOF'
+#include <setjmp.h>
+#include <signal.h>
+#include <stdio.h>
+#include <string.h>
+static sigjmp_buf jb;
+static void ill(int s) { (void) s; siglongjmp(jb, 1); }
+int main(void) {
+    struct sigaction sa, old;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = ill;
+    sigaction(SIGILL, &sa, &old);
+    int ok = 0;
+    if (sigsetjmp(jb, 1) == 0) { __asm__ volatile(".inst 0xd50330ff" ::: "memory"); ok = 1; }
+    sigaction(SIGILL, &old, NULL);
+    puts(ok ? "yes" : "no");
+    return ok ? 0 : 1;
+}
+EOF
+  "$CC" -O2 "$STAGE/sbprobe.c" -o "$STAGE/sbprobe" >/dev/null 2>&1 \
+    && "$STAGE/sbprobe" >/dev/null 2>&1 \
+    && info "FEAT_SB: this part executes sb, so the bracket is Apple's own sequence" \
+    || warn "this part does NOT execute sb -- the bracket arm is not Apple's sequence here; use -DAPI_BARRIER_DSBISB"
+
   info "link"
   for v in $ARMS; do
-    lib="$ARMS_WORK/$v/src/libsodium/.libs/libsodium.a"
+    lib="$ARMS_WORK/$(arm_lib "$v")/src/libsodium/.libs/libsodium.a"
     [[ -f "$lib" ]] || { warn "skip $v -- no archive at $lib"; continue; }
+    bf="$(arm_bracket_flags "$v")"
+    extra=(); obj=()
+    if [[ -n "$bf" ]]; then
+      # api_bracket.c is compiled WITHOUT the renames. With them, API_REAL(f)
+      # would expand to the wrapper's own name and every bracketed call would
+      # recurse into itself.
+      "$CC" -march=armv8.4-a -O2 -c "$BRACKET_SRC" $bf -o "$OUT/.brk_$v.o" \
+        >"$OUT/.link_$v.log" 2>&1 \
+        || { tail -20 "$OUT/.link_$v.log" >&2; die "could not compile api_bracket.c for $v"; }
+      obj=("$OUT/.brk_$v.o"); extra=("${BRACKET_RENAME[@]}")
+    fi
     for lane in $LANES; do
       h="$(lane_hdr "$lane")"
       # -march=armv8.4-a to match the library arms and the gem5 build (FEAT_DIT
       # is armv8.4). -I"$STAGE" first so nothing else can supply kperf_ipc.h.
-      "$CC" -march=armv8.4-a -O2 -g -I"$STAGE" -DHDR_CONST="$h" \
-        -I"$ARMS_WORK/$v/src/libsodium/include" \
-        "$STAGE/signed_lookup.c" "$lib" -o "$OUT/native_${v}_${lane}" \
-        >"$OUT/.link_${v}_${lane}.log" 2>&1 \
+      "$CC" -march=armv8.4-a -O2 -g -I"$STAGE" -DHDR_CONST="$h" ${extra[@]+"${extra[@]}"} \
+        -I"$ARMS_WORK/$(arm_lib "$v")/src/libsodium/include" \
+        "$STAGE/signed_lookup.c" ${obj[@]+"${obj[@]}"} "$lib" -o "$OUT/native_${v}_${lane}" \
+        >>"$OUT/.link_${v}_${lane}.log" 2>&1 \
         || { tail -20 "$OUT/.link_${v}_${lane}.log" >&2; die "link failed for $v/$lane"; }
-      printf '    %-12s %-8s HDR_CONST=%s\n' "$v" "$lane" "$h"
+      printf '    %-12s %-8s HDR_CONST=%s%s\n' "$v" "$lane" "$h" \
+        "$([[ -n "$bf" ]] && echo "  [api_bracket.c $bf]")"
     done
   done
   # The two lanes must differ in NOTHING but that constant. Same instruction
@@ -217,6 +324,26 @@ if want verify; then
   if [[ " $ARMS " == *" taintnop "* && -f "$ln" ]]; then
     n=$("$LLVM_BIN/llvm-objdump" -d "$ln" | grep -icE '\bmsr[[:space:]]+dit,')
     [[ "$n" -eq 0 ]] || die "the taintnop archive still has $n msr DIT: the NOP control did not build"
+  fi
+  # The bracket and its twin, in the wrapper only. The real one must carry
+  # Apple's four instructions (mrs DIT, msr #1, sb, msr #0) and the twin must
+  # carry none of them while disassembling to the same length.
+  W=_expedite_api_crypto_aead_chacha20poly1305_ietf_encrypt
+  if [[ -f "$OUT/native_bracket_narrow" ]]; then
+    d=$("$LLVM_BIN/llvm-objdump" -d --disassemble-symbols=$W "$OUT/native_bracket_narrow" 2>/dev/null)
+    for want in 'mrs[[:space:]]+x[0-9]+, DIT' 'msr[[:space:]]+DIT, #0x1' '\bsb\b' 'msr[[:space:]]+DIT, #0x0'; do
+      grep -qE "$want" <<< "$d" || die "the bracket wrapper is missing '$want' -- it is not Apple's sequence"
+    done
+    info "    bracket wrapper: mrs DIT / msr DIT,#1 / sb / call / tbnz / msr DIT,#0"
+  fi
+  if [[ -f "$OUT/native_bracketnop_narrow" ]]; then
+    d=$("$LLVM_BIN/llvm-objdump" -d --disassemble-symbols=$W "$OUT/native_bracketnop_narrow" 2>/dev/null)
+    grep -qE '(mrs|msr)[[:space:]]+(x[0-9]+, )?DIT' <<< "$d" \
+      && die "the bracket NOP twin still touches DIT: it is not a layout control"
+    a=$("$LLVM_BIN/llvm-objdump" -d --disassemble-symbols=$W "$OUT/native_bracket_narrow" 2>/dev/null | grep -c $'\t')
+    b=$(grep -c $'\t' <<< "$d")
+    [[ "$a" == "$b" ]] || die "bracket wrapper is $a instructions and its twin $b -- not instruction-matched"
+    info "    bracket NOP twin: $b instructions, same as the bracket, none of them DIT"
   fi
 fi
 

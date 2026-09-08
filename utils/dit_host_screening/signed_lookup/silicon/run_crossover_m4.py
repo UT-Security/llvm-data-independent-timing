@@ -83,19 +83,38 @@ import time
 D = os.path.dirname(os.path.abspath(__file__))
 BIN = os.path.join(D, "bin")
 
-# arm -> (binary, extra argv). nodit and blanket are ONE binary: the blanket arm
-# is the same codegen with the mode set before the ROI, so no instruction inside
-# the measured region differs between them.
-# arm -> (library variant, extra argv). nodit and blanket are ONE binary: the
-# blanket arm is the same codegen with the mode set before the ROI, so no
+# arm -> (library/link variant, extra argv). nodit and blanket are ONE binary:
+# the blanket arm is the same codegen with the mode set before the ROI, so no
 # instruction inside the measured region differs between them.
 ARMS = {
-    "nodit":   ("base",     []),
-    "blanket": ("base",     ["--blanket"]),
-    "pass":    ("taint",    []),
-    "nop":     ("taintnop", []),
+    "nodit":      ("base",       []),
+    "blanket":    ("base",       ["--blanket"]),
+    # Apple's own bracket around the AEAD entry points: read the previous DIT
+    # state, `msr DIT, #1`, `sb`, the call, and clear only if it was clear. Two
+    # mode writes and one barrier per CALL, against the pass's ~40 writes per
+    # request. This is what AWS-LC ships (experiment 14's `ditsb`) and what
+    # Apple's own guidance tells a library author to write. The unhardened
+    # library; only the wrapper is added.
+    "bracket":    ("bracket",    []),
+    # Its instruction-matched twin: the same 17 instructions at the same
+    # addresses, the token read a `mov xzr` and both writes and the barrier
+    # `nop`, so no mode ever changes. (bracket - bracketnop) is the bracket's
+    # real cost. Experiment 09 ran this arm without a twin and had to borrow a
+    # barrier arm for the column; that is the mistake this exists to not repeat.
+    "bracketnop": ("bracketnop", []),
+    # Apple's sequence with the speculation barrier removed. NOT a shippable
+    # configuration -- the barrier is what makes the mode change apply to what
+    # follows -- but (bracket - bracketnobar) is what `sb` costs, and on this
+    # part in this flow that turns out to be most of the bracket.
+    "bracketnobar": ("bracketnobar", []),
+    "pass":       ("taint",      []),
+    "nop":        ("taintnop",   []),
 }
-ARM_ORDER = ["nodit", "blanket", "pass", "nop"]
+ARM_ORDER = ["nodit", "blanket", "bracket", "bracketnop", "bracketnobar",
+             "pass", "nop"]
+# arm -> its instruction-matched layout control. (arm - twin) is what the mode
+# writes cost; everything else the arm did to the binary is in the twin too.
+TWIN = {"pass": "nop", "bracket": "bracketnop", "bracketnobar": "bracketnop"}
 LANES = ("wide", "narrow")
 # The header-width sweep. Each entry is its own BINARY, because HDR_CONST is a
 # compile-time -D: lane "bN" is built with a header of N one-bits, so the only
@@ -104,6 +123,33 @@ LANES = ("wide", "narrow")
 HDR = {"wide": ("0x2545F4914F6CDD1D", 62), "narrow": ("0xCAFEBABE", 32)}
 for _n in (8, 16, 24, 32, 34, 35, 36, 37, 38, 40, 48, 56, 62):
     HDR[f"b{_n}"] = (hex((1 << _n) - 1), _n)
+
+# EVERY ARM MUST SEE BYTE-IDENTICAL argv, and this is not fussiness.
+#
+# The request's retired instruction count moves by +/-5 (0.1%) with the stack
+# alignment the process happens to get, because the AEAD's stack buffers land
+# differently and macOS's memcpy dispatches on alignment -- same bytes, a
+# different number of instructions. argv is what sets that alignment. Two ways
+# it differed between arms before this existed:
+#
+#   * `--blanket`, 9 characters, which only the blanket arm passes. Measured:
+#     nodit read 5,137.2 instructions per request and blanket 5,147.9, a
+#     systematic +10 that has nothing to do with the mode -- and padding nodit's
+#     argv to the same length reproduced blanket's number exactly (5,147.3).
+#   * argv[0]. The arms' binaries are native_base_narrow (18 characters) through
+#     native_bracketnobar_narrow (26), so every arm sat at a different alignment.
+#
+# Both are fixed here: the binaries are reached through a farm of equal-length
+# symlinks, and the arms that do not pass `--blanket` pass an ignored filler of
+# the same length instead. The driver's argument loop ignores what it does not
+# recognise, so the filler costs one strcmp before the ROI opens.
+#
+# This is the instruction-count version of the argv[0] sensitivity the gem5 rig
+# already controls for by rooting its binaries at a constant-length /tmp path
+# (paper_experiments/02, "Validity gates").
+BLANKET_ARG = "--blanket"
+FILLER_ARG = "--padding"          # same length, and the driver ignores it
+assert len(FILLER_ARG) == len(BLANKET_ARG)
 
 LINE = re.compile(r"^signed_lookup ")
 PMC = re.compile(r"^PMC exit ")
@@ -125,18 +171,53 @@ def parse(out, err):
     return f, p
 
 
+_FARM = {}
+
+
+def farm_path(v, lane):
+    """An equal-length path to this arm's binary. See the argv note above.
+
+    The symlinks live next to the binaries and are named by a zero-padded index,
+    so every arm's argv[0] is the same number of bytes. Created on demand and
+    reused; a stale link is replaced rather than trusted.
+    """
+    key = (v, lane)
+    if key in _FARM:
+        return _FARM[key]
+    target = os.path.join(BIN, f"native_{v}_{lane}")
+    d = os.path.join(BIN, "argv")
+    os.makedirs(d, exist_ok=True)
+    # the index is the arm's position in a fixed list, so a given arm always
+    # gets the same name and two runs of the rig are comparable
+    order = sorted({a[0] for a in ARMS.values()} | set(LANES) | {v, lane})
+    idx = sorted({a[0] for a in ARMS.values()} | {v}).index(v)
+    ln = sorted(set(LANES) | {lane}).index(lane)
+    link = os.path.join(d, f"a{idx:02d}{ln:02d}")
+    try:
+        if os.path.islink(link) or os.path.exists(link):
+            os.unlink(link)
+        os.symlink(os.path.abspath(target), link)
+    except OSError as e:
+        sys.exit(f"FATAL: could not create the equal-length argv[0] link {link}: {e}")
+    _FARM[key] = link
+    return link
+
+
 def one(arm, args, lane="narrow", timeout=600):
     """One process. Returns (fields, pmcfields) or raises Reject/SystemExit."""
     v, extra = ARMS[arm]
-    path = os.path.join(BIN, f"native_{v}_{lane}")
+    path = farm_path(v, lane)
     if not os.path.exists(path):
-        sys.exit(f"no binary at {path} -- run build_silicon.sh")
-    r = subprocess.run([path] + extra + list(args), capture_output=True,
+        sys.exit(f"no binary behind {path} -- run build_silicon.sh")
+    # Every arm passes exactly one 9-character token in this slot, so argv is
+    # byte-identical across arms and the stack alignment is too.
+    slot = extra if extra else [FILLER_ARG]
+    r = subprocess.run([path] + slot + list(args), capture_output=True,
                        text=True, timeout=timeout)
     f, p = parse(r.stdout, r.stderr)
 
     # ---- gate 1: the arm ran in the mode it claims
-    want_dit = 1 if arm == "blanket" else 0
+    want_dit = 1 if arm == "blanket" else 0   # the bracket RESTORES, so 0
     if int(f["dit"]) != want_dit:
         sys.exit(f"FATAL: {arm} exited with PSTATE.DIT={f['dit']}, expected {want_dit}\n  {f}")
     # ---- gate 2: pub_dit. See the module docstring; this one is why the rig exists.
@@ -226,7 +307,7 @@ def med(arm, args, reps, tries_per_rep, log, tag, lane="narrow", gap=1.03):
 def common(a, L, iters, warmup):
     return ["--tblbits", str(a.tblbits), "--lookups", str(L),
             "--iter", str(iters), "--warmup", str(warmup),
-            "--predictable", str(a.q)]
+            "--predictable", str(a.q), "--chunks", str(a.chunks)]
 
 
 def budget(a, L):
@@ -234,11 +315,21 @@ def budget(a, L):
 
     Two separate jobs. The ROI wants to be long enough that its own start and
     end noise is small and short enough that an unpinned thread is unlikely to
-    move: ~50 ms. The WARMUP is not about caches here, it is about DVFS -- a
+    move: ~40 ms. The WARMUP is not about caches here, it is about DVFS -- a
     fresh process starts at a low clock and this M4 takes tens of milliseconds
     to reach 4.4 GHz. Measured: warmup 50 (the gem5 default) reads 2.2-3.1 GHz
     and fails the clock gate on every run; ~30 ms of warmup reads 4.40-4.41 and
     passes on all of them. So the warmup is sized in TIME, not in requests.
+
+    CALIBRATED ON THE SLOWEST ARM, not on the baseline, and that is not a
+    detail. Every arm has to run the SAME iteration count or the public-lane
+    checksum gate cannot compare them, so one number sets the ROI for all of
+    them -- and if that number comes from the unhardened arm, the pass runs
+    2.5x longer than the target, and at 25 bracketed calls per request 15x
+    longer. Measured: with the baseline setting the budget, one 80 ms `pass`
+    cell had 120 consecutive samples rejected as migrations and killed the
+    sweep. Sizing on the slowest arm makes the target a ceiling for everyone;
+    the fast arms just get a shorter ROI than they could have used.
     """
     cpr = a.cyc_per_request.get(L)
     if cpr is None:
@@ -251,23 +342,35 @@ def budget(a, L):
 
 
 def calibrate(a, L):
-    """One cheap unhardened run to learn cycles per request at this L."""
+    """Cycles per request at this L, on the SLOWEST arm this sweep will run.
+
+    Cheap: a 40-request probe per arm. `pass` is the slowest wherever it is
+    built, `bracket` next; falling back to `nodit` alone if neither is present
+    is the old behaviour and is only right for a sweep that runs neither.
+    """
     probe = ["--tblbits", str(a.tblbits), "--lookups", str(L), "--iter", "40",
-             "--warmup", "40", "--predictable", str(a.q)]
-    for _ in range(6):
-        try:
-            f, _p = one("nodit", probe, a.lane)
-        except Reject:
+             "--warmup", "40", "--predictable", str(a.q), "--chunks", str(a.chunks)]
+    worst = 0.0
+    for arm in ("nodit", "pass", "bracket"):
+        if not os.path.exists(os.path.join(BIN, f"native_{ARMS[arm][0]}_{a.lane}")):
             continue
-        return float(f["cycles"]) / 40.0
-    sys.exit(f"FATAL: could not calibrate L={L} -- six probe runs all migrated.")
+        for _ in range(6):
+            try:
+                f, _p = one(arm, probe, a.lane)
+            except Reject:
+                continue
+            worst = max(worst, float(f["cycles"]) / 40.0)
+            break
+    if worst:
+        return worst
+    sys.exit(f"FATAL: could not calibrate L={L} -- every probe run migrated.")
 
 
 def switch_cost():
     """Cycles per serialising `msr DIT` on this machine, from the probe.
 
-    Measured, never assumed: it is the divisor that turns the pass arm's extra
-    cycles into an executed switch count, and it is a property of the part.
+    Measured, never assumed: it is the divisor that turns an arm's extra cycles
+    into an executed switch count, and it is a property of the part.
     """
     exe = os.path.join(BIN, "dit_switch_cost")
     if not os.path.exists(exe):
@@ -276,7 +379,7 @@ def switch_cost():
         out = subprocess.run([exe], capture_output=True, text=True, timeout=300).stdout
         f = dict(kv.split("=", 1) for kv in out.split() if "=" in kv)
         return {k: float(v) for k, v in f.items()}
-    except (OSError, ValueError, StopIteration, subprocess.TimeoutExpired):
+    except (OSError, ValueError, subprocess.TimeoutExpired):
         return None
 
 
@@ -308,6 +411,7 @@ def provenance(a):
         "hdr_const": {"wide": "0x2545F4914F6CDD1D (62 bits)",
                       "narrow": "0xCAFEBABE (32 bits)"},
         "lane": a.lane, "tblbits": a.tblbits, "pred_q4": a.q, "reps": a.reps,
+        "chunks": a.chunks,
         "switch_cost": a.swcost,
         "roi_ms": a.roi_ms, "warm_ms": a.warm_ms,
     }
@@ -330,11 +434,15 @@ def sweep_crossover(a, log):
           f"tblbits={a.tblbits}  q={a.q / 4:.2f}  {a.reps} reps/cell  ROI~{a.roi_ms} ms")
     cw = a.swcost and a.swcost.get("cyc_per_write")
     print(f"   full-flow IPC overhead vs unhardened; (pub) is the public lane alone; "
+          f"'brk cyc' = (bracket - its twin) cycles/request, '-no sb' the same "
+          f"without the speculation barrier; "
           f"sw/req = (pass - nop) cycles / {cw:.2f} cyc per serialising msr DIT"
           if cw else "   full-flow IPC overhead vs unhardened; (pub) is the public lane alone")
     print(f"   {'L':>6} {'req':>6} {'f_sec':>6} {'c/req':>8} {'IPC':>6} "
-          f"{'blanket':>17} {'pass':>17} {'nop':>17} {'p-vs-b':>8} {'sw/req':>7} {'rej':>4}")
-    print("   " + "-" * 118)
+          f"{'blanket':>17} {'Apple bracket':>17} {'brk twin':>17} {'pass':>17} "
+          f"{'b-vs-blk':>9} {'p-vs-blk':>9} {'brk cyc':>8} {'-no sb':>8} "
+          f"{'sw/req':>7} {'rej':>4}")
+    print("   " + "-" * 167)
     for L in a.L:
         iters, warm = budget(a, L)
         args = common(a, L, iters, warm)
@@ -361,29 +469,34 @@ def sweep_crossover(a, log):
             sys.exit(f"FATAL: blanket retired {di:.3f}% more instructions than nodit at "
                      f"L={L} (tolerance {a.ins_tol}%). They are the same binary in two "
                      "modes; a real difference means the arms are not what they claim.")
+        if full["bracket"]["insts"] <= base["insts"]:
+            sys.exit(f"FATAL: the bracket arm retired no more instructions than nodit at "
+                     f"L={L}. Apple's sequence is six instructions per call; if none "
+                     "executed, the driver's calls were not renamed onto the wrapper and "
+                     "this arm is the baseline under another name.")
         if full["pass"]["insts"] <= base["insts"]:
             sys.exit(f"FATAL: the pass arm retired no more instructions than nodit at L={L}. "
                      "Selective placement adds mode writes; if none executed, the arm is "
                      "the baseline under another name.")
-        # Executed switches per request. NOT from the instruction count: the pass
-        # arm retires ~73 more instructions per request than unhardened, but only
-        # some of those are `msr DIT` -- the rest is the DIT twins' own code, and
-        # the NOP twin retires them too. The switches are what the pass has and
-        # the NOP twin does not, so their cost is (pass - nop) cycles, and
-        # dividing by the measured cost of one serialising write gives the count.
-        # It lands on ~34 per request, against the 32 committed writes gem5
-        # counts on the same library with commit.ditWrites -- two instruments
-        # agreeing on a number neither can read directly.
-        dit_cyc = (full["pass"]["cycles"] - full["nop"]["cycles"]) / iters
+        # What the mode writes cost, per arm that has a twin. NOT from the
+        # instruction count: the pass retires ~73 more instructions per request
+        # than unhardened but only some are `msr DIT`, and its twin retires the
+        # rest too. The writes are exactly what an arm has and its twin does not,
+        # so the cost is (arm - twin) cycles; dividing by the measured cost of
+        # one serialising write turns it into a count. The pass lands on ~40 per
+        # request against the 32 committed writes gem5 counts with
+        # commit.ditWrites, and the bracket on the 2 its source says it executes.
         cw = (a.swcost or {}).get("cyc_per_write")
-        sw_req = dit_cyc / cw if cw else float("nan")
+        dit_cyc = {k: (full[k]["cycles"] - full[t]["cycles"]) / iters
+                   for k, t in TWIN.items()}
+        sw_req = {k: (v / cw if cw else float("nan")) for k, v in dit_cyc.items()}
 
         rej = sum(full[x]["rejects"] + pub[x]["rejects"] for x in ARM_ORDER)
         for arm in ARM_ORDER:
             r, q = full[arm], pub[arm]
             rows.append({
                 "L": L, "requests": iters, "warmup": warm, "tblbits": a.tblbits,
-                "lane": a.lane, "pred_q4": a.q,
+                "lane": a.lane, "pred_q4": a.q, "chunks": a.chunks,
                 "f_secret_pct": round(f_secret, 2), "arm": arm,
                 "cycles": r["cycles"], "insts": r["insts"], "ipc": round(r["ipc"], 4),
                 "cyc_per_request": round(r["cycles"] / iters, 1),
@@ -391,8 +504,9 @@ def sweep_crossover(a, log):
                 # The figure's y: IPC overhead, exactly as the gem5 figure computes it.
                 "ipc_ovh_pct": round((base["ipc"] / r["ipc"] - 1) * 100, 2),
                 "ins_vs_base_per_req": round((r["insts"] - base["insts"]) / iters, 2),
-                "dit_cyc_per_req": round(dit_cyc, 1) if arm == "pass" else None,
-                "switches_per_req": round(sw_req, 1) if arm == "pass" else None,
+                "twin": TWIN.get(arm),
+                "dit_cyc_per_req": round(dit_cyc[arm], 1) if arm in TWIN else None,
+                "switches_per_req": round(sw_req[arm], 1) if arm in TWIN else None,
                 "pub_cycles": q["cycles"], "pub_insts": q["insts"],
                 "pub_ipc": round(q["ipc"], 4),
                 "pub_vs_base_pct": round((q["cycles"] - basepub["cycles"]) / basepub["cycles"] * 100, 2),
@@ -403,12 +517,17 @@ def sweep_crossover(a, log):
                 "spread_pct": round(max(r["spread_pct"], q["spread_pct"]), 2),
                 "checksum_pub": q["checksum"],
             })
-        pb = (full["pass"]["cycles"] - full["blanket"]["cycles"]) / full["blanket"]["cycles"] * 100
-        cell = lambda arm: (f"{[r for r in rows[-4:] if r['arm'] == arm][0]['ipc_ovh_pct']:+7.2f}%"
-                            f" ({[r for r in rows[-4:] if r['arm'] == arm][0]['pub_vs_base_pct']:+6.2f}%)")
+        vs_blanket = lambda arm: ((full[arm]["cycles"] - full["blanket"]["cycles"])
+                                  / full["blanket"]["cycles"] * 100)
+        mine = {r["arm"]: r for r in rows[-len(ARM_ORDER):]}
+        cell = lambda arm: (f"{mine[arm]['ipc_ovh_pct']:+7.2f}%"
+                            f" ({mine[arm]['pub_vs_base_pct']:+6.2f}%)")
         print(f"   {L:>6} {iters:>6} {f_secret:>5.1f}% {base['cycles'] / iters:>8.0f} "
-              f"{base['ipc']:>6.3f} {cell('blanket'):>17} {cell('pass'):>17} "
-              f"{cell('nop'):>17} {pb:>+7.2f}% {sw_req:>7.1f} {rej:>4}")
+              f"{base['ipc']:>6.3f} {cell('blanket'):>17} {cell('bracket'):>17} "
+              f"{cell('bracketnop'):>17} {cell('pass'):>17} "
+              f"{vs_blanket('bracket'):>+8.2f}% {vs_blanket('pass'):>+8.2f}% "
+              f"{dit_cyc['bracket']:>8.0f} {dit_cyc['bracketnobar']:>8.0f} "
+              f"{sw_req['pass']:>7.1f} {rej:>4}")
     return rows
 
 
@@ -480,6 +599,92 @@ def sweep_axis(a, log, axis, values):
     return rows
 
 
+def sweep_chunks(a, log, values):
+    """What ONE bracketed call costs, measured as a slope instead of a difference.
+
+    `--chunks N` splits a request into N pieces: L/N lookups then one AEAD call
+    over a 100/N-byte slice under its own nonce. The public work is the same
+    lookups in N runs and the secret bytes are the same bytes in N calls, so a
+    PER-CALL placement pays N times and blanket does not. Differencing one arm
+    against its NOP twin at a single N gives the bracket's cost mixed with
+    whatever else that binary did; the SLOPE of (arm - twin) against N is the
+    per-call cost and nothing else, because everything that is not per-call is
+    the intercept.
+
+    This is the honest way to quote "one bracket costs X cycles", and it is
+    needed here: at one call per request the difference reads 324 cycles when
+    the public lane is 10 lookups and ~490 when it is 30 or more, because `sb`
+    drains whatever is in flight and a 10-lookup lane has less in it.
+    """
+    rows = []
+    print(f"== what ONE placement costs per call (lane={a.lane}, L={a.mech_L}, "
+          f"{a.reps} reps) ==")
+    print(f"   arm - its NOP twin, cycles per REQUEST, against calls per request")
+    print(f"   {'chunks':>7} {'f_sec':>7} {'base c/req':>11} "
+          f"{'bracket - twin':>15} {'per call':>9} {'pass - nop':>12} {'per call':>9} "
+          f"{'rej':>4}")
+    print("   " + "-" * 84)
+    need = ["nodit", "bracket", "bracketnop", "pass", "nop"]
+    for n in values:
+        saved = a.chunks
+        a.chunks = n
+        a.cyc_per_request.pop(a.mech_L, None)
+        iters, warm = budget(a, a.mech_L)
+        args = common(a, a.mech_L, iters, warm)
+        r = {arm: med(arm, args, a.reps, a.tries, log, f"chunks{n}.{arm}", a.lane)
+             for arm in need}
+        pub = med("nodit", args + ["--nosecret"], a.reps, a.tries, log,
+                  f"chunks{n}.pub", a.lane)
+        base = r["nodit"]
+        f_secret = (base["cycles"] - pub["cycles"]) / base["cycles"] * 100
+        brk = (r["bracket"]["cycles"] - r["bracketnop"]["cycles"]) / iters
+        psw = (r["pass"]["cycles"] - r["nop"]["cycles"]) / iters
+        rej = sum(r[x]["rejects"] for x in need) + pub["rejects"]
+        rows.append({"axis": "chunks", "value": n, "label": f"{n} calls",
+                     "lane": a.lane, "L": a.mech_L, "pred_q4": a.q,
+                     "tblbits": a.tblbits, "requests": iters,
+                     "f_secret_pct": round(f_secret, 2),
+                     "base_cyc_per_req": round(base["cycles"] / iters, 1),
+                     "bracket_minus_twin_cyc": round(brk, 1),
+                     "bracket_per_call_cyc": round(brk / n, 1),
+                     "pass_minus_nop_cyc": round(psw, 1),
+                     "pass_per_call_cyc": round(psw / n, 1),
+                     "n": base["n"], "n_all": base["n_all"], "rejects": rej,
+                     "spread_pct": round(base["spread_pct"], 2)})
+        print(f"   {n:>7} {f_secret:>6.1f}% {base['cycles'] / iters:>11.0f} "
+              f"{brk:>15.0f} {brk / n:>9.0f} {psw:>12.0f} {psw / n:>9.0f} {rej:>4}")
+        a.chunks = saved
+    # A cell the gate mostly rejected is a cell whose surviving samples are a
+    # biased subset, and it must not be read as a cost. Seen for real, before
+    # the budget was sized on the slowest arm: a `pass` cell with 11 rejects
+    # against 15 kept read 815 cycles per call where every clean cell read
+    # ~1,340.
+    clean = [r for r in rows if r["rejects"] <= a.reps // 3]
+    dropped = [r["value"] for r in rows if r not in clean]
+    if dropped:
+        print(f"   NOTE: chunks {dropped} had more than {a.reps // 3} rejected "
+              f"samples; read them with suspicion. They stay in the CSV and the "
+              f"JSONL.")
+    # NO SLOPE IS FITTED, and that is the finding rather than a limitation.
+    # (arm - twin) is NOT linear in the number of calls: a bracket around a
+    # 100-byte AEAD with a real public lane on either side costs ~490 cycles,
+    # and the same bracket around a 4-byte slice with 8 lookups between calls
+    # costs ~290. `sb` drains what is in flight, so what one bracket costs
+    # depends on what the program had in flight when it hit it. A least-squares
+    # slope through those points would report a single "cycles per call" that
+    # is true at neither end.
+    if len(clean) > 1:
+        for key, lab in (("bracket_per_call_cyc", "Apple's bracket"),
+                         ("pass_per_call_cyc", "the pass")):
+            v = [(r["value"], r[key]) for r in clean]
+            lo = min(v, key=lambda t: t[1])
+            hi = max(v, key=lambda t: t[1])
+            print(f"   {lab}: {hi[1]:.0f} cycles per call at {hi[0]} call(s) per "
+                  f"request, {lo[1]:.0f} at {lo[0]}"
+                  f"{'  -- NOT constant' if hi[1] > 1.15 * lo[1] else ''}")
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -507,16 +712,25 @@ def main():
                     help="warmup is sized in TIME: it exists to reach the DVFS "
                          "ceiling, not to warm caches")
     ap.add_argument("--mech-L", type=int, default=20000)
-    ap.add_argument("--ins-tol", type=float, default=0.05,
+    ap.add_argument("--ins-tol", type=float, default=0.02,
                     help="how far nodit and blanket may differ in retired "
                          "instructions before the run is called invalid, in "
                          "percent. Apple's fixed PMC1 counts kernel entries, so "
-                         "two runs of one binary differ by ~0.01%%; 0.05%% is five "
-                         "times that and far under any real difference.")
+                         "two runs of one binary differ by ~0.005%%. It can be "
+                         "this tight only because argv is equalised across arms "
+                         "(see the argv note in this file); without that the two "
+                         "sat at different stack alignments and differed by a "
+                         "systematic 0.2%% that was not the mode.")
     ap.add_argument("--tblbits-sweep", nargs="*", type=int, default=None,
                     metavar="BITS", help="run the table-size mechanism sweep instead")
     ap.add_argument("--q-sweep", nargs="*", type=int, default=None,
                     metavar="Q4", help="run the predictable-fraction sweep instead")
+    ap.add_argument("--chunks", type=int, default=1,
+                    help="secret pieces per request. 1 is the request as the "
+                         "gem5 sweeps run it, bit for bit.")
+    ap.add_argument("--chunks-sweep", nargs="*", type=int, default=None,
+                    metavar="N", help="run the per-call cost sweep instead: "
+                                      "(arm - twin) cycles against calls per request")
     ap.add_argument("--hdr-sweep", nargs="*", default=None, metavar="LANE",
                     help="run the header-value-width sweep instead: how many "
                          "value bits this machine's predictor will hold")
@@ -538,7 +752,8 @@ def main():
 
     which = ("tblbits" if a.tblbits_sweep is not None else
              "q" if a.q_sweep is not None else
-             "hdr" if a.hdr_sweep is not None else "crossover")
+             "hdr" if a.hdr_sweep is not None else
+             "chunks" if a.chunks_sweep is not None else "crossover")
     stamp = time.strftime("%Y%m%d-%H%M%S")
     jl = os.path.join(a.out, f"runs-{which}-{stamp}.jsonl")
     with open(jl, "w") as log:
@@ -554,6 +769,8 @@ def main():
         elif which == "q":
             vals = a.q_sweep or [0, 1, 2, 3, 4]
             rows = sweep_axis(a, log, "q", vals)
+        elif which == "chunks":
+            rows = sweep_chunks(a, log, a.chunks_sweep or [1, 2, 5, 10, 25])
         elif which == "hdr":
             vals = a.hdr_sweep or [f"b{n}" for n in (8, 16, 24, 32, 34, 35, 36,
                                                      37, 38, 40, 48, 56, 62)]

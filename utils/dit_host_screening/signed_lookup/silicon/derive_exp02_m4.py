@@ -47,9 +47,19 @@ def prov(runs, what):
         f"benchmarks/signed_lookup/signed_lookup_gem5.c at the pinned commit, with "
         f"utils/dit_host_screening/signed_lookup/silicon/hdr_const_param.patch applied "
         f"(HDR_CONST becomes a -D; no other change)",
-        "# libsodium 1.0.21 --disable-asm -march=armv8.4-a; arms base / taint / taintnop "
-        "from utils/taint_libsodium_arms.sh at the shipped defaults (callee contract, "
-        "DIT twins, contract fixpoint seeds, owned list)",
+        "# libsodium 1.0.21 --disable-asm -march=armv8.4-a; library arms base / taint / "
+        "taintnop from utils/taint_libsodium_arms.sh at the shipped defaults (callee "
+        "contract, DIT twins, contract fixpoint seeds, owned list)",
+        "# arms: nodit unhardened | blanket the same binary with DIT set before the ROI | "
+        "bracket = the unhardened library with Apple's own prologue/epilogue around the "
+        "AEAD entry points (mrs DIT token, msr DIT #1, sb, the call, msr DIT #0 only if "
+        "it was clear) from utils/dit_host_screening/cioparity/api_bracket.c, which is "
+        "what AWS-LC ships | bracketnop its instruction-matched twin (token read -> mov "
+        "xzr, both writes and the barrier -> nop, so the restore takes the same branch) | "
+        "bracketnobar Apple's sequence minus the speculation barrier, to split the bill; "
+        "not a shippable configuration | pass = -ftaint-harden | nop its NOP twin. "
+        "dit_cyc_per_req is (arm - twin) cycles per request, which is what the mode "
+        "writes cost with layout removed",
         "# instrument: PMC0 (cycles, bare) and PMC1 (instructions, isb-ordered) read from "
         "EL0; CNTVCT_EL0 at 1 GHz gives the implied clock, and a sample outside "
         "3.4-5.0 GHz is rejected as a thread migration and counted",
@@ -97,11 +107,14 @@ def main():
         rows = []
         for _p, j in runs:
             rows += j["rows"]
+        order = ["nodit", "blanket", "bracket", "bracketnop", "bracketnobar",
+                 "pass", "nop"]
         rows.sort(key=lambda r: (r["lane"] != "narrow", r["L"],
-                                 ["nodit", "blanket", "pass", "nop"].index(r["arm"])))
+                                 order.index(r["arm"]) if r["arm"] in order else 99))
         write("m4_arms.csv",
               prov(runs, "CANONICAL Apple M4 sweep: secret-fraction crossover, "
-                         "both lanes, 4 arms. The paper figure's y is ipc_ovh_pct "
+                         "both lanes, 7 arms including Apple's own bracket and "
+                         "its instruction-matched twin. The paper figure's y is ipc_ovh_pct "
                          "(nodit ipc / arm ipc - 1), the same quantity the gem5 "
                          "figure plots; vs_base_pct is the cycles ratio. pub_* "
                          "columns are the same arm with --nosecret, i.e. the "
@@ -110,10 +123,35 @@ def main():
               rows,
               ["lane", "L", "pred_q4", "tblbits", "f_secret_pct", "arm", "requests",
                "cycles", "insts", "ipc", "cyc_per_request", "vs_base_pct",
-               "ipc_ovh_pct", "ins_vs_base_per_req", "dit_cyc_per_req",
+               "ipc_ovh_pct", "ins_vs_base_per_req", "twin", "dit_cyc_per_req",
                "switches_per_req", "pub_cycles", "pub_insts", "pub_ipc",
                "pub_vs_base_pct", "pub_cyc_per_lookup", "n", "n_all", "n_hi",
                "lottery_gap", "rejects", "spread_pct", "warmup", "checksum_pub"])
+
+    # --------------------------------------------------- per-call cost
+    runs = load(outdir, "chunks")
+    if runs:
+        rows = []
+        for _p, j in runs:
+            rows += j["rows"]
+        rows.sort(key=lambda r: (r["L"], r["value"]))
+        write("m4_per_call_cost.csv",
+              prov(runs, "WHAT ONE PLACEMENT COSTS PER CALL. --chunks N splits a "
+                         "request into N pieces, L/N lookups then one AEAD call over "
+                         "a 100/N-byte slice under its own nonce: the same public work "
+                         "in N runs and the same secret bytes in N calls, so a per-call "
+                         "placement pays N times. (arm - its NOP twin) / N is therefore "
+                         "the cost of ONE placement with layout removed. Apple's "
+                         "bracket lands at 455-510 cycles per call and the pass at "
+                         "1,260-1,340. It is not perfectly constant: at 25 calls per "
+                         "request with only 8 lookups between them the bracket falls to "
+                         "304, because `sb` drains what is in flight and there is less "
+                         "in it"),
+              rows,
+              ["lane", "L", "value", "label", "pred_q4", "tblbits", "requests",
+               "f_secret_pct", "base_cyc_per_req", "bracket_minus_twin_cyc",
+               "bracket_per_call_cyc", "pass_minus_nop_cyc", "pass_per_call_cyc",
+               "n", "n_all", "rejects", "spread_pct"])
 
     # ------------------------------------------------------- q / hdr / table
     for kind, name, what in (

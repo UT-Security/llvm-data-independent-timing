@@ -1,29 +1,30 @@
 # provenance: SENSITIVITY: blanket DIT's cost to the PUBLIC lane against q = pred_q4/4, the fraction of iterations that read the record header. Linear in q on the narrow lane and identically zero on the wide one, at both L. gem5's own q sweep is gem5_predictability_sweep.csv
-# run 2026-09-08T00:58:11-0500 on bellingham.csres.utexas.edu (Apple M4, kernel 24.6.0); unrooted, thread NOT pinned -- samples that migrated are rejected by the implied-clock gate and counted in the rejects column
-# clang from llvm-data-independent-timing 81782113460d; driver sha256 c91bc6f061649111.., byte-identical to gem5-DIT's benchmarks/signed_lookup/signed_lookup_gem5.c at the pinned commit, with utils/dit_host_screening/signed_lookup/silicon/hdr_const_param.patch applied (HDR_CONST becomes a -D; no other change)
-# libsodium 1.0.21 --disable-asm -march=armv8.4-a; arms base / taint / taintnop from utils/taint_libsodium_arms.sh at the shipped defaults (callee contract, DIT twins, contract fixpoint seeds, owned list)
+# run 2026-09-08T07:49:30-0500 on bellingham.csres.utexas.edu (Apple M4, kernel 24.6.0); unrooted, thread NOT pinned -- samples that migrated are rejected by the implied-clock gate and counted in the rejects column
+# clang from llvm-data-independent-timing b2bf47d508cc (WORKING TREE DIRTY); driver sha256 c91bc6f061649111.., byte-identical to gem5-DIT's benchmarks/signed_lookup/signed_lookup_gem5.c at the pinned commit, with utils/dit_host_screening/signed_lookup/silicon/hdr_const_param.patch applied (HDR_CONST becomes a -D; no other change)
+# libsodium 1.0.21 --disable-asm -march=armv8.4-a; library arms base / taint / taintnop from utils/taint_libsodium_arms.sh at the shipped defaults (callee contract, DIT twins, contract fixpoint seeds, owned list)
+# arms: nodit unhardened | blanket the same binary with DIT set before the ROI | bracket = the unhardened library with Apple's own prologue/epilogue around the AEAD entry points (mrs DIT token, msr DIT #1, sb, the call, msr DIT #0 only if it was clear) from utils/dit_host_screening/cioparity/api_bracket.c, which is what AWS-LC ships | bracketnop its instruction-matched twin (token read -> mov xzr, both writes and the barrier -> nop, so the restore takes the same branch) | bracketnobar Apple's sequence minus the speculation barrier, to split the bill; not a shippable configuration | pass = -ftaint-harden | nop its NOP twin. dit_cyc_per_req is (arm - twin) cycles per request, which is what the mode writes cost with layout removed
 # instrument: PMC0 (cycles, bare) and PMC1 (instructions, isb-ordered) read from EL0; CNTVCT_EL0 at 1 GHz gives the implied clock, and a sample outside 3.4-5.0 GHz is rejected as a thread migration and counted
 # lane: HDR_CONST is the value every record header holds. wide = 0x2545F4914F6CDD1D (62 bits), the value every gem5 sweep used; narrow = 0xCAFEBABE (32 bits). This machine's load value predictor holds 36 bits (m4_header_width.csv), so it predicts the narrow header and not the wide one
 # one serialising `msr DIT` on this part: 33.52 cycles (11.50 for a same-value write), measured by dit_switch_cost.c in this run
 # cycles = median of the FAST cluster of n valid samples. Once the tables leave L1 a run's cycles come out bimodal ~15% apart on the physical pages the kernel hands the BSS; n_hi counts the slow-cluster samples, which are kept in the JSONL and excluded from the median. Below 128 KB of table there is no split and this is the plain median.
 axis,value,label,lane,L,pred_q4,tblbits,requests,nodit_cycles,blanket_cycles,nodit_cyc_per_lookup,blanket_cyc_per_lookup,nodit_ipc,blanket_ipc,insts,blanket_pct,ipc_ovh_pct,n,n_all,n_hi_nodit,n_hi_blanket,lottery_gap,rejects,spread_pct
-q,0,0.00,narrow,200,0,9,38543,84119064.0,84140247.0,10.9124,10.9151,1.0385,1.0383,87360254.0,0.03,0.02,15,15,0,0,1.0,1,0.2
-q,1,0.25,narrow,200,1,9,37437,85118188.0,95273612.0,11.3682,12.7245,1.0848,0.9693,92337519.0,11.93,11.92,15,15,0,0,1.0,0,0.15
-q,2,0.50,narrow,200,2,9,36658,86737011.0,106813251.0,11.8306,14.5689,1.127,0.9152,97749199.0,23.15,23.14,15,15,0,0,1.0,0,0.24
-q,3,0.75,narrow,200,3,9,36140,88647260.0,118716881.0,12.2644,16.4246,1.1686,0.8727,103596019.0,33.92,33.91,15,15,0,0,1.0,0,0.28
-q,4,1.00,narrow,200,4,9,35486,89812413.0,130090397.0,12.6546,18.3298,1.2116,0.8365,108818824.0,44.85,44.84,15,15,0,0,1.0,1,0.18
-q,0,0.00,narrow,20000,0,9,520,131060874.0,131090269.0,12.602,12.6048,0.8733,0.8732,114458604.0,0.02,0.01,15,15,0,0,1.0,1,0.15
-q,1,0.25,narrow,20000,1,9,508,131237108.0,147252680.0,12.917,14.4934,0.9295,0.8284,121979375.0,12.2,12.19,15,15,0,0,1.0,0,0.07
-q,2,0.50,narrow,20000,2,9,496,131330642.0,162445988.0,13.239,16.3756,0.9825,0.7942,129026277.0,23.69,23.7,15,15,0,0,1.0,1,0.14
-q,3,0.75,narrow,20000,3,9,484,131433271.0,176750215.0,13.5778,18.2593,1.0315,0.7671,135579189.0,34.48,34.46,15,15,0,0,1.0,1,0.2
-q,4,1.00,narrow,20000,4,9,476,131641492.0,191669936.0,13.8279,20.1334,1.0853,0.7454,142864473.0,45.6,45.58,15,15,0,0,1.0,0,0.16
-q,0,0.00,wide,200,0,9,38576,84193844.0,84182524.0,10.9127,10.9113,1.0385,1.0386,87432036.0,-0.01,-0.01,15,15,0,0,1.0,0,0.12
-q,1,0.25,wide,200,1,9,34771,88482718.0,88455570.0,12.7236,12.7197,0.9693,0.9696,85768498.0,-0.03,-0.03,15,15,0,0,1.0,0,0.2
-q,2,0.50,wide,200,2,9,31322,91264226.0,91279245.0,14.5687,14.5711,0.9151,0.915,83520290.0,0.02,0.01,15,15,0,0,1.0,0,0.18
-q,3,0.75,wide,200,3,9,28714,94350064.0,94345470.0,16.4293,16.4285,0.8725,0.8725,82320083.0,-0.0,-0.0,15,15,0,0,1.0,0,0.22
-q,4,1.00,wide,200,4,9,26799,98246845.0,98296659.0,18.3303,18.3396,0.8366,0.8362,82192954.0,0.05,0.05,15,15,0,0,1.0,0,0.21
-q,0,0.00,wide,20000,0,9,520,131077064.0,131074191.0,12.6036,12.6033,0.8732,0.8733,114463026.0,-0.0,-0.0,15,15,0,0,1.0,0,0.1
-q,1,0.25,wide,20000,1,9,453,131298215.0,131331808.0,14.4921,14.4958,0.8285,0.8283,108775656.0,0.03,0.02,15,15,0,0,1.0,1,0.15
-q,2,0.50,wide,20000,2,9,401,131335567.0,131370597.0,16.376,16.3804,0.7942,0.7941,104310685.0,0.03,0.02,15,15,0,0,1.0,0,0.09
-q,3,0.75,wide,20000,3,9,360,131503594.0,131603169.0,18.2644,18.2782,0.767,0.7664,100858748.0,0.08,0.08,15,15,0,0,1.0,1,0.27
-q,4,1.00,wide,20000,4,9,326,131266145.0,131266651.0,20.1328,20.1329,0.7455,0.7455,97853302.0,0.0,0.0,15,15,0,0,1.0,1,0.11
+q,0,0.00,narrow,200,0,9,27504,60021568.0,60005554.0,10.9114,10.9085,1.0386,1.0388,62337569.0,-0.03,-0.02,15,15,0,0,1.0,0,0.58
+q,1,0.25,narrow,200,1,9,27170,61780967.0,69113110.0,11.3693,12.7186,1.0847,0.9696,67014586.0,11.87,11.87,15,15,0,0,1.0,0,0.22
+q,2,0.50,narrow,200,2,9,26845,63501108.0,78231807.0,11.8274,14.571,1.1273,0.9151,71582135.0,23.2,23.19,15,15,0,0,1.0,0,0.36
+q,3,0.75,narrow,200,3,9,26496,64964268.0,87059246.0,12.2593,16.4288,1.1691,0.8725,75947855.0,34.01,34.0,15,15,0,0,1.0,0,0.65
+q,4,1.00,narrow,200,4,9,26195,66277592.0,96037580.0,12.6508,18.3313,1.2119,0.8365,80324496.0,44.9,44.87,15,15,0,0,1.0,0,0.32
+q,0,0.00,narrow,20000,0,9,518,130554624.0,130561988.0,12.6018,12.6025,0.8734,0.8733,114021386.0,0.01,0.01,15,15,0,0,1.0,0,0.1
+q,1,0.25,narrow,20000,1,9,506,130759681.0,146670207.0,12.9209,14.4931,0.9293,0.8284,121511523.0,12.17,12.17,15,15,0,0,1.0,1,0.43
+q,2,0.50,narrow,20000,2,9,494,130843331.0,161856716.0,13.2433,16.3823,0.9822,0.7939,128507880.0,23.7,23.71,15,15,0,0,1.0,0,0.2
+q,3,0.75,narrow,20000,3,9,481,130603302.0,175756585.0,13.5762,18.2699,1.0317,0.7667,134738900.0,34.57,34.56,15,15,0,0,1.0,0,0.19
+q,4,1.00,narrow,20000,4,9,473,130796376.0,190447277.0,13.8263,20.1318,1.0854,0.7455,141961537.0,45.61,45.59,15,15,0,0,1.0,1,0.14
+q,0,0.00,wide,200,0,9,27578,60168183.0,60179972.0,10.9087,10.9109,1.0388,1.0386,62502114.0,0.02,0.01,15,15,0,0,1.0,0,0.14
+q,1,0.25,wide,200,1,9,25566,65026634.0,65029859.0,12.7174,12.718,0.9697,0.9696,63056009.0,0.0,0.0,15,15,0,0,1.0,0,0.25
+q,2,0.50,wide,200,2,9,23815,69403384.0,69389866.0,14.5714,14.5685,0.915,0.9151,63501221.0,-0.02,-0.02,15,15,0,0,1.0,1,0.19
+q,3,0.75,wide,200,3,9,22322,73355706.0,73377050.0,16.4313,16.436,0.8724,0.8721,63995106.0,0.03,0.03,15,15,0,0,1.0,0,0.29
+q,4,1.00,wide,200,4,9,20938,76740329.0,76784689.0,18.3256,18.3362,0.8368,0.8363,64214746.0,0.06,0.06,15,15,0,0,1.0,0,0.25
+q,0,0.00,wide,20000,0,9,518,130560961.0,130573443.0,12.6024,12.6036,0.8733,0.8733,114019945.0,0.01,0.01,15,15,0,0,1.0,0,0.34
+q,1,0.25,wide,20000,1,9,451,130722168.0,130718634.0,14.4925,14.4921,0.8284,0.8285,108295613.0,-0.0,-0.0,15,15,0,0,1.0,2,0.26
+q,2,0.50,wide,20000,2,9,399,130678898.0,130708576.0,16.3758,16.3795,0.7942,0.7941,103790727.0,0.02,0.02,15,15,0,0,1.0,0,0.09
+q,3,0.75,wide,20000,3,9,357,130367673.0,130494089.0,18.2588,18.2765,0.7671,0.7664,100007669.0,0.1,0.09,15,15,0,0,1.0,1,0.23
+q,4,1.00,wide,20000,4,9,325,130845077.0,130846774.0,20.13,20.1303,0.7455,0.7455,97548604.0,0.0,0.0,15,15,0,0,1.0,1,0.17

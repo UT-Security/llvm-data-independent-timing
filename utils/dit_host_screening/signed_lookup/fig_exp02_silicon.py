@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 """Experiment 02's silicon figures: the same crossover on gem5 and on an Apple M4.
 
-  crossover-gem5-vs-m4      the headline. Two panels, one per machine, same axes
-                            and same two arms: x = secret fraction of the
-                            request, y = IPC overhead vs unhardened. Both
-                            machines cross; they cross in different places.
-                            The orange arm is THE PASS. `ExpeDITe` is the gem5
-                            Neoverse-V2 model's name, not the pass's, so it sits
-                            in the left panel's title; the right panel is
-                            hardware and has no ExpeDITe in it.
+  crossover-gem5-vs-m4      the headline. Two panels, one per machine, two arms:
+                            blanket DIT against APPLE'S OWN BRACKET around the
+                            crypto call -- read the previous DIT state, set it,
+                            speculation barrier, the call, restore only if it was
+                            clear, which is what AWS-LC ships and what Apple's
+                            guidance tells a library author to write. x = secret
+                            fraction of the request, y = IPC overhead vs
+                            unhardened. Blanket falls with the secret fraction,
+                            the bracket rises, and where they cross is the
+                            decision. gem5 has no FEAT_SB so its bracket uses
+                            `isb sy`; the M4's uses the real `sb`, and that is
+                            most of the gap between the two panels.
+                            The compiler pass is measured and lives in
+                            data/m4_arms.csv, but it is deliberately NOT on this
+                            figure: the comparison this draws is blanket against
+                            hand placement at the API.
   predictability-gem5-vs-m4 why. Blanket's cost to the PUBLIC lane against q,
                             the fraction of iterations that read the record
                             header, for gem5 and for both Apple lanes.
@@ -115,69 +123,80 @@ mf, mblanket = m4("narrow", "blanket")
 _mf2, mpass = m4("narrow", "pass")
 
 # ============================================================ fig 1: the headline
-fig, axes = plt.subplots(1, 2, figsize=(8.2, 3.7), dpi=300)
+mf, mblanket = m4("narrow", "blanket")
+_x, mbracket = m4("narrow", "bracket")
+_x, mpass = m4("narrow", "pass")          # measured, in the CSV, not on the figure
+
+fig, axes = plt.subplots(1, 2, figsize=(8.0, 3.8), dpi=300)
 fig.patch.set_facecolor(SURF)
 
-for ax, title, xs, blank, ser, ren in [
-    (axes[0], "gem5 Neoverse-V2 FDP — the ExpeDITe model\nEVES + VTAGE: predicts the 62-bit header",
-     [gf[L] for L in gL], gipc("blanket", "-"), gipc("pass", "serialising"),
-     gipc("pass", "renamed")),
-    (axes[1], "Apple M4 — shipping silicon\nload value predictor: 36 bits, measured",
-     mf, mblanket, mpass, None),
+for ax, title, sub, xs, blank, rising in [
+    (axes[0], "gem5 Neoverse-V2 FDP — the ExpeDITe model",
+     "EVES + VTAGE; predicts the 62-bit header, `isb sy` for the bracket",
+     [gf[L] for L in gL], gipc("blanket", "-"),
+     [("Apple's bracket", gipc("api", "serialising"), GREEN, "-", GREEN),
+      ("Apple's bracket, renamed MSR DIT", gipc("api", "renamed"), GREEN, (0, (4, 2)), SURF)]),
+    (axes[1], "Apple M4 — shipping silicon",
+     "load value predictor: 36 bits, measured; the bracket's real `sb`",
+     mf, mblanket,
+     [("Apple's bracket", mbracket, GREEN, "-", GREEN)]),
 ]:
     style(ax)
-    ax.plot(xs, blank, color=BLUE, lw=2, marker="o", ms=5, mfc=BLUE, mec=BLUE, zorder=3)
-    ax.plot(xs, ser, color=ORANGE, lw=2, marker="o", ms=5, mfc=ORANGE, mec=ORANGE, zorder=3)
-    if ren is not None:
-        ax.plot(xs, ren, color=ORANGE, lw=2, ls=(0, (4, 2)), marker="o", ms=5,
-                mfc=SURF, mec=ORANGE, mew=1.4, zorder=3)
+    ax.plot(xs, blank, color=BLUE, lw=2.2, marker="o", ms=5, mfc=BLUE, mec=BLUE, zorder=4)
+    for _name, ys, col, ls, mfc in rising:
+        ax.plot(xs, ys, color=col, lw=2, ls=ls, marker="o", ms=5, mfc=mfc, mec=col,
+                mew=1.4, zorder=3)
     ax.axhline(0, color=BASE, lw=0.9, zorder=2)
     secret_axis(ax)
-    # Two lines: the machine, then what its value predictor is. The second line
-    # is the whole reason the two panels differ, so it is on the figure.
-    head, _, sub = title.partition("\n")
-    ax.set_title(head, fontsize=9, color=INK, pad=16, fontweight="bold")
-    ax.annotate(sub, xy=(0.5, 1.015), xycoords="axes fraction", fontsize=7.6,
+    ax.set_title(title, fontsize=9, color=INK, pad=16, fontweight="bold")
+    ax.annotate(sub, xy=(0.5, 1.015), xycoords="axes fraction", fontsize=7.2,
                 color=MUTED, ha="center", va="bottom")
     ax.set_xlabel("Secret fraction of the request", fontweight="bold")
+    ax.set_ylabel("IPC overhead vs unhardened (%)", fontweight="bold")
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
-    # The crossing is the point of the figure, so it is ON the figure.
+
     order = sorted(range(len(xs)), key=lambda k: xs[k])
     xo = [xs[k] for k in order]
-    fstar = crossing(xo, [ser[k] for k in order], [blank[k] for k in order])
-    if fstar is not None:
-        ax.axvline(fstar, color=FAINT, lw=0.9, ls=(0, (2, 2)), zorder=1)
-        ax.annotate(f"crossover\nf* = {fstar:.0f}%", xy=(fstar, ax.get_ylim()[1]),
-                    xytext=(fstar + 3, ax.get_ylim()[1] * 0.80),
-                    fontsize=7.6, color=MUTED, ha="left", va="top")
+    bo = [blank[k] for k in order]
+    lo, hi = ax.get_ylim()
+    ax.set_ylim(lo, hi + (hi - lo) * 0.08)
+    lo, hi = ax.get_ylim()
+    for _name, ys, col, ls, _mfc in rising:
+        if ls != "-":
+            continue
+        f = crossing(xo, [ys[k] for k in order], bo)
+        if f is None:
+            continue
+        ax.axvline(f, color=col, lw=1.0, ls=(0, (2, 2)), zorder=1, alpha=0.75)
+        ax.annotate(f"blanket cheaper\nabove f = {f:.0f}%",
+                    xy=(f, hi), xytext=(f - 2, hi - (hi - lo) * 0.02),
+                    fontsize=7.6, color=col, ha="right", va="top",
+                    fontweight="bold", linespacing=1.35)
 
-# BOTH panels carry the y label, because they do NOT share a scale: the pass
-# reaches +25% on gem5 and +113% here, since a serialising `msr DIT` costs 33.5
-# cycles against a ~1,100-cycle AEAD. Hiding that behind one unlabelled axis
-# would make the two curves look more alike than they are.
-for ax in axes:
-    ax.set_ylabel("IPC overhead vs unhardened (%)", fontweight="bold")
 handles = [
-    Line2D([], [], color=BLUE, lw=2, marker="o", ms=5, label="blanket DIT"),
-    # The arm is THE PASS. `ExpeDITe` names the gem5 Neoverse-V2 model, not the
-    # compiler pass, so it belongs in the left panel's title and nowhere near a
-    # curve on the right one -- there is no ExpeDITe on an M4.
-    Line2D([], [], color=ORANGE, lw=2, marker="o", ms=5,
-           label="the pass — serialised MSR DIT"),
-    Line2D([], [], color=ORANGE, lw=2, ls=(0, (4, 2)), marker="o", ms=5, mfc=SURF,
-           mec=ORANGE, mew=1.4, label="the pass — renamed MSR DIT (gem5 only)"),
+    Line2D([], [], color=BLUE, lw=2.2, marker="o", ms=5, label="blanket DIT"),
+    Line2D([], [], color=GREEN, lw=2, marker="o", ms=5,
+           label="Apple's bracket at the crypto call (mrs DIT, msr #1, sb, call, restore)"),
+    Line2D([], [], color=GREEN, lw=2, ls=(0, (4, 2)), marker="o", ms=5, mfc=SURF,
+           mec=GREEN, mew=1.4, label="the same bracket, renamed MSR DIT (gem5 only)"),
 ]
-fig.legend(handles=handles, frameon=False, fontsize=7.6, ncol=3,
-           loc="lower center", bbox_to_anchor=(0.5, -0.015))
-fig.tight_layout(rect=(0, 0.07, 1, 1))
+fig.legend(handles=handles, frameon=False, fontsize=7.4, ncol=1,
+           loc="lower center", bbox_to_anchor=(0.5, -0.02))
+fig.tight_layout(rect=(0, 0.15, 1, 1))
 fig.savefig(FIG / "crossover-gem5-vs-m4.png", dpi=300, facecolor=SURF)
 fig.savefig(FIG / "crossover-gem5-vs-m4.pdf", facecolor=SURF)
 
-gstar = crossing([gf[L] for L in gL], gipc("pass", "serialising"), gipc("blanket", "-"))
 order = sorted(range(len(mf)), key=lambda k: mf[k])
-mstar = crossing([mf[k] for k in order], [mpass[k] for k in order],
-                 [mblanket[k] for k in order])
-print(f"crossover: gem5 f* = {gstar:.1f}%   Apple M4 f* = {mstar:.1f}%")
+mo = lambda v: [v[k] for k in order]
+print("crossovers against blanket (secret fraction at which the placed arm stops winning):")
+print(f"  gem5   the pass       f* = "
+      f"{crossing([gf[L] for L in gL], gipc('pass', 'serialising'), gipc('blanket', '-')):.1f}%")
+print(f"  gem5   Apple bracket  f* = "
+      f"{crossing([gf[L] for L in gL], gipc('api', 'serialising'), gipc('blanket', '-')):.1f}%")
+print(f"  M4     the pass       f* = "
+      f"{crossing(mo(mf), mo(mpass), mo(mblanket)):.1f}%")
+print(f"  M4     Apple bracket  f* = "
+      f"{crossing(mo(mf), mo(mbracket), mo(mblanket)):.1f}%")
 
 # ================================================ fig 2: cost vs predictable share
 gq = rows("gem5_predictability_sweep.csv")
