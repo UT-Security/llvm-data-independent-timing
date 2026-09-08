@@ -184,3 +184,60 @@ The bracket in the signed-lookup flow has little in flight at the call boundary,
 so SB is cheap there under any of these models and the panel's missing 16x is
 still mostly Reasons 2 and 3 above — the in-situ amplification and the 2.2x
 longer baseline request. Pricing SB correctly is necessary and not sufficient.
+
+---
+
+# Does `MSR DIT` hold back younger instructions?
+
+**No — not architecturally, and not on this M4.** Which settles the SB question
+as well, because the same measurement separates the three gem5 models.
+
+**Architecturally.** A direct write to a PSTATE field is not a context
+synchronisation event, which is exactly why Apple's guide asks for a barrier
+after it: "to ensure that subsequent instruction timing reflects the updated DIT
+state, add a speculation barrier." If the write held younger instructions back,
+the barrier would have nothing to do and Apple would not specify one.
+
+**Measured.** A write that holds back younger instructions has to *wait* for
+them, so its cost must grow with what is in flight. Cost of two `msr DIT` per
+iteration, against W independent 16 MB-array loads issued first
+(`sbdrain_gem5.c`, 20,000 iterations):
+
+| model | flag | W=1 | W=8 | W=32 | holds younger back? |
+|---|---|---|---|---|---|
+| drain (no flag) | `IsSerializeAfter` | 36.2 | **1,237.6** | **1,232.4** | **yes** |
+| `--apple` | `IsSquashAfter` | 32.2 | 63.7 | 40.9 | no |
+| `--expedite` | renamed | 1.1 | &minus;15.5 | 1.7 | no |
+| **Apple M4** | — | **77.3** | **68.9** | **62.1** | **no** |
+
+The M4's cost is flat and slightly *falling* in occupancy — a fixed penalty
+overlapping ever more independent work. The drain model climbs 34x over the same
+sweep because it waits for 32 outstanding DRAM misses. Younger instructions on
+an M4 are not held back by the write; under `--apple` they run under the old mode
+and are squashed and re-run when it commits, which is a different thing from
+being prevented.
+
+## This is the second, independent argument for `IsSquashAfter` on SB
+
+Both DIT-mode operations on Apple silicon are **fixed-cost and
+occupancy-independent**: `msr DIT` reads 77 → 62 cycles and `sb` reads 37 → 58
+across W = 1 → 32. gem5 currently models one of them that way (`--apple`'s
+`IsSquashAfter`, 32 → 41) and the other as a full drain (`Sb64`'s
+`IsSerializeAfter`, 26 → 1,219). Making `Sb64` `IsSquashAfter` makes the pair
+consistent with each other *and* with silicon, and that recommendation now rests
+on two separate sweeps rather than one.
+
+Remaining gap after such a change is **magnitude, not shape**: gem5's `--apple`
+write is ~2x cheap (32 against 77 for the pair) and `IsSquashAfter` on SB would
+be ~3x cheap (10 against 37). Both floors are the modelled frontend refill.
+
+## It also complicates `docs/` on which design ships
+
+`paper_experiments/12-dit-clear-shadow/README.md` calls flush-after design 2,
+says it is **not** a model of Apple's switch, and calls the drain "the one that
+ships" — on the basis that the drain's ~27 cycles per write matches silicon's
+~30-34. In a tight loop both models are in that range and the calibration cannot
+separate them. **The in-flight sweep can, and it favours flush-after
+decisively**: the drain is 20x out at W=8 while flush-after stays within 2x
+across the whole sweep. Worth revisiting that conclusion before the drain is
+described as the shipping design anywhere load-bearing.
