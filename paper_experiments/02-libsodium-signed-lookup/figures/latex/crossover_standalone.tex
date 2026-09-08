@@ -1,0 +1,15 @@
+% Compile check for crossover.tex, in a USENIX-shaped document:
+%   tectonic -X compile crossover_standalone.tex      (run from figures/latex/)
+% Renders the float alone, so a broken include or an overfull box shows up here
+% and not in the paper.
+\documentclass[10pt,twocolumn]{article}
+\usepackage[letterpaper,textwidth=7in,columnsep=0.33in,textheight=9.25in]{geometry}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{newtxtext}
+\graphicspath{{../../}}
+\pagestyle{empty}
+\begin{document}
+\input{crossover}
+\null
+\end{document}
