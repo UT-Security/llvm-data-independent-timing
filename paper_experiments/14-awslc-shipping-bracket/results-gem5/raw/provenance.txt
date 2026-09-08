@@ -1,6 +1,6 @@
 experiment 14 on gem5 -- provenance
 
-run              2026-09-07T21:10:31-05:00  (sweep still in flight; see INCOMPLETE below)
+run              2026-09-07T21:10:31-05:00
 host             beckham, 160 cores, Linux 6.17.0-41-generic aarch64
 
 gem5             /home/rgangar/Documents/gem5-DIT-flags
@@ -31,7 +31,11 @@ sweeps (simulator output is NOT in the repo: 1.2 GB of stats.txt per sweep)
   /home/rgangar/Documents/dit-awslc-gem5/setcover-20260907-1901   arms A,B,H x both models
   /home/rgangar/Documents/dit-awslc-gem5/blanket-20260907-1932   arm C x both models
 
-INCOMPLETE at the time of this commit
-  357 rows joined in all five arms; 338 of them enter the bracket per data/dit_census.json.
-  The M4 side has 381 bracketed rows. Missing: the RSA (16 rows) and FFDH 4096 (1 row) groups,
-  still simulating at roughly 6-12 h per cell. Every cell moves slightly when they land.
+COMPLETE
+  120 of 120 cells in the main sweep and 40 of 40 in the blanket sweep, zero failures.
+  All driver gates pass. 374 rows joined in all five arms; 355 of them enter the bracket
+  per data/dit_census.json, against the M4 side's 381. The 26 missing rows are TrustToken,
+  excluded on purpose at 57-88 h per cell; nothing else differs between the two row sets.
+  The 19 rows that enter no bracket in any arm are the passengers the tool cannot separate:
+  EC POINT add/dbl, the five ECDSA verifies, Ed25519 verify, the two PKCS#8 encodes and
+  HRSS decap. Longest cell: FFDH 4096 unhardened at 6.5 h.
