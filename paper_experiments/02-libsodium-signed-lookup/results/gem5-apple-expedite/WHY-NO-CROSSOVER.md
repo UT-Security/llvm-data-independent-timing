@@ -115,3 +115,72 @@ done
 
 The silicon side is `silicon/dit_switch_cost.c`, which reads 33.51 / 11.50 on
 this M4.
+
+---
+
+# Correction: SB is not too cheap, it is the wrong SHAPE
+
+The section above said `sb` costs 0 in gem5 and 28 on silicon, and concluded it
+needed pricing up. That was measured in one context only — the bracket, where
+the flushing `msr DIT` had already drained the machine — and it generalised
+wrongly. Measured against in-flight work (`sbdrain_gem5.c` here, the gem5 twin of
+the M4's `sbdrain.c`): W independent 16 MB-array loads issued, then the sequence,
+20,000 iterations, cycles per iteration attributable to the barrier.
+
+| | W=1 | W=8 | W=32 |
+|---|---|---|---|
+| gem5 `sb`, `IsSerializeAfter` (today) | 25.8 | **855.1** | **1218.9** |
+| gem5 `isb`, `IsSquashAfter` | 10.4 | 57.4 | 26.5 |
+| **Apple M4 `sb`, measured** | **36.7** | **46.8** | **57.8** |
+
+**`IsSerializeAfter` is 20x too expensive once anything is in flight.** It means
+"stall rename until the ROB empties", so with 32 outstanding DRAM misses it waits
+for all of them: 1,219 cycles. The M4 goes 36.7 → 57.8 over the same sweep —
+**Apple's SB does not wait for outstanding loads.** It bars speculative execution
+past itself and nothing more, which is what the decoder comment in `aarch64.isa`
+says it should do, but "stall until the ROB drains" is not that.
+
+The zero in the bracket and the 1,219 here are the same bug: the cost is a
+function of ROB occupancy when on silicon it is very nearly not.
+
+## The fix, in two parts
+
+**1. The shape — change the flag.** `IsSquashAfter` tracks silicon: 10.4 / 57.4 /
+26.5 against 36.7 / 46.8 / 57.8, flat-ish and non-monotonic in both, because a
+squash-and-refetch costs the frontend refill and does not care how deep the
+window was. That is a one-line change in `misc64.isa`:
+
+```diff
+-    sbIop = ArmInstObjParams("sb", "Sb64", "ArmStaticInst", "",
+-                             ['IsSerializeAfter'])
++    sbIop = ArmInstObjParams("sb", "Sb64", "ArmStaticInst", "",
++                             ['IsSquashAfter'])
+```
+
+**It contradicts the reasoning already written next to it**, which distinguishes
+SB from ISB on the grounds that SB is not a context-synchronisation event and so
+"does not squash, it serialises". That distinction is architecturally correct and
+the flag is not an architectural statement — it is the only timing knob gem5
+offers, and the timing that matches this M4 is the squash. Worth deciding
+deliberately rather than silently.
+
+**2. The magnitude — then calibrate.** `IsSquashAfter` lands 2-3x cheap at W=1
+(10.4 against 36.7). Its floor is the modelled frontend refill, and
+`neoverse_v2.py` sets fetch-to-issue at ~7 cycles (`commitToFetchDelay` 1,
+`fetchToDecodeDelay` 3, `decodeToRenameDelay` 2, `renameToIEWDelay` 1). Closing
+that gap means either a deeper frontend — which changes every branch mispredict
+too, so no — or giving `Sb64` an explicit extra penalty on top of the squash. The
+second keeps the change local to SB.
+
+**If the architectural distinction has to hold**, the alternative is to give
+`Sb64` its own cost model rather than borrow a flag: a fixed penalty with no ROB
+dependence, calibrated to the ~37 cycles this M4 shows at W=1 and checked against
+the 57.8 at W=32. That is more code than a flag flip and is the honest version of
+what the measurement says the instruction does.
+
+## What it does not fix
+
+The bracket in the signed-lookup flow has little in flight at the call boundary,
+so SB is cheap there under any of these models and the panel's missing 16x is
+still mostly Reasons 2 and 3 above — the in-situ amplification and the 2.2x
+longer baseline request. Pricing SB correctly is necessary and not sufficient.
