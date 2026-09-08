@@ -12,7 +12,7 @@
 set -euo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIG="$(cd "$D/../.." && pwd)"
-PANELS=(crossover-panel-a-m4.pdf crossover-panel-b-gem5.pdf crossover-panel-legend.pdf)
+PANELS=(crossover-panel-a-m4.pdf crossover-panel-b-gem5.pdf)
 for f in "${PANELS[@]}"; do
   [[ -f "$FIG/$f" ]] || { echo "missing $FIG/$f -- run fig_exp02_silicon.py first" >&2; exit 1; }
 done

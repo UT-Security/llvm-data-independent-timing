@@ -55,6 +55,47 @@ FIG = R / "paper_experiments/02-libsodium-signed-lookup/figures"
 INK, MUTED, FAINT, GRID, BASE, SURF = "#11171C", "#5A6670", "#8695A0", "#E4E9EB", "#9AA6AE", "#FFFFFF"
 BLUE, ORANGE, GREEN = "#2a78d6", "#eb6834", "#1f9e6e"
 
+# ------------------------------------------------- the MTE paper's figure style
+#
+# Matched to UT-Security/mte-paper figure 4 (fig:ampere-server-fix,
+# figure/server/after/*.pdf), read off the PDFs since the repo ships no
+# generator: matplotlib, a full box frame, grid on BOTH axes, a framed legend
+# inside the axes carrying a title, plain (not bold) axis labels, no panel
+# title, and a black dashed line at the no-overhead baseline.
+#
+# THE FONT IS THE ONE COMPROMISE. Those PDFs embed TeXGyreTermesX and NewTXMI,
+# i.e. matplotlib with text.usetex=True against the paper's own newtx preamble.
+# That needs latex + dvipng on PATH and this host has neither (tectonic cannot
+# serve usetex). Times New Roman with STIX for math is the same design -- TeX
+# Gyre Termes IS a Times clone -- and sits beside newtxtext body copy without
+# announcing itself. If this ever runs somewhere with a TeX install, setting
+# text.usetex=True and font.serif to Times is the exact thing.
+PAPER_STYLE = {
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "STIXGeneral", "DejaVu Serif"],
+    "mathtext.fontset": "stix",
+    "font.size": 9,
+    "axes.labelsize": 9,
+    "axes.edgecolor": "black",
+    "axes.linewidth": 0.8,
+    "axes.labelcolor": "black",
+    "xtick.color": "black",
+    "ytick.color": "black",
+    "xtick.labelsize": 8.5,
+    "ytick.labelsize": 8.5,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "text.color": "black",
+    "grid.color": "#b0b0b0",
+    "grid.linewidth": 0.5,
+    "legend.fontsize": 8,
+    "legend.title_fontsize": 8,
+    "legend.framealpha": 0.92,
+    "legend.edgecolor": "#b0b0b0",
+    "legend.fancybox": True,
+    "legend.borderpad": 0.4,
+}
+
 # --------------------------------------------------------------- arm styling
 #
 # ExpeDITe is the contribution, so it gets the ONLY saturated colour on the
@@ -72,9 +113,9 @@ COARSE_C = "#4E7396"   # desaturated steel blue
 FINE_C   = "#7C868E"   # neutral grey, deliberately hueless
 EXPED_C  = "#0E8F5E"   # the one saturated colour on the figure
 ARM = {
-    "coarse":   dict(label="Coarse",   color=COARSE_C, ls="-",         lw=1.8, ms=4.0, z=3),
-    "fine":     dict(label="Fine",     color=FINE_C,   ls=(0, (5, 2)), lw=1.8, ms=4.0, z=4),
-    "expedite": dict(label="ExpeDITe", color=EXPED_C,  ls="-",         lw=2.9, ms=5.4, z=6),
+    "coarse":   dict(label="Coarse",   color=COARSE_C, ls="-",         lw=1.6, ms=3.2, z=3),
+    "fine":     dict(label="Fine",     color=FINE_C,   ls=(0, (5, 2)), lw=1.6, ms=3.2, z=4),
+    "expedite": dict(label="ExpeDITe", color=EXPED_C,  ls="-",         lw=2.6, ms=4.2, z=6),
 }
 
 
@@ -95,6 +136,7 @@ plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9, "axes.labelco
 
 
 def style(ax):
+    """The web/README look: light, spineless, y grid only."""
     ax.set_facecolor(SURF)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
@@ -103,6 +145,19 @@ def style(ax):
     ax.yaxis.grid(True, color=GRID, lw=0.7, zorder=0)
     ax.set_axisbelow(True)
     ax.tick_params(axis="both", length=0)
+
+
+def paper_style(ax):
+    """The MTE paper's look: boxed, gridded on both axes, ticks out."""
+    ax.set_facecolor("none")
+    for sp in ax.spines.values():
+        sp.set_visible(True)
+        sp.set_color("black")
+        sp.set_linewidth(0.8)
+    ax.grid(True, which="major", axis="both", color="#b0b0b0", lw=0.5, zorder=0)
+    ax.set_axisbelow(True)
+    ax.tick_params(axis="both", direction="out", length=2.5, width=0.7,
+                   color="black")
 
 
 def rows(name):
@@ -329,63 +384,66 @@ for lab, ys in (("M4     Apple bracket, chacha 100 B  ", cbracket),
 # not be forced to: on a shared axis gem5's curves flatten into the bottom third
 # and stop being readable. Both panels label their own axis, and the caption
 # says the ranges differ -- that difference is a result, not a plotting artifact.
-PANEL = (3.35, 2.5)
+# Aspect follows the MTE figure's proportions -- theirs is 6.9 x 2.3in for a
+# full-column strip; ours is half that width because two sit side by side, so
+# 3.35 x 2.3 keeps a comparable line-to-height feel rather than copying the
+# number. Legend INSIDE the axes with a title, as theirs is; its corner differs
+# per panel because the data does, which is what theirs does too.
+PANEL = (3.35, 2.3)
 
 
-def paper_panel(path, xs, coarse, others):
-    fig, ax = plt.subplots(figsize=PANEL, dpi=300)
-    style(ax)
-    ax.set_facecolor("none")
-    draw(ax, xs, coarse, "coarse")
-    for key, ys in others:
-        draw(ax, xs, ys, key)
-    ax.axhline(0, color=BASE, lw=0.9, zorder=2)
-    secret_axis(ax)
-    ax.set_ylabel("IPC overhead (%)", fontweight="bold")
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
+def paper_panel(path, xs, coarse, others, legend_loc):
+    with plt.rc_context(PAPER_STYLE):
+        fig, ax = plt.subplots(figsize=PANEL, dpi=300)
+        paper_style(ax)
+        draw(ax, xs, coarse, "coarse")
+        for key, ys in others:
+            draw(ax, xs, ys, key)
+        # The no-overhead baseline, black and dashed: the MTE figure marks its
+        # own (normalised 1.0) the same way, and it is the line every arm is
+        # being read against.
+        ax.axhline(0, color="black", lw=1.0, ls=(0, (5, 3)), zorder=5)
+        secret_axis(ax)
+        # secret_axis() sets the web figure's bold label, and set_xlabel(str)
+        # only replaces the STRING -- properties already on the Text artist
+        # survive. The MTE figure's labels are plain, so say so explicitly.
+        ax.set_xlabel(XLABEL, fontweight="normal")
+        ax.set_ylabel("IPC Overhead (%)", fontweight="normal")
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
 
-    order = sorted(range(len(xs)), key=lambda k: xs[k])
-    xo, bo = [xs[k] for k in order], [coarse[k] for k in order]
-    lo, hi = ax.get_ylim()
-    ax.set_ylim(lo, hi + (hi - lo) * 0.06)
-    lo, hi = ax.get_ylim()
-    fine_ys = dict(others).get("fine")
-    if fine_ys is not None:
-        f = crossing(xo, [fine_ys[k] for k in order], bo)
-        if f is not None:
-            # FINE's colour, not ExpeDITe's: the marker is for Coarse x Fine,
-            # and green means ExpeDITe and nothing else on this figure.
-            ax.axvline(f, color=FINE_C, lw=1.0, ls=(0, (2, 2)), zorder=1, alpha=0.8)
-            # Just right of the line and near the top: empty in both panels,
-            # because the crossing is where the two curves MEET and the space
-            # above it is clear on either side of the line.
-            ax.annotate(f"$f^*$ = {f:.0f}%", xy=(f, hi),
-                        xytext=(f + 2.5, hi - (hi - lo) * 0.02),
-                        fontsize=8.5, color=FINE_C, ha="left", va="top",
-                        fontweight="bold")
-    fig.tight_layout(pad=0.25)
-    for ext in ("pdf", "png"):
-        fig.savefig(FIG / f"{path}.{ext}", transparent=True,
-                    bbox_inches="tight", pad_inches=0.02)
-    plt.close(fig)
-
-
-def paper_legend(path):
-    """The shared legend, as its own strip. One row, all three arms."""
-    fig = plt.figure(figsize=(5.4, 0.24), dpi=300)
-    fig.legend(handles=arm_handles(["coarse", "fine", "expedite"]), frameon=False,
-               fontsize=8.6, ncol=3, loc="center", handlelength=2.2,
-               columnspacing=2.6, handletextpad=0.55)
-    for ext in ("pdf", "png"):
-        fig.savefig(FIG / f"{path}.{ext}", transparent=True,
-                    bbox_inches="tight", pad_inches=0.01)
-    plt.close(fig)
+        order = sorted(range(len(xs)), key=lambda k: xs[k])
+        xo, bo = [xs[k] for k in order], [coarse[k] for k in order]
+        lo, hi = ax.get_ylim()
+        ax.set_ylim(lo, hi + (hi - lo) * 0.04)
+        lo, hi = ax.get_ylim()
+        fine_ys = dict(others).get("fine")
+        if fine_ys is not None:
+            f = crossing(xo, [fine_ys[k] for k in order], bo)
+            if f is not None:
+                # FINE's colour, not ExpeDITe's: the marker is for Coarse x Fine,
+                # and green means ExpeDITe and nothing else on this figure.
+                ax.axvline(f, color=FINE_C, lw=0.9, ls=(0, (2, 2)), zorder=1)
+                ax.annotate(f"$f^*$ = {f:.0f}%", xy=(f, hi),
+                            xytext=(f + 2.0, hi - (hi - lo) * 0.03),
+                            fontsize=8.5, color=FINE_C, ha="left", va="top")
+        keys = ["coarse"] + [k for k, _ in others]
+        ax.legend(handles=arm_handles(keys), loc=legend_loc,
+                  title="DIT placement", ncol=1, handlelength=1.9,
+                  labelspacing=0.32, borderaxespad=0.5)
+        fig.tight_layout(pad=0.25)
+        for ext in ("pdf", "png"):
+            fig.savefig(FIG / f"{path}.{ext}", transparent=True,
+                        bbox_inches="tight", pad_inches=0.02)
+        plt.close(fig)
 
 
-paper_panel("crossover-panel-a-m4", mf, mblanket, [("fine", mbracket)])
+# Legend corners: (a) has an empty upper-left above Coarse's flat start, (b) has
+# an empty band on the left between Coarse coming down and Fine going up.
+paper_panel("crossover-panel-a-m4", mf, mblanket, [("fine", mbracket)], "upper left")
 paper_panel("crossover-panel-b-gem5", [gf[L] for L in gL], gipc("blanket", "apple"),
-            [("fine", gipc("api", "apple")), ("expedite", gipc("api", "expedite"))])
-paper_legend("crossover-panel-legend")
+            [("fine", gipc("api", "apple")), ("expedite", gipc("api", "expedite"))],
+            "center left")
+print("wrote " + str(FIG / "crossover-panel-{a-m4,b-gem5}.{pdf,png}"))
 print("wrote " + str(FIG / "crossover-panel-{a-m4,b-gem5,legend}.{pdf,png}"))
 
 # ================================================ fig 2: cost vs predictable share

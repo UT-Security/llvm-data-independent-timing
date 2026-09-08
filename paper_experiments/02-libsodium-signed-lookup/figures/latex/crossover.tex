@@ -2,6 +2,9 @@
 %
 % Preamble needs:  \usepackage{graphicx}  \usepackage{subcaption}
 %
+% Each panel carries its own legend, in the MTE paper's style (figure 4 there),
+% so there is no separate legend strip to place -- just the two subfigures.
+%
 % The two panels are 3.35in wide each, so the pair wants a FULL-WIDTH float. On
 % a USENIX-style 7in textwidth 0.49\textwidth is 3.43in and they fit side by
 % side with room for \hfill. In a single 3.33in column, stack them instead --
@@ -17,7 +20,6 @@
 % from the committed CSVs and nothing else. Do not edit the PDFs.
 \begin{figure*}[t]
   \centering
-  \includegraphics{figures/crossover-panel-legend}\\[-2pt]
   \begin{subfigure}[t]{0.49\textwidth}
     \centering
     \includegraphics{figures/crossover-panel-a-m4}
@@ -71,7 +73,6 @@
 %
 % \begin{figure}[t]
 %   \centering
-%   \includegraphics[width=\columnwidth]{figures/crossover-panel-legend}
 %   \begin{subfigure}{\columnwidth}
 %     \centering
 %     \includegraphics[width=\columnwidth]{figures/crossover-panel-a-m4}
