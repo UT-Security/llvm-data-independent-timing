@@ -404,11 +404,12 @@ def paper_panel(path, xs, coarse, others, legend_loc):
         # being read against.
         ax.axhline(0, color="black", lw=1.0, ls=(0, (5, 3)), zorder=5)
         secret_axis(ax)
-        # secret_axis() sets the web figure's bold label, and set_xlabel(str)
-        # only replaces the STRING -- properties already on the Text artist
-        # survive. The MTE figure's labels are plain, so say so explicitly.
-        ax.set_xlabel(XLABEL, fontweight="normal")
-        ax.set_ylabel("IPC Overhead (%)", fontweight="normal")
+        # Bold axis labels. This is the one place the panels depart from the
+        # MTE figure's typography, whose labels are plain -- asked for, and it
+        # reads well against Times body copy since the label is then clearly
+        # not part of the running text.
+        ax.set_xlabel(XLABEL, fontweight="bold")
+        ax.set_ylabel("IPC Overhead (%)", fontweight="bold")
         ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
 
         order = sorted(range(len(xs)), key=lambda k: xs[k])
