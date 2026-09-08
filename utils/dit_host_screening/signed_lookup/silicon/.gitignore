@@ -1,0 +1,3 @@
+# built binaries, the staged+patched driver, and raw run output
+bin/
+out/
