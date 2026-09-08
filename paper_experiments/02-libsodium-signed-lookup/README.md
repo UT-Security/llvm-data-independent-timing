@@ -700,8 +700,17 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
   is therefore a property of the workload and not of any placement, so every arm
   moves along one fixed axis -- and it is why the same L sits at a different f on
   the two machines: gem5 sustains IPC 1.07 at L=10 where the M4 sustains 3.89, so
-  the public lane is a larger share of the model's request. The figures label the
-  axis "Secret fraction of request cycles" for exactly this reason.
+  the public lane is a larger share of the model's operation. The figures label
+  the axis "Secret fraction of operation cycles" for exactly this reason.
+- **The figures say OPERATION where the rig says request.** The driver's
+  docstring opens "One request = a PUBLIC lane that gathers records..." and the
+  CSV columns are still `requests` and `cyc_per_request` -- that schema is
+  published and stays. But "request" implies a server's unit of work, and this
+  public lane is a dependence chain built to have the right shape rather than any
+  application's real public code, so the figures do not claim it. Same unit
+  either way: L value-dependent loads plus one AEAD call over the digest of what
+  they gathered. Experiment 01's coin selection is the real-application public
+  lane.
 - **The public lane is synthetic**, and q=0.75 is a chosen midpoint, not a
   measured property of any application. Experiment 01's coin selection is the
   real-application public lane.
