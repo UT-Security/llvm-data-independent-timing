@@ -383,7 +383,7 @@ stored beside it.
   MTE paper's overhead tables (`latex_table_awslc.py`, run by `analyze`): `awslc_gradient.tex`
   (colour scale and the `\awsgradient` cell macro, for the preamble), `awslc_paper_rows.tex`
   (the `table` environment, ratios to A with a gradient cell colour, geomean over every cell),
-  `awslc_all_rows_bands.tex` (the same format over every row, grouped: the geomean of all
+  `awslc_m4.tex` (the same format over every row, grouped: the geomean of all
   rows, then the slowest 25%, the middle 50% and the fastest 25% of each column's cells, the
   four AWS columns only; `--bands 15,50,15` changes the cut, `--band-arms C,B,Bs,H,Hs` puts
   Coarse back, and `--rank-by B` makes every column follow the AWS default order instead of
@@ -393,8 +393,8 @@ stored beside it.
   Overleaf: upload the first two files into the project, add `\input{awslc_gradient}` to the
   preamble after `\usepackage[table]{xcolor}`, `\usepackage{etoolbox}`, `\usepackage{pgf}` and
   `\usepackage{booktabs}` (the MTE paper's preamble already has all four), and put
-  `\input{awslc_paper_rows}` and `\input{awslc_all_rows_bands}` where the tables go;
-  `\Cref{tab:awslc-bracket}` and `\Cref{tab:awslc-bands}` refer to them. After a rerun,
+  `\input{awslc_paper_rows}` and `\input{awslc_m4}` where the tables go;
+  `\Cref{tab:awslc-bracket}` and `\Cref{tab:awslc-m4}` refer to them. After a rerun,
   re-upload the two table files only.
 - Filters are substring matches, so `AES-128` also matches every `AEAD-AES-128-*` row; those rows
   collect samples from two processes per rep and show up to twice the rep count in the sample column.

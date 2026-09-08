@@ -6,7 +6,7 @@ a bold geometric-mean row. Reads the analysis summary and writes three files:
 
   awslc_gradient.tex     the colour scale and the \\gradient / \\gradientbold macros (preamble; once per document)
   awslc_paper_rows.tex   the table: the paper's ten rows x five arms, ratios to A, geomean over every cell
-  awslc_all_rows_bands.tex  the same format over every BRACKETED row, in bands: five groups of 20% from the slowest to
+  awslc_m4.tex  the same format over every BRACKETED row, in bands: five groups of 20% from the slowest to
                          the fastest, then the geomean of all of them. Ratios are to the Coarse arm by default
                          (--baseline A for unhardened), so they isolate the mode switches; rows are ranked once by
                          the AWS default column (--rank-by none ranks each column by itself); --bands 25,50,25 or
@@ -176,7 +176,7 @@ def bands_table(an, scale_max, bands=(20, 20, 20, 20, 20), rank_by='B', arms=('B
            % (base_txt, which, len(bands), bandtxt, how, v.get('timeout_ms'), v.get('reps'), v.get('runs_count', 1),
               (r" The counter fault corrupted a median in %s (%s); $^\dagger$ marks the band it fell into."
                % ('one row' if len(suspect_rows) == 1 else '%d rows' % len(suspect_rows), ', '.join(tex_escape(k) for k in suspect_rows))) if suspect_rows else ''))
-    L += table_close(cap, 'tab:awslc-bands')
+    L += table_close(cap, 'tab:awslc-m4')
     return '\n'.join(L) + '\n'
 
 ARM_LABEL_TEX = {'C': 'Coarse', 'B': 'AWS default', 'Bs': 'AWS default + sb', 'H': 'AWS hoist', 'Hs': 'AWS hoist + sb'}
@@ -222,7 +222,7 @@ STANDALONE = r"""\documentclass[10pt,twocolumn]{article}
 \pagestyle{empty}
 \begin{document}
 \input{awslc_paper_rows}
-\input{awslc_all_rows_bands}
+\input{awslc_m4}
 \end{document}
 """
 
@@ -250,9 +250,9 @@ def main():
     open(os.path.join(a.out, 'awslc_gradient.tex'), 'w').write(GRADIENT.replace('%%', '%').replace('__MAX__', f"{scale_max:g}"))
     open(os.path.join(a.out, 'awslc_paper_rows.tex'), 'w').write(table(an, scale_max))
     rank_by = None if a.rank_by in ('none', '') else a.rank_by
-    open(os.path.join(a.out, 'awslc_all_rows_bands.tex'), 'w').write(bands_table(an, scale_max, bands, rank_by, band_arms, census, a.baseline))
+    open(os.path.join(a.out, 'awslc_m4.tex'), 'w').write(bands_table(an, scale_max, bands, rank_by, band_arms, census, a.baseline))
     open(os.path.join(a.out, 'awslc_standalone.tex'), 'w').write(STANDALONE)
-    print(f"wrote {a.out}/awslc_gradient.tex, awslc_paper_rows.tex, awslc_all_rows_bands.tex (bands {a.bands}, columns {','.join(band_arms)}, "
+    print(f"wrote {a.out}/awslc_gradient.tex, awslc_paper_rows.tex, awslc_m4.tex (bands {a.bands}, columns {','.join(band_arms)}, "
           f"{'ranked by ' + rank_by if rank_by else 'each column ranked on its own cells'}, baseline {a.baseline}{', bracketed rows only per ' + cpath if census else ''}), awslc_standalone.tex (colour scale 0..{scale_max:g}, white at 1.00)")
 
 if __name__ == '__main__':
