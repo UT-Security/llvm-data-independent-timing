@@ -31,23 +31,28 @@
     \label{fig:xover-gem5}
   \end{subfigure}
   \caption{%
-    \textbf{Where hand placement stops paying, on one microbenchmark and two
+    \textbf{Where fine placement stops paying, on one microbenchmark and two
     machines.} A request is a public lookup lane of $L$ dependent loads and one
     AES-256-GCM call over 64 secret bytes; sweeping $L$ sweeps the secret
-    fraction $f$ on the $x$ axis. Blanket \texttt{PSTATE.DIT} costs the public
-    lane its load-value predictions, so it gets dearer as $f$ falls; Apple's
-    bracket at the crypto call pays a fixed bill per call, so it gets cheaper.
-    $f^*$ is where they cross, and it is the deployment decision. $y$ is IPC
-    overhead against an unhardened build, each bracket arm measured against an
+    fraction $f$ on the $x$ axis. \textbf{Coarse} holds \texttt{PSTATE.DIT} over
+    the whole request, so it costs the public lane its load-value predictions
+    and gets dearer as $f$ falls. \textbf{Fine} brackets the mode around each
+    crypto call instead --- read the previous DIT state, set it, speculation
+    barrier, call, restore --- paying a fixed bill per call, so it gets cheaper.
+    $f^*$ is where the two cross, and it is the deployment decision.
+    \textbf{ExpeDITe} is that same fine placement under a renamed mode switch,
+    and it is flat: 10--29 cycles a call, never crossing Coarse anywhere in the
+    sweep. It is a microarchitectural design gem5 models and no shipping part
+    implements, which is why it appears in (b) alone. $y$ is IPC overhead
+    against an unhardened build, each fine arm measured against an
     instruction-matched NOP twin.
     %
     \emph{The two $y$ ranges differ, $+105\%$ against $+35\%$, and that is a
-    result rather than a plotting choice}: the same bracket costs
-    333--710\,cycles per request on the M4 against 206--351 in the model, over a
-    request 3.6$\times$ shorter, so it is 106\% of a secret-heavy request on
-    hardware and 18\% of one in simulation. The simulator is optimistic about
-    hand placement by roughly a factor of two in secret fraction. The dashed
-    curve is the simulator's own renamed switch design, which never crosses.%
+    result rather than a plotting choice}: one bracket costs 333--710\,cycles
+    per request on the M4 against 206--351 in the model, over a request
+    3.6$\times$ shorter, so it is 106\% of a secret-heavy request on hardware
+    and 18\% of one in simulation. The simulator is optimistic about fine
+    placement by roughly a factor of two in secret fraction.%
   }
   \label{fig:xover}
 \end{figure*}
