@@ -243,7 +243,13 @@ for b in $BENCHES; do
                case "$arm" in
                  apidsb)    bar="-DAPI_BARRIER_DSBISB" ;;
                  apibare)   bar="-DAPI_BARRIER_NONE -DAPI_NO_MRS" ;;
-                 apiisb)    bar="-DAPI_NO_MRS" ;;
+                 # -DAPI_BARRIER_ISB is now EXPLICIT on the arms below. It used
+                 # to be api_bracket.c's default; the default moved to Apple's
+                 # `dsb nsh; isb sy` fallback on 2026-09-08 because `isb` alone
+                 # is not a recipe Apple publishes. These arms' numbers in
+                 # paper_experiments/09 were measured with isb alone, so they
+                 # name it rather than inherit whatever the default is.
+                 apiisb)    bar="-DAPI_NO_MRS -DAPI_BARRIER_ISB" ;;
                  apiisbnop) bar="-DAPI_NO_MRS -DAPI_BARRIER_NOP" ;;
                  # apinop: the bracket's INSTRUCTION-MATCHED twin. Every
                  # instruction of Apple's full sequence kept and none of them
@@ -253,8 +259,8 @@ for b in $BENCHES; do
                  # wired an arm to it, so the bracket had no twin and the
                  # figure had to borrow apiisbnop, which still executes two
                  # real mode writes and is a BARRIER control, not a twin.
-                 apinop)    bar="-DAPI_NOP" ;;
-                 *)       bar="" ;;
+                 apinop)    bar="-DAPI_NOP -DAPI_BARRIER_ISB" ;;
+                 *)       bar="-DAPI_BARRIER_ISB" ;;   # plain `api`, as published
                esac
                case "$b" in
                  ed25519)        extra="-DAPI_SIGN";   syms="crypto_sign_keypair crypto_sign crypto_sign_open" ;;

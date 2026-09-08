@@ -113,15 +113,18 @@ ARMS = {
     # sequence here -- it is the one gem5 could model, having dsb and isb and no
     # sb.
     "bracketdsb": ("bracketdsb", []),
+    "bracketdsbnop": ("bracketdsbnop", []),
     "pass":       ("taint",      []),
     "nop":        ("taintnop",   []),
 }
 ARM_ORDER = ["nodit", "blanket", "bracket", "bracketnop", "bracketnobar",
-             "bracketdsb", "pass", "nop"]
+             "bracketdsb", "bracketdsbnop", "pass", "nop"]
 # arm -> its instruction-matched layout control. (arm - twin) is what the mode
 # writes cost; everything else the arm did to the binary is in the twin too.
+# Each arm against a twin with ITS OWN instruction count. bracketdsb cannot use
+# bracketnop: `dsb nsh; isb sy` is two instructions where `sb` is one.
 TWIN = {"pass": "nop", "bracket": "bracketnop", "bracketnobar": "bracketnop",
-        "bracketdsb": "bracketnop"}
+        "bracketdsb": "bracketdsbnop"}
 LANES = ("wide", "narrow")
 # The header-width sweep. Each entry is its own BINARY, because HDR_CONST is a
 # compile-time -D: lane "bN" is built with a header of N one-bits, so the only

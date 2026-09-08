@@ -79,14 +79,14 @@ OUT="${OUT:-$D/bin}"
 # What gets LINKED. `bracket` and `bracketnop` are not library variants -- they
 # link the unhardened `base` archive with a wrapper object, so there is nothing
 # extra to compile in libsodium for them.
-ARMS="${ARMS:-base taint taintnop bracket bracketnop bracketnobar bracketdsb}"
+ARMS="${ARMS:-base taint taintnop bracket bracketnop bracketnobar bracketdsb bracketdsbnop}"
 # What taint_libsodium_arms.sh has to BUILD.
 LIB_VARIANTS="${LIB_VARIANTS:-base taint taintnop}"
 
 # arm -> the libsodium archive it links.
 arm_lib() {
   case "$1" in
-    bracket|bracketnop|bracketnobar|bracketdsb) echo base ;;
+    bracket|bracketnop|bracketnobar|bracketdsb|bracketdsbnop) echo base ;;
     *) echo "$1" ;;
   esac
 }
@@ -119,6 +119,12 @@ arm_bracket_flags() {
     # the gem5 bracket column can be made comparable by building it
     # -DAPI_BARRIER_DSBISB instead of leaving it on the isb-only default.
     bracketdsb) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_DSBISB" ;;
+    # bracketdsb's OWN twin. It cannot share bracketnop: `dsb nsh; isb sy` is
+    # two instructions where `sb` is one, so bracketnop is an instruction short
+    # of it. api_bracket.c's API_NOP now emits as many hints as the selected
+    # barrier has instructions, so this twin matches at 18 where bracketnop
+    # matches bracket at 17.
+    bracketdsbnop) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_DSBISB -DAPI_NOP" ;;
     *) echo "" ;;
   esac
 }
