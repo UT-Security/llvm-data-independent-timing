@@ -26,7 +26,7 @@
                             is not predicted and costs nothing.
 
 Reads only the committed CSVs, so it regenerates from data/ with no intermediate:
-  gem5_arms.csv, gem5_predictability_sweep.csv   the simulator half
+  gem5_apple_arms.csv, gem5_predictability_sweep.csv   the simulator half
   m4_arms.csv, m4_predictability_sweep.csv,      the silicon half, written by
   m4_header_width.csv                            silicon/derive_exp02_m4.py
 
@@ -100,13 +100,23 @@ def crossing(xs, a, b):
 
 
 # ------------------------------------------------------------------ gem5 series
-g = rows("gem5_arms.csv")
+#
+# gem5_apple_arms.csv, not gem5_arms.csv. The old file's bracket arm carried
+# `isb sy` as a substitute because gem5 had no FEAT_SB, and its two switch
+# models were "renamed" and a bare `--no-speculative-dit`. The simulator now
+# implements `sb` (Sb64, IsSerializeAfter) and names the two designs
+# `--apple` (flush after the switch, plus the redundant-write skip) and
+# `--expedite` (renamed switch, deferred clear, MRS read that does not stall),
+# so the bracket runs Apple's actual sequence under both. f_secret comes from
+# the M4 CSV's measurement of the same lane -- the gem5 sweep here did not run
+# the --nosecret arm, so the x axis is shared rather than re-derived, and the
+# two instruments weight the lanes differently (see the README's known limits).
+g = rows("gem5_apple_arms.csv")
 gL = sorted({int(r["L"]) for r in g})
-gf = {int(r["L"]): float(r["f_secret_pct"]) for r in g if r["arm"] == "nodit"}
-grow = lambda L, arm, sw: next(r for r in g if int(r["L"]) == L and r["arm"] == arm
-                               and r["switch"] == sw)
-gipc = lambda arm, sw: [(float(grow(L, "nodit", "-")["ipc"]) / float(grow(L, arm, sw)["ipc"]) - 1) * 100
-                        for L in gL]
+gf = {int(r["L"]): float(r["f_secret_pct"]) for r in g if r["arm"] == "base"}
+grow = lambda L, arm, m: next(r for r in g if int(r["L"]) == L and r["arm"] == arm
+                              and r["model"] == m)
+gipc = lambda arm, m: [float(grow(L, arm, m)["ipc_ovh_pct"]) for L in gL]
 
 # ------------------------------------------------------------------ M4 series
 m = rows("m4_arms.csv")
@@ -119,25 +129,25 @@ def m4(lane, arm):
             [float(r["ipc_ovh_pct"]) for r in rs])
 
 
-mf, mblanket = m4("narrow", "blanket")
-_mf2, mpass = m4("narrow", "pass")
-
 # ============================================================ fig 1: the headline
 mf, mblanket = m4("narrow", "blanket")
 _x, mbracket = m4("narrow", "bracket")
 _x, mpass = m4("narrow", "pass")          # measured, in the CSV, not on the figure
+# Each panel uses ITS OWN measured secret fraction. The two instruments weight
+# the lanes differently -- gem5 reads 44.7% at L=200 where the M4 reads 32.6% --
+# and paper_experiments/02's known limits say plainly they must not be swapped.
 
 fig, axes = plt.subplots(1, 2, figsize=(8.0, 3.8), dpi=300)
 fig.patch.set_facecolor(SURF)
 
 for ax, title, sub, xs, blank, rising in [
-    (axes[0], "gem5 Neoverse-V2 FDP — the ExpeDITe model",
-     "EVES + VTAGE; predicts the 62-bit header, `isb sy` for the bracket",
-     [gf[L] for L in gL], gipc("blanket", "-"),
-     [("Apple's bracket", gipc("api", "serialising"), GREEN, "-", GREEN),
-      ("Apple's bracket, renamed MSR DIT", gipc("api", "renamed"), GREEN, (0, (4, 2)), SURF)]),
+    (axes[0], "gem5 Neoverse-V2 FDP",
+     "EVES + VTAGE, FEAT_SB; the bracket's real `sb` under both switch designs",
+     [gf[L] for L in gL], gipc("blanket", "apple"),
+     [("Apple's bracket, --apple", gipc("api", "apple"), GREEN, "-", GREEN),
+      ("Apple's bracket, --expedite", gipc("api", "expedite"), GREEN, (0, (4, 2)), SURF)]),
     (axes[1], "Apple M4 — shipping silicon",
-     "load value predictor: 36 bits, measured; the bracket's real `sb`",
+     "load value predictor: 36 bits, measured; `msr DIT` serialises",
      mf, mblanket,
      [("Apple's bracket", mbracket, GREEN, "-", GREEN)]),
 ]:
@@ -176,9 +186,9 @@ for ax, title, sub, xs, blank, rising in [
 handles = [
     Line2D([], [], color=BLUE, lw=2.2, marker="o", ms=5, label="blanket DIT"),
     Line2D([], [], color=GREEN, lw=2, marker="o", ms=5,
-           label="Apple's bracket at the crypto call (mrs DIT, msr #1, sb, call, restore)"),
+           label="Apple's bracket (mrs DIT, msr #1, sb, call, restore) — flush-after switch (--apple)"),
     Line2D([], [], color=GREEN, lw=2, ls=(0, (4, 2)), marker="o", ms=5, mfc=SURF,
-           mec=GREEN, mew=1.4, label="the same bracket, renamed MSR DIT (gem5 only)"),
+           mec=GREEN, mew=1.4, label="the same bracket under the renamed switch (--expedite, gem5 only)"),
 ]
 fig.legend(handles=handles, frameon=False, fontsize=7.4, ncol=1,
            loc="lower center", bbox_to_anchor=(0.5, -0.02))
@@ -189,14 +199,15 @@ fig.savefig(FIG / "crossover-gem5-vs-m4.pdf", facecolor=SURF)
 order = sorted(range(len(mf)), key=lambda k: mf[k])
 mo = lambda v: [v[k] for k in order]
 print("crossovers against blanket (secret fraction at which the placed arm stops winning):")
-print(f"  gem5   the pass       f* = "
-      f"{crossing([gf[L] for L in gL], gipc('pass', 'serialising'), gipc('blanket', '-')):.1f}%")
-print(f"  gem5   Apple bracket  f* = "
-      f"{crossing([gf[L] for L in gL], gipc('api', 'serialising'), gipc('blanket', '-')):.1f}%")
-print(f"  M4     the pass       f* = "
-      f"{crossing(mo(mf), mo(mpass), mo(mblanket)):.1f}%")
-print(f"  M4     Apple bracket  f* = "
-      f"{crossing(mo(mf), mo(mbracket), mo(mblanket)):.1f}%")
+for lab, arm, m in (("gem5   Apple bracket, --apple   ", "api", "apple"),
+                    ("gem5   Apple bracket, --expedite", "api", "expedite")):
+    f = crossing([gf[L] for L in gL], gipc(arm, m), gipc("blanket", "apple"))
+    print(f"  {lab} f* = " + (f"{f:.1f}%" if f is not None
+                              else "none -- the bracket is cheaper at every measured point"))
+mo = lambda v: [v[k] for k in sorted(range(len(mf)), key=lambda k: mf[k])]
+for lab, ys in (("M4     Apple bracket           ", mbracket), ("M4     the pass                ", mpass)):
+    f = crossing(mo(mf), mo(ys), mo(mblanket))
+    print(f"  {lab} f* = " + (f"{f:.1f}%" if f is not None else "none"))
 
 # ================================================ fig 2: cost vs predictable share
 gq = rows("gem5_predictability_sweep.csv")
