@@ -20,6 +20,23 @@ OUT="${1:-$D/dit-crossover-overleaf.zip}"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 cp "$D/main.tex" "$TMP/"
 for f in "${PANELS[@]}"; do cp "$FIG/$f" "$TMP/"; done
+# Compile the STAGED copy before zipping. main.tex cannot be compiled where it
+# lives -- the panels sit one directory up and are copied in here -- so this is
+# the only place the bundle can be checked, and a bundle that does not build is
+# worse than no bundle.
+if command -v tectonic >/dev/null 2>&1; then
+  if ( cd "$TMP" && tectonic -X compile main.tex >/dev/null 2>&1 ); then
+    echo "bundle compiles (tectonic)"
+  else
+    echo "the staged bundle does NOT compile -- not writing a zip" >&2
+    ( cd "$TMP" && tectonic -X compile main.tex 2>&1 | tail -20 ) >&2
+    exit 1
+  fi
+  rm -f "$TMP/main.pdf"
+else
+  echo "note: tectonic not on PATH, bundle not compile-checked"
+fi
+
 rm -f "$OUT"
 ( cd "$TMP" && zip -q "$OUT" main.tex "${PANELS[@]}" )
 echo "wrote $OUT"

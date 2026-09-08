@@ -54,6 +54,42 @@ FIG = R / "paper_experiments/02-libsodium-signed-lookup/figures"
 
 INK, MUTED, FAINT, GRID, BASE, SURF = "#11171C", "#5A6670", "#8695A0", "#E4E9EB", "#9AA6AE", "#FFFFFF"
 BLUE, ORANGE, GREEN = "#2a78d6", "#eb6834", "#1f9e6e"
+
+# --------------------------------------------------------------- arm styling
+#
+# ExpeDITe is the contribution, so it gets the ONLY saturated colour on the
+# figure and the heaviest line. Coarse and Fine are what it is measured against
+# and they recede: a desaturated steel blue and a neutral grey, no hue that
+# competes with the green. The reader's eye should land on the flat green curve,
+# because that is the result.
+#
+# Two side effects of spending colour on one arm, both wanted. Only ONE hue is
+# load-bearing, so the figure survives red-green colour blindness; and the three
+# arms differ in weight and dash as well as colour, so it survives greyscale
+# printing. Fine is dashed rather than solid for the same reason -- it is the
+# curve that crosses Coarse, and the crossing has to stay readable in ink.
+COARSE_C = "#4E7396"   # desaturated steel blue
+FINE_C   = "#7C868E"   # neutral grey, deliberately hueless
+EXPED_C  = "#0E8F5E"   # the one saturated colour on the figure
+ARM = {
+    "coarse":   dict(label="Coarse",   color=COARSE_C, ls="-",         lw=1.8, ms=4.0, z=3),
+    "fine":     dict(label="Fine",     color=FINE_C,   ls=(0, (5, 2)), lw=1.8, ms=4.0, z=4),
+    "expedite": dict(label="ExpeDITe", color=EXPED_C,  ls="-",         lw=2.9, ms=5.4, z=6),
+}
+
+
+def draw(ax, xs, ys, key, scale=1.0):
+    a = ARM[key]
+    ax.plot(xs, ys, color=a["color"], ls=a["ls"], lw=a["lw"] * scale,
+            marker="o", ms=a["ms"] * scale, mfc=a["color"], mec=a["color"],
+            zorder=a["z"])
+
+
+def arm_handles(keys, scale=1.0):
+    return [Line2D([], [], color=ARM[k]["color"], ls=ARM[k]["ls"],
+                   lw=ARM[k]["lw"] * scale, marker="o", ms=ARM[k]["ms"] * scale,
+                   mfc=ARM[k]["color"], mec=ARM[k]["color"], label=ARM[k]["label"])
+            for k in keys]
 plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9, "axes.labelcolor": MUTED,
                      "xtick.color": MUTED, "ytick.color": MUTED, "text.color": INK})
 
@@ -177,22 +213,20 @@ _c, cpass = m4("narrow", "pass", m_chacha)
 fig, axes = plt.subplots(1, 2, figsize=(8.0, 3.8), dpi=300)
 fig.patch.set_facecolor(SURF)
 
-for ax, title, sub, xs, blank, rising in [
+for ax, title, sub, xs, coarse, others in [
     (axes[0], "gem5 Neoverse-V2 FDP",
      "EVES + VTAGE, FEAT_SB; AES-256-GCM secret lane, 64 B, real `sb`",
      [gf[L] for L in gL], gipc("blanket", "apple"),
-     [("Apple's bracket, --apple", gipc("api", "apple"), GREEN, "-", GREEN),
-      ("Apple's bracket, --expedite", gipc("api", "expedite"), GREEN, (0, (4, 2)), SURF)]),
+     [("fine", gipc("api", "apple")), ("expedite", gipc("api", "expedite"))]),
     (axes[1], "Apple M4 — shipping silicon",
      "36-bit load value predictor, measured; AES-256-GCM secret lane, 64 B",
      mf, mblanket,
-     [("Apple's bracket", mbracket, GREEN, "-", GREEN)]),
+     [("fine", mbracket)]),
 ]:
     style(ax)
-    ax.plot(xs, blank, color=BLUE, lw=2.2, marker="o", ms=5, mfc=BLUE, mec=BLUE, zorder=4)
-    for _name, ys, col, ls, mfc in rising:
-        ax.plot(xs, ys, color=col, lw=2, ls=ls, marker="o", ms=5, mfc=mfc, mec=col,
-                mew=1.4, zorder=3)
+    draw(ax, xs, coarse, "coarse", 1.15)
+    for key, ys in others:
+        draw(ax, xs, ys, key, 1.15)
     ax.axhline(0, color=BASE, lw=0.9, zorder=2)
     secret_axis(ax)
     ax.set_title(title, fontsize=9, color=INK, pad=16, fontweight="bold")
@@ -204,32 +238,26 @@ for ax, title, sub, xs, blank, rising in [
 
     order = sorted(range(len(xs)), key=lambda k: xs[k])
     xo = [xs[k] for k in order]
-    bo = [blank[k] for k in order]
+    bo = [coarse[k] for k in order]
     lo, hi = ax.get_ylim()
     ax.set_ylim(lo, hi + (hi - lo) * 0.08)
     lo, hi = ax.get_ylim()
-    for _name, ys, col, ls, _mfc in rising:
-        if ls != "-":
-            continue
-        f = crossing(xo, [ys[k] for k in order], bo)
-        if f is None:
-            continue
-        ax.axvline(f, color=col, lw=1.0, ls=(0, (2, 2)), zorder=1, alpha=0.75)
-        ax.annotate(f"blanket cheaper\nabove f = {f:.0f}%",
-                    xy=(f, hi), xytext=(f - 2, hi - (hi - lo) * 0.02),
-                    fontsize=7.6, color=col, ha="right", va="top",
-                    fontweight="bold", linespacing=1.35)
+    # The marker is for Coarse x Fine and is drawn in FINE's colour, not
+    # ExpeDITe's: green marks ExpeDITe and nothing else on this figure.
+    fine_ys = dict(others).get("fine")
+    if fine_ys is not None:
+        f = crossing(xo, [fine_ys[k] for k in order], bo)
+        if f is not None:
+            ax.axvline(f, color=FINE_C, lw=1.0, ls=(0, (2, 2)), zorder=1, alpha=0.8)
+            ax.annotate(f"Coarse cheaper\nabove f = {f:.0f}%",
+                        xy=(f, hi), xytext=(f - 2, hi - (hi - lo) * 0.02),
+                        fontsize=7.6, color=FINE_C, ha="right", va="top",
+                        fontweight="bold", linespacing=1.35)
 
-handles = [
-    Line2D([], [], color=BLUE, lw=2.2, marker="o", ms=5, label="blanket DIT"),
-    Line2D([], [], color=GREEN, lw=2, marker="o", ms=5,
-           label="Apple's bracket (mrs DIT, msr #1, sb, call, restore) — flush-after switch (--apple)"),
-    Line2D([], [], color=GREEN, lw=2, ls=(0, (4, 2)), marker="o", ms=5, mfc=SURF,
-           mec=GREEN, mew=1.4, label="the same bracket under the renamed switch (--expedite, gem5 only)"),
-]
-fig.legend(handles=handles, frameon=False, fontsize=7.4, ncol=1,
-           loc="lower center", bbox_to_anchor=(0.5, -0.02))
-fig.tight_layout(rect=(0, 0.15, 1, 1))
+fig.legend(handles=arm_handles(["coarse", "fine", "expedite"], 1.15), frameon=False,
+           fontsize=8.2, ncol=3, loc="lower center", bbox_to_anchor=(0.5, -0.01),
+           handlelength=2.2, columnspacing=2.4)
+fig.tight_layout(rect=(0, 0.09, 1, 1))
 fig.savefig(FIG / "crossover-gem5-vs-m4.png", dpi=300, facecolor=SURF)
 fig.savefig(FIG / "crossover-gem5-vs-m4.pdf", facecolor=SURF)
 
@@ -275,22 +303,15 @@ for lab, ys in (("M4     Apple bracket, chacha 100 B  ", cbracket),
 # and stop being readable. Both panels label their own axis, and the caption
 # says the ranges differ -- that difference is a result, not a plotting artifact.
 PANEL = (3.35, 2.5)
-ARMS_LEGEND = [
-    ("blanket DIT", BLUE, "-", BLUE),
-    ("Apple's bracket at the crypto call", GREEN, "-", GREEN),
-    ("the same bracket, renamed switch (gem5 only)", GREEN, (0, (4, 2)), SURF),
-]
 
 
-def paper_panel(path, xs, blank, rising):
+def paper_panel(path, xs, coarse, others):
     fig, ax = plt.subplots(figsize=PANEL, dpi=300)
     style(ax)
     ax.set_facecolor("none")
-    ax.plot(xs, blank, color=BLUE, lw=2.0, marker="o", ms=4.2, mfc=BLUE, mec=BLUE,
-            zorder=4)
-    for _name, ys, col, ls, mfc in rising:
-        ax.plot(xs, ys, color=col, lw=1.9, ls=ls, marker="o", ms=4.2, mfc=mfc,
-                mec=col, mew=1.3, zorder=3)
+    draw(ax, xs, coarse, "coarse")
+    for key, ys in others:
+        draw(ax, xs, ys, key)
     ax.axhline(0, color=BASE, lw=0.9, zorder=2)
     secret_axis(ax)
     ax.set_xlabel("Secret fraction of the request", fontweight="bold")
@@ -298,24 +319,24 @@ def paper_panel(path, xs, blank, rising):
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:+.0f}"))
 
     order = sorted(range(len(xs)), key=lambda k: xs[k])
-    xo, bo = [xs[k] for k in order], [blank[k] for k in order]
+    xo, bo = [xs[k] for k in order], [coarse[k] for k in order]
     lo, hi = ax.get_ylim()
     ax.set_ylim(lo, hi + (hi - lo) * 0.06)
     lo, hi = ax.get_ylim()
-    for _name, ys, col, ls, _mfc in rising:
-        if ls != "-":
-            continue
-        f = crossing(xo, [ys[k] for k in order], bo)
-        if f is None:
-            continue
-        ax.axvline(f, color=col, lw=1.0, ls=(0, (2, 2)), zorder=1, alpha=0.75)
-        # Just right of the line and near the top: empty in both panels, because
-        # the crossing is where the two curves MEET and the space above it is
-        # clear on either side of the line.
-        ax.annotate(f"$f^*$ = {f:.0f}%", xy=(f, hi),
-                    xytext=(f + 2.5, hi - (hi - lo) * 0.02),
-                    fontsize=8.5, color=col, ha="left", va="top",
-                    fontweight="bold")
+    fine_ys = dict(others).get("fine")
+    if fine_ys is not None:
+        f = crossing(xo, [fine_ys[k] for k in order], bo)
+        if f is not None:
+            # FINE's colour, not ExpeDITe's: the marker is for Coarse x Fine,
+            # and green means ExpeDITe and nothing else on this figure.
+            ax.axvline(f, color=FINE_C, lw=1.0, ls=(0, (2, 2)), zorder=1, alpha=0.8)
+            # Just right of the line and near the top: empty in both panels,
+            # because the crossing is where the two curves MEET and the space
+            # above it is clear on either side of the line.
+            ax.annotate(f"$f^*$ = {f:.0f}%", xy=(f, hi),
+                        xytext=(f + 2.5, hi - (hi - lo) * 0.02),
+                        fontsize=8.5, color=FINE_C, ha="left", va="top",
+                        fontweight="bold")
     fig.tight_layout(pad=0.25)
     for ext in ("pdf", "png"):
         fig.savefig(FIG / f"{path}.{ext}", transparent=True,
@@ -325,24 +346,19 @@ def paper_panel(path, xs, blank, rising):
 
 def paper_legend(path):
     """The shared legend, as its own strip. One row, all three arms."""
-    fig = plt.figure(figsize=(6.9, 0.24), dpi=300)
-    handles = [Line2D([], [], color=c, lw=2.0, ls=ls, marker="o", ms=4.2,
-                      mfc=mfc, mec=c, mew=1.3, label=n)
-               for n, c, ls, mfc in ARMS_LEGEND]
-    fig.legend(handles=handles, frameon=False, fontsize=8, ncol=3,
-               loc="center", handlelength=2.0, columnspacing=1.6,
-               handletextpad=0.5)
+    fig = plt.figure(figsize=(5.4, 0.24), dpi=300)
+    fig.legend(handles=arm_handles(["coarse", "fine", "expedite"]), frameon=False,
+               fontsize=8.6, ncol=3, loc="center", handlelength=2.2,
+               columnspacing=2.6, handletextpad=0.55)
     for ext in ("pdf", "png"):
         fig.savefig(FIG / f"{path}.{ext}", transparent=True,
                     bbox_inches="tight", pad_inches=0.01)
     plt.close(fig)
 
 
-paper_panel("crossover-panel-a-m4", mf, mblanket,
-            [("Apple's bracket", mbracket, GREEN, "-", GREEN)])
+paper_panel("crossover-panel-a-m4", mf, mblanket, [("fine", mbracket)])
 paper_panel("crossover-panel-b-gem5", [gf[L] for L in gL], gipc("blanket", "apple"),
-            [("Apple's bracket, --apple", gipc("api", "apple"), GREEN, "-", GREEN),
-             ("the same, --expedite", gipc("api", "expedite"), GREEN, (0, (4, 2)), SURF)])
+            [("fine", gipc("api", "apple")), ("expedite", gipc("api", "expedite"))])
 paper_legend("crossover-panel-legend")
 print("wrote " + str(FIG / "crossover-panel-{a-m4,b-gem5,legend}.{pdf,png}"))
 
