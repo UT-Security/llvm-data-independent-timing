@@ -79,14 +79,14 @@ OUT="${OUT:-$D/bin}"
 # What gets LINKED. `bracket` and `bracketnop` are not library variants -- they
 # link the unhardened `base` archive with a wrapper object, so there is nothing
 # extra to compile in libsodium for them.
-ARMS="${ARMS:-base taint taintnop bracket bracketnop bracketnobar}"
+ARMS="${ARMS:-base taint taintnop bracket bracketnop bracketnobar bracketdsb}"
 # What taint_libsodium_arms.sh has to BUILD.
 LIB_VARIANTS="${LIB_VARIANTS:-base taint taintnop}"
 
 # arm -> the libsodium archive it links.
 arm_lib() {
   case "$1" in
-    bracket|bracketnop|bracketnobar) echo base ;;
+    bracket|bracketnop|bracketnobar|bracketdsb) echo base ;;
     *) echo "$1" ;;
   esac
 }
@@ -111,6 +111,14 @@ arm_bracket_flags() {
     # read and the two writes. In situ that split is not what a tight loop
     # predicts, which is the point.
     bracketnobar) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_NONE" ;;
+    # Apple's documented FALLBACK for a part without FEAT_SB: `dsb nsh; isb sy`
+    # in place of `sb`. Not what this M4 needs -- it has FEAT_SB and Apple's own
+    # libsystem_platform uses `sb` on it -- but it is the barrier gem5 can
+    # actually model, since it implements both dsb (IsSerializeAfter) and isb
+    # (IsSquashAfter) and no `sb` at all. If this arm lands near the `sb` one,
+    # the gem5 bracket column can be made comparable by building it
+    # -DAPI_BARRIER_DSBISB instead of leaving it on the isb-only default.
+    bracketdsb) echo "-DAPI_CHACHA -DAPI_MACRO_RENAME -DAPI_BARRIER_DSBISB" ;;
     *) echo "" ;;
   esac
 }

@@ -1,4 +1,43 @@
-# The gem5 column of experiment 02 has to be rerun with `--apple` / `--expedite`
+# The gem5 column of experiment 02 has to be rerun: `--apple` / `--expedite`, and `dsb nsh; isb sy`
+
+## Build the gem5 bracket with `-DAPI_BARRIER_DSBISB`
+
+**This is the actionable fix and it needs no FEAT_SB work.** Apple's guide gives
+two recipes: `sb` on a part that has FEAT_SB, and `dsb nsh; isb sy` on one that
+does not. gem5 implements **both instructions of the fallback exactly** --
+`Dsb64Local` with `IsSerializeAfter` and `Isb64` with `IsSquashAfter` -- and no
+`sb` at all. So the gem5 bracket arm should be built with Apple's fallback, which
+is a recipe Apple actually publishes:
+
+```diff
+-link api     base  "$API_BRACKET -DAPI_CHACHA -Wl,--wrap=..."
++link api     base  "$API_BRACKET -DAPI_CHACHA -DAPI_BARRIER_DSBISB -Wl,--wrap=..."
+```
+
+(and the same on `apinop`, whose `-DAPI_NOP` already NOPs whatever barrier is
+selected). What it is on today -- no `-DAPI_BARRIER_*`, so `api_bracket.c`'s
+`isb sy`-only default -- is **not an Apple recipe at all**. It was chosen because
+gem5 lacks `sb`, and `isb` alone is half of the fallback. Switching to the full
+pair costs nothing and makes the gem5 column a faithful model of something Apple
+ships, rather than of a sequence nobody would write.
+
+**Apple ships `sb`, verified from the binary.** `/usr/lib/system/libsystem_platform.dylib`
+(macOS SDK 26.1) implements the API the guide points at:
+
+```
+timingsafe_enable_if_supported:        timingsafe_restore_if_supported:
+    mrs  x8, DIT                           tbnz w0, #0x0, +8
+    ubfx x0, x8, #24, #1   ; the token     msr  DIT, #0x0
+    msr  DIT, #0x1                         ret
+    sb
+    ret
+```
+
+So on an M-series part the shipping barrier is `sb`, and `api_bracket.c`'s
+`-DAPI_BARRIER_SB` arm reproduces Apple's sequence instruction for instruction.
+gem5 can never run that arm; it can run the fallback.
+
+
 
 **Why:** the committed gem5 arms (`data/gem5_arms.csv`, run 2026-09-06) predate
 those flags. They were run on the old two-model surface —
@@ -98,15 +137,35 @@ the rerun:
    `renameToIEWDelay=1`, so fetch-to-issue is ~7 cycles and a squash-plus-refill
    lands around 15-20. exp09 measured 18-27. Self-consistent.
 
-   **The undercharge is entirely `isb` != `sb`.** On the M4 the real `sb` is
-   **164 cycles** (median over 11 lengths, `bracket - bracketnobar`), 8x a
-   frontend refill and far more than any refill can account for, so Apple's
-   speculation barrier is doing something heavier than ISB's
-   context-synchronisation. Dropping it takes the M4 bracket from ~480 cycles to
-   ~300. Whether `dit-flag-restructure` adds FEAT_SB is the first thing to
-   check; if it does not, the gem5 bracket column still understates by that 8x
-   no matter which switch flag is passed, and the fix is implementing FEAT_SB
-   with a cost calibrated against silicon rather than retuning `isb`.
+   **Where the undercharge is, stated at the granularity the data supports.**
+   The whole bracket, against its own NOP twin, is 31-58 cycles per request in
+   gem5 and 460-580 on the M4 (table below). That 10x is solid on both
+   instruments: it is large against each rig's layout band.
+
+   Attributing it to a single instruction is not solid, and an earlier version
+   of this note overstated it. Two measurements of the barrier alone:
+
+   | | `sb` | `dsb nsh; isb sy` |
+   |---|---|---|
+   | isolated (`sbdrain.c`: controlled independent DRAM loads in flight, then the write, then the barrier) | 22 cyc with nothing in flight, rising to 58 with 32 loads in flight | ~60-69 cyc, flat in what is in flight |
+   | in situ (`bracket - bracketnobar` / `bracketdsb - bracketnobar`, L=200/1000/5000) | 147 / 172 / 140 | 8 / 16 / 25 |
+
+   The two disagree about which barrier is dearer, so **neither ordering should
+   be quoted.** What both agree on is that a barrier costs tens of cycles in
+   isolation, and that removing the barrier entirely still leaves ~290-400
+   cycles of the M4 bracket unexplained -- which the tight-loop price of
+   `mrs` + two `msr` (78 cycles all in) does not account for either. The
+   defensible reading is that **the sequence costs 4-6x its isolated price
+   because serialising in the middle of a real instruction stream is far dearer
+   than serialising in a loop**, and no one instruction in it owns that.
+
+   Experiment 14 reports the same barrier at **4 cycles** after a mode-changing
+   write ("a barrier after a serialising one finds it empty"), on a 16-byte AES
+   seal. `sbdrain.c` shows why that is not general: the barrier's cost GROWS
+   with what is in flight (22 -> 58 cycles over 0 -> 32 independent loads), so a
+   16-byte seal and a bracket sitting after a 200-lookup pointer chase are not
+   the same measurement. The structural claim does not hold; the number is a
+   property of the surrounding code.
 2. **The name is contested by the project's own numbers.** `--apple` selects
    flush-after, which `paper_experiments/12-dit-clear-shadow/README.md`
    calibrates as design 2 and says explicitly is **not** a model of Apple's

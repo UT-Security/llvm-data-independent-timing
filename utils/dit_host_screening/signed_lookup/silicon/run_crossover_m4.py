@@ -107,14 +107,21 @@ ARMS = {
     # follows -- but (bracket - bracketnobar) is what `sb` costs, and on this
     # part in this flow that turns out to be most of the bracket.
     "bracketnobar": ("bracketnobar", []),
+    # Apple's documented fallback barrier for a part without FEAT_SB,
+    # `dsb nsh; isb sy`. This part HAS FEAT_SB and Apple's own
+    # libsystem_platform.dylib uses `sb` on it, so this is not the shipping
+    # sequence here -- it is the one gem5 could model, having dsb and isb and no
+    # sb.
+    "bracketdsb": ("bracketdsb", []),
     "pass":       ("taint",      []),
     "nop":        ("taintnop",   []),
 }
 ARM_ORDER = ["nodit", "blanket", "bracket", "bracketnop", "bracketnobar",
-             "pass", "nop"]
+             "bracketdsb", "pass", "nop"]
 # arm -> its instruction-matched layout control. (arm - twin) is what the mode
 # writes cost; everything else the arm did to the binary is in the twin too.
-TWIN = {"pass": "nop", "bracket": "bracketnop", "bracketnobar": "bracketnop"}
+TWIN = {"pass": "nop", "bracket": "bracketnop", "bracketnobar": "bracketnop",
+        "bracketdsb": "bracketnop"}
 LANES = ("wide", "narrow")
 # The header-width sweep. Each entry is its own BINARY, because HDR_CONST is a
 # compile-time -D: lane "bN" is built with a header of N one-bits, so the only
