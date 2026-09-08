@@ -694,6 +694,14 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 - **Silicon IS now measured**, on an M4, 2026-09-08 -- see "The crossover on
   silicon" at the top. The M5 crossover further down is the retired lane's and
   is superseded by it.
+- **`f_secret` is a ratio of CYCLES, on the unhardened build.**
+  `f = (c - c_pub) / c`, where `c_pub` is the same binary run with `--nosecret`,
+  i.e. the crypto call skipped. Not instructions, not bytes, not wall time. It
+  is therefore a property of the workload and not of any placement, so every arm
+  moves along one fixed axis -- and it is why the same L sits at a different f on
+  the two machines: gem5 sustains IPC 1.07 at L=10 where the M4 sustains 3.89, so
+  the public lane is a larger share of the model's request. The figures label the
+  axis "Secret fraction of request cycles" for exactly this reason.
 - **The public lane is synthetic**, and q=0.75 is a chosen midpoint, not a
   measured property of any application. Experiment 01's coin selection is the
   real-application public lane.
