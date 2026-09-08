@@ -21,12 +21,22 @@ default moving does not silently restate them.
 
 **The NOP twins moved with it.** `API_NOP` used to hardcode one `hint #0` in the
 barrier slot, which matched a one-instruction barrier. `dsb nsh; isb sy` is two,
-so every barrier branch now declares a `DIT_BARRIER_NOP()` beside its real
+so every barrier branch now declares a `DIT_BARRIER_NOP_ASM` beside its real
 barrier and `API_NOP` emits that. Verified: the twin matches at 17 instructions
 for `sb` and for `isb`, and at 18 for `dsb;isb`. Without it the twin would be a
 whole instruction shorter than the arm it controls for — which is how a layout
 control stops being one. `bracketdsb` in the silicon rig therefore gets its own
 twin, `bracketdsbnop`, instead of sharing `bracketnop`.
+
+**The enable and the barrier are one asm block.** They were two `__asm__
+volatile` statements, and clang scheduled an argument reload into the gap:
+`msr DIT, #1` / `ldr x8, [x29, #0x20]` / `sb`. Architecturally harmless, but
+gem5's `--expedite` only drops a barrier's ordering when it is *immediately*
+behind the write in program order (`Rename::ditBarrierFollowsMsrDit`), so
+`rename.ditBarrierFused` read 0 and every `--expedite` arm paid a full
+`IsSerializeAfter` drain — 9 to 17 points on the AES lane, all of it the
+unfused `sb`. The barrier is now a string concatenated into the enable's own
+block, so the pair cannot be separated. Instruction counts are unchanged.
 
 **Apple ships `sb`, verified from the binary.** `/usr/lib/system/libsystem_platform.dylib`
 (macOS SDK 26.1) implements the API the guide points at:
