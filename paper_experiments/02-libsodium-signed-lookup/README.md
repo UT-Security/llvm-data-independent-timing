@@ -741,7 +741,9 @@ functions. `docs/results/dit-intra-block-default-2026-09-05.md`.
 | `data/m4_tblbits_sweep.csv` | 4 KB to 512 KB: the wide lane's zero is not an L1-residency artifact |
 | `figures/crossover-gem5-vs-m4.{png,pdf}` | **the headline**: the crossover on both machines, side by side, one file |
 | `figures/crossover-panel-{a-m4,b-gem5,legend}.{pdf,png}` | the same pair as three separate files, for a LaTeX side-by-side: no titles, no subtitles, no in-panel legend. Silicon is (a) |
-| `figures/latex/crossover.tex` | the `figure*` that places them, with the caption. `\input` it; needs `graphicx` and `subcaption`. `crossover_standalone.tex` beside it is the compile check (`tectonic -X compile crossover_standalone.tex`) |
+| `figures/latex/crossover.tex` | the `figure*` that places them, with the caption. `\input` it into a paper; needs `graphicx` and `subcaption`. Its `\includegraphics` paths are relative to THIS directory (`figures/...`), not to `latex/` |
+| `figures/latex/crossover_standalone.tex` | the compile check: renders the float alone in a USENIX-shaped document, so a broken include or an overfull box surfaces here and not in the paper. `cd figures/latex && tectonic -X compile crossover_standalone.tex` |
+| `figures/latex/overleaf/` | **to just LOOK at the figure**: `bash overleaf/make_zip.sh` builds a flat, self-contained zip (`main.tex` + the three panel PDFs, no subdirectories). Overleaf: New Project -> Upload Project -> the zip, set `main.tex` as the main document, compile. The PDFs are not committed there on purpose -- the script copies the real ones, so the bundle cannot show stale panels |
 | `figures/predictability-gem5-vs-m4.{png,pdf}` | blanket's public-lane cost vs q, both machines and both lanes |
 | `figures/m4-predictor-width.{png,pdf}` | the step function at 36 bits |
 | `utils/dit_host_screening/signed_lookup/silicon/` (repo root) | the silicon rig and its README |

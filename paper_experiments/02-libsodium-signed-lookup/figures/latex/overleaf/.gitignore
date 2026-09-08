@@ -1,0 +1,5 @@
+# built by make_zip.sh; the panel PDFs live one level up and are copied in
+*.pdf
+*.zip
+*.log
+*.aux
