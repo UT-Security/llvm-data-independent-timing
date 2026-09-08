@@ -1,0 +1,37 @@
+experiment 14 on gem5 -- provenance
+
+run              2026-09-07T21:10:31-05:00  (sweep still in flight; see INCOMPLETE below)
+host             beckham, 160 cores, Linux 6.17.0-41-generic aarch64
+
+gem5             /home/rgangar/Documents/gem5-DIT-flags
+  branch         dit-flag-restructure @ 455bc87c56a427bb81ab8c1fc4d105a01f73d0f8
+  binary         build/ARM/gem5.fast, 99229384 bytes, built 2026-09-07 18:18:0
+  config         configs/example/arm/fdp_neoverse_v2_binary.py
+  models         --apple    flush after the switch (squash at commit)   [Baseline column]
+                 --expedite renamed switch, deferred clear, isb fused at rename
+  common flags   --eves --dmp --comp-simp
+
+AWS-LC builds    ~/Documents/dit-awslc-gem5
+  rel  md5=727f795c3032f5b7178790975538a263  6605408 bytes  msr-dit=3  isb=0
+  ditisb  md5=5d044129ba1747e1f49ab4a991244a58  6605544 bytes  msr-dit=557  isb=278
+
+arms
+  A   unhardened        rel
+  C   blanket / Coarse  rel + AWSLC_BLANKET=1 (same binary; constructor sets DIT before main)
+  B   shipped bracket   ditisb
+  H   hoisted           ditisb + -dit
+  Coarse is taken from the --apple run only: arm C commits no msr DIT inside any ROI.
+
+row selection    25-filter set cover from data/bracketed_filters.txt, minus trusttoken
+                 (36 rows, 26 bracketed; 57-88 h per cell in gem5)
+  slices         ~/Documents/dit-awslc-gem5/slices_setcover.json, 20 groups
+  chunks         16,256,1350,8192,16384;  -threads 1;  20 warm-up calls, capped at the row's own count
+
+sweeps (simulator output is NOT in the repo: 1.2 GB of stats.txt per sweep)
+  /home/rgangar/Documents/dit-awslc-gem5/setcover-20260907-1901   arms A,B,H x both models
+  /home/rgangar/Documents/dit-awslc-gem5/blanket-20260907-1932   arm C x both models
+
+INCOMPLETE at the time of this commit
+  357 rows joined in all five arms; 338 of them enter the bracket per data/dit_census.json.
+  The M4 side has 381 bracketed rows. Missing: the RSA (16 rows) and FFDH 4096 (1 row) groups,
+  still simulating at roughly 6-12 h per cell. Every cell moves slightly when they land.

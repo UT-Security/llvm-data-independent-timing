@@ -1,0 +1,30 @@
+# bssl speed -filter strings for the timing run: 25 filters selecting 410 rows of the 632-row suite,
+# every one of the 381 rows that enter the DIT bracket and 29 passenger rows that never do but cannot be
+# separated from ones that do by the tool's filter (EC POINT P-224 add, EC POINT P-224 dbl, EC POINT P-256 add, EC POINT P-256 dbl, EC POINT P-384 add, EC POINT P-384 dbl, EC POINT P-521 add, EC POINT P-521 dbl, EC POINT secp256k1 add, EC POINT secp256k1 dbl, ECDSA P-224 verify, ECDSA P-256 verify, ECDSA P-384 verify, ECDSA P-521 verify, ECDSA secp256k1 verify, Ed25519 PKCS#8 v1 encode, Ed25519 PKCS#8 v2 encode, Ed25519 verify, HRSS decap, TrustToken-Exp1-Batch1 begin_redemption, TrustToken-Exp1-Batch1 redeem, TrustToken-Exp1-Batch10 begin_redemption, TrustToken-Exp1-Batch10 redeem, TrustToken-Exp2PMB-Batch1 begin_redemption, TrustToken-Exp2PMB-Batch1 redeem, TrustToken-Exp2PMB-Batch10 begin_redemption, TrustToken-Exp2PMB-Batch10 redeem, TrustToken-Exp2VOPRF-Batch10 begin_redemption, TrustToken-Exp2VOfPRF-Batch1 begin_redemption).
+# The tool matches a filter against a per-benchmark selection name, so these were found by probing it (filter_probe.json).
+# census of 2026-09-07, count_awslc.py; one filter per line; bench_awslc.py reads this as BENCH_TESTS_FILE
+AEAD-ChaCha20-Poly1305
+AEAD-DES-EDE3-CBC-SHA1
+AES-128
+AES-192
+AES-256
+EC POINT
+ECDH
+ECDSA
+EVP-ChaCha20-Poly1305
+EVP-RC4
+Ed25519
+FFDH
+Generate
+HRSS
+ML-KEM-1024
+ML-KEM-512
+ML-KEM-768
+MLDSA44
+MLDSA65
+MLDSA87
+RNG
+RSA
+SPAKE2
+pkcs8
+trusttoken
