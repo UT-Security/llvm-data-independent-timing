@@ -6,6 +6,7 @@
 %   gem5-DIT/benchmarks/expedite_security/plot_paper_figs.py
 % from paper_experiments/15-security-evaluation/data/results.csv, and land in
 % that experiment's figures/ as sec-vp, sec-dmp, sec-compsimp, sec-spec.
+% sec-grid-col.pdf is the same 2x2 laid out for a single-column float.
 %
 % Every number below is from that CSV. Compiler cbec54a0866f, gem5-DIT
 % 25675e4aff03 plus the probes, Neoverse-V2 FDP, SE mode.
@@ -34,12 +35,12 @@ have to detect.
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/sec-grid.pdf}
-  \caption{Each gated optimization acting inside the DIT region.
-  (a)~value-predictor activations on the secret loads, net of the training
-  loads the probe predicts outside any region; (b)~DMP activations, each one a
-  prefetch of a line addressed by a secret pointer; (c)~computation
-  simplifications, that is multiplies that ran with operand-dependent latency,
-  of the 32{,}768 in the region. In (a)--(c) the baseline is the same binary
+  \caption{Each gated optimization acting inside the DIT region. (a)~activations
+  of the value predictor on the secret loads, net of the training loads the
+  probe predicts outside any region; (b)~DMP activations, each one a prefetch
+  of a line addressed by a secret pointer; (c)~computation simplifications,
+  that is multiplies that ran with operand-dependent latency, of the 32{,}768
+  in the region. In (a)--(c) the baseline is the same binary
   with the mode switches removed, and \emph{Apple-style DIT} is the gem5 model
   of Apple's design (\texttt{-{}-apple}): the switch is unordered against older
   instructions and establishes the mode only when it commits. Every
@@ -217,13 +218,3 @@ void victim(const uint64_t *secret,
   sink ^= acc;
 }
 \end{lstlisting}
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{figures/sec-spec.pdf}
-  \caption{Value predictions issued in the shadow of a clear that runs on a
-  mispredicted path, and how many of them were inside the DIT sequence. The left
-  bar of each pair is what makes the right one meaningful: ExpeDITe's zero is
-  zero of 475, not the absence of a shadow.}
-  \label{fig:sec-spec}
-\end{figure}
