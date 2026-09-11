@@ -9,13 +9,13 @@
  & \multicolumn{2}{c}{\cellcolor[HTML]{EACBC8}\textbf{Baseline}} & \multicolumn{2}{c}{\cellcolor[HTML]{EFDEC0}\textbf{ExpeDITe}} \\
 \textbf{Benchmarks} & \textbf{bracket} & \textbf{hoisted} & \textbf{bracket} & \textbf{hoisted} \\
 \midrule
-Slowest 20\% (71) & \awsgradient{2.08} & \awsgradient{1.58} & \awsgradient{1.05} & \awsgradient{1.05} \\
-20--40\% (71) & \awsgradient{1.30} & \awsgradient{1.18} & \awsgradient{1.03} & \awsgradient{1.03} \\
-40--60\% (71) & \awsgradient{1.05} & \awsgradient{1.03} & \awsgradient{1.00} & \awsgradient{1.01} \\
-60--80\% (71) & \awsgradient{1.01} & \awsgradient{1.01} & \awsgradient{1.01} & \awsgradient{1.01} \\
-Fastest 20\% (71) & \awsgradient{0.99} & \awsgradient{1.00} & \awsgradient{0.99} & \awsgradient{0.99} \\
+Slowest 20\% (71) & \awsgradient{1.75} & \awsgradient{1.42} & \awsgradient{1.05} & \awsgradient{1.06} \\
+20--40\% (71) & \awsgradient{1.21} & \awsgradient{1.13} & \awsgradient{1.04} & \awsgradient{1.03} \\
+40--60\% (71) & \awsgradient{1.04} & \awsgradient{1.03} & \awsgradient{1.01} & \awsgradient{1.01} \\
+60--80\% (71) & \awsgradient{1.01} & \awsgradient{1.01} & \awsgradient{1.00} & \awsgradient{1.00} \\
+Fastest 20\% (71) & \awsgradient{0.99} & \awsgradient{0.99} & \awsgradient{0.99} & \awsgradient{1.00} \\
 \midrule
-\textbf{All 355 bracketed benchmarks} & \awsgradientbold{1.23} & \awsgradientbold{1.14} & \awsgradientbold{1.02} & \awsgradientbold{1.02} \\
+\textbf{All 355 bracketed benchmarks} & \awsgradientbold{1.17} & \awsgradientbold{1.10} & \awsgradientbold{1.02} & \awsgradientbold{1.02} \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{AWS-LC's bracket against coarse DIT across every bracketed \texttt{bssl speed} row.} \textit{Geometric mean of cycles per operation relative to the Coarse arm (DIT on for the whole process), so the ratio isolates the cost of the bracket's mode switches from the cost of running under DIT, over the 355 rows that enter the bracket (19 rows of the run never do and are left out; they share a selection name with rows that do, so the tool runs them anyway), in 5 bands of 20\%, 20\%, 20\%, 20\%, 20\% from the slowest to the fastest, and over all of them. Rows are ranked once, by the baseline bracket column, so a band holds the same benchmarks in every column. gem5, Neoverse-V2 model, one deterministic run; no repetitions are needed because host load cannot move a simulated cycle. Every kept cell counts.}}

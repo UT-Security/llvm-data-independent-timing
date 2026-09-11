@@ -1,0 +1,20 @@
+   one serialising `msr DIT` on this machine: 33.52 cycles (11.50 for a same-value write)
+
+== Experiment 02 on silicon: secret-fraction crossover ==
+   Apple M4  lane=narrow (HDR_CONST 0xCAFEBABE, 32 bits)  tblbits=9  q=0.75  11 reps/cell  ROI~50.0 ms
+   full-flow IPC overhead vs unhardened; (pub) is the public lane alone; 'brk cyc' = (bracket - its twin) cycles/request, '-no sb' the same without the speculation barrier; sw/req = (pass - nop) cycles / 33.52 cyc per serialising msr DIT
+        L    req  f_sec    c/req    IPC           blanket    Apple bracket         brk twin b-vs-blk brk cyc rej
+   ------------------------------------------------------------------------------------------------------------------------
+       10 330504  85.3%      315  3.886  +12.11% (+22.71%)+103.76% ( +0.03%)  -0.68% ( +0.12%)  +84.13%     333   0
+       30 216062  64.4%      580  2.592  +23.00% (+29.82%) +72.44% ( +0.00%)  -2.37% ( -0.01%)  +41.68%     438   0
+       50 171083  49.0%      837  2.128  +28.89% (+30.80%) +51.47% ( -0.00%)  -0.27% ( +0.03%)  +18.57%     437   2
+      100 111799  27.4%     1514  1.638  +30.98% (+32.63%) +28.79% ( +0.00%)  -0.41% ( -0.13%)   -1.04%     445   0
+      200  66547  14.9%     2879  1.348  +32.27% (+34.03%) +14.24% ( +0.02%)  -0.90% ( +0.04%)  -13.28%     438   4
+     1000  15523   3.0%    13726  1.099  +34.24% (+34.57%)  +3.16% ( -0.03%)  -0.12% ( -0.02%)  -23.07%     452   1
+     5000   3210   0.6%    68075  1.044  +34.41% (+34.51%)  +0.69% ( -0.03%)  -0.07% ( -0.01%)  -25.08%     516   2
+    20000    806   0.1%   271940  1.034  +34.46% (+34.52%)  +0.26% ( +0.00%)  -0.00% ( -0.02%)  -25.44%     710   1
+
+   32 rows in 46 s -> /private/tmp/claude-501/-Users-rgangar--treehouse-llvm-data-independent-timing-7b712d-1-llvm-data-independent-timing/1b1d2b97-4ed4-46e9-bfae-74e82bb4dace/scratchpad/m4aes/out/crossover-20260908-142635.json
+   every run, rejects included -> /private/tmp/claude-501/-Users-rgangar--treehouse-llvm-data-independent-timing-7b712d-1-llvm-data-independent-timing/1b1d2b97-4ed4-46e9-bfae-74e82bb4dace/scratchpad/m4aes/out/runs-crossover-20260908-142635.jsonl
+
+[exited with code 0]

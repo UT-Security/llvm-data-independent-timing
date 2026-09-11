@@ -3,18 +3,25 @@
 # of `bssl speed` carrying m5 ROI markers instead of Apple PMC reads.
 #
 #   rel        -DENABLE_DATA_INDEPENDENT_TIMING=OFF     the unhardened baseline
-#   ditisb     ...=ON, as shipped, plus `isb sy` after the enable
+#   ditsb      ...=ON, as shipped, plus `sb` after the enable -- THE SILICON BINARY
+#   ditisb     ...=ON, as shipped, plus `isb sy` after the enable  (superseded, see below)
 #
 # ONE hardened build for BOTH switch models. Apple's design needs the barrier; the renamed
-# switch does not, and gem5 drops its ORDERING at rename (--dit-fuse-isb-after-msr, implied
+# switch does not, and gem5 drops its ORDERING at rename (ditFuseBarrierAfterMsr, implied
 # by --expedite) while still fetching, decoding and retiring it. So both models run the same
 # binary and the barrier's cost is measured with instruction count and layout held constant,
 # rather than across a relink between a `dit` build and a `ditisb` one.
 #
-# `sb` is NOT built here: gem5 does not implement FEAT_SB, so the barrier arm is `isb sy`,
-# the same substitution cioparity/api_bracket.c makes. The arms are otherwise the silicon
-# rig's, one for one. (patch_bracket_variant.py still knows `ditnop`; nothing builds it by
-# default -- the silicon experiment has no such arm and the two tables must compare.)
+# `sb` IS the barrier now, and that is the point of ditsb: gem5 implements FEAT_SB (Sb64 in
+# arch/arm/isa/insts/misc64.isa, ID_AA64ISAR1_EL1.SB advertised), so the gem5 rig runs the
+# SAME BINARY the silicon rig runs instead of substituting `isb sy` for it. `isb` was only
+# ever a stand-in for a simulator without FEAT_SB and it is not the same barrier: measured
+# on tests/test-progs/feat_sb, `sb` costs 5 cycles per bracket entry against `isb`'s 12 and
+# `dsb sy; isb`'s 25, and the reason is structural -- ISB is a context synchronization event
+# and squashes, SB only bars speculation. ditisb is kept buildable so the earlier gem5
+# numbers stay reproducible; both barriers fuse under --expedite, so one gem5 build measures
+# either. (patch_bracket_variant.py still knows `ditnop`; nothing builds it by default --
+# the silicon experiment has no such arm and the two tables must compare.)
 #
 # Static, because every gem5 rig in this tree is: gem5 SE has no loader to preload into,
 # which is also why arm C is an env var read by a constructor linked into every build
@@ -48,7 +55,7 @@ G5="${G5:-$REPO/gem5-DIT}"
 W="${W:-$HOME/Documents/dit-awslc-gem5}"
 V=5.8.0; TAG="v$V"; SRC="$W/src/aws-lc-$V"; URL="https://github.com/aws/aws-lc/archive/refs/tags/$TAG.tar.gz"
 CC_BIN="${CC_BIN:-clang}"; CXX_BIN="${CXX_BIN:-clang++}"; JOBS="${JOBS:-24}"
-VARIANTS="${VARIANTS:-rel ditisb}"
+VARIANTS="${VARIANTS:-rel ditsb}"
 info() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 die()  { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 OD="$(command -v objdump)"
@@ -105,7 +112,7 @@ do_build() {
     # the option ON the compiler inlines armv8_set_dit/armv8_restore_dit into every bracketed
     # entry point: one DIT read and two DIT writes per site. With it OFF only the two
     # out-of-line copies remain (the speed tool's -dit path calls them). The gate counts sites.
-    echo "$v mrs_dit=$(count "$b" 'mrs[[:space:]]+x[0-9]+,[[:space:]]*(dit|s3_3_c4_c2_5)') msr_dit=$(count "$b" 'msr[[:space:]]+dit,') isb=$(count "$b" 'isb([[:space:]]|$)') m5=$(count "$b" '\.inst.*0x040f0000|m5_reset') static=$(file "$b" | grep -c 'statically linked')" | tee -a "$W/switch_counts.txt"
+    echo "$v mrs_dit=$(count "$b" 'mrs[[:space:]]+x[0-9]+,[[:space:]]*(dit|s3_3_c4_c2_5)') msr_dit=$(count "$b" 'msr[[:space:]]+dit,') isb=$(count "$b" 'isb([[:space:]]|$)') sb=$(count "$b" 'd50330ff') m5=$(count "$b" '\.inst.*0x040f0000|m5_reset') static=$(file "$b" | grep -c 'statically linked')" | tee -a "$W/switch_counts.txt"
   done
   # gates: what must hold, not numbers to eyeball
   for v in $VARIANTS; do
@@ -115,6 +122,8 @@ do_build() {
   [[ " $VARIANTS " == *" rel "*   ]] && { [[ $(count "$W/build-rel/tool/bssl" 'mrs[[:space:]]+x[0-9]+,[[:space:]]*(dit|s3_3_c4_c2_5)') -le 2 ]] || die "rel brackets its entry points (the option is not off)"; }
   [[ " $VARIANTS " == *" ditisb "* ]] && { [[ $(count "$W/build-ditisb/tool/bssl" 'mrs[[:space:]]+x[0-9]+,[[:space:]]*(dit|s3_3_c4_c2_5)') -ge 50 ]] || die "ditisb carries too few bracket sites"; }
   [[ " $VARIANTS " == *" ditisb "* ]] && { [[ $(count "$W/build-ditisb/tool/bssl" 'isb([[:space:]]|$)') -ge 50 ]] || die "ditisb carries too few isb"; }
+  [[ " $VARIANTS " == *" ditsb "*  ]] && { [[ $(count "$W/build-ditsb/tool/bssl" 'mrs[[:space:]]+x[0-9]+,[[:space:]]*(dit|s3_3_c4_c2_5)') -ge 50 ]] || die "ditsb carries too few bracket sites"; }
+  [[ " $VARIANTS " == *" ditsb "*  ]] && { [[ $(count "$W/build-ditsb/tool/bssl" 'd50330ff') -ge 50 ]] || die "ditsb carries too few sb"; }
   # the layout twin must contain NO DIT instruction at all: not a write, and not a read
   # (a `mrs DIT` decodes differently under the two switch models, so its mere presence would
   # break the inert-arm control -- cioparity/blanket_ctor.c)
@@ -122,9 +131,11 @@ do_build() {
     [[ $(count "$W/build-ditnop/tool/bssl" 'msr[[:space:]]+dit,') -le 1 ]] || die "ditnop still writes DIT"
     [[ $(count "$W/build-ditnop/tool/bssl" 'mrs[[:space:]]+x[0-9]+,[[:space:]]*(dit|s3_3_c4_c2_5)') -eq 0 ]] || die "ditnop still reads DIT"
   fi
-  if [[ " $VARIANTS " == *" ditisb "* ]]; then
-    "$OD" -d "$W/build-ditisb/tool/bssl" | awk '/^[0-9a-f]+ <.*>:/{fn=$2} /mrs[[:space:]]+x[0-9]+, (DIT|dit|s3_3_c4_c2_5)/{c[fn]++} END{for(f in c) print c[f], f}' | sort -k2 > "$W/bracket_sites.txt"
-    info "    bracket sites in $(wc -l < "$W/bracket_sites.txt" | tr -d ' ') functions ($W/bracket_sites.txt)"
+  BSRC=""; [[ " $VARIANTS " == *" ditsb "* ]] && BSRC=ditsb
+  [[ -z "$BSRC" && " $VARIANTS " == *" ditisb "* ]] && BSRC=ditisb
+  if [[ -n "$BSRC" ]]; then
+    "$OD" -d "$W/build-$BSRC/tool/bssl" | awk '/^[0-9a-f]+ <.*>:/{fn=$2} /mrs[[:space:]]+x[0-9]+, (DIT|dit|s3_3_c4_c2_5)/{c[fn]++} END{for(f in c) print c[f], f}' | sort -k2 > "$W/bracket_sites.txt"
+    info "    bracket sites in $(wc -l < "$W/bracket_sites.txt" | tr -d ' ') functions, from $BSRC ($W/bracket_sites.txt)"
   fi
 }
 case "${1:-all}" in
@@ -132,4 +143,4 @@ case "${1:-all}" in
   all) do_fetch && do_prep && do_build ;;
   *) die "usage: $0 fetch|prep|build|all" ;;
 esac
-info "done ($1)"
+info "done (${1:-all})"

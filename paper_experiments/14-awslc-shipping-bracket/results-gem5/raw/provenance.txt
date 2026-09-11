@@ -1,41 +1,47 @@
 experiment 14 on gem5 -- provenance
 
-run              2026-09-07T21:10:31-05:00
+run              2026-09-08T21:25:30-05:00
 host             beckham, 160 cores, Linux 6.17.0-41-generic aarch64
 
 gem5             /home/rgangar/Documents/gem5-DIT-flags
-  branch         dit-flag-restructure @ 455bc87c56a427bb81ab8c1fc4d105a01f73d0f8
-  binary         build/ARM/gem5.fast, 99229384 bytes, built 2026-09-07 18:18:0
+  commit         dda764d8124e6ea6e1dde4ceb345122a8a7f71aa
+  subject        Merge pull request #111 from UT-Security/dit-fuse-barrier-in-iew
+  binary         build/ARM/gem5.fast, 99230592 bytes
   config         configs/example/arm/fdp_neoverse_v2_binary.py
-  models         --apple    flush after the switch (squash at commit)   [Baseline column]
-                 --expedite renamed switch, deferred clear, isb fused at rename
+  models         --apple    flush after the switch; the write is NOT ordered against
+                            older instructions (no IsNonSpeculative)   [Baseline column]
+                 --expedite renamed switch, deferred clear, and the barrier after an
+                            MSR DIT is fused: no drain in rename, no squash at commit,
+                            no wait at the ROB head in IEW
   common flags   --eves --dmp --comp-simp
 
 AWS-LC builds    ~/Documents/dit-awslc-gem5
-  rel  md5=727f795c3032f5b7178790975538a263  6605408 bytes  msr-dit=3  isb=0
-  ditisb  md5=5d044129ba1747e1f49ab4a991244a58  6605544 bytes  msr-dit=557  isb=278
+  rel  md5=727f795c3032f5b7178790975538a263  6605408 bytes  bracket-sites=2  sb=0  isb=0
+  ditsb  md5=b2c53aa1eeb73f3e907f4081371409bc  6605544 bytes  bracket-sites=279  sb=278  isb=0
+  ditsb carries the REAL 'sb', not a substitute: gem5 implements FEAT_SB, so the
+  hardened arms run the same binary the silicon rig runs.
 
 arms
   A   unhardened        rel
-  C   blanket / Coarse  rel + AWSLC_BLANKET=1 (same binary; constructor sets DIT before main)
-  B   shipped bracket   ditisb
-  H   hoisted           ditisb + -dit
+  C   blanket / Coarse  rel + AWSLC_BLANKET=1 (SAME binary; a constructor sets DIT
+                        before main, so the ratio to it has no instruction or layout term)
+  B   shipped bracket   ditsb
+  H   hoisted           ditsb + -dit
   Coarse is taken from the --apple run only: arm C commits no msr DIT inside any ROI.
+  It is not bit-identical across models -- 28 of 236 rows differ, largest -0.8% -- because
+  rel contains msr DIT instructions that are speculatively fetched and squashed, never
+  committed. That is dwell-free noise, not switch cost, which is why it gets one column.
 
 row selection    25-filter set cover from data/bracketed_filters.txt, minus trusttoken
                  (36 rows, 26 bracketed; 57-88 h per cell in gem5)
-  slices         ~/Documents/dit-awslc-gem5/slices_setcover.json, 20 groups
-  chunks         16,256,1350,8192,16384;  -threads 1;  20 warm-up calls, capped at the row's own count
+  chunks         16,256,1350,8192,16384;  -threads 1;  20 warm-up calls, capped at the
+                 row's own count
 
-sweeps (simulator output is NOT in the repo: 1.2 GB of stats.txt per sweep)
-  /home/rgangar/Documents/dit-awslc-gem5/setcover-20260907-1901   arms A,B,H x both models
-  /home/rgangar/Documents/dit-awslc-gem5/blanket-20260907-1932   arm C x both models
-
-COMPLETE
-  120 of 120 cells in the main sweep and 40 of 40 in the blanket sweep, zero failures.
-  All driver gates pass. 374 rows joined in all five arms; 355 of them enter the bracket
-  per data/dit_census.json, against the M4 side's 381. The 26 missing rows are TrustToken,
-  excluded on purpose at 57-88 h per cell; nothing else differs between the two row sets.
-  The 19 rows that enter no bracket in any arm are the passengers the tool cannot separate:
-  EC POINT add/dbl, the five ECDSA verifies, Ed25519 verify, the two PKCS#8 encodes and
-  HRSS decap. Longest cell: FFDH 4096 unhardened at 6.5 h.
+sweep            /home/rgangar/Documents/dit-awslc-gem5/ditsb-pr111-20260908-1413
+  160 of 160 cells, 0 failures, all driver gates pass.
+  374 rows joined in all five arms; 355 of them enter the bracket per data/dit_census.json,
+  against the M4 side's 381. The 26 missing are TrustToken, excluded on purpose.
+  The 19 rows that enter no bracket in any arm are the passengers the tool cannot
+  separate: EC POINT add/dbl, the five ECDSA verifies, Ed25519 verify, the two PKCS#8
+  encodes and HRSS decap.
+  Simulator output is NOT in the repo: ~1.2 GB of stats.txt.

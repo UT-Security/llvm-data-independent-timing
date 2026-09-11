@@ -16,18 +16,20 @@ ditClearImm / ditRead COUNT the entries inside the ROI instead of inferring them
 THE COMPILER IS NOT INVOLVED. This is the vendor's bracket, built with the platform clang
 the way AWS-LC's users build it. Nothing here runs the taint pass.
 
-ARMS. The silicon rig's six, one for one, with `isb sy` where it uses `sb`: gem5 has no
-FEAT_SB (the same substitution cioparity/api_bracket.c makes). No arm exists here that the
-silicon rig does not have, so the two tables compare row for row.
+ARMS. The silicon rig's six, one for one, and since gem5 implements FEAT_SB (Sb64 in
+arch/arm/isa/insts/misc64.isa) the barrier is `sb`, not a substitute -- the hardened arms
+run the SAME BINARY the silicon rig runs. No arm exists here that the silicon rig does not
+have, so the two tables compare row for row.
 
   A    rel                     unhardened
   C    rel, AWSLC_BLANKET=1    blanket: DIT set before main by the linked constructor,
                                the library never touches it. SAME BINARY as A.
   B    dit                     the bracket as shipped: mrs; msr dit,#1 ... msr dit,#0
-  Bi   ditisb                  B with `isb sy` after the enable
+  Bs   ditsb                   B with `sb` after the enable (FEAT_SB; gem5 implements it,
+                               so this is the SAME binary the silicon rig runs)
   H    dit, `-dit`             AWS's mitigation: DIT set once for the run; each entry still
                                mrs + msr dit,#1, and the enable no longer changes the mode
-  Hi   ditisb, `-dit`          the same on the isb build
+  Hs   ditsb, `-dit`           the same on the sb build
 
 WHY NO REPS. gem5 is deterministic, so the silicon rig's 7 reps and medians are replaced by
 exact gates. Host load and core count cannot move a simulated cycle.
@@ -91,20 +93,21 @@ CONFIG_ARMS = {
 }
 
 # arm -> (build, blanket, extra argv to bssl speed)
-# No barrier arm. gem5 has no FEAT_SB and `isb sy` in its place was only ever a
-# stand-in, so the three arms that carry meaning are blanket, the shipped
-# bracket and the vendor's hoisted mitigation, against the unhardened baseline.
-# The ditisb build is no longer needed.
-# ONE hardened build for both switch models: ditisb carries `isb sy` after the
+# No separate barrier arm, because there is no barrier substitution left to
+# control for: gem5 implements FEAT_SB, so the hardened build carries the real
+# `sb` and the three arms that carry meaning are blanket, the shipped bracket
+# and the vendor's hoisted mitigation, against the unhardened baseline.
+# ONE hardened build for both switch models: ditsb carries `sb` after the
 # enable, which Apple's design needs and the renamed switch does not. gem5 drops
-# the barrier's ORDERING at rename under --expedite while still fetching and
+# the barrier's ORDERING at rename under --expedite -- an `sb`'s serialize-after
+# in rename, an `isb`'s squash-after at commit -- while still fetching and
 # retiring it, so both models run the same binary and the barrier's cost is
 # measured with instruction count and layout held constant.
 ARMS = {
     "A": ("rel", 0, []),
     "C": ("rel", 1, []),
-    "B": ("ditisb", 0, []),
-    "H": ("ditisb", 0, ["-dit"]),
+    "B": ("ditsb", 0, []),
+    "H": ("ditsb", 0, ["-dit"]),
 }
 ARM_ORDER = ["A", "C", "B", "H"]
 # Arms in which no `msr DIT` ever executes: the switch model must not move them, and dwell

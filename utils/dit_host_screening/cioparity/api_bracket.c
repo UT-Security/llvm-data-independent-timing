@@ -19,9 +19,13 @@
  *   ... the operation ...
  *   if (!was) msr DIT, #0            restore, never clear a caller's DIT
  *
- * gem5 does not implement SB, so the barrier here is `isb sy` by default
- * (API_BARRIER_ISB); API_BARRIER_DSBISB selects Apple's no-SB fallback pair and
- * API_BARRIER_NONE drops it. API_NO_MRS drops the token read and clears
+ * The enable and the barrier are emitted as ONE asm block so nothing can be
+ * scheduled between them; gem5's barrier fusion requires that adjacency.
+ *
+ * gem5 implements no SB, so the barrier here is Apple's no-FEAT_SB fallback
+ * pair `dsb nsh; isb sy` by default; API_BARRIER_SB selects the `sb` Apple
+ * actually ships (silicon only), API_BARRIER_ISB the `isb sy`-alone sequence
+ * that used to be the default, and API_BARRIER_NONE drops the barrier. API_NO_MRS drops the token read and clears
  * unconditionally (the pre-2026-09-05 form of this arm), which bounds a gem5
  * artifact: `mrs DIT` decodes to Mrs64, IsSerializeBefore, a pipeline drain,
  * where the M5 reads it in 1 cycle (docs/results/dit-cost-model.md).
@@ -35,30 +39,96 @@
  */
 #include <stddef.h>
 
+/* THE BARRIER. Apple's guide gives TWO recipes and the default here is the one
+ * a simulator can run:
+ *
+ *   sb                 on a part with FEAT_SB. This is what Apple actually
+ *                      ships: /usr/lib/system/libsystem_platform.dylib's
+ *                      timingsafe_enable_if_supported is
+ *                          mrs x8, DIT ; ubfx x0, x8, #24, #1
+ *                          msr DIT, #1 ; sb ; ret
+ *                      Select it with -DAPI_BARRIER_SB. Every M-series has
+ *                      FEAT_SB, so this is the arm a silicon rig wants.
+ *   dsb nsh ; isb sy   Apple's documented fallback for a part WITHOUT FEAT_SB,
+ *                      and THE DEFAULT, because gem5 implements both of these
+ *                      (Dsb64Local -> IsSerializeAfter, Isb64 -> IsSquashAfter)
+ *                      and implements no `sb` at all -- not in the DIT fork and
+ *                      not upstream (gem5/gem5 stable f5c5a6e390f5: the A64
+ *                      barrier decode group ends at Isb64 and falls through to
+ *                      Unknown64).
+ *
+ * The default USED TO BE `isb sy` alone, which is half of the fallback and is
+ * not a recipe Apple publishes anywhere. It was picked only because gem5 lacks
+ * `sb`, and it silently understated every gem5 bracket arm by whatever `dsb`
+ * costs. If you want it back it is now named: -DAPI_BARRIER_ISB. The arms whose
+ * published numbers were measured with it pass that flag explicitly.
+ *
+ * API_BARRIER_NONE drops the barrier. It is not a shippable configuration --
+ * the barrier is what makes the mode change apply to what follows -- and exists
+ * only to price the barrier by difference. API_BARRIER_NOP puts HINT #0 at the
+ * barrier's address, the rig's layout control. */
+/* THE ENABLE AND THE BARRIER MUST BE ONE ASM BLOCK.
+ *
+ * They used to be two `__asm__ volatile` statements and the compiler scheduled
+ * between them -- clang put an argument reload in the slot:
+ *
+ *      mrs  x19, DIT
+ *      msr  DIT, #0x1
+ *      ldr  x8, [x29, #0x20]     <- here
+ *      sb
+ *
+ * which is architecturally harmless but defeats gem5's barrier fusion: under
+ * the renamed switch (--expedite) a barrier immediately behind an MSR DIT
+ * orders nothing the dataflow does not already order, and rename drops its
+ * ordering -- but "immediately" is program order, and Rename::
+ * ditBarrierFollowsMsrDit says so outright: "The two come from one asm block
+ * in the workload, so nothing can be scheduled between them; a compiler that
+ * did separate them would simply not fuse." With the load in between,
+ * rename.ditBarrierFused read 0 and every --expedite arm paid a full
+ * IsSerializeAfter drain it should not have -- 9 to 17 points on the AES lane,
+ * all of it the unfused `sb`.
+ *
+ * So the barrier is a STRING concatenated into the enable's own asm block, not
+ * a separate statement. The instruction count is unchanged; only the guarantee
+ * of adjacency is added. DIT_BARRIER_NOP_ASM is the twin's matching filler and
+ * must have the same instruction count as its real counterpart. */
 #if defined(API_BARRIER_SB)
    /* Apple's actual instruction, for silicon with FEAT_SB (every M-series);
     * the raw encoding so no -march or target attribute is needed */
-#  define DIT_BARRIER() __asm__ volatile(".inst 0xd50330ff" ::: "memory")
-#elif defined(API_BARRIER_DSBISB)
-#  define DIT_BARRIER() __asm__ volatile("dsb nsh\n\tisb sy" ::: "memory")
+#  define DIT_BARRIER_ASM     ".inst 0xd50330ff"
+#  define DIT_BARRIER_NOP_ASM "hint #0"
+#elif defined(API_BARRIER_ISB)
+   /* `isb sy` alone: half of Apple's fallback pair, and the pre-2026-09-08
+    * default. Kept named so the arms measured with it stay reproducible. */
+#  define DIT_BARRIER_ASM     "isb sy"
+#  define DIT_BARRIER_NOP_ASM "hint #0"
 #elif defined(API_BARRIER_NONE)
-#  define DIT_BARRIER() ((void)0)
+#  define DIT_BARRIER_ASM     ""
+#  define DIT_BARRIER_NOP_ASM ""
 #elif defined(API_BARRIER_NOP)
-   /* the rig's layout control for the barrier: HINT #0 at the isb's address */
-#  define DIT_BARRIER() __asm__ volatile("hint #0" ::: "memory")
-#else /* API_BARRIER_ISB, the default: isb in place of sb, which gem5 lacks */
-#  define DIT_BARRIER() __asm__ volatile("isb sy" ::: "memory")
+   /* the rig's layout control for the barrier alone: HINT #0 at its address,
+    * with the two mode writes still real */
+#  define DIT_BARRIER_ASM     "hint #0"
+#  define DIT_BARRIER_NOP_ASM "hint #0"
+#else /* API_BARRIER_DSBISB, the default: Apple's no-FEAT_SB fallback pair */
+#  define DIT_BARRIER_ASM     "dsb nsh\n\tisb sy"
+#  define DIT_BARRIER_NOP_ASM "hint #0\n\thint #0"
 #endif
 
 #if defined(API_NOP)
    /* The bracket's instruction-matched layout control: every instruction of
     * the full sequence kept, none of them touching DIT. mrs -> mov (one
-    * instruction, a register write), msr -> hint #0, the barrier -> hint #0,
-    * the conditional clear -> the same tbnz over a hint #0. */
-#  define DIT_ENTER(was) do { __asm__ volatile("mov %0, #0" : "=r"(was)); __asm__ volatile("hint #0" ::: "memory"); __asm__ volatile("hint #0" ::: "memory"); } while (0)
+    * instruction, a register write), msr -> hint #0, the barrier ->
+    * DIT_BARRIER_NOP_ASM (as many hints as the selected barrier has
+    * instructions), the conditional clear -> the same tbnz over a hint #0.
+    * The enable and barrier fillers share one asm block, exactly as the real
+    * pair does, so the two arms have the same scheduling freedom. */
+#  define DIT_ENTER(was) do { __asm__ volatile("mov %0, #0" : "=r"(was)); \
+        __asm__ volatile("hint #0\n\t" DIT_BARRIER_NOP_ASM ::: "memory"); } while (0)
 #  define DIT_LEAVE(was) do { if (!(was)) __asm__ volatile("hint #0" ::: "memory"); } while (0)
 #elif defined(API_NO_MRS)
-#  define DIT_ENTER(was) do { (was) = 0; __asm__ volatile("msr DIT, #1" ::: "memory"); DIT_BARRIER(); } while (0)
+#  define DIT_ENTER(was) do { (was) = 0; \
+        __asm__ volatile("msr DIT, #1\n\t" DIT_BARRIER_ASM ::: "memory"); } while (0)
 #  define DIT_LEAVE(was) do { (void)(was); __asm__ volatile("msr DIT, #0" ::: "memory"); } while (0)
 #else
 static inline unsigned long dit_was_on(void) {
@@ -66,7 +136,8 @@ static inline unsigned long dit_was_on(void) {
     __asm__ volatile("mrs %0, DIT" : "=r"(v));
     return (v >> 24) & 1;
 }
-#  define DIT_ENTER(was) do { (was) = dit_was_on(); __asm__ volatile("msr DIT, #1" ::: "memory"); DIT_BARRIER(); } while (0)
+#  define DIT_ENTER(was) do { (was) = dit_was_on(); \
+        __asm__ volatile("msr DIT, #1\n\t" DIT_BARRIER_ASM ::: "memory"); } while (0)
 #  define DIT_LEAVE(was) do { if (!(was)) __asm__ volatile("msr DIT, #0" ::: "memory"); } while (0)
 #endif
 
